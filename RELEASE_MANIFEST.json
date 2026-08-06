@@ -1,0 +1,90 @@
+{
+  "release": "4.0.0-phase1-safety",
+  "product": "YGPH METROPOLIS",
+  "tagline": "Four Apps. One Flow.",
+  "releaseDate": "2026-08-06",
+  "sourceCommit": "ac27632",
+  "uploadMode": "OVERWRITE_STABLE_PATHS",
+  "stateSchema": 4,
+  "database": {
+    "name": "stock-pocket-secure",
+    "version": 1,
+    "store": "kv",
+    "vaultKey": "vault",
+    "vaultFormat": 1
+  },
+  "compatibility": {
+    "readableSchemas": [1, 2, 3, 4],
+    "targetSchema": 4,
+    "moneyUnit": "INTEGER_SATANG",
+    "transactionCorrection": "LINKED_REVERSAL_ONLY",
+    "legacySchema4ReceivableRepair": "APPEND_TWO_OFFSETTING_REVERSALS_NET_ZERO"
+  },
+  "safety": [
+    "one authoritative core and event envelope",
+    "idempotency key blocks duplicate effects",
+    "import preview and validation before write",
+    "snapshot before restore, migration, or import promotion",
+    "encrypted write followed by decrypt and durable read-back",
+    "rollback with raw-vault read-back on failure",
+    "strict reversal topology with legacy one-to-one compatibility",
+    "no direct deletion of protected history"
+  ],
+  "runtimeOrder": [
+    "highway-gate.js",
+    "app.js",
+    "flow-era.js",
+    "flow-era-3.5.js",
+    "metropolis-v4.js"
+  ],
+  "serviceWorker": {
+    "htmlRewriting": false,
+    "explicitStableShell": true,
+    "waitingActivation": true,
+    "rollbackGenerations": 1,
+    "legacyMixedCacheAsRollback": false,
+    "note": "This release establishes the first safe rollback baseline; a previous safe generation becomes available after the next update."
+  },
+  "validation": {
+    "command": "npm run deploy:gate",
+    "nodeTests": "43/43 PASS",
+    "focusedReview": "35/35 PASS",
+    "syntax": "PASS",
+    "utf8": "12/12 production files PASS",
+    "encryptedBackupRoundTrip": "PASS",
+    "browserPersistence": "PASS — setup, write, read-back, lock, unlock, close, reopen",
+    "browserExpectedState": "stock 5 items; ledger 499.75 baht",
+    "independentCodeReview": "NO BLOCKING FINDINGS",
+    "cloudflareOrGitHubMutationPerformed": false
+  },
+  "productionFiles": [
+    { "path": "index.html", "bytes": 25135, "sha256": "b83efd526b912ee3a6794512a2eff5c3a5df523ff335386274f8b336fe768882" },
+    { "path": "manifest.webmanifest", "bytes": 810, "sha256": "90214731f013f75d21e1c347c39e6591e9f58c40f0b725301f1957144bb0a2e4" },
+    { "path": "styles.css", "bytes": 23136, "sha256": "0d2bf778045e58542690ccb70a38dbc7e66d52d763bd729074aab690db7ce004" },
+    { "path": "flow-era.css", "bytes": 12815, "sha256": "a92c64ef081c98f54aca266ac7bfb9eec2ce9d0800e3dfa4b78f1ff384f7a91c" },
+    { "path": "flow-era-3.5.css", "bytes": 7858, "sha256": "3f3980526b3198ae45e2a5156620f13c1f71110b19d342ba94dc68ddb4cba154" },
+    { "path": "metropolis-v4.css", "bytes": 13118, "sha256": "a4738d1575fcf281c54973b8920aea87b06691e22bfa0bc1e0162ca0300129b0" },
+    { "path": "highway-gate.js", "bytes": 31238, "sha256": "15b775db0a6ccdd8336749b7a3883d4504fb51ca9eaaa7e001987627fe68b369" },
+    { "path": "app.js", "bytes": 216510, "sha256": "df9853bb143b0e39616b5a49e10981d782a51b72b91f2fa74ed10c0375dad0c2" },
+    { "path": "flow-era.js", "bytes": 69858, "sha256": "a67fec0540a6e5280f5c0112bca54c941b095fabf0cd3206d102c9c2d87de4e0" },
+    { "path": "flow-era-3.5.js", "bytes": 18233, "sha256": "2f0bcb7c7c3fd638c957f7882fa3aa74fd6b3ae86088c3be4b1a6f91f7410afc" },
+    { "path": "metropolis-v4.js", "bytes": 18099, "sha256": "8a1c1ec7d9227359a4874e04c5c88def75e090548b5ae3b2610554a0c59305eb" },
+    { "path": "sw.js", "bytes": 8333, "sha256": "ae57e21e5ee0ab58b88b6b3da8740189d08ccdd48696538126122e26365df8c6" },
+    { "path": "icon-192.png", "bytes": 1131, "sha256": "3141ee0476280c2ec74d05c9aa931564f071428192a3d98586c9df01693e0b45" },
+    { "path": "icon-512.png", "bytes": 3153, "sha256": "6b4a04cf12aa96104e257f15c9dbba6d7715eba1987be031a2bcbea71acbb385" }
+  ],
+  "repositoryGateFiles": [
+    { "path": ".assetsignore", "bytes": 367, "sha256": "253147f6639072bd254e7159861bf641ae0da77bf76e136d46d3fead19b56277" },
+    { "path": ".github/workflows/phase1-deploy-gate.yml", "bytes": 454, "sha256": "95a831c76eedf480e30b1319cecdac15695e3d4330582759b3e5accd5cc4a65b" },
+    { "path": "package.json", "bytes": 496, "sha256": "200761f1a32e8358fedeba43ed9b67a0ba3a57dccd04d3430b2b58fbe9ea69ff" },
+    { "path": "scripts/verify-utf8.mjs", "bytes": 932, "sha256": "8b971c4f80fb349a358e943b293a54b535883d9ea524b9bcd0d7cd048dfc1023" },
+    { "path": "wrangler.jsonc", "bytes": 168, "sha256": "7550309834d28eb16d16db41493b245218872600533586ce5debc1bae5653d3f" },
+    { "path": "UPLOAD_GUIDE.md", "bytes": 2654, "sha256": "e08c6b0dda1d6f6fd2eb10dd682a0818f1db4c60d9b98925c9119d883de7b6bf" }
+  ],
+  "manualUpload": [
+    "Extract the ZIP at repository root.",
+    "Overwrite files with the same names and paths.",
+    "Do not rename production files or add version suffixes.",
+    "Run npm run deploy:gate before Cloudflare deployment."
+  ]
+}

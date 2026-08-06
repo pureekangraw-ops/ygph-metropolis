@@ -1,0 +1,47 @@
+{
+  "schema": 4,
+  "revision": 108,
+  "createdAt": "2026-08-02T00:00:00.000Z",
+  "updatedAt": "2026-08-06T00:00:00.000Z",
+  "settings": {
+    "defaultPriceSatang": 80000,
+    "lockMinutes": 5,
+    "lowStockThreshold": 3,
+    "themeColor": "navy"
+  },
+  "store": {
+    "stockQty": 5,
+    "stockValueSatang": 170000,
+    "sales": [],
+    "purchases": [],
+    "withdrawals": []
+  },
+  "ride": {
+    "currentRound": null,
+    "rounds": [],
+    "jobs": [],
+    "expenses": [],
+    "creditBalanceSatang": 0,
+    "creditWithdrawals": []
+  },
+  "ledger": {
+    "openingBalanceSatang": 400000,
+    "balanceVerified": true,
+    "verifiedAt": "2026-08-02T00:00:00.000Z",
+    "transactions": [],
+    "obligations": []
+  },
+  "calendar": [],
+  "audit": [],
+  "sync": {
+    "lastExportAt": null,
+    "lastImportAt": null,
+    "pendingImport": null,
+    "lastBatchId": null
+  },
+  "migration": {
+    "fromSchema": null,
+    "migratedAt": null,
+    "sourceRelease": null
+  }
+}

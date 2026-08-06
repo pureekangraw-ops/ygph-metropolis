@@ -1,0 +1,22 @@
+name: Phase 1 Deploy Gate
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-gate:
+    name: Cloudflare upload safety gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out stable filenames
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run regression, syntax, and UTF-8 gates
+        run: npm run deploy:gate

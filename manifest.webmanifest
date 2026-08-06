@@ -1,15 +1,26 @@
 {
-  "name": "YGPH METROPOLIS",
+  "name": "YGPH METROPOLIS v4.0.0",
   "short_name": "METROPOLIS",
-  "description": "Four Apps. One Flow. — แยกเป็นแอป เชื่อมเป็นระบบ",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#f5f4fb",
-  "theme_color": "#7164e8",
+  "description": "Four Apps. One Flow. ร้านค้า วิ่งงาน การเงิน และปฏิทิน แยกประสบการณ์ใช้งานแต่เชื่อมข้อมูลในระบบเดียว — Offline, Encrypted, Route-aware",
   "lang": "th",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f6f4",
+  "theme_color": "#176b4f",
   "icons": [
-    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ]
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/index.html"
 }
