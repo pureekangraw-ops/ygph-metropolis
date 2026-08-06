@@ -1,0 +1,13 @@
+{
+  "name": "ygph-metropolis",
+  "version": "0.1.0-preview.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node --check controller.js && node --check core.js && node --check domain.js && node --check ui-model.js && node --check vault.js && node --check sw.js",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.68.0"
+  }
+}

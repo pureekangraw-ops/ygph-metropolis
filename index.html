@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#7164e8">
+  <meta name="description" content="YGPH METROPOLIS — Four Apps. One Flow.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>YGPH METROPOLIS</title>
+</head>
+<body>
+  <noscript>แอปนี้ต้องเปิด JavaScript</noscript>
+
+  <main id="gate" class="gate-wrap">
+    <section id="setupScreen" class="gate-card hidden" aria-labelledby="setupTitle">
+      <div class="brand-mark" aria-hidden="true">Y</div>
+      <p class="eyebrow">FOUR APPS · ONE FLOW</p>
+      <h1 id="setupTitle">ตั้งค่า YGPH METROPOLIS</h1>
+      <p class="muted">ข้อมูลจะเข้ารหัสและเก็บไว้ในอุปกรณ์ รหัสผ่านไม่มีระบบกู้คืน</p>
+      <form id="setupForm" class="form-stack">
+        <label>รหัสผ่านใหม่<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>ยืนยันรหัสผ่าน<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>ยอดเงินเริ่มต้น (บาท)<input name="openingBalance" type="text" inputmode="decimal" value="0" required></label>
+        <button class="primary" type="submit">สร้าง Vault และเริ่มใช้งาน</button>
+      </form>
+      <button id="showRestoreFromSetup" class="ghost" type="button">กู้คืนจากไฟล์สำรอง</button>
+    </section>
+
+    <section id="unlockScreen" class="gate-card hidden" aria-labelledby="unlockTitle">
+      <div class="brand-mark" aria-hidden="true">Y</div>
+      <p class="eyebrow">ENCRYPTED · OFFLINE-FIRST</p>
+      <h1 id="unlockTitle">YGPH METROPOLIS</h1>
+      <p class="muted">ใส่รหัสเพื่อปลดล็อกข้อมูลที่เข้ารหัสไว้ในเครื่อง</p>
+      <form id="unlockForm" class="form-stack">
+        <label>รหัสผ่าน<input name="password" type="password" autocomplete="current-password" required autofocus></label>
+        <button class="primary" type="submit">ปลดล็อก</button>
+      </form>
+      <button id="showRestoreFromUnlock" class="ghost" type="button">กู้คืนจากไฟล์สำรอง</button>
+    </section>
+
+    <section id="restoreScreen" class="gate-card hidden" aria-labelledby="restoreTitle">
+      <div class="brand-mark" aria-hidden="true">↥</div>
+      <p class="eyebrow">RESTORE</p>
+      <h1 id="restoreTitle">กู้คืนไฟล์สำรอง</h1>
+      <p class="muted">ระบบจะตรวจรหัสผ่านและอ่านข้อมูลก่อนเขียนลงอุปกรณ์</p>
+      <form id="restoreForm" class="form-stack">
+        <label>ไฟล์สำรอง JSON<input name="backup" type="file" accept="application/json,.json" required></label>
+        <label>รหัสผ่านของไฟล์<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">ตรวจและกู้คืน</button>
+      </form>
+      <button id="cancelRestore" class="ghost" type="button">ย้อนกลับ</button>
+    </section>
+  </main>
+
+  <div id="app" class="app-shell hidden" aria-live="polite"></div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

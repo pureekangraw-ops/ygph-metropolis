@@ -1,0 +1,14 @@
+.git
+.git/**
+.github
+.github/**
+node_modules
+node_modules/**
+README_TH.md
+SHA256SUMS.txt
+package.json
+package-lock.json
+wrangler.jsonc
+.assetsignore
+*.zip
+*.sha256
