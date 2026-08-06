@@ -9,6 +9,9 @@
   --metro-ride:#d8791f;
   --metro-ledger:#6f4fb1;
   --metro-calendar:#347bc6;
+  --metro-icon-bg:#60758C;
+  --metro-icon-bg-dark:#465B71;
+  --metro-icon-ink:#F7F5EF;
   --metro-shadow:0 16px 45px rgba(28,62,48,.10);
   --metro-soft-shadow:0 8px 24px rgba(28,62,48,.08);
 }
@@ -36,6 +39,14 @@ body.metropolis-v4[data-metropolis-page="sync"]{--metro-accent:#176b4f;--metro-a
 }
 .metropolis-v4 .brand-copy h1{font-weight:950!important;letter-spacing:.015em}
 .metropolis-v4 .brand-copy p{max-width:520px!important}
+.metropolis-v4 .brand-mark{
+  background:var(--metro-icon-bg)!important;
+  color:var(--metro-icon-ink)!important;
+  border:1px solid var(--metro-icon-bg-dark)!important;
+  box-shadow:0 8px 20px rgba(70,91,113,.24)!important;
+}
+.metropolis-v4 .brand-mark .flow-icon{display:grid;place-items:center}
+.metropolis-v4 .brand-mark svg{width:27px!important;height:27px!important;stroke:currentColor}
 .metropolis-v4 .status-line b{color:#176b4f}
 .metropolis-v4 .bottom-nav{display:none!important}
 .metropolis-v4 main{padding-bottom:max(2rem,env(safe-area-inset-bottom))}
@@ -175,10 +186,10 @@ body.metropolis-v4[data-metropolis-page="sync"]{--metro-accent:#176b4f;--metro-a
   width:52px;
   height:52px;
   border-radius:18px;
-  background:#fff;
-  color:var(--app-color);
-  border:1px solid color-mix(in srgb,var(--app-color) 18%,#e4ece8);
-  box-shadow:0 7px 18px color-mix(in srgb,var(--app-color) 13%,transparent);
+  background:var(--metro-icon-bg);
+  color:var(--metro-icon-ink);
+  border:1px solid var(--metro-icon-bg-dark);
+  box-shadow:0 7px 18px rgba(70,91,113,.24);
 }
 .metropolis-app-icon .flow-icon,.metropolis-current-icon .flow-icon{display:grid;place-items:center}
 .metropolis-app-icon svg{width:28px!important;height:28px!important;stroke:currentColor}

@@ -30,10 +30,11 @@ const flowBase = {
 };
 
 const FLOW_ICONS = {
-  store: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v9h16v-9"/><path d="M3 10l2-5h14l2 5"/><path d="M3 10c0 1.4 1 2.5 2.3 2.5S7.7 11.4 7.7 10c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5S21 11.4 21 10"/><path d="M9 19v-4h6v4"/></svg>',
-  ride: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h4l2-5h3"/><path d="M11 9h4l2 3"/><path d="M8 12h4l-2 5"/><path d="M14 7h3"/></svg>',
-  ledger: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M16 10h5v4h-5a2 2 0 0 1 0-4z"/><path d="M7 9h5"/></svg>',
-  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>',
+  app: '<svg data-icon="app-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12V8.4A3.4 3.4 0 0 1 8.4 5h1A3.6 3.6 0 0 1 13 8.6"/><path d="M5 12h4.5A3.5 3.5 0 0 0 13 8.5 2.5 2.5 0 0 1 15.5 6H19"/><path d="M5 12v4a3 3 0 0 0 3 3h7.5a3 3 0 0 0 3-3v-3"/><path d="M9.5 12v7"/><circle cx="5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="9.5" cy="12" r="1"/><circle cx="19" cy="6" r=".8" fill="currentColor" stroke="none"/></svg>',
+  store: '<svg data-icon="storefront" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v9h16v-9"/><path d="M3 10l2-5h14l2 5"/><path d="M3 10c0 1.4 1 2.5 2.3 2.5S7.7 11.4 7.7 10c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5s2.3-1.1 2.3-2.5c0 1.4 1 2.5 2.3 2.5S21 11.4 21 10"/><path d="M9 19v-4h6v4"/></svg>',
+  ride: '<svg data-icon="ride-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="12" r="2.5"/><path d="M9.5 12h3.2l1.7-4H18M11 8l1-4h3M12 4h3"/><path d="M5.5 15.5c-2.2.8-3.1 2-2.4 3.1 1 1.6 4.6 1.7 7.1.2 2.2-1.3 4.4-1.5 7.3-1.2" stroke-dasharray="1.3 2.3"/><circle cx="20" cy="18" r="1.5"/></svg>',
+  ledger: '<svg data-icon="ledger-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="14" height="18" rx="2.5"/><path d="M9 3v18M4 7h4M4 12h4M4 17h4M12.5 8h4.5M12.5 12h4.5M12.5 16h3.5"/></svg>',
+  calendar: '<svg data-icon="calendar-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10.5V20h14v-9.5"/><path d="M9 20v-6h6v6"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
   tree: '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8"/><path d="M12 14c-4.5 0-7-2.8-7-6 4.2-.5 7 1.1 7 6z"/><path d="M12 11c0-4.5 2.8-7 6-7 .5 4.2-1.1 7-6 7z"/><path d="M8 21h8"/></svg>'
@@ -768,7 +769,7 @@ function flowInstallDom() {
     brand.appendChild(button);
   }
 
-  document.querySelector(".brand-mark").innerHTML = flowIcon("tree");
+  document.querySelector(".brand-mark").innerHTML = flowIcon("app");
   const summaryGrid = document.querySelector("#homePage .source-grid");
   summaryGrid?.classList.add("flow-summary-grid");
   const ledgerCard = summaryGrid?.querySelector(".source-card.ledger");
