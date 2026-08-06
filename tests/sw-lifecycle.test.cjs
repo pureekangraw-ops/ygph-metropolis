@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -9,6 +10,7 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 test("index loads the stable runtime files explicitly and in one order", () => {
   const html = read("index.html");
   const expected = [
+    "sw-bootstrap.js",
     "highway-gate.js",
     "app.js",
     "flow-era.js",
@@ -28,7 +30,50 @@ test("index loads the stable runtime files explicitly and in one order", () => {
   }
 });
 
-test("service worker no longer rewrites HTML or forces activation during install", () => {
+test("service worker rescue bootstrap runs before any legacy-cached runtime", () => {
+  const html = read("index.html");
+  const bootstrapIndex = html.indexOf('<script src="sw-bootstrap.js"></script>');
+  const runtimeIndex = html.indexOf('<script src="highway-gate.js"></script>');
+  const source = read("sw-bootstrap.js");
+
+  assert.ok(bootstrapIndex >= 0, "rescue bootstrap script missing");
+  assert.ok(bootstrapIndex < runtimeIndex, "rescue bootstrap must run before cached runtime files");
+  assert.match(source, /serviceWorker\.register\("sw\.js",\s*\{\s*updateViaCache:\s*"none"\s*\}\)/);
+  assert.match(source, /controllerchange/);
+  assert.match(source, /location\.reload\(\)/);
+
+  let controllerChange;
+  let reloads = 0;
+  const registrations = [];
+  vm.runInNewContext(source, {
+    navigator: {
+      serviceWorker: {
+        controller: {},
+        addEventListener(type, listener) {
+          if (type === "controllerchange") controllerChange = listener;
+        },
+        register(...args) {
+          registrations.push(args);
+          return Promise.resolve();
+        }
+      }
+    },
+    location: {
+      protocol: "https:",
+      hostname: "example.test",
+      reload() { reloads += 1; }
+    }
+  });
+
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0][0], "sw.js");
+  assert.equal(registrations[0][1].updateViaCache, "none");
+  controllerChange();
+  controllerChange();
+  assert.equal(reloads, 1, "controller takeover must reload exactly once");
+});
+
+test("service worker only forces install activation for the legacy-cache rescue bridge", () => {
   const source = read("sw.js");
   const installStart = source.indexOf('addEventListener("install"');
   const activateStart = source.indexOf('addEventListener("activate"');
@@ -36,11 +81,49 @@ test("service worker no longer rewrites HTML or forces activation during install
 
   assert.ok(installStart >= 0, "install handler missing");
   assert.ok(activateStart > installStart, "activate handler missing");
-  assert.doesNotMatch(installBody, /skipWaiting\s*\(/);
+  assert.match(installBody, /await precacheRelease\(\)/);
+  assert.match(installBody, /shouldAutoActivateLegacyBridge/);
+  assert.match(installBody, /skipWaiting\s*\(/);
+  assert.equal((installBody.match(/skipWaiting\s*\(/g) || []).length, 1);
   assert.doesNotMatch(source, /inject|replaceAll\s*\(/i);
   assert.match(source, /ACTIVATE_UPDATE/);
   assert.match(source, /ROLLBACK_UPDATE/);
   assert.match(source, /GET_UPDATE_STATUS/);
+});
+
+test("legacy preview cache triggers a one-time bridge without becoming rollback", () => {
+  const {
+    CURRENT_CACHE,
+    LEGACY_CACHE_PREFIXES,
+    legacyAppCaches,
+    shouldAutoActivateLegacyBridge
+  } = require("../sw.js");
+  const legacyCache = "ygph-metropolis-0.1.0-preview.3";
+  const unrelated = "workbox-external";
+
+  assert.ok(LEGACY_CACHE_PREFIXES.some(prefix => legacyCache.startsWith(prefix)));
+  assert.deepEqual(
+    legacyAppCaches([legacyCache, CURRENT_CACHE, unrelated]),
+    [legacyCache]
+  );
+  assert.equal(
+    shouldAutoActivateLegacyBridge([legacyCache, CURRENT_CACHE], {}),
+    true,
+    "a device trapped on the preview cache must activate the verified rescue release"
+  );
+  assert.equal(
+    shouldAutoActivateLegacyBridge(
+      [legacyCache, CURRENT_CACHE],
+      { current: CURRENT_CACHE, serving: CURRENT_CACHE }
+    ),
+    false,
+    "the bridge must not override the normal manual lifecycle after a safe generation exists"
+  );
+  assert.equal(
+    shouldAutoActivateLegacyBridge([unrelated, CURRENT_CACHE], {}),
+    false,
+    "unrelated caches must never force activation"
+  );
 });
 
 test("activation keeps one previous app cache and cleanup ignores unrelated caches", () => {

@@ -11,6 +11,7 @@ const productionFiles = [
   "flow-era-3.5.js",
   "metropolis-v4.css",
   "metropolis-v4.js",
+  "sw-bootstrap.js",
   "sw.js",
   "manifest.webmanifest"
 ];
