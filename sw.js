@@ -1,7 +1,10 @@
 "use strict";
 
 const APP_CACHE_PREFIX = "ygph-metropolis-app-";
-const RELEASE_ID = "v4.0.0-phase1-safety-20260806";
+const LEGACY_CACHE_PREFIXES = Object.freeze([
+  "ygph-metropolis-0.1.0-preview."
+]);
+const RELEASE_ID = "v4.0.0-phase1-safety-20260806-r2";
 const CURRENT_CACHE = `${APP_CACHE_PREFIX}${RELEASE_ID}`;
 const META_CACHE = "ygph-metropolis-meta";
 const META_PATH = "__ygph_service_worker_lifecycle__";
@@ -13,6 +16,7 @@ const APP_SHELL = [
   "flow-era.css",
   "flow-era-3.5.css",
   "metropolis-v4.css",
+  "sw-bootstrap.js",
   "highway-gate.js",
   "app.js",
   "flow-era.js",
@@ -70,6 +74,18 @@ function planUseCurrent(existing, at = new Date().toISOString()) {
 function obsoleteAppCaches(cacheNames, lifecycle) {
   const keep = new Set([lifecycle?.current, lifecycle?.serving, lifecycle?.previous].filter(Boolean));
   return cacheNames.filter(name => name.startsWith(APP_CACHE_PREFIX) && !keep.has(name));
+}
+
+function legacyAppCaches(cacheNames = []) {
+  return cacheNames.filter(name =>
+    LEGACY_CACHE_PREFIXES.some(prefix => name.startsWith(prefix))
+  );
+}
+
+function shouldAutoActivateLegacyBridge(cacheNames, lifecycle) {
+  const state = lifecycleBase(lifecycle);
+  const hasSafeGeneration = Boolean(state.current || state.serving || state.previous);
+  return !hasSafeGeneration && legacyAppCaches(cacheNames).length > 0;
 }
 
 function assertShellReadback(responses) {
@@ -153,14 +169,28 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function") 
   }
 
   self.addEventListener("install", event => {
-    event.waitUntil(precacheRelease());
+    event.waitUntil((async () => {
+      await precacheRelease();
+      const [cacheNames, lifecycle] = await Promise.all([
+        caches.keys(),
+        readLifecycle()
+      ]);
+      if (shouldAutoActivateLegacyBridge(cacheNames, lifecycle)) {
+        await self.skipWaiting();
+      }
+    })());
   });
 
   self.addEventListener("activate", event => {
     event.waitUntil((async () => {
       const existing = await readLifecycle();
       const lifecycle = await writeLifecycle(planActivation(existing, CURRENT_CACHE));
-      await Promise.all(obsoleteAppCaches(await caches.keys(), lifecycle).map(name => caches.delete(name)));
+      const cacheNames = await caches.keys();
+      const cleanup = new Set([
+        ...obsoleteAppCaches(cacheNames, lifecycle),
+        ...legacyAppCaches(cacheNames)
+      ]);
+      await Promise.all([...cleanup].map(name => caches.delete(name)));
       await self.clients.claim();
       await notifyClients(await updateStatus());
     })());
@@ -232,6 +262,7 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function") 
 if (typeof module === "object" && module.exports) {
   module.exports = {
     APP_CACHE_PREFIX,
+    LEGACY_CACHE_PREFIXES,
     RELEASE_ID,
     CURRENT_CACHE,
     META_CACHE,
@@ -241,6 +272,8 @@ if (typeof module === "object" && module.exports) {
     planRollback,
     planUseCurrent,
     obsoleteAppCaches,
+    legacyAppCaches,
+    shouldAutoActivateLegacyBridge,
     assertShellReadback,
     offlineLookupKeys
   };
