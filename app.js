@@ -1,6 +1,5 @@
 import {
   RELEASE_VERSION,
-  VAULT_KEY,
   createDefaultState,
   dateKey,
   formatSatang,
@@ -9,11 +8,13 @@ import {
 } from './core.js';
 import { createAppController } from './controller.js';
 import {
-  exportEncryptedBackup,
-  importEncryptedBackup,
+  exportLocalBackup,
+  hasLegacyVault,
+  importLocalBackup,
+  loadLocalState,
+  migrateLegacyVault,
   openVaultStore,
-  saveNewVault,
-  unlockVault,
+  saveNewLocalState,
 } from './vault.js';
 import { buildDashboardModel, escapeHtml, renderLauncher } from './ui-model.js';
 
@@ -22,20 +23,18 @@ const gate = $('#gate');
 const app = $('#app');
 const toast = $('#toast');
 const setupScreen = $('#setupScreen');
-const unlockScreen = $('#unlockScreen');
+const migrationScreen = $('#migrationScreen');
 const restoreScreen = $('#restoreScreen');
 
 let store;
-let key;
 let controller;
 let route = 'home';
-let restoreReturn = 'unlock';
+let restoreReturn = 'setup';
 let toastTimer;
-let lockTimer;
 let appEventsBound = false;
 
 function showOnly(screen) {
-  for (const node of [setupScreen, unlockScreen, restoreScreen]) node.classList.toggle('hidden', node !== screen);
+  for (const node of [setupScreen, migrationScreen, restoreScreen]) node.classList.toggle('hidden', node !== screen);
   gate.classList.remove('hidden');
   app.classList.add('hidden');
 }
@@ -46,20 +45,6 @@ function notify(message, error = false) {
   toast.classList.toggle('error', error);
   toast.classList.remove('hidden');
   toastTimer = setTimeout(() => toast.classList.add('hidden'), 3200);
-}
-
-function resetLockTimer() {
-  clearTimeout(lockTimer);
-  const minutes = controller?.getState()?.settings?.lockMinutes || 5;
-  lockTimer = setTimeout(lockApp, Math.max(1, minutes) * 60_000);
-}
-
-function lockApp() {
-  key = null;
-  controller = null;
-  app.innerHTML = '';
-  showOnly(unlockScreen);
-  $('#unlockForm').reset();
 }
 
 function money(value) {
@@ -95,7 +80,6 @@ function shell() {
       </div>
       <div class="top-actions">
         <button class="icon-btn" id="themeBtn" type="button" aria-label="เปลี่ยนธีม">◐</button>
-        <button class="icon-btn" id="lockBtn" type="button" aria-label="ล็อก">⌁</button>
       </div>
     </header>
     <main class="content" id="content"></main>
@@ -181,9 +165,8 @@ function renderReports(state) {
 function renderSettings(state) {
   return `
     <div class="page-head"><div><h1>ตั้งค่าและข้อมูลสำรอง</h1><p class="muted">งานสำคัญต้องตรวจผลก่อนถือว่าสำเร็จ</p></div><button class="secondary small" data-route="home">กลับหน้ารวม</button></div>
-    <section class="panel"><h2>ไฟล์สำรองเข้ารหัส</h2><div class="actions"><button class="primary" id="exportBtn">ส่งออก Backup</button><label class="secondary" style="display:inline-flex;align-items:center">นำเข้า Backup<input id="importFile" type="file" accept="application/json,.json" hidden></label></div><form id="importForm" class="form-grid hidden" style="margin-top:12px"><label class="wide">รหัสผ่านของไฟล์<input name="password" type="password" required></label><button class="primary wide" type="submit">ตรวจและนำเข้า</button></form></section>
-    <section class="panel"><h2>สถานะระบบ</h2><div class="list"><div class="list-item"><strong>Release</strong><b>${RELEASE_VERSION}</b></div><div class="list-item"><strong>State schema</strong><b>${state.schema}</b></div><div class="list-item"><strong>Revision</strong><b>${state.revision}</b></div><div class="list-item"><strong>ที่เก็บข้อมูล</strong><b>IndexedDB + AES-GCM</b></div></div></section>
-    <section class="panel"><h2>ความปลอดภัย</h2><button class="danger" id="settingsLockBtn">ล็อกแอปตอนนี้</button></section>`;
+    <section class="panel"><h2>ไฟล์สำรอง</h2><div class="actions"><button class="primary" id="exportBtn">ส่งออก Backup</button><label class="secondary" style="display:inline-flex;align-items:center">นำเข้า Backup<input id="importFile" type="file" accept="application/json,.json" hidden></label></div><form id="importForm" class="form-grid hidden" style="margin-top:12px"><button class="primary wide" type="submit">ตรวจและนำเข้า</button></form></section>
+    <section class="panel"><h2>สถานะระบบ</h2><div class="list"><div class="list-item"><strong>Release</strong><b>${RELEASE_VERSION}</b></div><div class="list-item"><strong>State schema</strong><b>${state.schema}</b></div><div class="list-item"><strong>Revision</strong><b>${state.revision}</b></div><div class="list-item"><strong>ที่เก็บข้อมูล</strong><b>IndexedDB · เปิดตรงโดยไม่ใช้รหัส</b></div></div></section>`;
 }
 
 function render() {
@@ -196,7 +179,6 @@ function render() {
   document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.route === route));
   updateNetwork();
   bindRouteSpecific();
-  resetLockTimer();
 }
 
 function formCommand(form) {
@@ -230,12 +212,11 @@ function bindRouteSpecific() {
   const importFile = $('#importFile');
   importFile?.addEventListener('change', () => $('#importForm').classList.toggle('hidden', !importFile.files?.length));
   $('#importForm')?.addEventListener('submit', importBackupFromSettings);
-  $('#settingsLockBtn')?.addEventListener('click', lockApp);
 }
 
 async function exportBackup() {
   try {
-    const backup = await exportEncryptedBackup(store, RELEASE_VERSION);
+    const backup = await exportLocalBackup(store, RELEASE_VERSION);
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -251,22 +232,20 @@ async function importBackupFromSettings(event) {
   event.preventDefault();
   const file = $('#importFile').files?.[0];
   if (!file) return;
-  const password = new FormData(event.currentTarget).get('password');
-  await importFile(file, password);
+  await importFile(file);
 }
 
-async function importFile(file, password) {
+async function importFile(file) {
   try {
     const backup = JSON.parse(await file.text());
-    const unlocked = await importEncryptedBackup(store, backup, password);
-    key = unlocked.key;
-    enterApp(unlocked.state);
+    const state = await importLocalBackup(store, backup);
+    enterApp(state);
     notify('นำเข้าและตรวจข้อมูลหลังเขียนแล้ว');
   } catch (error) { notify(error.message || 'นำเข้าไม่สำเร็จ', true); }
 }
 
 function enterApp(state) {
-  controller = createAppController({ store, key, state, onChange: () => {} });
+  controller = createAppController({ store, state, onChange: () => {} });
   route = 'home';
   gate.classList.add('hidden');
   app.classList.remove('hidden');
@@ -277,7 +256,6 @@ function enterApp(state) {
     appEventsBound = true;
   }
   $('#themeBtn').addEventListener('click', toggleTheme);
-  $('#lockBtn').addEventListener('click', lockApp);
   render();
 }
 
@@ -319,45 +297,47 @@ async function init() {
   const savedTheme = localStorage.getItem('ygph-theme');
   if (savedTheme) document.documentElement.dataset.theme = savedTheme;
   store = await openVaultStore();
-  const vault = await store.get(VAULT_KEY);
-  showOnly(vault ? unlockScreen : setupScreen);
+  const state = await loadLocalState(store);
+  if (state) enterApp(state);
+  else if (await hasLegacyVault(store)) showOnly(migrationScreen);
+  else showOnly(setupScreen);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
   window.addEventListener('online', updateNetwork);
   window.addEventListener('offline', updateNetwork);
-  for (const eventName of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(eventName, resetLockTimer, { passive: true });
 }
 
 $('#setupForm').addEventListener('submit', async event => {
   event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  if (data.get('password') !== data.get('confirmPassword')) return notify('รหัสผ่านไม่ตรงกัน', true);
+  const form = event.currentTarget;
+  const data = new FormData(form);
   try {
     const state = createDefaultState({ openingBalanceSatang: parseBahtToSatang(data.get('openingBalance')) });
-    const created = await saveNewVault(store, data.get('password'), state);
-    key = created.key;
-    enterApp(state);
-    notify('สร้าง Vault และตรวจ read-back แล้ว');
+    const durable = await saveNewLocalState(store, state);
+    enterApp(durable);
+    notify('เริ่มใช้งานและตรวจข้อมูลหลังเขียนแล้ว');
   } catch (error) { notify(error.message, true); }
 });
 
-$('#unlockForm').addEventListener('submit', async event => {
+$('#migrationForm').addEventListener('submit', async event => {
   event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
   try {
-    const vault = await store.get(VAULT_KEY);
-    const unlocked = await unlockVault(vault, new FormData(event.currentTarget).get('password'));
-    key = unlocked.key;
-    enterApp(unlocked.state);
-  } catch (error) { notify(error.message, true); }
+    const state = await migrateLegacyVault(store, data.get('password'));
+    enterApp(state);
+    notify('ย้ายข้อมูลเดิมแล้ว จากนี้เปิดได้โดยไม่ใช้รหัส');
+  } catch (error) { notify(error.message || 'ย้ายข้อมูลเดิมไม่สำเร็จ', true); }
 });
 
-for (const [selector, back] of [['#showRestoreFromSetup','setup'],['#showRestoreFromUnlock','unlock']]) {
+for (const [selector, back] of [['#showRestoreFromSetup','setup'],['#showRestoreFromMigration','migration']]) {
   $(selector).addEventListener('click', () => { restoreReturn = back; showOnly(restoreScreen); });
 }
-$('#cancelRestore').addEventListener('click', () => showOnly(restoreReturn === 'setup' ? setupScreen : unlockScreen));
+$('#cancelRestore').addEventListener('click', () => showOnly(restoreReturn === 'migration' ? migrationScreen : setupScreen));
 $('#restoreForm').addEventListener('submit', async event => {
   event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  await importFile(data.get('backup'), data.get('password'));
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  await importFile(data.get('backup'));
 });
 
 init().catch(error => notify(error.message || 'เริ่มระบบไม่สำเร็จ', true));

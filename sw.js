@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ygph-metropolis-0.1.0-preview.1';
+const CACHE_NAME = 'ygph-metropolis-0.1.0-preview.3';
 const APP_SHELL = [
   './',
   './index.html',

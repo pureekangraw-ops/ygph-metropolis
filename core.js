@@ -1,4 +1,4 @@
-export const RELEASE_VERSION = '0.1.0-preview.1';
+export const RELEASE_VERSION = '0.1.0-preview.3';
 export const STATE_SCHEMA = 4;
 export const DB_NAME = 'stock-pocket-secure';
 export const DB_VERSION = 1;

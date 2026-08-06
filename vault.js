@@ -10,6 +10,7 @@ import {
   validateState,
 } from './core.js';
 
+export const STATE_KEY = 'state';
 const AAD_TEXT = 'stock-pocket-secure-v1';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -31,6 +32,13 @@ function randomBytes(length) {
   const bytes = new Uint8Array(length);
   globalThis.crypto.getRandomValues(bytes);
   return bytes;
+}
+
+function checkedState(value) {
+  const state = normalizeState(structuredClone(value));
+  const validation = validateState(state);
+  if (!validation.ok) throw new Error(validation.errors.join('\n'));
+  return state;
 }
 
 export async function deriveVaultKey(passphrase, salt, iterations = PBKDF2_ITERATIONS) {
@@ -114,9 +122,9 @@ export function validateVaultEnvelope(vault) {
   return { ok: errors.length === 0, errors };
 }
 
+// Legacy-only helpers. They remain solely to migrate the existing encrypted preview data once.
 export async function createVault(passphrase, state) {
-  const validation = validateState(state);
-  if (!validation.ok) throw new Error(validation.errors.join('\n'));
+  const safeState = checkedState(state);
   const salt = randomBytes(16);
   const kdf = {
     name: 'PBKDF2',
@@ -125,17 +133,15 @@ export async function createVault(passphrase, state) {
     salt: bytesToBase64(salt),
   };
   const key = await deriveVaultKey(passphrase, salt, kdf.iterations);
-  const vault = await encryptWithKey(state, key, kdf);
-  return { vault, key, state };
+  const vault = await encryptWithKey(safeState, key, kdf);
+  return { vault, key, state: safeState };
 }
 
 export async function unlockVault(vault, passphrase) {
   const envelope = validateVaultEnvelope(vault);
   if (!envelope.ok) throw new Error(envelope.errors.join('\n'));
   const key = await deriveVaultKey(passphrase, base64ToBytes(vault.kdf.salt), vault.kdf.iterations);
-  const state = normalizeState(await decryptWithKey(vault, key));
-  const validation = validateState(state);
-  if (!validation.ok) throw new Error(`ข้อมูลใน Vault ไม่ผ่านการตรวจ: ${validation.errors.join(', ')}`);
+  const state = checkedState(await decryptWithKey(vault, key));
   return { state, key, vault };
 }
 
@@ -178,34 +184,78 @@ export async function openVaultStore() {
   };
 }
 
-export async function commitState({ store, key, proposed, action = 'UNKNOWN' }) {
-  const validation = validateState(proposed);
-  if (!validation.ok) throw new Error(validation.errors.join('\n'));
-  const currentVault = await store.get(VAULT_KEY);
-  if (!currentVault) throw new Error('ไม่พบ Vault เดิม');
-  const envelope = validateVaultEnvelope(currentVault);
-  if (!envelope.ok) throw new Error(envelope.errors.join('\n'));
-  const vault = await encryptWithKey(proposed, key, currentVault.kdf);
-  await store.put(VAULT_KEY, vault);
-  const durableVault = await store.get(VAULT_KEY);
-  const durableState = await decryptWithKey(durableVault, key);
-  if (stableStringify(durableState) !== stableStringify(proposed)) {
+export async function loadLocalState(store) {
+  const stored = await store.get(STATE_KEY);
+  return stored ? checkedState(stored) : null;
+}
+
+export async function saveNewLocalState(store, state) {
+  const safeState = checkedState(state);
+  await store.put(STATE_KEY, safeState);
+  const durable = await loadLocalState(store);
+  if (stableStringify(durable) !== stableStringify(safeState)) {
+    throw new Error('ตรวจข้อมูลหลังสร้างไม่ผ่าน');
+  }
+  return durable;
+}
+
+export async function commitState({ store, proposed, action = 'UNKNOWN' }) {
+  const safeState = checkedState(proposed);
+  const current = await loadLocalState(store);
+  if (!current) throw new Error('ไม่พบข้อมูลเดิม');
+  await store.put(STATE_KEY, safeState);
+  const durableState = await loadLocalState(store);
+  if (stableStringify(durableState) !== stableStringify(safeState)) {
     throw new Error('ตรวจข้อมูลหลังบันทึกไม่ผ่าน');
   }
   return {
     status: 'COMMITTED',
     action,
-    revision: proposed.revision,
+    revision: safeState.revision,
     committedAt: new Date().toISOString(),
   };
 }
 
+export async function exportLocalBackup(store, releaseVersion = '0.1.0-preview.3') {
+  const state = await loadLocalState(store);
+  if (!state) throw new Error('ไม่พบข้อมูลในเครื่อง');
+  return {
+    backupFormat: 'ygph-local-backup',
+    backupVersion: 1,
+    exportedAt: new Date().toISOString(),
+    releaseVersion,
+    state,
+  };
+}
+
+export async function importLocalBackup(store, backup) {
+  if (backup?.backupFormat !== 'ygph-local-backup' || backup?.backupVersion !== 1 || !backup.state) {
+    throw new Error('ไฟล์สำรองไม่ถูกต้อง');
+  }
+  const state = checkedState(backup.state);
+  await saveNewLocalState(store, state);
+  return state;
+}
+
+export async function hasLegacyVault(store) {
+  return Boolean(await store.get(VAULT_KEY));
+}
+
+export async function migrateLegacyVault(store, passphrase) {
+  const vault = await store.get(VAULT_KEY);
+  if (!vault) throw new Error('ไม่พบข้อมูลเข้ารหัสเดิม');
+  const { state } = await unlockVault(vault, passphrase);
+  await saveNewLocalState(store, state);
+  return state;
+}
+
+// Kept for compatibility with old utilities; regular UI no longer uses these.
 export async function saveNewVault(store, passphrase, state) {
   const created = await createVault(passphrase, state);
   await store.put(VAULT_KEY, created.vault);
   const durable = await store.get(VAULT_KEY);
   const unlocked = await unlockVault(durable, passphrase);
-  if (stableStringify(unlocked.state) !== stableStringify(state)) throw new Error('ตรวจ Vault หลังสร้างไม่ผ่าน');
+  if (stableStringify(unlocked.state) !== stableStringify(created.state)) throw new Error('ตรวจ Vault หลังสร้างไม่ผ่าน');
   return created;
 }
 

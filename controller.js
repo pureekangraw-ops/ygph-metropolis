@@ -3,7 +3,6 @@ import { commitState } from './vault.js';
 
 export function createAppController({
   store,
-  key,
   state,
   onChange = () => {},
   commandOptions = {},
@@ -27,7 +26,6 @@ export function createAppController({
         const proposed = applyCommand(currentState, command, commandOptions);
         const receipt = await commitState({
           store,
-          key,
           proposed,
           action: command.type,
         });
