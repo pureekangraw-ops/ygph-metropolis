@@ -27,6 +27,8 @@
     loadScript("metropolis-r5-1.js", "data-metropolis-r5-1");
     loadStylesheet("metropolis-r5-2.css", "data-metropolis-r5-2");
     loadScript("metropolis-r5-2.js", "data-metropolis-r5-2");
+    loadStylesheet("metropolis-r5-3.css", "data-metropolis-r5-3");
+    loadScript("metropolis-r5-3.js", "data-metropolis-r5-3");
   }
 
   loadMetropolisLayers();
