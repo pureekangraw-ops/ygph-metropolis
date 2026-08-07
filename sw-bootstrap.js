@@ -2,6 +2,7 @@
 
 (() => {
   function loadMetropolisR5() {
+    if (typeof document === "undefined") return;
     if (!document.querySelector('link[data-metropolis-r5="true"]')) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
