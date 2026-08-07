@@ -43,12 +43,11 @@ test("accepted imported queues bypass only the duplicate local verification prom
 });
 
 test("launcher cards use SVG app marks and no redundant arrow affordance", () => {
-  const source = read("metropolis-r5.js");
+  const { iconSvg } = runtime();
   const css = read("metropolis-r5.css");
-  assert.match(source, /data-r5-icon="store"/);
-  assert.match(source, /data-r5-icon="ride"/);
-  assert.match(source, /data-r5-icon="ledger"/);
-  assert.match(source, /data-r5-icon="calendar"/);
+  for (const app of ["store", "ride", "ledger", "calendar"]) {
+    assert.match(iconSvg(app), new RegExp(`data-r5-icon="${app}"`));
+  }
   assert.match(css, /\.metropolis-open-mark\s*\{[^}]*display:\s*none/s);
 });
 
