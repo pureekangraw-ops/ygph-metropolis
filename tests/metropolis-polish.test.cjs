@@ -5,7 +5,6 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const jsPath = path.join(root, "metropolis-r5.js");
-const cssPath = path.join(root, "metropolis-r5.css");
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -61,12 +60,12 @@ test("compact Calendar cards keep readable columns and wrap actions inside the c
   assert.match(css, /#calendarPage\s+\.queue-actions[^{]*\{[^}]*flex-wrap:\s*wrap/s);
 });
 
-test("R5 assets are loaded by the document and cached by the service worker", () => {
-  const html = read("index.html");
+test("R5 assets are loaded by the existing bootstrap and cached by the service worker", () => {
+  const bootstrap = read("sw-bootstrap.js");
   const sw = read("sw.js");
   const pkg = read("package.json");
-  assert.match(html, /metropolis-r5\.css/);
-  assert.match(html, /metropolis-r5\.js/);
+  assert.match(bootstrap, /metropolis-r5\.css/);
+  assert.match(bootstrap, /metropolis-r5\.js/);
   assert.match(sw, /metropolis-r5\.css/);
   assert.match(sw, /metropolis-r5\.js/);
   assert.match(pkg, /node --check metropolis-r5\.js/);
