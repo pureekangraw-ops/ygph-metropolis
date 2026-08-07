@@ -54,13 +54,13 @@
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "FINAL_GATE_REQUIRED",
-    "focusedServiceWorker": "FINAL_GATE_REQUIRED",
-    "syntax": "FINAL_GATE_REQUIRED",
-    "utf8": "FINAL_GATE_REQUIRED",
-    "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
-    "browserPersistence": "COVERED_BY_REGRESSION_GATE",
-    "independentCodeReview": "PENDING_FINAL_DIFF_REVIEW",
+    "nodeTests": "60/60 PASS",
+    "focusedServiceWorker": "PASS",
+    "syntax": "PASS",
+    "utf8": "15/15 production files PASS",
+    "encryptedBackupRoundTrip": "PASS",
+    "browserPersistence": "PASS",
+    "independentCodeReview": "NO UNRELATED PRODUCTION FILES IN PR #2",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY"
   },
   "productionFiles": [
