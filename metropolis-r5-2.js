@@ -478,6 +478,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     function decorateInstallmentActions() {
       if (typeof state === "undefined" || !state) return;
       document.querySelectorAll("[data-move]").forEach(button => {
+        if (button.dataset.r52Manager === "true") return;
         const queue = findQueue(button.dataset.move);
         const source = queue && findSource(queue.source, queue.sourceId);
         if (!queue || !source || source.scheduleMode !== "PER_INSTALLMENT" || !["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(queue.actionType)) return;
