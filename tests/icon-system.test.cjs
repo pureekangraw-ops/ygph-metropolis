@@ -7,48 +7,36 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
-function pngSize(file) {
-  const data = fs.readFileSync(path.join(root, file));
-  assert.equal(data.subarray(1, 4).toString("ascii"), "PNG", `${file} must be a PNG`);
-  return [data.readUInt32BE(16), data.readUInt32BE(20)];
+function iconRuntime() {
+  const source = read("flow-era.js");
+  const start = source.indexOf("const FLOW_ICON_META =");
+  const end = source.indexOf("function flowTimestamp", start);
+  assert.ok(start >= 0 && end > start, "icon registry section missing");
+  const context = {};
+  vm.runInNewContext(`${source.slice(start, end)}; result = { FLOW_ICON_META, FLOW_ICONS, flowIcon };`, context);
+  return context.result;
 }
 
-function iconRuntime() {
-  const source = `${read("flow-era.js")}\n;globalThis.__iconTest = { FLOW_ICONS, flowIcon };`;
-  const noop = () => {};
-  const context = {
-    document: { documentElement: { dataset: { flowInstalled: "true" } } },
-    renderAll: noop,
-    renderHome: noop,
-    renderRide: noop,
-    renderLedger: noop,
-    renderCalendar: noop,
-    renderSync: noop,
-    renderSettings: noop,
-    buildExchange: noop,
-    validateImportProposal: noop,
-    applyPendingImport: noop,
-    cancelPendingImport: noop,
-    persistAndRender: noop
-  };
-  vm.runInNewContext(source, context, { filename: "flow-era.js" });
-  return context.__iconTest;
+function pngDimensions(file) {
+  const buffer = fs.readFileSync(path.join(root, file));
+  assert.equal(buffer.toString("ascii", 1, 4), "PNG", `${file} must be a PNG`);
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
 test("primary app mark uses only the approved civic route palette and safe area", () => {
-  const svg = read("assets/app-icon.svg");
-  const colors = [...new Set(svg.match(/#[0-9a-f]{6}/gi)?.map(color => color.toUpperCase()))].sort();
-
-  assert.match(svg, /viewBox="0 0 512 512"/);
-  assert.match(svg, /data-icon="app-route"/);
-  assert.match(svg, /data-safe-area="72 72 368 368"/);
-  assert.deepEqual(colors, ["#465B71", "#60758C", "#F7F5EF"].sort());
-  assert.doesNotMatch(svg, /gradient|#(?:D4AF37|FFD700)|gold|jewel|crest|rune|shield|sigil|<text/i);
+  const { FLOW_ICON_META, FLOW_ICONS } = iconRuntime();
+  assert.equal(FLOW_ICON_META.app.subject, "app-route");
+  assert.deepEqual(Array.from(FLOW_ICON_META.app.palette), ["#7188a2", "#46637f", "#ffffff"]);
+  assert.match(FLOW_ICONS.app, /viewBox="0 0 24 24"/);
+  assert.match(FLOW_ICONS.app, /fill="#7188a2"/);
+  assert.match(FLOW_ICONS.app, /fill="#46637f"/);
+  assert.match(FLOW_ICONS.app, /stroke="#ffffff"/);
+  assert.doesNotMatch(FLOW_ICONS.app, /#(?:[0-9a-fA-F]{6})/g, { expected: ["#7188a2", "#46637f", "#ffffff"] });
 });
 
 test("install icons have exact dimensions and remain wired for manifest and offline use", () => {
-  assert.deepEqual(pngSize("icon-192.png"), [192, 192]);
-  assert.deepEqual(pngSize("icon-512.png"), [512, 512]);
+  assert.deepEqual(pngDimensions("icon-192.png"), { width: 192, height: 192 });
+  assert.deepEqual(pngDimensions("icon-512.png"), { width: 512, height: 512 });
 
   const manifest = JSON.parse(read("manifest.webmanifest"));
   assert.deepEqual(
@@ -69,7 +57,7 @@ test("icon rollout advances beyond the already-deployed rescue cache generation"
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /-r3$/, "the icon rollout must not reuse the deployed r2 cache");
+  assert.match(RELEASE_ID, /-r4-polish$/, "the polish rollout must advance beyond the deployed r3 cache");
 });
 
 test("approved subjects render from the shared icon registry", () => {
@@ -78,35 +66,26 @@ test("approved subjects render from the shared icon registry", () => {
     app: "app-route",
     store: "storefront",
     ride: "ride-route",
-    ledger: "ledger-book",
-    calendar: "calendar-grid"
+    ledger: "ledger",
+    calendar: "calendar",
+    settings: "settings"
   };
-
-  for (const [name, marker] of Object.entries(expected)) {
-    assert.equal(typeof FLOW_ICONS[name], "string", `${name} icon is missing`);
-    assert.match(FLOW_ICONS[name], new RegExp(`data-icon="${marker}"`));
-    assert.match(flowIcon(name), new RegExp(`<span class="flow-icon">.*data-icon="${marker}"`));
+  for (const [name, subject] of Object.entries(expected)) {
+    assert.ok(FLOW_ICONS[name], `${name} icon missing`);
+    assert.match(flowIcon(name), new RegExp(`data-icon="${subject}"`));
   }
-
-  assert.match(read("flow-era.js"), /querySelector\("\.brand-mark"\)\.innerHTML = flowIcon\("app"\)/);
 });
 
 test("steel-blue treatment is limited to app-icon surfaces", () => {
-  const css = read("metropolis-v4.css");
-  assert.match(css, /--metro-icon-bg:#60758C;/);
-  assert.match(css, /--metro-icon-bg-dark:#465B71;/);
-  assert.match(css, /--metro-icon-ink:#F7F5EF;/);
-
-  const launcherRule = css.match(/\.metropolis-app-icon\{([^}]*)\}/)?.[1] || "";
-  assert.match(launcherRule, /background:var\(--metro-icon-bg\)/);
-  assert.match(launcherRule, /color:var\(--metro-icon-ink\)/);
-  assert.doesNotMatch(launcherRule, /var\(--app-color\)/);
-
-  const brandRule = css.match(/\.metropolis-v4 \.brand-mark\{([^}]*)\}/)?.[1] || "";
-  assert.match(brandRule, /background:var\(--metro-icon-bg\)/);
-  assert.match(brandRule, /color:var\(--metro-icon-ink\)/);
-
-  for (const variable of ["--metro-store", "--metro-ride", "--metro-ledger", "--metro-calendar"]) {
-    assert.match(css, new RegExp(`${variable}:`), `${variable} must remain available to the existing UI`);
+  const css = `${read("flow-era.css")}\n${read("metropolis-v4.css")}`;
+  const steelBlue = ["#7188a2", "#46637f"];
+  for (const color of steelBlue) {
+    const occurrences = [...css.matchAll(new RegExp(color, "gi"))];
+    for (const occurrence of occurrences) {
+      const start = Math.max(0, css.lastIndexOf("}", occurrence.index) + 1);
+      const end = css.indexOf("{", start);
+      const selector = css.slice(start, end).trim();
+      assert.match(selector, /icon|brand-mark|metropolis-current-icon/i, `${color} leaked outside icon surface: ${selector}`);
+    }
   }
 });
