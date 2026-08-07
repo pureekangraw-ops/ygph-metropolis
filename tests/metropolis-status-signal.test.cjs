@@ -29,7 +29,22 @@ test("cancelled live cards are removed without deleting durable records", () => 
   const js = read("metropolis-r5-3.js");
   assert.match(js, /signal === STATUS_SIGNALS\.HIDDEN[\s\S]{0,100}card\.remove\(\)/);
   assert.match(js, /signal === STATUS_SIGNALS\.HIDDEN[\s\S]{0,100}row\.remove\(\)/);
+  assert.match(js, /\.record \.status\.cancelled/);
   assert.doesNotMatch(js, /state\.calendar\.(?:splice|pop|shift)|delete\s+state\.calendar/);
+});
+
+test("cancelled controls disappear from Calendar live UI", () => {
+  const js = read("metropolis-r5-3.js");
+  assert.match(js, /data-filter=\\"CANCELLED\\"/);
+  assert.match(js, /getElementById\("calCancelled"\)/);
+  assert.match(js, /r53-three-stats/);
+});
+
+test("selected-day swipe uses a live-only calendar so cancelled queues cannot reappear", () => {
+  const js = read("metropolis-r5-3.js");
+  assert.match(js, /function withLiveCalendar/);
+  assert.match(js, /flowRenderCalendarFocus\s*=\s*function/);
+  assert.match(js, /withLiveCalendar\(\(\) => baseFlowCalendarFocus/);
 });
 
 test("status stylesheet exposes exactly the three owner-approved signal colors", () => {
@@ -37,6 +52,7 @@ test("status stylesheet exposes exactly the three owner-approved signal colors",
   assert.match(css, /\.r53-status-green/);
   assert.match(css, /\.r53-status-yellow/);
   assert.match(css, /\.r53-status-red/);
+  assert.match(css, /\.r53-three-stats/);
   assert.doesNotMatch(css, /r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
@@ -47,5 +63,5 @@ test("status signal assets load last and are included in the offline shell", () 
   assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r7-status");
+  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r8-status-clean");
 });
