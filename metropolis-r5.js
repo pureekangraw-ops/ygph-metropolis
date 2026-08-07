@@ -201,6 +201,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       if (typeof state === "undefined" || !state?.ledger?.obligations || !Array.isArray(state.calendar)) return 0;
       let changed = 0;
       for (const obligation of state.ledger.obligations) {
+        if (obligation.scheduleMode === "PER_INSTALLMENT") continue;
         const count = Number(obligation.installmentCount || 1);
         if (count <= 1 || obligation.status === "CANCELLED") continue;
         const firstDue = obligation.firstDue || obligation.installments?.[0]?.due;

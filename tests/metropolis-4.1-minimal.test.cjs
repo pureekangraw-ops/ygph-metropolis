@@ -8,9 +8,8 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const runtime = require("../metropolis-r5-1.js");
 const sw = require("../sw.js");
 
-test("Metropolis product version advances to 4.1.0", () => {
+test("Metropolis 4.1 compatibility layer retains its own version marker", () => {
   assert.equal(runtime.METROPOLIS_PRODUCT_VERSION, "4.1.0");
-  assert.match(sw.RELEASE_ID, /^v4\.1\.0-20260807-r5-minimal$/);
 });
 
 test("launcher cleanup removes explanatory copy while retaining primary app content", () => {

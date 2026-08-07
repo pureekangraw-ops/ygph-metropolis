@@ -1,0 +1,92 @@
+/* YGPH METROPOLIS 4.2 — schedule engine */
+
+.r52-schedule-preview{
+  border:1px solid var(--metro-line,#dfe9e4);
+  border-radius:18px;
+  background:#f8fbf9;
+  padding:.85rem;
+  color:var(--metro-ink,#17251f);
+}
+
+.r52-schedule-preview>small{
+  color:var(--metro-muted,#65766f);
+}
+
+.r52-schedule-preview>b{
+  display:block;
+  font-size:.9rem;
+  line-height:1.35;
+}
+
+.r52-preview-list{
+  display:grid;
+  gap:.42rem;
+  margin-top:.65rem;
+  max-height:220px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding-right:.15rem;
+}
+
+.r52-preview-list>span{
+  display:grid;
+  grid-template-columns:2rem minmax(0,1fr) auto;
+  align-items:center;
+  gap:.55rem;
+  padding:.48rem .55rem;
+  border-radius:12px;
+  background:#fff;
+  border:1px solid rgba(210,226,218,.8);
+}
+
+.r52-preview-list>span>strong{
+  display:grid;
+  place-items:center;
+  width:1.7rem;
+  height:1.7rem;
+  border-radius:50%;
+  background:var(--metro-accent-soft,#e9f6ef);
+  color:var(--metro-accent,#176b4f);
+  font-size:.75rem;
+}
+
+.r52-preview-list>span>em{
+  min-width:0;
+  font-style:normal;
+  font-size:.8rem;
+  color:var(--metro-muted,#65766f);
+}
+
+.r52-preview-list>span>b{
+  font-size:.8rem;
+  white-space:nowrap;
+}
+
+.r52-manager-actions{
+  display:grid!important;
+  grid-template-columns:1fr 1fr;
+  gap:.6rem;
+  padding-top:.2rem;
+}
+
+.r52-manager-actions button{
+  width:100%;
+  min-width:0;
+  white-space:normal;
+}
+
+button[data-r52-manager="true"]{
+  font-weight:800;
+}
+
+@media (max-width:560px){
+  .r52-preview-list>span{
+    grid-template-columns:1.8rem minmax(0,1fr);
+  }
+  .r52-preview-list>span>b{
+    grid-column:2;
+  }
+  .r52-manager-actions{
+    grid-template-columns:1fr;
+  }
+}

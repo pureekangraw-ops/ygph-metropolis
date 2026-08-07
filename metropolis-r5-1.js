@@ -14,6 +14,7 @@ function metropolis41Icon(app) {
 
 function metropolis41ApplyVersion() {
   if (typeof document === "undefined") return;
+  if (document.documentElement.dataset.metropolisR52) return;
   document.documentElement.dataset.metropolisVersion = METROPOLIS_PRODUCT_VERSION;
   document.documentElement.dataset.metropolisR51 = METROPOLIS_R5_1_VERSION;
   document.title = `YGPH METROPOLIS v${METROPOLIS_PRODUCT_VERSION}`;
@@ -23,25 +24,20 @@ function metropolis41ApplyVersion() {
 
 function metropolis41PolishLauncher() {
   if (typeof document === "undefined") return;
-
   document.querySelector(".metropolis-city-copy > p")?.remove();
   document.querySelectorAll(".metropolis-section-note").forEach(node => node.remove());
-
   document.querySelectorAll("[data-metropolis-app]").forEach(card => {
     const app = card.dataset.metropolisApp;
     const icon = metropolis41Icon(app);
     if (!icon) return;
-
     card.querySelectorAll(".metropolis-open-mark").forEach(node => node.remove());
     card.querySelectorAll(".metropolis-app-copy > small, .metropolis-app-status").forEach(node => node.remove());
-
     const target = card.querySelector(".metropolis-app-icon");
     if (target && target.dataset.metropolis41Applied !== "true") {
       target.innerHTML = icon;
       target.dataset.metropolis41Applied = "true";
     }
   });
-
   const page = document.body?.dataset.metropolisPage;
   const current = document.getElementById("metropolisCurrentIcon");
   const currentIcon = metropolis41Icon(page);
@@ -54,11 +50,7 @@ function metropolis41Apply() {
 }
 
 if (typeof module === "object" && module.exports) {
-  module.exports = {
-    METROPOLIS_PRODUCT_VERSION,
-    METROPOLIS_R5_1_VERSION,
-    metropolis41Icon
-  };
+  module.exports = { METROPOLIS_PRODUCT_VERSION, METROPOLIS_R5_1_VERSION, metropolis41Icon };
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
@@ -72,10 +64,8 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         metropolis41Apply();
       });
     };
-
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", queueApply, { once: true });
     else queueApply();
-
     const startObserver = () => {
       if (!document.body || globalThis.__YGPH_METROPOLIS_41_OBSERVER__) return;
       const observer = new MutationObserver(queueApply);
@@ -83,7 +73,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       globalThis.__YGPH_METROPOLIS_41_OBSERVER__ = observer;
       queueApply();
     };
-
     if (document.body) startObserver();
     else document.addEventListener("DOMContentLoaded", startObserver, { once: true });
   })();
