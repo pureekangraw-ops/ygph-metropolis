@@ -98,12 +98,13 @@ test("4.1 version observer yields when the 4.2 runtime is present", () => {
   assert.match(r51, /metropolisR52/);
 });
 
-test("4.2 assets load last and advance the offline release", () => {
+test("4.2 assets stay loaded before the additive status layer", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-2.js") > bootstrap.indexOf("metropolis-r5-1.js"));
   assert.ok(bootstrap.indexOf("metropolis-r5-2.css") > bootstrap.indexOf("metropolis-r5-1.css"));
+  assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.css"));
-  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r6-schedule");
+  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r7-status");
 });
