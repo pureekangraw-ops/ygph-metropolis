@@ -64,12 +64,12 @@ test("install icons have exact dimensions and remain wired for manifest and offl
   assert.ok(APP_SHELL.includes("icon-512.png"));
 });
 
-test("icon rollout advances with the current Metropolis cache generation", () => {
+test("icon rollout follows the current Metropolis cache generation", () => {
   const manifest = JSON.parse(read("RELEASE_MANIFEST.json"));
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.0-20260808-r6-schedule$/, "the schedule rollout must advance beyond the 4.1 launcher cache");
+  assert.match(RELEASE_ID, /^v4\.2\.0-20260808-r7-status$/, "the status rollout must advance beyond the schedule cache");
 });
 
 test("approved subjects render from the shared icon registry", () => {
