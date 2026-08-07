@@ -1,0 +1,113 @@
+/* YGPH METROPOLIS 4.2.1 — three-color live status */
+
+:root{
+  --r53-green:var(--green,#198a58);
+  --r53-yellow:var(--yellow,#d99a17);
+  --r53-red:var(--red,#cc4141);
+}
+
+.r53-hidden{display:none!important}
+
+html[data-metropolis-r53] .status-line b{
+  font-size:0;
+}
+html[data-metropolis-r53] .status-line b::after{
+  content:"METROPOLIS v4.2.1";
+  font-size:10px;
+  font-weight:850;
+}
+
+.cal-dot.signal-green{background:var(--r53-green)!important}
+.cal-dot.signal-yellow{background:var(--r53-yellow)!important}
+.cal-dot.signal-red{background:var(--r53-red)!important}
+
+#calendarPage .queue-item.signal-green,
+#calendarPage .flow-swipe-card.signal-green{
+  --r53-signal:var(--r53-green);
+  --r53-signal-bg:#e7f6ee;
+  --r53-signal-ink:#26744f;
+}
+#calendarPage .queue-item.signal-yellow,
+#calendarPage .flow-swipe-card.signal-yellow{
+  --r53-signal:var(--r53-yellow);
+  --r53-signal-bg:#fff1d2;
+  --r53-signal-ink:#8e5d13;
+}
+#calendarPage .queue-item.signal-red,
+#calendarPage .flow-swipe-card.signal-red{
+  --r53-signal:var(--r53-red);
+  --r53-signal-bg:#fdeaea;
+  --r53-signal-ink:#a33636;
+}
+
+#calendarPage .queue-item.signal-green,
+#calendarPage .queue-item.signal-yellow,
+#calendarPage .queue-item.signal-red{
+  border-left:4px solid var(--r53-signal);
+}
+
+#calendarPage .queue-item.signal-green .queue-title,
+#calendarPage .queue-item.signal-yellow .queue-title,
+#calendarPage .queue-item.signal-red .queue-title{
+  position:relative;
+  padding-left:14px;
+}
+
+#calendarPage .queue-item.signal-green .queue-title::before,
+#calendarPage .queue-item.signal-yellow .queue-title::before,
+#calendarPage .queue-item.signal-red .queue-title::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:.28rem;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--r53-signal);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--r53-signal) 16%,transparent);
+}
+
+#calendarPage .queue-item.signal-green .status,
+#calendarPage .queue-item.signal-yellow .status,
+#calendarPage .queue-item.signal-red .status,
+#calendarPage .flow-swipe-card.signal-green .status,
+#calendarPage .flow-swipe-card.signal-yellow .status,
+#calendarPage .flow-swipe-card.signal-red .status{
+  background:var(--r53-signal-bg)!important;
+  color:var(--r53-signal-ink)!important;
+}
+
+#calendarPage .flow-swipe-card.signal-green,
+#calendarPage .flow-swipe-card.signal-yellow,
+#calendarPage .flow-swipe-card.signal-red{
+  border-left:4px solid var(--r53-signal);
+}
+
+.flow-task-row.signal-green,
+.flow-task-row.signal-yellow,
+.flow-task-row.signal-red{
+  --r53-task-signal:var(--r53-yellow);
+  position:relative;
+}
+.flow-task-row.signal-green{--r53-task-signal:var(--r53-green)}
+.flow-task-row.signal-yellow{--r53-task-signal:var(--r53-yellow)}
+.flow-task-row.signal-red{--r53-task-signal:var(--r53-red)}
+.flow-task-row.signal-green::before,
+.flow-task-row.signal-yellow::before,
+.flow-task-row.signal-red::before{
+  content:"";
+  flex:0 0 auto;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--r53-task-signal);
+  align-self:center;
+}
+
+@media (max-width:560px){
+  #calendarPage .queue-item.signal-green .queue-title,
+  #calendarPage .queue-item.signal-yellow .queue-title,
+  #calendarPage .queue-item.signal-red .queue-title{
+    padding-left:12px;
+  }
+}
