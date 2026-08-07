@@ -106,5 +106,5 @@ test("4.2 assets stay loaded before the additive status layer", () => {
   assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.css"));
-  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r7-status");
+  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r8-status-clean");
 });

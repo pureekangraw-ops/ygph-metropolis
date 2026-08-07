@@ -2,7 +2,7 @@
 
 /* YGPH METROPOLIS — three-color live status signal */
 
-const METROPOLIS_R5_3_VERSION = "5.3.0-status-signal";
+const METROPOLIS_R5_3_VERSION = "5.3.1-status-clean";
 const STATUS_SIGNALS = Object.freeze({ GREEN: "GREEN", YELLOW: "YELLOW", RED: "RED", HIDDEN: "HIDDEN" });
 
 function statusSignal(item, today) {
@@ -43,6 +43,18 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       if (signal === STATUS_SIGNALS.GREEN) return "เสร็จแล้ว";
       if (signal === STATUS_SIGNALS.RED) return "เกินกำหนด";
       return "รอดำเนินการ";
+    }
+
+    function withLiveCalendar(callback) {
+      if (typeof state === "undefined" || !state || !Array.isArray(state.calendar)) return callback();
+      if (typeof queueFilter !== "undefined" && queueFilter === "CANCELLED") queueFilter = "ALL";
+      const original = state.calendar;
+      state.calendar = original.filter(item => queueSignal(item) !== STATUS_SIGNALS.HIDDEN);
+      try {
+        return callback();
+      } finally {
+        state.calendar = original;
+      }
     }
 
     function paintMonthGrid() {
@@ -121,11 +133,34 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       });
     }
 
+    function hideCancelledRecordCards() {
+      document.querySelectorAll(".record .status.cancelled").forEach(status => status.closest(".record")?.remove());
+    }
+
+    function hideCancelledControls() {
+      document.querySelector('[data-filter="CANCELLED"]')?.remove();
+      const count = document.getElementById("calCancelled");
+      const tile = count?.closest(".mini");
+      if (tile?.parentElement) tile.parentElement.classList.add("r53-three-stats");
+      tile?.remove();
+    }
+
+    function patchFlowCalendarFocus() {
+      if (globalThis.__YGPH_R53_FLOW_FOCUS_PATCHED__ || typeof flowRenderCalendarFocus !== "function") return;
+      const baseFlowCalendarFocus = flowRenderCalendarFocus;
+      flowRenderCalendarFocus = function(...args) {
+        return withLiveCalendar(() => baseFlowCalendarFocus(...args));
+      };
+      globalThis.__YGPH_R53_FLOW_FOCUS_PATCHED__ = true;
+    }
+
     function apply() {
       document.documentElement.dataset.metropolisR53 = METROPOLIS_R5_3_VERSION;
+      hideCancelledControls();
       paintMonthGrid();
       paintQueueCards();
       paintHomeTasks();
+      hideCancelledRecordCards();
     }
 
     function queueApply() {
@@ -139,6 +174,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
     function install() {
       if (globalThis.__YGPH_METROPOLIS_R53_OBSERVER__) return;
+      patchFlowCalendarFocus();
       apply();
       const observer = new MutationObserver(queueApply);
       observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });

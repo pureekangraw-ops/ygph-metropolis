@@ -39,11 +39,22 @@
   flex:0 0 auto;
 }
 
+#calendarPage .hero-grid.r53-three-stats{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+
 @media (max-width:560px){
   .r53-day-dot,
   .r53-status-dot{
     width:.62rem;
     height:.62rem;
     min-width:.62rem;
+  }
+
+  #calendarPage .hero-grid.r53-three-stats{
+    gap:6px;
+  }
+  #calendarPage .hero-grid.r53-three-stats .mini{
+    padding:8px 6px;
   }
 }
