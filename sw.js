@@ -4,7 +4,7 @@ const APP_CACHE_PREFIX = "ygph-metropolis-app-";
 const LEGACY_CACHE_PREFIXES = Object.freeze([
   "ygph-metropolis-0.1.0-preview."
 ]);
-const RELEASE_ID = "v4.0.0-phase1-safety-20260807-r4-polish";
+const RELEASE_ID = "v4.1.0-20260807-r5-minimal";
 const CURRENT_CACHE = `${APP_CACHE_PREFIX}${RELEASE_ID}`;
 const META_CACHE = "ygph-metropolis-meta";
 const META_PATH = "__ygph_service_worker_lifecycle__";
@@ -17,6 +17,7 @@ const APP_SHELL = [
   "flow-era-3.5.css",
   "metropolis-v4.css",
   "metropolis-r5.css",
+  "metropolis-r5-1.css",
   "sw-bootstrap.js",
   "highway-gate.js",
   "app.js",
@@ -24,6 +25,7 @@ const APP_SHELL = [
   "flow-era-3.5.js",
   "metropolis-v4.js",
   "metropolis-r5.js",
+  "metropolis-r5-1.js",
   "icon-192.png",
   "icon-512.png"
 ];
