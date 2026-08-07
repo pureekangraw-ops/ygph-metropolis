@@ -69,7 +69,7 @@ test("icon rollout advances beyond the already-deployed rescue cache generation"
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /-r3$/, "the icon rollout must not reuse the deployed r2 cache");
+  assert.match(RELEASE_ID, /-r4-polish$/, "the polish rollout must advance beyond the deployed r3 cache");
 });
 
 test("approved subjects render from the shared icon registry", () => {

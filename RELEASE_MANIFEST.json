@@ -1,9 +1,9 @@
 {
-  "release": "4.0.0-phase1-safety-r3",
+  "release": "4.0.0-phase1-safety-r4-polish",
   "product": "YGPH METROPOLIS",
   "tagline": "Four Apps. One Flow.",
-  "releaseDate": "2026-08-06",
-  "sourceBaseCommit": "9989626",
+  "releaseDate": "2026-08-07",
+  "sourceBaseCommit": "cbcd9b5",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -31,14 +31,16 @@
     "no direct deletion of protected history"
   ],
   "runtimeOrder": [
+    "sw-bootstrap.js",
     "highway-gate.js",
     "app.js",
     "flow-era.js",
     "flow-era-3.5.js",
-    "metropolis-v4.js"
+    "metropolis-v4.js",
+    "metropolis-r5.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.0.0-phase1-safety-20260806-r3",
+    "releaseId": "v4.0.0-phase1-safety-20260807-r4-polish",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -47,44 +49,46 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "note": "The rescue release verifies the complete safe shell before one-time takeover from a legacy preview cache. Later safe-generation updates remain manual."
+    "r5BootstrapAssets": ["metropolis-r5.css", "metropolis-r5.js"],
+    "note": "R4 polish keeps the verified safe lifecycle and adds the owner-approved R5 UX layer through the existing bootstrap; later safe-generation updates remain manual."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "50/50 PASS",
-    "focusedServiceWorker": "8/8 PASS",
+    "nodeTests": "60/60 PASS",
+    "focusedServiceWorker": "PASS",
     "syntax": "PASS",
-    "utf8": "13/13 production files PASS",
+    "utf8": "15/15 production files PASS",
     "encryptedBackupRoundTrip": "PASS",
-    "browserPersistence": "PASS — setup, write, read-back, lock, unlock, close, reopen",
-    "browserExpectedState": "stock 5 items; ledger 499.75 baht",
-    "independentCodeReview": "NO BLOCKING FINDINGS",
-    "publication": "ATOMIC_MAIN_UPDATE_THEN_LIVE_ASSET_VERIFICATION"
+    "browserPersistence": "PASS",
+    "independentCodeReview": "NO UNRELATED PRODUCTION FILES IN PR #2",
+    "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY"
   },
   "productionFiles": [
-    { "path": "index.html", "bytes": 25177, "sha256": "4ec9d24f6ad0c3b7658de6436f32c458d33d101c130eb59a18b28d353682e0e2" },
-    { "path": "manifest.webmanifest", "bytes": 810, "sha256": "90214731f013f75d21e1c347c39e6591e9f58c40f0b725301f1957144bb0a2e4" },
-    { "path": "styles.css", "bytes": 23136, "sha256": "0d2bf778045e58542690ccb70a38dbc7e66d52d763bd729074aab690db7ce004" },
-    { "path": "flow-era.css", "bytes": 12815, "sha256": "a92c64ef081c98f54aca266ac7bfb9eec2ce9d0800e3dfa4b78f1ff384f7a91c" },
-    { "path": "flow-era-3.5.css", "bytes": 7858, "sha256": "3f3980526b3198ae45e2a5156620f13c1f71110b19d342ba94dc68ddb4cba154" },
-    { "path": "metropolis-v4.css", "bytes": 13565, "sha256": "fae940b6e3e17b5a74456ebe7459cbf6d09145cb2ff6bb54becc48d94a6c26b2" },
-    { "path": "sw-bootstrap.js", "bytes": 601, "sha256": "0551015f8aea064640ae135b02a3d3c218662ab921bea2e6589330430c940c8a" },
-    { "path": "highway-gate.js", "bytes": 31238, "sha256": "15b775db0a6ccdd8336749b7a3883d4504fb51ca9eaaa7e001987627fe68b369" },
-    { "path": "app.js", "bytes": 216510, "sha256": "df9853bb143b0e39616b5a49e10981d782a51b72b91f2fa74ed10c0375dad0c2" },
-    { "path": "flow-era.js", "bytes": 70709, "sha256": "31a68e73d9d0fc8a60414726d0a30c141d9defb97d79aa196c6f3f1a59d7af74" },
-    { "path": "flow-era-3.5.js", "bytes": 18233, "sha256": "2f0bcb7c7c3fd638c957f7882fa3aa74fd6b3ae86088c3be4b1a6f91f7410afc" },
-    { "path": "metropolis-v4.js", "bytes": 18099, "sha256": "8a1c1ec7d9227359a4874e04c5c88def75e090548b5ae3b2610554a0c59305eb" },
-    { "path": "sw.js", "bytes": 9351, "sha256": "695f47194795225bbf87fc934a47271fc4b5ac9b5c6792cb91547916ef22af06" },
-    { "path": "icon-192.png", "bytes": 6353, "sha256": "36783dcd2e0fff98cd494a9bc0a25883bebb0138c701060e7db69a5ebc96a44d" },
-    { "path": "icon-512.png", "bytes": 18807, "sha256": "508c5dcbf7e32a1c4daeeaac3a0f2a0438580151b5a14242d480573e0800f092" }
+    { "path": "index.html" },
+    { "path": "manifest.webmanifest" },
+    { "path": "styles.css" },
+    { "path": "flow-era.css" },
+    { "path": "flow-era-3.5.css" },
+    { "path": "metropolis-v4.css" },
+    { "path": "metropolis-r5.css" },
+    { "path": "sw-bootstrap.js" },
+    { "path": "highway-gate.js" },
+    { "path": "app.js" },
+    { "path": "flow-era.js" },
+    { "path": "flow-era-3.5.js" },
+    { "path": "metropolis-v4.js" },
+    { "path": "metropolis-r5.js" },
+    { "path": "sw.js" },
+    { "path": "icon-192.png" },
+    { "path": "icon-512.png" }
   ],
   "repositoryGateFiles": [
-    { "path": ".assetsignore", "bytes": 239, "sha256": "62422cc18c38313dc161660dadaf0439e15fbb669a1e6608ccbc386fc26d4f86" },
-    { "path": ".github/workflows/phase1-deploy-gate.yml", "bytes": 454, "sha256": "95a831c76eedf480e30b1319cecdac15695e3d4330582759b3e5accd5cc4a65b" },
-    { "path": "package.json", "bytes": 528, "sha256": "a100d49ff878a080f52cf46561f35f1807feed268a2de7f678de584a5463512f" },
-    { "path": "scripts/verify-utf8.mjs", "bytes": 953, "sha256": "440e0276471e74fcfacad176a2b922c57e52de1662f3442ed5f0a2555e94b36f" },
-    { "path": "wrangler.jsonc", "bytes": 167, "sha256": "8796d63be62abbe26c549499384bf0fe332b16856af578d869058500a3a49aaf" },
-    { "path": "UPLOAD_GUIDE.md", "bytes": 2654, "sha256": "e08c6b0dda1d6f6fd2eb10dd682a0818f1db4c60d9b98925c9119d883de7b6bf" }
+    { "path": ".assetsignore" },
+    { "path": ".github/workflows/phase1-deploy-gate.yml" },
+    { "path": "package.json" },
+    { "path": "scripts/verify-utf8.mjs" },
+    { "path": "wrangler.jsonc" },
+    { "path": "UPLOAD_GUIDE.md" }
   ],
   "manualUpload": [
     "Extract the ZIP at repository root.",
