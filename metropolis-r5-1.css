@@ -1,0 +1,51 @@
+/* YGPH METROPOLIS 4.1 — minimal launcher */
+
+.metropolis-v4 .metropolis-city-copy > p,
+.metropolis-v4 .metropolis-section-note,
+.metropolis-v4 .metropolis-app-copy > small,
+.metropolis-v4 .metropolis-app-status,
+.metropolis-v4 .metropolis-open-mark{
+  display:none!important;
+}
+
+.metropolis-v4 .metropolis-city-copy h2{
+  margin-bottom:0!important;
+}
+
+.metropolis-v4 .metropolis-home .section-title{
+  margin-bottom:.55rem!important;
+}
+
+.metropolis-v4 .metropolis-app-card{
+  min-height:185px!important;
+}
+
+.metropolis-v4 .metropolis-app-icon{
+  width:56px!important;
+  height:56px!important;
+  border-radius:17px!important;
+  background:var(--app-color)!important;
+  color:#fff!important;
+  border:0!important;
+  box-shadow:0 8px 20px color-mix(in srgb,var(--app-color) 28%,transparent)!important;
+}
+
+.metropolis-v4 .metropolis-app-icon .metropolis-41-icon{
+  width:31px!important;
+  height:31px!important;
+  stroke:currentColor!important;
+}
+
+.metropolis-v4 .metropolis-current-icon .metropolis-41-icon{
+  width:26px!important;
+  height:26px!important;
+  stroke:currentColor!important;
+}
+
+.metropolis-v4 .metropolis-app-copy{
+  margin-top:.65rem!important;
+}
+
+.metropolis-v4 .metropolis-app-value{
+  padding-top:.6rem!important;
+}
