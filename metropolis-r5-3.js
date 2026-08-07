@@ -172,6 +172,17 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         });
       };
 
+      if (typeof flowRenderCalendarFocus === "function") {
+        const baseFlowCalendarFocus = flowRenderCalendarFocus;
+        flowRenderCalendarFocus = function(...args) {
+          return withLiveCalendar(() => {
+            const result = baseFlowCalendarFocus(...args);
+            signalFlowFocus();
+            return result;
+          });
+        };
+      }
+
       const baseStore = renderStore;
       renderStore = function(...args) {
         if (typeof state === "undefined" || !state) return baseStore(...args);
