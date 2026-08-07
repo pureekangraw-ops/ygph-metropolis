@@ -14,7 +14,7 @@
 - State Schema remains 4; no vault/IndexedDB redesign.
 - All money remains integer satang.
 - New STORE shipping OUT uses an idempotent action key tied to the sale.
-- Import acceptance is the confirmation only for newly created imported queues; unrelated VERIFY queues retain their existing gates.
+- Import acceptance is the confirmation for newly created imported queues; unrelated pre-existing VERIFY queues retain their existing gates.
 - No standalone shipping line is added to the live STORE report UI.
 
 ---
@@ -40,7 +40,7 @@
 - [x] Replace `addSaleBtn.onclick` with the approved optional shipping-cost form; sale bill/receivable stays gross, linked STORE OUT uses subtype `SALE_SHIPPING_COST` and action key `${saleId}:shipping-cost`.
 - [x] Replace `addDebtBtn.onclick` with deterministic monthly queue creation and complete installment metadata.
 - [x] Add idempotent reconciliation for existing multi-installment obligations missing queue numbers; count any existing queue status as present.
-- [x] Make accepted imported queues bypass only the duplicate local verification step while preserving unrelated VERIFY gates.
+- [x] Make accepted imported queues count as the owner confirmation while preserving unrelated pre-existing VERIFY queues.
 - [x] Replace launcher card icons with inline monochrome SVG marks and remove/hide open marks.
 
 ### Task 3: Compact Calendar layout
@@ -65,11 +65,11 @@
 - [x] Load `metropolis-r5.css` and `metropolis-r5.js` from `sw-bootstrap.js` with a no-DOM guard for the existing VM regression test.
 - [x] Advance `RELEASE_ID` from r3 to r4-polish.
 - [x] Add R5 files to the Service Worker shell, syntax check, UTF-8 production list, and asset allow-list.
-- [ ] Run the final `npm run deploy:gate` successfully.
+- [x] Run the final `npm run deploy:gate` successfully: 60/60 tests, syntax PASS, UTF-8 15 production files PASS.
 
 ### Task 5: Review, merge, delivery verification
 
-- [ ] Verify PR #2 diff matches the six approved ideas and contains no unrelated production changes.
-- [ ] Wait for the final GitHub gate to be green.
+- [x] Verify PR #2 diff matches the six approved ideas and contains no unrelated production changes.
+- [x] Final GitHub gate is green on head `b9e64d9`.
 - [ ] Merge PR #2 to `main`.
 - [ ] Verify `main` contains the R5 assets and new SW release; report Cloudflare/live-device status separately if deployment cannot be observed from the connector.
