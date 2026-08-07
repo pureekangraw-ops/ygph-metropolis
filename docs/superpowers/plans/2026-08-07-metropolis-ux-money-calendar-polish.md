@@ -70,6 +70,6 @@
 ### Task 5: Review, merge, delivery verification
 
 - [x] Verify PR #2 diff matches the six approved ideas and contains no unrelated production changes.
-- [x] Final GitHub gate is green on head `b9e64d9`.
+- [x] Final GitHub gate is green on release head `7940cf1`.
 - [ ] Merge PR #2 to `main`.
 - [ ] Verify `main` contains the R5 assets and new SW release; report Cloudflare/live-device status separately if deployment cannot be observed from the connector.
