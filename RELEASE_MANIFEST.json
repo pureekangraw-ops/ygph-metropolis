@@ -1,9 +1,9 @@
 {
-  "release": "4.0.0-phase1-safety-r4-polish",
+  "release": "4.1.0-minimal-launcher",
   "product": "YGPH METROPOLIS",
   "tagline": "Four Apps. One Flow.",
   "releaseDate": "2026-08-07",
-  "sourceBaseCommit": "cbcd9b5",
+  "sourceBaseCommit": "4b514ae",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -37,10 +37,11 @@
     "flow-era.js",
     "flow-era-3.5.js",
     "metropolis-v4.js",
-    "metropolis-r5.js"
+    "metropolis-r5.js",
+    "metropolis-r5-1.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.0.0-phase1-safety-20260807-r4-polish",
+    "releaseId": "v4.1.0-20260807-r5-minimal",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -49,18 +50,16 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "r5BootstrapAssets": ["metropolis-r5.css", "metropolis-r5.js"],
-    "note": "R4 polish keeps the verified safe lifecycle and adds the owner-approved R5 UX layer through the existing bootstrap; later safe-generation updates remain manual."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js"],
+    "note": "METROPOLIS 4.1 keeps Schema 4 and the verified safe lifecycle while simplifying the launcher and strengthening app icon contrast."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "60/60 PASS",
-    "focusedServiceWorker": "PASS",
-    "syntax": "PASS",
-    "utf8": "15/15 production files PASS",
-    "encryptedBackupRoundTrip": "PASS",
-    "browserPersistence": "PASS",
-    "independentCodeReview": "NO UNRELATED PRODUCTION FILES IN PR #2",
+    "nodeTests": "FINAL_GATE_REQUIRED",
+    "syntax": "FINAL_GATE_REQUIRED",
+    "utf8": "FINAL_GATE_REQUIRED",
+    "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
+    "browserPersistence": "COVERED_BY_REGRESSION_GATE",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY"
   },
   "productionFiles": [
@@ -71,6 +70,7 @@
     { "path": "flow-era-3.5.css" },
     { "path": "metropolis-v4.css" },
     { "path": "metropolis-r5.css" },
+    { "path": "metropolis-r5-1.css" },
     { "path": "sw-bootstrap.js" },
     { "path": "highway-gate.js" },
     { "path": "app.js" },
@@ -78,6 +78,7 @@
     { "path": "flow-era-3.5.js" },
     { "path": "metropolis-v4.js" },
     { "path": "metropolis-r5.js" },
+    { "path": "metropolis-r5-1.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }
