@@ -1,0 +1,113 @@
+/* YGPH METROPOLIS R5 — focused mobile and launcher polish */
+
+.metropolis-open-mark {
+  display: none !important;
+}
+
+.metropolis-app-icon svg,
+#metropolisCurrentIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.metropolis-app-card[data-metropolis-app="store"] .metropolis-app-icon { color: #159564; }
+.metropolis-app-card[data-metropolis-app="ride"] .metropolis-app-icon { color: #e47a12; }
+.metropolis-app-card[data-metropolis-app="ledger"] .metropolis-app-icon { color: #7648ba; }
+.metropolis-app-card[data-metropolis-app="calendar"] .metropolis-app-icon { color: #2477c9; }
+
+.r5-check {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  font-weight: 700;
+}
+
+.r5-check input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--navy);
+}
+
+#saleShippingCost:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  #calendarPage .flow-swipe-card,
+  #calendarPage .queue-item,
+  #calendarPage .record,
+  #calendarPage .queue-card {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  #calendarPage .flow-swipe-main,
+  #calendarPage .queue-top {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: .8rem !important;
+    align-items: start !important;
+    min-width: 0;
+  }
+
+  #calendarPage .flow-swipe-main > div,
+  #calendarPage .queue-title,
+  #calendarPage .queue-money {
+    min-width: 0;
+    width: 100%;
+  }
+
+  #calendarPage .flow-swipe-main h3,
+  #calendarPage .queue-title b {
+    max-width: 100%;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  #calendarPage .flow-swipe-amount,
+  #calendarPage .queue-money {
+    justify-self: stretch;
+    text-align: left !important;
+  }
+
+  #calendarPage .flow-swipe-amount small,
+  #calendarPage .queue-money span {
+    display: block;
+    margin-top: .25rem;
+  }
+
+  #calendarPage .source-badge,
+  #calendarPage .record-icon,
+  #calendarPage .queue-icon,
+  #calendarPage .flow-item-icon,
+  #calendarPage [class*="icon-box"] {
+    display: none !important;
+  }
+
+  #calendarPage .flow-swipe-actions,
+  #calendarPage .queue-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: .55rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  #calendarPage .flow-swipe-actions > button,
+  #calendarPage .queue-actions > button {
+    flex: 1 1 9.5rem;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #calendarPage .meta-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
