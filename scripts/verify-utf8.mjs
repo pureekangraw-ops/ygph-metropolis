@@ -17,6 +17,8 @@ const productionFiles = [
   "metropolis-r5-1.js",
   "metropolis-r5-2.css",
   "metropolis-r5-2.js",
+  "metropolis-r5-3.css",
+  "metropolis-r5-3.js",
   "sw-bootstrap.js",
   "sw.js",
   "manifest.webmanifest"
