@@ -2,7 +2,7 @@
 
 /* YGPH METROPOLIS 4.2 — per-installment schedule engine */
 
-const METROPOLIS_PRODUCT_VERSION = "4.2.0";
+const METROPOLIS_42_PRODUCT_VERSION = "4.2.0";
 const METROPOLIS_R5_2_VERSION = "5.2.0-schedule-engine";
 const SCHEDULE_FREQUENCIES = Object.freeze(["WEEKLY", "MONTHLY"]);
 
@@ -87,7 +87,7 @@ function derivePerInstallmentSchedule(obligation) {
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    METROPOLIS_PRODUCT_VERSION,
+    METROPOLIS_PRODUCT_VERSION: METROPOLIS_42_PRODUCT_VERSION,
     METROPOLIS_R5_2_VERSION,
     scheduleDueDates,
     totalFromInstallment,
@@ -106,11 +106,11 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     function applyProductVersion42() {
       const root = document.documentElement;
       root.dataset.metropolisR52 = METROPOLIS_R5_2_VERSION;
-      root.dataset.metropolisVersion = METROPOLIS_PRODUCT_VERSION;
-      const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_PRODUCT_VERSION}`;
+      root.dataset.metropolisVersion = METROPOLIS_42_PRODUCT_VERSION;
+      const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`;
       if (document.title !== expectedTitle) document.title = expectedTitle;
       const status = document.querySelector(".status-line b");
-      if (status && status.textContent !== `METROPOLIS v${METROPOLIS_PRODUCT_VERSION}`) status.textContent = `METROPOLIS v${METROPOLIS_PRODUCT_VERSION}`;
+      if (status && status.textContent !== `METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`) status.textContent = `METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`;
     }
 
     function displayScheduleMoney(satang) {
