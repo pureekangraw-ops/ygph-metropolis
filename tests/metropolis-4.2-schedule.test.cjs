@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -84,6 +85,12 @@ test("4.2 reconciliation treats installment records as authoritative", () => {
     { number: 2, amountSatang: 350000, due: "2026-08-17" },
     { number: 3, amountSatang: 300000, due: "2026-08-23" }
   ]);
+});
+
+test("4.1 and 4.2 classic runtime layers can load in the same global scope", () => {
+  const context = vm.createContext({});
+  assert.doesNotThrow(() => vm.runInContext(read("metropolis-r5-1.js"), context, { filename: "metropolis-r5-1.js" }));
+  assert.doesNotThrow(() => vm.runInContext(read("metropolis-r5-2.js"), context, { filename: "metropolis-r5-2.js" }));
 });
 
 test("4.1 version observer yields when the 4.2 runtime is present", () => {
