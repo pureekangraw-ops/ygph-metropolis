@@ -35,7 +35,7 @@ test("cancelled live cards are removed without deleting durable records", () => 
 
 test("cancelled controls disappear from Calendar live UI", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /data-filter=\\"CANCELLED\\"/);
+  assert.match(js, /data-filter="CANCELLED"/);
   assert.match(js, /getElementById\("calCancelled"\)/);
   assert.match(js, /r53-three-stats/);
 });
