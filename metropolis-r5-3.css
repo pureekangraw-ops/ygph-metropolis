@@ -1,0 +1,49 @@
+/* YGPH METROPOLIS — three-color live status signal */
+
+.r53-day-dot,
+.r53-status-dot{
+  display:inline-block;
+  width:.58rem;
+  height:.58rem;
+  min-width:.58rem;
+  border-radius:999px;
+  box-shadow:0 0 0 2px rgba(255,255,255,.92);
+}
+
+.r53-status-green{ background:#2f9e62!important; }
+.r53-status-yellow{ background:#e0a51a!important; }
+.r53-status-red{ background:#d74646!important; }
+
+#monthGrid .day-dots{
+  display:flex;
+  align-items:center;
+  gap:.22rem;
+  min-height:.6rem;
+}
+
+#queueList .queue-title>b{
+  display:flex;
+  align-items:center;
+  gap:.48rem;
+  min-width:0;
+}
+
+.flow-task-row>.r53-status-dot{
+  position:static!important;
+  margin-right:.08rem;
+  align-self:center;
+  flex:0 0 auto;
+}
+
+#queueList .queue-title>b>.r53-status-dot{
+  flex:0 0 auto;
+}
+
+@media (max-width:560px){
+  .r53-day-dot,
+  .r53-status-dot{
+    width:.62rem;
+    height:.62rem;
+    min-width:.62rem;
+  }
+}

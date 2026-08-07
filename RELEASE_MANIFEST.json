@@ -1,9 +1,9 @@
 {
-  "release": "4.2.0-schedule-engine",
+  "release": "4.2.0-status-signal",
   "product": "YGPH METROPOLIS",
   "tagline": "Four Apps. One Flow.",
   "releaseDate": "2026-08-08",
-  "sourceBaseCommit": "f59118c",
+  "sourceBaseCommit": "3104ca5",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -31,7 +31,8 @@
     "rollback with raw-vault read-back on failure",
     "strict reversal topology with legacy one-to-one compatibility",
     "no direct deletion of protected history",
-    "pre-4.2 obligations retain original total-split semantics"
+    "pre-4.2 obligations retain original total-split semantics",
+    "cancelled records are hidden from live UI only and remain in durable history"
   ],
   "runtimeOrder": [
     "sw-bootstrap.js",
@@ -42,10 +43,11 @@
     "metropolis-v4.js",
     "metropolis-r5.js",
     "metropolis-r5-1.js",
-    "metropolis-r5-2.js"
+    "metropolis-r5-2.js",
+    "metropolis-r5-3.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.0-20260808-r6-schedule",
+    "releaseId": "v4.2.0-20260808-r7-status",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -54,8 +56,8 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js"],
-    "note": "METROPOLIS 4.2 keeps Schema 4 while adding per-installment weekly/monthly scheduling and preserving all legacy obligation semantics."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js"],
+    "note": "METROPOLIS 4.2 keeps Schema 4 and adds a three-color live status signal: green completed, yellow pending, red overdue; cancelled items are hidden from live Calendar/work views without deleting history."
   },
   "validation": {
     "command": "npm run deploy:gate",
@@ -76,6 +78,7 @@
     { "path": "metropolis-r5.css" },
     { "path": "metropolis-r5-1.css" },
     { "path": "metropolis-r5-2.css" },
+    { "path": "metropolis-r5-3.css" },
     { "path": "sw-bootstrap.js" },
     { "path": "highway-gate.js" },
     { "path": "app.js" },
@@ -85,6 +88,7 @@
     { "path": "metropolis-r5.js" },
     { "path": "metropolis-r5-1.js" },
     { "path": "metropolis-r5-2.js" },
+    { "path": "metropolis-r5-3.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }
