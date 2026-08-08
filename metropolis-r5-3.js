@@ -1,8 +1,8 @@
 "use strict";
 
-/* YGPH METROPOLIS — three-color live status signal */
+/* YGPH METROPOLIS — three-color live status signal + live-only render boundary */
 
-const METROPOLIS_R5_3_VERSION = "5.3.2-live-count";
+const METROPOLIS_R5_3_VERSION = "5.3.3-live-authority";
 const STATUS_SIGNALS = Object.freeze({ GREEN: "GREEN", YELLOW: "YELLOW", RED: "RED", HIDDEN: "HIDDEN" });
 
 function statusSignal(item, today) {
@@ -58,6 +58,39 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         return callback();
       } finally {
         state.calendar = original;
+      }
+    }
+
+    function withoutCancelled(records) {
+      return Array.isArray(records)
+        ? records.filter(record => String(record?.status || "").toUpperCase() !== "CANCELLED")
+        : records;
+    }
+
+    function withLiveSourceRecords(callback) {
+      if (typeof state === "undefined" || !state) return callback();
+      const snapshots = {
+        sales: state.store?.sales,
+        purchases: state.store?.purchases,
+        rideJobs: state.ride?.jobs,
+        rideWithdrawals: state.ride?.creditWithdrawals,
+        obligations: state.ledger?.obligations
+      };
+
+      if (state.store && Array.isArray(snapshots.sales)) state.store.sales = withoutCancelled(snapshots.sales);
+      if (state.store && Array.isArray(snapshots.purchases)) state.store.purchases = withoutCancelled(snapshots.purchases);
+      if (state.ride && Array.isArray(snapshots.rideJobs)) state.ride.jobs = withoutCancelled(snapshots.rideJobs);
+      if (state.ride && Array.isArray(snapshots.rideWithdrawals)) state.ride.creditWithdrawals = withoutCancelled(snapshots.rideWithdrawals);
+      if (state.ledger && Array.isArray(snapshots.obligations)) state.ledger.obligations = withoutCancelled(snapshots.obligations);
+
+      try {
+        return callback();
+      } finally {
+        if (state.store && Array.isArray(snapshots.sales)) state.store.sales = snapshots.sales;
+        if (state.store && Array.isArray(snapshots.purchases)) state.store.purchases = snapshots.purchases;
+        if (state.ride && Array.isArray(snapshots.rideJobs)) state.ride.jobs = snapshots.rideJobs;
+        if (state.ride && Array.isArray(snapshots.rideWithdrawals)) state.ride.creditWithdrawals = snapshots.rideWithdrawals;
+        if (state.ledger && Array.isArray(snapshots.obligations)) state.ledger.obligations = snapshots.obligations;
       }
     }
 
@@ -117,6 +150,11 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
           return;
         }
         ensureInlineDot(card.querySelector(".queue-title > b"), signal);
+        const status = card.querySelector(".status");
+        if (status) {
+          status.classList.remove("r53-status-green", "r53-status-yellow", "r53-status-red");
+          status.classList.add(signalClass(signal));
+        }
       });
       const list = document.getElementById("queueList");
       if (list && !list.querySelector(".queue-item") && !list.querySelector(".empty")) {
@@ -176,6 +214,43 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       setCounter("ledgerPendingCount", `${outgoing} รายการ`);
     }
 
+    function patchLiveRenderers() {
+      if (globalThis.__YGPH_R53_LIVE_RENDERERS_PATCHED__) return;
+
+      if (typeof renderCalendar === "function") {
+        const baseRenderCalendar = renderCalendar;
+        renderCalendar = function(...args) {
+          return withLiveCalendar(() => baseRenderCalendar(...args));
+        };
+      }
+      if (typeof renderStore === "function") {
+        const baseRenderStore = renderStore;
+        renderStore = function(...args) {
+          return withLiveSourceRecords(() => baseRenderStore(...args));
+        };
+      }
+      if (typeof renderRide === "function") {
+        const baseRenderRide = renderRide;
+        renderRide = function(...args) {
+          return withLiveSourceRecords(() => baseRenderRide(...args));
+        };
+      }
+      if (typeof renderLedger === "function") {
+        const baseRenderLedger = renderLedger;
+        renderLedger = function(...args) {
+          return withLiveSourceRecords(() => baseRenderLedger(...args));
+        };
+      }
+      if (typeof historyHtml === "function") {
+        const baseHistoryHtml = historyHtml;
+        historyHtml = function(...args) {
+          return withLiveSourceRecords(() => baseHistoryHtml(...args));
+        };
+      }
+
+      globalThis.__YGPH_R53_LIVE_RENDERERS_PATCHED__ = true;
+    }
+
     function patchFlowCalendarFocus() {
       if (globalThis.__YGPH_R53_FLOW_FOCUS_PATCHED__ || typeof flowRenderCalendarFocus !== "function") return;
       const baseFlowCalendarFocus = flowRenderCalendarFocus;
@@ -206,6 +281,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
     function install() {
       if (globalThis.__YGPH_METROPOLIS_R53_OBSERVER__) return;
+      patchLiveRenderers();
       patchFlowCalendarFocus();
       apply();
       const observer = new MutationObserver(queueApply);
