@@ -1,9 +1,9 @@
 "use strict";
 
-/* YGPH METROPOLIS 4.2.2 — owner home dashboard + visible release authority */
+/* YGPH METROPOLIS 4.2.3 — owner home dashboard + visible release authority */
 
-const METROPOLIS_422_PRODUCT_VERSION = "4.2.2";
-const METROPOLIS_R5_4_VERSION = "5.4.1-home-authority";
+const METROPOLIS_423_PRODUCT_VERSION = "4.2.3";
+const METROPOLIS_R5_4_VERSION = "5.4.2-calendar-dom-contract";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -50,13 +50,13 @@ function r54Money(satang) {
 function r54ApplyVisibleVersion() {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.metropolisR54 = METROPOLIS_R5_4_VERSION;
-  document.documentElement.dataset.metropolisVersion = METROPOLIS_422_PRODUCT_VERSION;
-  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
+  document.documentElement.dataset.metropolisVersion = METROPOLIS_423_PRODUCT_VERSION;
+  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
   if (document.title !== expectedTitle) document.title = expectedTitle;
   const statusVersion = document.querySelector(".status-line b");
   if (statusVersion) {
-    const expectedVersion = `METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
-    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
+    const expectedVersion = `METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
+    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
     statusVersion.setAttribute("aria-label", expectedVersion);
   }
 }
@@ -130,7 +130,7 @@ function r54Apply() {
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    METROPOLIS_422_PRODUCT_VERSION,
+    METROPOLIS_423_PRODUCT_VERSION,
     METROPOLIS_R5_4_VERSION,
     r54Metrics
   };

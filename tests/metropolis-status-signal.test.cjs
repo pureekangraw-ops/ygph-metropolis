@@ -88,7 +88,7 @@ test("status stylesheet exposes exactly the three owner-approved signal colors",
   assert.doesNotMatch(css, /r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
-test("status signal assets stay loaded before the 4.2.2 dashboard layer", () => {
+test("status signal assets stay loaded before the 4.2.3 dashboard layer", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-3.css") > bootstrap.indexOf("metropolis-r5-2.css"));
@@ -96,5 +96,5 @@ test("status signal assets stay loaded before the 4.2.2 dashboard layer", () => 
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.2-20260808-r11-home-authority");
+  assert.equal(sw.RELEASE_ID, "v4.2.3-20260808-r12-calendar-dom-contract");
 });

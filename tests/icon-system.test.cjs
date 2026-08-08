@@ -69,7 +69,7 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.2-20260808-r11-home-authority$/, "the authoritative dashboard rollout must advance the visible product version and cache");
+  assert.match(RELEASE_ID, /^v4\.2\.3-20260808-r12-calendar-dom-contract$/, "the Calendar DOM contract rollout must advance the visible product version and cache");
 });
 
 test("approved subjects render from the shared icon registry", () => {

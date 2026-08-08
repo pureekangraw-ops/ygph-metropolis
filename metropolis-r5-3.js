@@ -184,7 +184,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       const count = document.getElementById("calCancelled");
       const tile = count?.closest(".mini");
       if (tile?.parentElement) tile.parentElement.classList.add("r53-three-stats");
-      tile?.remove();
+      tile?.classList.add("hidden");
     }
 
     function syncLiveCounters() {
