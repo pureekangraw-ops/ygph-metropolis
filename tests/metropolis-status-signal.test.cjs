@@ -18,6 +18,12 @@ test("status signal uses only green yellow red and hides cancelled items", () =>
   assert.equal(runtime.statusSignal({ status: "PARTIAL", due: "2026-08-07" }, today), "RED");
 });
 
+test("live signal hides an otherwise-open queue when its source was cancelled", () => {
+  const queue = { status: "OPEN", due: "2026-08-08" };
+  assert.equal(runtime.liveStatusSignal(queue, "CANCELLED", "2026-08-08"), "HIDDEN");
+  assert.equal(runtime.liveStatusSignal(queue, "OPEN", "2026-08-08"), "YELLOW");
+});
+
 test("calendar day counts and dots exclude cancelled queues", () => {
   const js = read("metropolis-r5-3.js");
   assert.match(js, /state\.calendar\.filter\(item => item\.due === date && queueSignal\(item\) !== STATUS_SIGNALS\.HIDDEN\)/);
