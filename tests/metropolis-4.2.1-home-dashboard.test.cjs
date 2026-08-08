@@ -7,6 +7,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
+const dashboardRuntime = require("../metropolis-r5-4.js");
 
 test("4.2.1 removes the Four Apps eyebrow and adds the owner dashboard", () => {
   const js = read("metropolis-r5-4.js");
@@ -17,7 +18,7 @@ test("4.2.1 removes the Four Apps eyebrow and adds the owner dashboard", () => {
     assert.match(js, new RegExp(id));
   }
   assert.match(js, /currentBalanceSatang/);
-  assert.match(js, /state\.store\.stockQty/);
+  assert.equal(dashboardRuntime.r54Metrics({ store: { stockQty: 12 }, calendar: [] }, "2026-08-08").stockQty, 12);
   assert.match(js, /\bdue\s*&&\s*due\s*<\s*today/);
   assert.match(js, /queueDirection/);
 });
