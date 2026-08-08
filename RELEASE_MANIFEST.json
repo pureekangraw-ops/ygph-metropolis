@@ -1,9 +1,9 @@
 {
-  "release": "4.2.0-live-count",
+  "release": "4.2.1-home-dashboard",
   "product": "YGPH METROPOLIS",
-  "tagline": "Four Apps. One Flow.",
+  "tagline": "Owner Dashboard",
   "releaseDate": "2026-08-08",
-  "sourceBaseCommit": "5f95ef6",
+  "sourceBaseCommit": "c6eaacf",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -34,7 +34,9 @@
     "pre-4.2 obligations retain original total-split semantics",
     "cancelled records are hidden from live UI only and remain in durable history",
     "cancelled Calendar controls and selected-day swipe paths are removed from live UI",
-    "live counters use the same cancelled-source visibility rule as live cards"
+    "live counters use the same cancelled-source visibility rule as live cards",
+    "owner dashboard reads current cash, stock and live Calendar state without mutating durable data",
+    "every production UI change advances the visible product version"
   ],
   "runtimeOrder": [
     "sw-bootstrap.js",
@@ -46,10 +48,11 @@
     "metropolis-r5.js",
     "metropolis-r5-1.js",
     "metropolis-r5-2.js",
-    "metropolis-r5-3.js"
+    "metropolis-r5-3.js",
+    "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.0-20260808-r9-live-count",
+    "releaseId": "v4.2.1-20260808-r10-home-dashboard",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -58,8 +61,8 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js"],
-    "note": "METROPOLIS 4.2 keeps durable cancelled history hidden from live work views and now reconciles Dashboard, Calendar, and Ledger pending counters against the same live visibility rule."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
+    "note": "METROPOLIS 4.2.1 removes the Four Apps eyebrow, adds the owner dashboard in purple/green/yellow/red order, and keeps cancelled-source work out of live metrics while preserving history."
   },
   "validation": {
     "command": "npm run deploy:gate",
@@ -81,6 +84,7 @@
     { "path": "metropolis-r5-1.css" },
     { "path": "metropolis-r5-2.css" },
     { "path": "metropolis-r5-3.css" },
+    { "path": "metropolis-r5-4.css" },
     { "path": "sw-bootstrap.js" },
     { "path": "highway-gate.js" },
     { "path": "app.js" },
@@ -91,6 +95,7 @@
     { "path": "metropolis-r5-1.js" },
     { "path": "metropolis-r5-2.js" },
     { "path": "metropolis-r5-3.js" },
+    { "path": "metropolis-r5-4.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }
