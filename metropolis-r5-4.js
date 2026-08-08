@@ -31,7 +31,10 @@ function r54Metrics(targetState, today = r54Today()) {
   try { cashSatang = typeof currentBalanceSatang === "function" ? Number(currentBalanceSatang()) : 0; }
   catch (_) { cashSatang = 0; }
   const stockQty = Number(targetState?.store?.stockQty || 0);
-  const overdue = active.filter(item => String(item.due || "").slice(0, 10) < today).length;
+  const overdue = active.filter(item => {
+    const due = String(item?.due || "").slice(0, 10);
+    return due && due < today;
+  }).length;
   const pendingOut = active.filter(item => typeof queueDirection === "function" && queueDirection(item) === "OUT").length;
   return { cashSatang, stockQty, overdue, pendingOut };
 }
@@ -48,9 +51,7 @@ function r54ApplyVisibleVersion() {
   const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`;
   if (document.title !== expectedTitle) document.title = expectedTitle;
   const statusVersion = document.querySelector(".status-line b");
-  if (statusVersion && statusVersion.textContent !== `METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`) {
-    statusVersion.textContent = `METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`;
-  }
+  if (statusVersion) statusVersion.setAttribute("aria-label", `METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`);
 }
 
 function r54BuildDashboard() {
