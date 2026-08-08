@@ -14,6 +14,21 @@
 .r53-status-yellow{ background:#e0a51a!important; }
 .r53-status-red{ background:#d74646!important; }
 
+#queueList .status.r53-status-green{
+  background:#e7f6ee!important;
+  color:#26744f!important;
+}
+
+#queueList .status.r53-status-yellow{
+  background:#fff1d2!important;
+  color:#8e5d13!important;
+}
+
+#queueList .status.r53-status-red{
+  background:#fdeaea!important;
+  color:#a33636!important;
+}
+
 #monthGrid .day-dots{
   display:flex;
   align-items:center;

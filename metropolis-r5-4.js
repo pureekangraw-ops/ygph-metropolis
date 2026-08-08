@@ -1,9 +1,9 @@
 "use strict";
 
-/* YGPH METROPOLIS 4.2.1 — owner home dashboard + visible release version */
+/* YGPH METROPOLIS 4.2.2 — owner home dashboard + visible release authority */
 
-const METROPOLIS_421_PRODUCT_VERSION = "4.2.1";
-const METROPOLIS_R5_4_VERSION = "5.4.0-home-dashboard";
+const METROPOLIS_422_PRODUCT_VERSION = "4.2.2";
+const METROPOLIS_R5_4_VERSION = "5.4.1-home-authority";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -35,8 +35,11 @@ function r54Metrics(targetState, today = r54Today()) {
     const due = String(item?.due || "").slice(0, 10);
     return due && due < today;
   }).length;
-  const pendingOut = active.filter(item => typeof queueDirection === "function" && queueDirection(item) === "OUT").length;
-  return { cashSatang, stockQty, overdue, pendingOut };
+  const outgoing = active.filter(item => typeof queueDirection === "function" && queueDirection(item) === "OUT");
+  const pendingOut = outgoing.length;
+  const pendingOutSatang = outgoing.reduce((sum, item) =>
+    sum + Math.max(0, Number(item?.amountSatang || 0) - Number(item?.paidSatang || 0)), 0);
+  return { cashSatang, stockQty, overdue, pendingOut, pendingOutSatang };
 }
 
 function r54Money(satang) {
@@ -47,15 +50,30 @@ function r54Money(satang) {
 function r54ApplyVisibleVersion() {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.metropolisR54 = METROPOLIS_R5_4_VERSION;
-  document.documentElement.dataset.metropolisVersion = METROPOLIS_421_PRODUCT_VERSION;
-  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`;
+  document.documentElement.dataset.metropolisVersion = METROPOLIS_422_PRODUCT_VERSION;
+  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
   if (document.title !== expectedTitle) document.title = expectedTitle;
   const statusVersion = document.querySelector(".status-line b");
-  if (statusVersion) statusVersion.setAttribute("aria-label", `METROPOLIS v${METROPOLIS_421_PRODUCT_VERSION}`);
+  if (statusVersion) {
+    const expectedVersion = `METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
+    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_422_PRODUCT_VERSION}`;
+    statusVersion.setAttribute("aria-label", expectedVersion);
+  }
+}
+
+function r54ClaimVersionAuthority() {
+  if (typeof globalThis === "undefined" || globalThis.__YGPH_R54_VERSION_AUTHORITY__) return;
+  if (typeof applyProductVersion42 === "function") {
+    applyProductVersion42 = function() {
+      r54ApplyVisibleVersion();
+    };
+  }
+  globalThis.__YGPH_R54_VERSION_AUTHORITY__ = true;
 }
 
 function r54BuildDashboard() {
   if (typeof document === "undefined") return null;
+  document.querySelector(".metropolis-city-hero")?.remove();
   document.querySelector(".metropolis-eyebrow")?.remove();
   const brandSub = document.querySelector(".brand-copy p");
   if (brandSub && /Four Apps\. One Flow/i.test(brandSub.textContent || "")) {
@@ -64,8 +82,12 @@ function r54BuildDashboard() {
 
   const home = document.getElementById("homePage");
   if (!home) return null;
+  const appSection = home.querySelector(".section");
   let dashboard = document.getElementById("metropolisOwnerDashboard");
-  if (dashboard) return dashboard;
+  if (dashboard) {
+    if (appSection?.parentElement === home && dashboard.nextElementSibling !== appSection) home.insertBefore(dashboard, appSection);
+    return dashboard;
+  }
 
   dashboard = document.createElement("section");
   dashboard.id = "metropolisOwnerDashboard";
@@ -76,13 +98,10 @@ function r54BuildDashboard() {
       <article class="metro-dash-card metro-dash-purple"><small>เงินที่มี</small><strong id="metroDashCash">0 บาท</strong></article>
       <article class="metro-dash-card metro-dash-green"><small>สต็อกสินค้า</small><strong id="metroDashStock">0 ชิ้น</strong></article>
       <article class="metro-dash-card metro-dash-yellow"><small>งานที่เลยกำหนด</small><strong id="metroDashOverdue">0 งาน</strong></article>
-      <article class="metro-dash-card metro-dash-red"><small>ค้างจ่าย</small><strong id="metroDashPendingOut">0 รายการ</strong></article>
+      <article class="metro-dash-card metro-dash-red"><small>ค้างจ่าย</small><strong id="metroDashPendingOut">0 บาท · 0 รายการ</strong></article>
     </div>`;
 
-  const cityHero = home.querySelector(".metropolis-city-hero");
-  const appSection = home.querySelector(".section");
-  if (cityHero?.parentElement === home) cityHero.after(dashboard);
-  else if (appSection?.parentElement === home) home.insertBefore(dashboard, appSection);
+  if (appSection?.parentElement === home) home.insertBefore(dashboard, appSection);
   else home.prepend(dashboard);
   return dashboard;
 }
@@ -99,10 +118,11 @@ function r54SyncDashboard() {
   set("metroDashCash", `${r54Money(metrics.cashSatang)} บาท`);
   set("metroDashStock", `${metrics.stockQty.toLocaleString("th-TH")} ชิ้น`);
   set("metroDashOverdue", `${metrics.overdue.toLocaleString("th-TH")} งาน`);
-  set("metroDashPendingOut", `${metrics.pendingOut.toLocaleString("th-TH")} รายการ`);
+  set("metroDashPendingOut", `${r54Money(metrics.pendingOutSatang)} บาท · ${metrics.pendingOut.toLocaleString("th-TH")} รายการ`);
 }
 
 function r54Apply() {
+  r54ClaimVersionAuthority();
   r54ApplyVisibleVersion();
   r54BuildDashboard();
   r54SyncDashboard();
@@ -110,7 +130,7 @@ function r54Apply() {
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    METROPOLIS_421_PRODUCT_VERSION,
+    METROPOLIS_422_PRODUCT_VERSION,
     METROPOLIS_R5_4_VERSION,
     r54Metrics
   };
@@ -133,6 +153,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
     const install = () => {
       if (!document.body || globalThis.__YGPH_METROPOLIS_R54_OBSERVER__) return;
+      r54ClaimVersionAuthority();
       const observer = new MutationObserver(queueApply);
       observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
       globalThis.__YGPH_METROPOLIS_R54_OBSERVER__ = observer;

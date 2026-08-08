@@ -1,9 +1,9 @@
 {
-  "release": "4.2.1-home-dashboard",
+  "release": "4.2.2-home-authority",
   "product": "YGPH METROPOLIS",
-  "tagline": "Owner Dashboard",
+  "tagline": "Owner Dashboard Authority",
   "releaseDate": "2026-08-08",
-  "sourceBaseCommit": "c6eaacf",
+  "sourceBaseCommit": "29973dd",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -32,10 +32,12 @@
     "strict reversal topology with legacy one-to-one compatibility",
     "no direct deletion of protected history",
     "pre-4.2 obligations retain original total-split semantics",
-    "cancelled records are hidden from live UI only and remain in durable history",
+    "cancelled records are filtered before live render/list counting and remain in durable history",
     "cancelled Calendar controls and selected-day swipe paths are removed from live UI",
-    "live counters use the same cancelled-source visibility rule as live cards",
-    "owner dashboard reads current cash, stock and live Calendar state without mutating durable data",
+    "Calendar month and list use the same green/yellow/red status signal",
+    "owner dashboard replaces the Four Apps hero slot and reads current cash, stock and live Calendar state without mutating durable data",
+    "owner dashboard red metric reports unpaid outgoing amount and item count",
+    "4.2.2 owns the visible product version without CSS masking",
     "every production UI change advances the visible product version"
   ],
   "runtimeOrder": [
@@ -52,7 +54,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.1-20260808-r10-home-dashboard",
+    "releaseId": "v4.2.2-20260808-r11-home-authority",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -62,7 +64,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.1 removes the Four Apps eyebrow, adds the owner dashboard in purple/green/yellow/red order, and keeps cancelled-source work out of live metrics while preserving history."
+    "note": "METROPOLIS 4.2.2 makes the owner Dashboard and three-color Calendar status authoritative, filters cancelled records before live rendering, and advances the visible product version/cache together."
   },
   "validation": {
     "command": "npm run deploy:gate",

@@ -24,6 +24,21 @@ test("live signal hides an otherwise-open queue when its source was cancelled", 
   assert.equal(runtime.liveStatusSignal(queue, "OPEN", "2026-08-08"), "YELLOW");
 });
 
+test("cancelled records are filtered before Calendar and aggregate list renderers execute", () => {
+  const js = read("metropolis-r5-3.js");
+  assert.match(js, /function withLiveCalendar/);
+  assert.match(js, /function withLiveSourceRecords/);
+  assert.match(js, /function patchLiveRenderers/);
+  assert.match(js, /renderCalendar\s*=\s*function/);
+  assert.match(js, /withLiveCalendar\(\(\) => baseRenderCalendar/);
+  for (const renderer of ["renderStore", "renderRide", "renderLedger", "historyHtml"]) {
+    assert.match(js, new RegExp(`${renderer}\\s*=\\s*function`));
+  }
+  assert.match(js, /withLiveSourceRecords\(\(\) => baseRenderStore/);
+  assert.match(js, /withLiveSourceRecords\(\(\) => baseHistoryHtml/);
+  assert.doesNotMatch(js, /state\.calendar\.(?:splice|pop|shift)|delete\s+state\.calendar/);
+});
+
 test("calendar day counts and dots exclude cancelled queues", () => {
   const js = read("metropolis-r5-3.js");
   assert.match(js, /state\.calendar\.filter\(item => item\.due === date && queueSignal\(item\) !== STATUS_SIGNALS\.HIDDEN\)/);
@@ -31,12 +46,15 @@ test("calendar day counts and dots exclude cancelled queues", () => {
   assert.match(js, /r53-day-dot/);
 });
 
-test("cancelled live cards are removed without deleting durable records", () => {
+test("Calendar list pill receives the same three-color signal as its dot", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /signal === STATUS_SIGNALS\.HIDDEN[\s\S]{0,100}card\.remove\(\)/);
-  assert.match(js, /signal === STATUS_SIGNALS\.HIDDEN[\s\S]{0,100}row\.remove\(\)/);
-  assert.match(js, /\.record \.status\.cancelled/);
-  assert.doesNotMatch(js, /state\.calendar\.(?:splice|pop|shift)|delete\s+state\.calendar/);
+  const css = read("metropolis-r5-3.css");
+  assert.match(js, /const status = card\.querySelector\("\.status"\)/);
+  assert.match(js, /status\.classList\.add\(signalClass\(signal\)\)/);
+  assert.match(css, /#queueList \.status\.r53-status-green/);
+  assert.match(css, /#queueList \.status\.r53-status-yellow/);
+  assert.match(css, /#queueList \.status\.r53-status-red/);
+  assert.doesNotMatch(css, /#queueList \.status\.r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
 test("cancelled controls disappear from Calendar live UI", () => {
@@ -48,7 +66,6 @@ test("cancelled controls disappear from Calendar live UI", () => {
 
 test("selected-day swipe uses a live-only calendar so cancelled queues cannot reappear", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /function withLiveCalendar/);
   assert.match(js, /flowRenderCalendarFocus\s*=\s*function/);
   assert.match(js, /withLiveCalendar\(\(\) => baseFlowCalendarFocus/);
 });
@@ -71,7 +88,7 @@ test("status stylesheet exposes exactly the three owner-approved signal colors",
   assert.doesNotMatch(css, /r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
-test("status signal assets stay loaded before the 4.2.1 dashboard layer", () => {
+test("status signal assets stay loaded before the 4.2.2 dashboard layer", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-3.css") > bootstrap.indexOf("metropolis-r5-2.css"));
@@ -79,5 +96,5 @@ test("status signal assets stay loaded before the 4.2.1 dashboard layer", () => 
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.1-20260808-r10-home-dashboard");
+  assert.equal(sw.RELEASE_ID, "v4.2.2-20260808-r11-home-authority");
 });
