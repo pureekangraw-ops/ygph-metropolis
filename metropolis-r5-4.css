@@ -1,5 +1,14 @@
 /* YGPH METROPOLIS 4.2.1 — owner dashboard */
 
+html[data-metropolis-r54] .status-line b{
+  font-size:0;
+}
+
+html[data-metropolis-r54] .status-line b::after{
+  content:"METROPOLIS v4.2.1";
+  font-size:1rem;
+}
+
 .metro-owner-dashboard{
   margin:18px 0 24px;
   padding:18px;
