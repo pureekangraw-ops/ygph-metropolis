@@ -1,9 +1,9 @@
 {
-  "release": "4.2.2-home-authority",
+  "release": "4.2.3-calendar-dom-contract",
   "product": "YGPH METROPOLIS",
-  "tagline": "Owner Dashboard Authority",
+  "tagline": "Calendar DOM Contract",
   "releaseDate": "2026-08-08",
-  "sourceBaseCommit": "29973dd",
+  "sourceBaseCommit": "ccf6f25",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -33,11 +33,11 @@
     "no direct deletion of protected history",
     "pre-4.2 obligations retain original total-split semantics",
     "cancelled records are filtered before live render/list counting and remain in durable history",
-    "cancelled Calendar controls and selected-day swipe paths are removed from live UI",
+    "cancelled Calendar filter can disappear from live UI but the base calCancelled counter node remains mounted and hidden so renderCalendar retains its DOM contract",
     "Calendar month and list use the same green/yellow/red status signal",
     "owner dashboard replaces the Four Apps hero slot and reads current cash, stock and live Calendar state without mutating durable data",
     "owner dashboard red metric reports unpaid outgoing amount and item count",
-    "4.2.2 owns the visible product version without CSS masking",
+    "4.2.3 owns the visible product version without CSS masking",
     "every production UI change advances the visible product version"
   ],
   "runtimeOrder": [
@@ -54,7 +54,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.2-20260808-r11-home-authority",
+    "releaseId": "v4.2.3-20260808-r12-calendar-dom-contract",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -64,7 +64,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.2 makes the owner Dashboard and three-color Calendar status authoritative, filters cancelled records before live rendering, and advances the visible product version/cache together."
+    "note": "METROPOLIS 4.2.3 preserves the base Calendar DOM contract: cancelled work stays hidden from live UI without deleting the calCancelled node required by renderCalendar, so Calendar list rendering and afterPageChange navigation can complete."
   },
   "validation": {
     "command": "npm run deploy:gate",
