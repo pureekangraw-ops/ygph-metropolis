@@ -9,9 +9,9 @@ const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 const dashboardRuntime = require("../metropolis-r5-4.js");
 
-test("4.2.2 replaces the Four Apps hero slot with the owner dashboard", () => {
+test("4.2.3 replaces the Four Apps hero slot with the owner dashboard", () => {
   const js = read("metropolis-r5-4.js");
-  assert.match(js, /METROPOLIS_422_PRODUCT_VERSION\s*=\s*"4\.2\.2"/);
+  assert.match(js, /METROPOLIS_423_PRODUCT_VERSION\s*=\s*"4\.2\.3"/);
   assert.match(js, /querySelector\("\.metropolis-city-hero"\)\?\.remove\(\)/);
   assert.match(js, /insertBefore\(dashboard,\s*appSection\)/);
   for (const id of ["metroDashCash", "metroDashStock", "metroDashOverdue", "metroDashPendingOut"]) {
@@ -60,21 +60,21 @@ test("dashboard palette follows purple green yellow red order", () => {
   assert.ok(purple >= 0 && green > purple && yellow > green && red > yellow);
 });
 
-test("4.2.2 owns visible version without a CSS pseudo-version workaround", () => {
+test("4.2.3 owns visible version without a CSS pseudo-version workaround", () => {
   const js = read("metropolis-r5-4.js");
   const css = read("metropolis-r5-4.css");
-  assert.match(js, /statusVersion\.textContent\s*=\s*`METROPOLIS v\$\{METROPOLIS_422_PRODUCT_VERSION\}`/);
+  assert.match(js, /statusVersion\.textContent\s*=\s*`METROPOLIS v\$\{METROPOLIS_423_PRODUCT_VERSION\}`/);
   assert.match(js, /applyProductVersion42\s*=\s*function/);
   assert.doesNotMatch(css, /\.status-line b::after/);
   assert.doesNotMatch(css, /\.status-line b\s*\{[\s\S]{0,80}font-size\s*:\s*0/);
 });
 
-test("4.2.2 visible version and assets are loaded as the newest layer", () => {
+test("4.2.3 visible version and assets are loaded as the newest layer", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-4.css") > bootstrap.indexOf("metropolis-r5-3.css"));
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.2-20260808-r11-home-authority");
+  assert.equal(sw.RELEASE_ID, "v4.2.3-20260808-r12-calendar-dom-contract");
 });
