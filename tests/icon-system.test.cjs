@@ -69,7 +69,7 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.0-20260808-r8-status-clean$/, "the cleanup rollout must advance beyond the first status cache");
+  assert.match(RELEASE_ID, /^v4\.2\.0-20260808-r9-live-count$/, "the live-counter rollout must advance beyond status cleanup");
 });
 
 test("approved subjects render from the shared icon registry", () => {
