@@ -18,7 +18,7 @@ test("4.2.1 removes the Four Apps eyebrow and adds the owner dashboard", () => {
   }
   assert.match(js, /currentBalanceSatang/);
   assert.match(js, /state\.store\.stockQty/);
-  assert.match(js, /due\s*<\s*today/);
+  assert.match(js, /\bdue\s*&&\s*due\s*<\s*today/);
   assert.match(js, /queueDirection/);
 });
 
@@ -29,6 +29,14 @@ test("dashboard palette follows purple green yellow red order", () => {
   const yellow = css.indexOf(".metro-dash-yellow");
   const red = css.indexOf(".metro-dash-red");
   assert.ok(purple >= 0 && green > purple && yellow > green && red > yellow);
+});
+
+test("4.2.1 visible version cannot be reverted by the older 4.2 observer", () => {
+  const js = read("metropolis-r5-4.js");
+  const css = read("metropolis-r5-4.css");
+  assert.match(js, /setAttribute\("aria-label",\s*`METROPOLIS v\$\{METROPOLIS_421_PRODUCT_VERSION\}`\)/);
+  assert.doesNotMatch(js, /statusVersion\.textContent\s*=/);
+  assert.match(css, /html\[data-metropolis-r54\][\s\S]*\.status-line b::after[\s\S]*content:\s*"METROPOLIS v4\.2\.1"/);
 });
 
 test("4.2.1 visible version and assets are loaded as the newest layer", () => {
