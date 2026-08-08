@@ -2,7 +2,7 @@
 
 /* YGPH METROPOLIS — three-color live status signal */
 
-const METROPOLIS_R5_3_VERSION = "5.3.1-status-clean";
+const METROPOLIS_R5_3_VERSION = "5.3.2-live-count";
 const STATUS_SIGNALS = Object.freeze({ GREEN: "GREEN", YELLOW: "YELLOW", RED: "RED", HIDDEN: "HIDDEN" });
 
 function statusSignal(item, today) {
@@ -16,8 +16,13 @@ function statusSignal(item, today) {
   return STATUS_SIGNALS.YELLOW;
 }
 
+function liveStatusSignal(item, sourceStatus, today) {
+  if (String(sourceStatus || "").toUpperCase() === "CANCELLED") return STATUS_SIGNALS.HIDDEN;
+  return statusSignal(item, today);
+}
+
 if (typeof module === "object" && module.exports) {
-  module.exports = { METROPOLIS_R5_3_VERSION, STATUS_SIGNALS, statusSignal };
+  module.exports = { METROPOLIS_R5_3_VERSION, STATUS_SIGNALS, statusSignal, liveStatusSignal };
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
@@ -31,8 +36,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     function queueSignal(item) {
       if (!item) return STATUS_SIGNALS.HIDDEN;
       const source = typeof findSource === "function" ? findSource(item.source, item.sourceId) : null;
-      if (String(source?.status || "").toUpperCase() === "CANCELLED") return STATUS_SIGNALS.HIDDEN;
-      return statusSignal(item, todayKey());
+      return liveStatusSignal(item, source?.status, todayKey());
     }
 
     function signalClass(signal) {
@@ -145,6 +149,33 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       tile?.remove();
     }
 
+    function syncLiveCounters() {
+      if (typeof state === "undefined" || !state || !Array.isArray(state.calendar)) return;
+      const active = state.calendar.filter(item =>
+        queueSignal(item) !== STATUS_SIGNALS.HIDDEN &&
+        !["COMPLETED", "CANCELLED"].includes(String(item.status || "").toUpperCase())
+      );
+      const directionOf = item => typeof queueDirection === "function" ? queueDirection(item) : "OTHER";
+      const isVerify = item => String(item.status || "").toUpperCase() === "VERIFY" ||
+        (typeof integrityGate === "function" && integrityGate(item).state !== "TRUSTED");
+      const incoming = active.filter(item => directionOf(item) === "IN").length;
+      const outgoing = active.filter(item => directionOf(item) === "OUT").length;
+      const verify = active.filter(isVerify).length;
+      const setCounter = (id, value) => {
+        const element = document.getElementById(id);
+        const text = String(value);
+        if (element && element.textContent !== text) element.textContent = text;
+      };
+
+      setCounter("homeWaitIn", incoming);
+      setCounter("homeWaitOut", outgoing);
+      setCounter("homeVerify", verify);
+      setCounter("calWaitIn", incoming);
+      setCounter("calWaitOut", outgoing);
+      setCounter("calVerify", verify);
+      setCounter("ledgerPendingCount", `${outgoing} รายการ`);
+    }
+
     function patchFlowCalendarFocus() {
       if (globalThis.__YGPH_R53_FLOW_FOCUS_PATCHED__ || typeof flowRenderCalendarFocus !== "function") return;
       const baseFlowCalendarFocus = flowRenderCalendarFocus;
@@ -161,6 +192,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       paintQueueCards();
       paintHomeTasks();
       hideCancelledRecordCards();
+      syncLiveCounters();
     }
 
     function queueApply() {
