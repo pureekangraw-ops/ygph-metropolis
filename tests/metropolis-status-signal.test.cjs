@@ -53,6 +53,15 @@ test("selected-day swipe uses a live-only calendar so cancelled queues cannot re
   assert.match(js, /withLiveCalendar\(\(\) => baseFlowCalendarFocus/);
 });
 
+test("live counters use the same hidden rule as visible queue cards", () => {
+  const js = read("metropolis-r5-3.js");
+  assert.match(js, /function syncLiveCounters/);
+  assert.match(js, /queueSignal\(item\) !== STATUS_SIGNALS\.HIDDEN/);
+  for (const id of ["homeWaitIn", "homeWaitOut", "homeVerify", "calWaitIn", "calWaitOut", "calVerify", "ledgerPendingCount"]) {
+    assert.match(js, new RegExp(`setCounter\\("${id}"`));
+  }
+});
+
 test("status stylesheet exposes exactly the three owner-approved signal colors", () => {
   const css = read("metropolis-r5-3.css");
   assert.match(css, /\.r53-status-green/);
@@ -69,5 +78,5 @@ test("status signal assets load last and are included in the offline shell", () 
   assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r8-status-clean");
+  assert.equal(sw.RELEASE_ID, "v4.2.0-20260808-r9-live-count");
 });
