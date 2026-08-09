@@ -37,6 +37,25 @@ test("dashboard metrics take cash as explicit input instead of reading unrelated
     "r54Metrics must not silently read cash from global state");
 });
 
+test("post-render extensions use the runtime hook bus instead of stacked render wrappers and DOM observers", () => {
+  const flow = read("flow-era.js");
+  assert.match(flow, /YGPHRuntime\.run\("afterRender"/,
+    "FLOW must dispatch the canonical post-render hook");
+
+  const r5 = read("metropolis-r5.js");
+  assert.match(r5, /YGPHRuntime\.register\("METROPOLIS_R5"[\s\S]*afterRender/,
+    "R5 must subscribe to afterRender");
+  assert.doesNotMatch(r5, /renderAll\s*=\s*function/,
+    "R5 must not wrap renderAll for post-render work");
+
+  for (const file of ["metropolis-r5-1.js", "metropolis-r5-2.js", "metropolis-r5-3.js", "metropolis-r5-4.js"]) {
+    const source = read(file);
+    assert.match(source, /YGPHRuntime\.register\(/, `${file} must subscribe to the runtime hook bus`);
+    assert.doesNotMatch(source, /new MutationObserver\(/,
+      `${file} must not watch the whole DOM to discover renders`);
+  }
+});
+
 test("production manifest, Cloudflare allowlist, and offline shell cannot drift apart", () => {
   const manifest = JSON.parse(read("RELEASE_MANIFEST.json"));
   const { APP_SHELL } = require("../sw.js");
