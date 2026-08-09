@@ -8,7 +8,9 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
+const flow = read("flow-era.js");
 const v4 = read("metropolis-v4.js");
+const r51 = read("metropolis-r5-1.js");
 const r54 = read("metropolis-r5-4.js");
 const css = read("metropolis-r5-4.css");
 const index = read("index.html");
@@ -26,25 +28,30 @@ test("METROPOLIS stays primary and YGPH is the signature", () => {
   assert.match(v4, /brandSub\.textContent\s*=\s*METROPOLIS_SIGNATURE/);
 });
 
-test("core METROPOLIS icons come from one SVG glyph registry", () => {
-  assert.match(v4, /const METROPOLIS_GLYPHS\s*=\s*Object\.freeze\(/);
-  assert.match(v4, /function metropolisGlyph\(/);
-  for (const name of ["home", "store", "ride", "ledger", "calendar", "settings", "wallet", "stock", "task", "payment", "chevron"]) {
-    assert.match(v4, new RegExp(`${name}:\\s*`), `missing ${name} glyph`);
+test("core METROPOLIS icons extend the existing shared FLOW icon registry", () => {
+  assert.match(flow, /const FLOW_ICONS\s*=\s*\{/);
+  assert.match(flow, /function flowIcon\(/);
+  for (const name of ["app", "home", "store", "ride", "ledger", "calendar", "settings", "wallet", "stock", "task", "payment", "chevron"]) {
+    assert.match(flow, new RegExp(`\\b${name}:\\s*`), `missing ${name} glyph`);
   }
+  assert.match(v4, /return flowIcon\(iconName\)/);
   assert.doesNotMatch(v4, /<span class="metropolis-emoji"[^>]*>\$\{meta\.emoji\}<\/span>/);
+  assert.match(r51, /return typeof flowIcon === "function" \? flowIcon\(app\) : ""/);
+  assert.doesNotMatch(r51, /data-metropolis-41-icon/);
 });
 
-test("bottom navigation contains exactly the five approved destinations", () => {
-  assert.match(v4, /id\s*=\s*"metropolisBottomNav"|bar\.id\s*=\s*"metropolisBottomNav"/);
-  const navTargets = [...v4.matchAll(/data-metropolis-nav=["'](home|store|ride|ledger|calendar|settings)["']/g)].map(match => match[1]);
-  assert.deepEqual([...new Set(navTargets)].sort(), ["calendar", "home", "ledger", "ride", "store"]);
-  assert.doesNotMatch(v4, /data-metropolis-nav=["']settings["']/);
+test("existing bottom navigation is the single five-destination source", () => {
+  const nav = index.match(/<nav class="bottom-nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || "";
+  const targets = [...nav.matchAll(/data-page="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(targets, ["home", "store", "ride", "ledger", "calendar"]);
+  assert.doesNotMatch(nav, /data-page="settings"/);
+  assert.match(v4, /function metropolisHydrateBottomNav\(/);
+  assert.match(v4, /function metropolisSyncBottomNav\(/);
   assert.match(v4, /aria-current/);
 });
 
 test("visual rollout preserves the defragmented runtime boundary", () => {
-  for (const file of ["metropolis-v4.js", "metropolis-r5-4.js"]) {
+  for (const file of ["metropolis-v4.js", "metropolis-r5-1.js", "metropolis-r5-4.js"]) {
     const source = read(file);
     assert.doesNotMatch(source, /new MutationObserver\(/, `${file} must not reintroduce a DOM observer`);
   }
@@ -55,10 +62,10 @@ test("visual rollout preserves the defragmented runtime boundary", () => {
 
 test("approved production palette and nav state are encoded in the authoritative visual CSS", () => {
   for (const hex of ["#0F1416", "#1B2326", "#22C55E", "#14B8A6", "#F5C14A", "#F7F7F8"]) {
-    assert.match(css.toUpperCase(), new RegExp(hex.toUpperCase().replace("#", "#")));
+    assert.match(css.toUpperCase(), new RegExp(hex.toUpperCase()));
   }
-  assert.match(css, /\.metropolis-bottom-nav/);
-  assert.match(css, /\.metropolis-bottom-nav[^\n]*\.is-active|\.metropolis-bottom-nav[\s\S]*?\.is-active/);
+  assert.match(css, /\.metropolis-v4 \.bottom-nav/);
+  assert.match(css, /\.nav-btn\.is-active/);
   assert.match(css, /env\(safe-area-inset-bottom/);
 });
 
