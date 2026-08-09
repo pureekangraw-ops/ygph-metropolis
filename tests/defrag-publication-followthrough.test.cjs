@@ -11,8 +11,8 @@ const sw = require("../sw.js");
 const manifest = JSON.parse(read("RELEASE_MANIFEST.json"));
 const r53 = read("metropolis-r5-3.js");
 
-test("service worker generation advances for the calendar/version defrag", () => {
-  const expected = "v4.2.4-20260809-r19-trusted-device-auto-unlock";
+test("service worker generation advances for the current Metropolis release", () => {
+  const expected = "v4.2.5-20260810-r20-metro-finalization";
   assert.equal(sw.RELEASE_ID, expected);
   assert.equal(manifest.serviceWorker.releaseId, expected);
 });
