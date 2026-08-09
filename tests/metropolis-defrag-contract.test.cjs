@@ -11,11 +11,14 @@ const read = file => fs.readFileSync(path.join(root, file), "utf8");
 test("4.2 runtime layers share one visible product-version authority instead of monkey-patching writers", () => {
   const r52 = read("metropolis-r5-2.js");
   const r54 = read("metropolis-r5-4.js");
+  const r55 = read("metropolis-r5-5.js");
 
   assert.match(r52, /YGPH_METROPOLIS_PRODUCT_VERSION/,
     "R5-2 must read the shared visible product-version authority");
   assert.match(r54, /YGPH_METROPOLIS_PRODUCT_VERSION/,
     "R5-4 must claim the shared visible product-version authority");
+  assert.match(r55, /YGPH_METROPOLIS_PRODUCT_VERSION/,
+    "R5-5 must claim the shared visible product-version authority");
   assert.doesNotMatch(r54, /applyProductVersion42\s*=\s*function/,
     "newer layers must not replace older local writer functions");
 });
@@ -53,7 +56,7 @@ test("post-render extensions use the runtime hook bus instead of stacked render 
   assert.doesNotMatch(r5, /renderAll\s*=\s*function/,
     "R5 must not wrap renderAll for post-render work");
 
-  for (const file of ["metropolis-r5-1.js", "metropolis-r5-2.js", "metropolis-r5-3.js", "metropolis-r5-4.js"]) {
+  for (const file of ["metropolis-r5-1.js", "metropolis-r5-2.js", "metropolis-r5-3.js", "metropolis-r5-4.js", "metropolis-r5-5.js"]) {
     const source = read(file);
     assert.match(source, /YGPHRuntime\.register\(/, `${file} must subscribe to the runtime hook bus`);
     assert.doesNotMatch(source, /new MutationObserver\(/,
