@@ -1,8 +1,7 @@
-/* YGPH METROPOLIS 4.1 — minimal launcher */
+/* YGPH METROPOLIS 4.1 — minimal launcher compatibility */
 
 .metropolis-v4 .metropolis-city-copy > p,
 .metropolis-v4 .metropolis-section-note,
-.metropolis-v4 .metropolis-app-copy > small,
 .metropolis-v4 .metropolis-app-status,
 .metropolis-v4 .metropolis-open-mark{
   display:none!important;
@@ -20,23 +19,20 @@
   min-height:185px!important;
 }
 
-.metropolis-v4 .metropolis-app-icon{
-  width:56px!important;
-  height:56px!important;
-  border-radius:17px!important;
-  background:var(--app-color)!important;
-  color:#fff!important;
-  border:0!important;
-  box-shadow:0 8px 20px color-mix(in srgb,var(--app-color) 28%,transparent)!important;
+/* SVG geometry is owned by FLOW_ICONS. This layer only keeps legacy sizing sane. */
+.metropolis-v4 .metropolis-app-icon .flow-icon,
+.metropolis-v4 .metropolis-current-icon .flow-icon{
+  display:grid;
+  place-items:center;
 }
 
-.metropolis-v4 .metropolis-app-icon .metropolis-41-icon{
+.metropolis-v4 .metropolis-app-icon .flow-icon svg{
   width:31px!important;
   height:31px!important;
   stroke:currentColor!important;
 }
 
-.metropolis-v4 .metropolis-current-icon .metropolis-41-icon{
+.metropolis-v4 .metropolis-current-icon .flow-icon svg{
   width:26px!important;
   height:26px!important;
   stroke:currentColor!important;
