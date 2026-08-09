@@ -10,6 +10,8 @@
 
 const METROPOLIS_VERSION = "4.0.0";
 const METROPOLIS_NAME = "YGPH METROPOLIS";
+const METROPOLIS_DISPLAY_NAME = "METROPOLIS";
+const METROPOLIS_SIGNATURE = "by YGPH — Yggdrasil Personal Helper";
 const METROPOLIS_ARCHITECTURE = "FOUR_APP_CONNECTED_SUITE";
 
 const METROPOLIS_APPS = {
@@ -74,14 +76,14 @@ const METROPOLIS_APPS = {
 
 function metropolisIcon(app) {
   const meta = METROPOLIS_APPS[app] || METROPOLIS_APPS.store;
+  const iconMap = { report: "task", sync: "payment" };
+  const iconName = iconMap[app] || meta.icon || app;
   try {
-    if (typeof flowIcon === "function" && ["store", "ride", "ledger", "calendar", "settings"].includes(meta.icon)) {
-      return flowIcon(meta.icon);
-    }
+    if (typeof flowIcon === "function") return flowIcon(iconName);
   } catch (error) {
-    console.warn("Metropolis icon fallback", error);
+    console.warn("Metropolis icon unavailable", error);
   }
-  return `<span class="metropolis-emoji" aria-hidden="true">${meta.emoji}</span>`;
+  return "";
 }
 
 function metropolisActivePage() {
@@ -97,6 +99,23 @@ function metropolisShowPage(page) {
   }
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === `${page}Page`));
   metropolisApplyPage(page);
+}
+
+function metropolisHydrateBottomNav() {
+  document.querySelectorAll(".bottom-nav .nav-btn[data-page]").forEach(button => {
+    const page = button.dataset.page;
+    const iconHost = button.querySelector("i");
+    if (iconHost) iconHost.innerHTML = metropolisIcon(page);
+  });
+}
+
+function metropolisSyncBottomNav(page = metropolisActivePage()) {
+  document.querySelectorAll(".bottom-nav .nav-btn[data-page]").forEach(button => {
+    const active = button.dataset.page === page;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
 }
 
 function metropolisFormatMoney(value) {
@@ -298,8 +317,8 @@ function metropolisApplyBranding() {
 
   const brandTitle = document.querySelector(".brand-copy h1");
   const brandSub = document.querySelector(".brand-copy p");
-  if (brandTitle) brandTitle.textContent = METROPOLIS_NAME;
-  if (brandSub) brandSub.textContent = "Four Apps. One Flow. — แยกเป็นแอป เชื่อมเป็นระบบ";
+  if (brandTitle) brandTitle.textContent = METROPOLIS_DISPLAY_NAME;
+  if (brandSub) brandSub.textContent = METROPOLIS_SIGNATURE;
 
   const status = document.querySelector(".status-line");
   if (status) {
@@ -313,6 +332,7 @@ function metropolisApplyBranding() {
 function metropolisApplyPage(page = metropolisActivePage()) {
   const normalized = METROPOLIS_APPS[page] ? page : "home";
   document.body.dataset.metropolisPage = normalized;
+  metropolisSyncBottomNav(normalized);
 
   const bar = document.getElementById("metropolisAppBar");
   if (!bar) return;
@@ -408,6 +428,7 @@ function metropolisInstall() {
   metropolisApplyBranding();
   metropolisBuildLauncher();
   metropolisBuildAppBar();
+  metropolisHydrateBottomNav();
   metropolisRegisterRuntime();
   metropolisApplyPage(metropolisActivePage());
   metropolisRefresh();

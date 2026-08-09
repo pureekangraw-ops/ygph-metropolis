@@ -48,8 +48,8 @@ body.metropolis-v4[data-metropolis-page="sync"]{--metro-accent:#176b4f;--metro-a
 .metropolis-v4 .brand-mark .flow-icon{display:grid;place-items:center}
 .metropolis-v4 .brand-mark svg{width:27px!important;height:27px!important;stroke:currentColor}
 .metropolis-v4 .status-line b{color:#176b4f}
-.metropolis-v4 .bottom-nav{display:none!important}
-.metropolis-v4 main{padding-bottom:max(2rem,env(safe-area-inset-bottom))}
+.metropolis-v4 .bottom-nav{display:grid!important}
+.metropolis-v4 main{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
 
 .metropolis-city-hero{
   display:grid;
