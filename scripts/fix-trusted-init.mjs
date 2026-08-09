@@ -1,0 +1,10 @@
+import fs from "node:fs";
+const path = "app.js";
+let source = fs.readFileSync(path, "utf8");
+const oldBlock = `    if (!vault) { showSetup(); return; }\n    if (await tryTrustedDeviceUnlock(vault)) return;\n    showUnlock();`;
+const newBlock = `    if (!vault) {\n      showSetup();\n    } else {\n      const trustedUnlocked = await tryTrustedDeviceUnlock(vault);\n      if (!trustedUnlocked) showUnlock();\n    }`;
+const matches = source.split(oldBlock).length - 1;
+if (matches !== 1) throw new Error(`trusted init block: expected 1 match, found ${matches}`);
+source = source.replace(oldBlock, newBlock);
+fs.writeFileSync(path, source);
+console.log("trusted init lifecycle fixed");
