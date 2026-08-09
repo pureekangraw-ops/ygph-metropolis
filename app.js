@@ -1,7 +1,7 @@
 "use strict";
 
 const VAULT_VERSION = 1;
-const RELEASE_VERSION = "2.1.4";
+const CORE_DATA_RELEASE_VERSION = "2.1.4";
 const STATE_SCHEMA = 4;
 const DB_NAME = "stock-pocket-secure";
 const DB_VERSION = 1;
@@ -177,7 +177,7 @@ function defaultState(defaultPriceSatang = 80000, openingBalanceSatang = 0) {
     ride: { currentRound: null, rounds: [], jobs: [], expenses: [], creditBalanceSatang: 0, creditWithdrawals: [] },
     ledger: { openingBalanceSatang, balanceVerified: true, verifiedAt: createdAt, transactions: [], obligations: [] },
     calendar: [],
-    audit: [{ id: uid("AUD"), at: createdAt, event: "SYSTEM_CREATED", note: `YGPH v${RELEASE_VERSION}` }],
+    audit: [{ id: uid("AUD"), at: createdAt, event: "SYSTEM_CREATED", note: `YGPH v${CORE_DATA_RELEASE_VERSION}` }],
     events: [],
     sync: { lastExportAt: null, lastImportAt: null, pendingImport: null, lastBatchId: null, appliedCommandKeys: {} },
     migration: { fromSchema: null, migratedAt: null, sourceRelease: null }
@@ -593,7 +593,7 @@ function repairSafeStateInvariants(target) {
   target.dataFixes ||= {};
   if (Number(target.store.stockQty || 0) === 0 && Number(target.store.stockValueSatang || 0) !== 0) {
     target.store.stockValueSatang = 0;
-    target.dataFixes.stockZeroValueInvariant ||= { appliedAt: nowIso(), release: RELEASE_VERSION };
+    target.dataFixes.stockZeroValueInvariant ||= { appliedAt: nowIso(), release: CORE_DATA_RELEASE_VERSION };
   }
   for (const item of target.calendar) {
     const isPayment = ["RECEIVE_CUSTOMER_PAYMENT", "PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType);
@@ -678,7 +678,7 @@ function validateStateInvariants(target, { quarantine = false } = {}) {
     if (item.status === "CANCELLED" && (!item.cancelledAt || item.completedAt)) fatal.push(`สถานะคิว ${item.id} ขัดกัน`);
     if (!["COMPLETED", "CANCELLED"].includes(item.status) && item.completedAt) fatal.push(`คิว ${item.id} เปิดอยู่แต่มีเวลาปิดแล้ว`);
   }
-  target.integrity = { checkedAt: nowIso(), release: RELEASE_VERSION, fatal: [...new Set(fatal)], warnings: [...new Set(warnings)] };
+  target.integrity = { checkedAt: nowIso(), release: CORE_DATA_RELEASE_VERSION, fatal: [...new Set(fatal)], warnings: [...new Set(warnings)] };
   if (fatal.length) throw new Error(`ข้อมูลไม่ผ่านกฎความปลอดภัย: ${[...new Set(fatal)].slice(0, 3).join("; ")}`);
   return target.integrity;
 }
@@ -823,7 +823,7 @@ async function commitStateAtomic({
     idempotencyKey,
     expectedRevision: next.revision,
     provenance: {
-      releaseVersion: RELEASE_VERSION,
+      releaseVersion: CORE_DATA_RELEASE_VERSION,
       ...(commandContext.provenance || {})
     }
   };
@@ -1668,7 +1668,6 @@ function renderCalendar() {
   byId("calWaitIn").textContent = active.filter(q => queueDirection(q) === "IN").length;
   byId("calWaitOut").textContent = active.filter(q => queueDirection(q) === "OUT").length;
   byId("calVerify").textContent = active.filter(q => q.status === "VERIFY" || integrityGate(q).state !== "TRUSTED").length;
-  byId("calCancelled").textContent = state.calendar.filter(q => q.status === "CANCELLED").length;
   byId("selectedDayTitle").textContent = selectedDate ? `รายการวันที่ ${dateTH(selectedDate)}` : "รายการทุกวัน";
   byId("selectedDayMeta").textContent = selectedDate ? "กด “ดูทุกวัน” เพื่อยกเลิกตัวกรอง" : "กดวันที่เพื่อดูเฉพาะวัน";
   let items = [...state.calendar].sort((a, b) => String(a.due).localeCompare(String(b.due)) || Number(a.sequence) - Number(b.sequence));
@@ -1744,8 +1743,8 @@ function buildReportData(start, end) {
     },
     ride: {
       grossSatang: jobs.reduce((sum, item) => sum + Number(item.amountSatang || 0), 0),
-      cashSatang: jobs.filter(item => item.paymentMode === "CASH").reduce((sum, item) => sum + Number(item.amountSatang || 0), 0),
-      creditEarnedSatang: jobs.filter(item => item.paymentMode === "CREDIT").reduce((sum, item) => sum + Number(item.amountSatang || 0), 0),
+      cashSatang: jobs.filter(item => item.paymentMode === "CASH").reduce((sum, job) => sum + Number(job.amountSatang || 0), 0),
+      creditEarnedSatang: jobs.filter(item => item.paymentMode === "CREDIT").reduce((sum, job) => sum + Number(job.amountSatang || 0), 0),
       expenseSatang: rideExpenses.reduce((sum, item) => sum + Number(item.amountSatang || 0), 0),
       jobs: jobs.length,
       distanceKm: jobs.reduce((sum, item) => sum + Number(item.distanceKm || 0), 0)
@@ -2163,7 +2162,7 @@ function renderSettings() {
   const swLine = serviceWorkerStatus?.lifecycle
     ? `${serviceWorkerStatus.lifecycle.serving || "—"}${serviceWorkerStatus.usingPrevious ? " (rollback)" : ""}`
     : "กำลังตรวจ";
-  byId("technicalStatus").textContent = `Release: ${RELEASE_VERSION}\nCore: ${coreVersion}\nState schema: ${state.schema}\nState revision: ${state.revision}\nEvent envelopes: ${state.events?.length || 0}\nDB: ${DB_NAME}/${DB_STORE}/${VAULT_KEY}\nVault: AES-GCM + PBKDF2 ${currentVault?.kdf?.iterations || PBKDF2_ITERATIONS}\nLast read-back: ${proof ? `${proof.status} / revision ${proof.stateRevision} / ${proof.verifiedAt}` : "ยังไม่มีในรอบนี้"}\nService Worker: ${swLine}\nBalance verified: ${state.ledger.balanceVerified}\nMigration: ${JSON.stringify(state.migration)}`;
+  byId("technicalStatus").textContent = `Core/data release: ${CORE_DATA_RELEASE_VERSION}\nCore: ${coreVersion}\nState schema: ${state.schema}\nState revision: ${state.revision}\nEvent envelopes: ${state.events?.length || 0}\nDB: ${DB_NAME}/${DB_STORE}/${VAULT_KEY}\nVault: AES-GCM + PBKDF2 ${currentVault?.kdf?.iterations || PBKDF2_ITERATIONS}\nLast read-back: ${proof ? `${proof.status} / revision ${proof.stateRevision} / ${proof.verifiedAt}` : "ยังไม่มีในรอบนี้"}\nService Worker: ${swLine}\nBalance verified: ${state.ledger.balanceVerified}\nMigration: ${JSON.stringify(state.migration)}`;
 }
 
 function renderAll() {
@@ -2535,7 +2534,7 @@ function wireEvents() {
         idempotencyKey: `setup:${created.createdAt}`,
         timestamp: created.createdAt,
         payloadVersion: 1,
-        provenance: { releaseVersion: RELEASE_VERSION },
+        provenance: { releaseVersion: CORE_DATA_RELEASE_VERSION },
         sourceRevision: 0,
         expectedRevision: created.revision,
         changes: [],
@@ -2627,7 +2626,7 @@ function wireEvents() {
   byId("downloadReportBtn").onclick = downloadReport;
   byId("verifyBalanceBtn").onclick = () => promptVerifyBalance(false);
   byId("settingsForm").onsubmit = async event => { event.preventDefault(); try { state.settings.defaultPriceSatang = parseMoneyToSatang(byId("defaultPrice").value, { allowZero: true, label: "ราคาขายตั้งต้น" }); state.settings.lowStockThreshold = Math.max(0, Math.trunc(Number(byId("lowStockThreshold").value))); state.settings.lockMinutes = Math.max(1, Math.trunc(Number(byId("lockMinutes").value))); state.settings.themeColor = byId("themeColor").value; await persistAndRender("บันทึกการตั้งค่าแล้ว"); } catch (error) { toast(error.message || "การตั้งค่าไม่ถูกต้อง"); } };
-  byId("exportBackupBtn").onclick = async () => { const vault = await dbGet(VAULT_KEY); downloadJson({ backupFormat: "stock-pocket-encrypted-backup", backupVersion: 1, exportedAt: nowIso(), releaseVersion: RELEASE_VERSION, vault }, `YGPH-encrypted-backup-${localISO()}.json`); toast("ส่งออกไฟล์สำรองแล้ว"); };
+  byId("exportBackupBtn").onclick = async () => { const vault = await dbGet(VAULT_KEY); downloadJson({ backupFormat: "stock-pocket-encrypted-backup", backupVersion: 1, exportedAt: nowIso(), releaseVersion: CORE_DATA_RELEASE_VERSION, vault }, `YGPH-encrypted-backup-${localISO()}.json`); toast("ส่งออกไฟล์สำรองแล้ว"); };
   byId("restoreBackupBtn").onclick = () => byId("restoreBackupInput").click();
   byId("restoreBackupInput").onchange = async () => { try { await importBackupFile(byId("restoreBackupInput").files[0]); } catch (error) { toast(error.message || "กู้คืนไม่สำเร็จ"); } byId("restoreBackupInput").value = ""; };
   byId("restoreFromLockBtn").onclick = () => byId("restoreFromLockInput").click();
