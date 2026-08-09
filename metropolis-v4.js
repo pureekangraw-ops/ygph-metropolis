@@ -75,9 +75,9 @@ const METROPOLIS_APPS = {
 };
 
 function metropolisIcon(app) {
-  const meta = METROPOLIS_APPS[app] || METROPOLIS_APPS.store;
   const iconMap = { report: "task", sync: "payment" };
-  const iconName = iconMap[app] || meta.icon || app;
+  const meta = METROPOLIS_APPS[app] || null;
+  const iconName = iconMap[app] || meta?.icon || app;
   try {
     if (typeof flowIcon === "function") return flowIcon(iconName);
   } catch (error) {
