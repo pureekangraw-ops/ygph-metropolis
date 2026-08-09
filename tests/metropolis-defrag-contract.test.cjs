@@ -20,6 +20,23 @@ test("4.2 runtime layers share one visible product-version authority instead of 
     "newer layers must not replace older local writer functions");
 });
 
+test("dashboard metrics take cash as explicit input instead of reading unrelated global state", () => {
+  const r54 = read("metropolis-r5-4.js");
+  const runtime = require("../metropolis-r5-4.js");
+  const previousBalance = global.currentBalanceSatang;
+  global.currentBalanceSatang = () => 999999;
+  try {
+    const metrics = runtime.r54Metrics({ store: { stockQty: 2 }, calendar: [] }, "2026-08-09", 12345);
+    assert.equal(metrics.cashSatang, 12345);
+  } finally {
+    if (previousBalance === undefined) delete global.currentBalanceSatang;
+    else global.currentBalanceSatang = previousBalance;
+  }
+  const metricsBody = r54.match(/function r54Metrics\([^)]*\)\s*\{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.doesNotMatch(metricsBody, /currentBalanceSatang/,
+    "r54Metrics must not silently read cash from global state");
+});
+
 test("production manifest, Cloudflare allowlist, and offline shell cannot drift apart", () => {
   const manifest = JSON.parse(read("RELEASE_MANIFEST.json"));
   const { APP_SHELL } = require("../sw.js");
