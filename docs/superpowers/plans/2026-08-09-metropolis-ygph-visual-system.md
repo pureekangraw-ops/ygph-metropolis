@@ -51,7 +51,7 @@
 - [x] Kept manifest/index/offline icon filename contracts unchanged.
 
 ### 6. Publication follow-through
-- [x] Advanced Service Worker generation to `v4.2.4-20260809-r16-ygph-visual-system`.
+- [x] Advanced Service Worker generation to `v4.2.4-20260809-r17-settings-version-authority`.
 - [x] Updated `RELEASE_MANIFEST.json` without changing state schema or core data/provenance behavior.
 - [x] Updated cache-generation regression tests from r15 to r16 only where the gate identified stale expectations.
 - [ ] Run final `npm run deploy:gate` on clean source after temporary transform tools are removed.

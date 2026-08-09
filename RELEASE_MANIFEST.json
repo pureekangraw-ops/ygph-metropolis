@@ -59,7 +59,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.4-20260809-r16-ygph-visual-system",
+    "releaseId": "v4.2.4-20260809-r17-settings-version-authority",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,

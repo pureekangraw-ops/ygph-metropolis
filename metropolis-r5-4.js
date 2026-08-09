@@ -3,7 +3,7 @@
 /* YGPH METROPOLIS 4.2.4 — owner home dashboard + visible release authority */
 
 const METROPOLIS_424_PRODUCT_VERSION = "4.2.4";
-const METROPOLIS_R5_4_VERSION = "5.4.5-ygph-visual-system";
+const METROPOLIS_R5_4_VERSION = "5.4.6-settings-version-authority";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -58,11 +58,13 @@ function r54ApplyVisibleVersion() {
   const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
   if (document.title !== expectedTitle) document.title = expectedTitle;
   const statusVersion = document.querySelector(".status-line b");
+  const expectedVersion = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
   if (statusVersion) {
-    const expectedVersion = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
     if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = expectedVersion;
     statusVersion.setAttribute("aria-label", expectedVersion);
   }
+  const settingsVersion = document.getElementById("settingsProductVersion");
+  if (settingsVersion && settingsVersion.textContent !== expectedVersion) settingsVersion.textContent = expectedVersion;
 }
 
 function r54ClaimVersionAuthority() {
