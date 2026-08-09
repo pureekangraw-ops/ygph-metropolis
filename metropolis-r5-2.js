@@ -111,7 +111,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     let installed = false;
     let reconcileBusy = false;
     let reconcileQueued = false;
-    let observerQueued = false;
+    let runtimeQueued = false;
 
     function applyProductVersion42() {
       const root = document.documentElement;
@@ -504,11 +504,11 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       });
     }
 
-    function queueObserverWork() {
-      if (observerQueued) return;
-      observerQueued = true;
+    function queueRuntimeWork() {
+      if (runtimeQueued) return;
+      runtimeQueued = true;
       requestAnimationFrame(() => {
-        observerQueued = false;
+        runtimeQueued = false;
         applyProductVersion42();
         decorateInstallmentActions();
         schedule42Reconciliation();
@@ -531,11 +531,13 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       installDebtAction42();
       decorateInstallmentActions();
       schedule42Reconciliation();
-      const observer = new MutationObserver(queueObserverWork);
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
-      globalThis.__YGPH_METROPOLIS_42_OBSERVER__ = observer;
-      setTimeout(queueObserverWork, 100);
-      setTimeout(queueObserverWork, 400);
+      if (globalThis.YGPHRuntime?.register) {
+        globalThis.YGPHRuntime.register("METROPOLIS_R52_SCHEDULE", {
+          afterRender: queueRuntimeWork,
+          afterPageChange: queueRuntimeWork
+        });
+      }
+      queueRuntimeWork();
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
