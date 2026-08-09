@@ -25,10 +25,8 @@ test("4.2.4 replaces the Four Apps hero slot with the owner dashboard", () => {
 test("dashboard red metric counts only active outgoing items due this month", () => {
   const previousDirection = global.queueDirection;
   const previousSource = global.findSource;
-  const previousBalance = global.currentBalanceSatang;
   global.queueDirection = item => item.direction || "OTHER";
   global.findSource = (source, sourceId) => sourceId === "source-cancelled" ? { status: "CANCELLED" } : { status: "OPEN" };
-  global.currentBalanceSatang = () => 12345;
   try {
     const metrics = dashboardRuntime.r54Metrics({
       store: { stockQty: 12 },
@@ -40,7 +38,7 @@ test("dashboard red metric counts only active outgoing items due this month", ()
         { source: "LEDGER", sourceId: "cancelled", status: "CANCELLED", direction: "OUT", due: "2026-08-01", amountSatang: 8000, paidSatang: 0 },
         { source: "LEDGER", sourceId: "source-cancelled", status: "OPEN", direction: "OUT", due: "2026-08-01", amountSatang: 7000, paidSatang: 0 }
       ]
-    }, "2026-08-09");
+    }, "2026-08-09", 12345);
     assert.equal(metrics.cashSatang, 12345);
     assert.equal(metrics.stockQty, 12);
     assert.equal(metrics.overdue, 1);
@@ -49,7 +47,6 @@ test("dashboard red metric counts only active outgoing items due this month", ()
   } finally {
     if (previousDirection === undefined) delete global.queueDirection; else global.queueDirection = previousDirection;
     if (previousSource === undefined) delete global.findSource; else global.findSource = previousSource;
-    if (previousBalance === undefined) delete global.currentBalanceSatang; else global.currentBalanceSatang = previousBalance;
   }
 });
 
