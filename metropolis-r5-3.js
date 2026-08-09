@@ -280,15 +280,18 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     }
 
     function install() {
-      if (globalThis.__YGPH_METROPOLIS_R53_OBSERVER__) return;
+      if (globalThis.__YGPH_METROPOLIS_R53_RUNTIME__) return;
+      globalThis.__YGPH_METROPOLIS_R53_RUNTIME__ = true;
       patchLiveRenderers();
       patchFlowCalendarFocus();
+      if (globalThis.YGPHRuntime?.register) {
+        globalThis.YGPHRuntime.register("METROPOLIS_R53_LIVE_STATUS", {
+          afterRender: queueApply,
+          afterPageChange: queueApply
+        });
+      }
       apply();
-      const observer = new MutationObserver(queueApply);
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
-      globalThis.__YGPH_METROPOLIS_R53_OBSERVER__ = observer;
-      setTimeout(queueApply, 100);
-      setTimeout(queueApply, 400);
+      queueApply();
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });

@@ -6,6 +6,15 @@ const METROPOLIS_42_PRODUCT_VERSION = "4.2.0";
 const METROPOLIS_R5_2_VERSION = "5.2.0-schedule-engine";
 const SCHEDULE_FREQUENCIES = Object.freeze(["WEEKLY", "MONTHLY"]);
 
+function metropolisProductVersion() {
+  try {
+    const claimed = globalThis.YGPH_METROPOLIS_PRODUCT_VERSION;
+    return typeof claimed === "string" && claimed ? claimed : METROPOLIS_42_PRODUCT_VERSION;
+  } catch (_) {
+    return METROPOLIS_42_PRODUCT_VERSION;
+  }
+}
+
 function parseScheduleDate(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
   if (!match) throw new Error("วันที่ไม่ถูกต้อง");
@@ -89,6 +98,7 @@ if (typeof module === "object" && module.exports) {
   module.exports = {
     METROPOLIS_PRODUCT_VERSION: METROPOLIS_42_PRODUCT_VERSION,
     METROPOLIS_R5_2_VERSION,
+    metropolisProductVersion,
     scheduleDueDates,
     totalFromInstallment,
     shiftDueOneInterval,
@@ -101,16 +111,17 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     let installed = false;
     let reconcileBusy = false;
     let reconcileQueued = false;
-    let observerQueued = false;
+    let runtimeQueued = false;
 
     function applyProductVersion42() {
       const root = document.documentElement;
+      const visibleVersion = metropolisProductVersion();
       root.dataset.metropolisR52 = METROPOLIS_R5_2_VERSION;
-      root.dataset.metropolisVersion = METROPOLIS_42_PRODUCT_VERSION;
-      const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`;
+      root.dataset.metropolisVersion = visibleVersion;
+      const expectedTitle = `YGPH METROPOLIS v${visibleVersion}`;
       if (document.title !== expectedTitle) document.title = expectedTitle;
       const status = document.querySelector(".status-line b");
-      if (status && status.textContent !== `METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`) status.textContent = `METROPOLIS v${METROPOLIS_42_PRODUCT_VERSION}`;
+      if (status && status.textContent !== `METROPOLIS v${visibleVersion}`) status.textContent = `METROPOLIS v${visibleVersion}`;
     }
 
     function displayScheduleMoney(satang) {
@@ -493,11 +504,11 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       });
     }
 
-    function queueObserverWork() {
-      if (observerQueued) return;
-      observerQueued = true;
+    function queueRuntimeWork() {
+      if (runtimeQueued) return;
+      runtimeQueued = true;
       requestAnimationFrame(() => {
-        observerQueued = false;
+        runtimeQueued = false;
         applyProductVersion42();
         decorateInstallmentActions();
         schedule42Reconciliation();
@@ -512,16 +523,21 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       }
       installed = true;
       globalThis.YGPH_METROPOLIS_R5_2_VERSION = METROPOLIS_R5_2_VERSION;
+      if (!globalThis.YGPH_METROPOLIS_PRODUCT_VERSION) {
+        globalThis.YGPH_METROPOLIS_PRODUCT_VERSION = METROPOLIS_42_PRODUCT_VERSION;
+      }
       document.documentElement.dataset.metropolisR52 = METROPOLIS_R5_2_VERSION;
       applyProductVersion42();
       installDebtAction42();
       decorateInstallmentActions();
       schedule42Reconciliation();
-      const observer = new MutationObserver(queueObserverWork);
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
-      globalThis.__YGPH_METROPOLIS_42_OBSERVER__ = observer;
-      setTimeout(queueObserverWork, 100);
-      setTimeout(queueObserverWork, 400);
+      if (globalThis.YGPHRuntime?.register) {
+        globalThis.YGPHRuntime.register("METROPOLIS_R52_SCHEDULE", {
+          afterRender: queueRuntimeWork,
+          afterPageChange: queueRuntimeWork
+        });
+      }
+      queueRuntimeWork();
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });

@@ -25,10 +25,8 @@ test("4.2.4 replaces the Four Apps hero slot with the owner dashboard", () => {
 test("dashboard red metric counts only active outgoing items due this month", () => {
   const previousDirection = global.queueDirection;
   const previousSource = global.findSource;
-  const previousBalance = global.currentBalanceSatang;
   global.queueDirection = item => item.direction || "OTHER";
   global.findSource = (source, sourceId) => sourceId === "source-cancelled" ? { status: "CANCELLED" } : { status: "OPEN" };
-  global.currentBalanceSatang = () => 12345;
   try {
     const metrics = dashboardRuntime.r54Metrics({
       store: { stockQty: 12 },
@@ -40,7 +38,7 @@ test("dashboard red metric counts only active outgoing items due this month", ()
         { source: "LEDGER", sourceId: "cancelled", status: "CANCELLED", direction: "OUT", due: "2026-08-01", amountSatang: 8000, paidSatang: 0 },
         { source: "LEDGER", sourceId: "source-cancelled", status: "OPEN", direction: "OUT", due: "2026-08-01", amountSatang: 7000, paidSatang: 0 }
       ]
-    }, "2026-08-09");
+    }, "2026-08-09", 12345);
     assert.equal(metrics.cashSatang, 12345);
     assert.equal(metrics.stockQty, 12);
     assert.equal(metrics.overdue, 1);
@@ -49,7 +47,6 @@ test("dashboard red metric counts only active outgoing items due this month", ()
   } finally {
     if (previousDirection === undefined) delete global.queueDirection; else global.queueDirection = previousDirection;
     if (previousSource === undefined) delete global.findSource; else global.findSource = previousSource;
-    if (previousBalance === undefined) delete global.currentBalanceSatang; else global.currentBalanceSatang = previousBalance;
   }
 });
 
@@ -69,11 +66,12 @@ test("dashboard palette follows purple green yellow red order", () => {
   assert.ok(purple >= 0 && green > purple && yellow > green && red > yellow);
 });
 
-test("4.2.4 owns visible version without a CSS pseudo-version workaround", () => {
+test("4.2.4 owns visible version through the shared runtime authority", () => {
   const js = read("metropolis-r5-4.js");
   const css = read("metropolis-r5-4.css");
   assert.match(js, /statusVersion\.textContent\s*=\s*`METROPOLIS v\$\{METROPOLIS_424_PRODUCT_VERSION\}`/);
-  assert.match(js, /applyProductVersion42\s*=\s*function/);
+  assert.match(js, /YGPH_METROPOLIS_PRODUCT_VERSION\s*=\s*METROPOLIS_424_PRODUCT_VERSION/);
+  assert.doesNotMatch(js, /applyProductVersion42\s*=\s*function/);
   assert.doesNotMatch(css, /\.status-line b::after/);
   assert.doesNotMatch(css, /\.status-line b\s*\{[\s\S]{0,80}font-size\s*:\s*0/);
 });
@@ -85,5 +83,5 @@ test("4.2.4 visible version and assets are loaded as the newest layer", () => {
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r13-dashboard-current-month");
+  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r14-runtime-authority");
 });

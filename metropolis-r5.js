@@ -356,18 +356,17 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       if (current && icons[page]) current.innerHTML = icons[page];
     }
 
-    function installRenderWrapper() {
-      if (globalThis.__YGPH_R5_RENDER_PATCHED__ || typeof renderAll !== "function") return;
-      const originalRenderAll = renderAll;
-      renderAll = function(...args) {
-        const result = originalRenderAll(...args);
-        setTimeout(() => {
-          polishLauncher();
-          scheduleReconciliation();
-        }, 0);
-        return result;
-      };
-      globalThis.__YGPH_R5_RENDER_PATCHED__ = true;
+    function runPostRenderWork() {
+      polishLauncher();
+      scheduleReconciliation();
+    }
+
+    function installRuntimeHooks() {
+      if (!globalThis.YGPHRuntime?.register) return;
+      globalThis.YGPHRuntime.register("METROPOLIS_R5", {
+        afterRender: runPostRenderWork,
+        afterPageChange: runPostRenderWork
+      });
     }
 
     function install() {
@@ -383,11 +382,8 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       installReceivableAndReportPatch();
       installSaleAction();
       installDebtAction();
-      installRenderWrapper();
-      polishLauncher();
-      scheduleReconciliation();
-      setTimeout(polishLauncher, 120);
-      setTimeout(polishLauncher, 400);
+      installRuntimeHooks();
+      runPostRenderWork();
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });

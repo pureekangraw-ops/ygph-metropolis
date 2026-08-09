@@ -3,7 +3,7 @@
 /* YGPH METROPOLIS 4.2.4 — owner home dashboard + visible release authority */
 
 const METROPOLIS_424_PRODUCT_VERSION = "4.2.4";
-const METROPOLIS_R5_4_VERSION = "5.4.3-dashboard-current-month";
+const METROPOLIS_R5_4_VERSION = "5.4.4-runtime-authority";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -24,12 +24,10 @@ function r54IsLiveActive(item) {
   return true;
 }
 
-function r54Metrics(targetState, today = r54Today()) {
+function r54Metrics(targetState, today = r54Today(), cashSatang = 0) {
   const calendar = Array.isArray(targetState?.calendar) ? targetState.calendar : [];
   const active = calendar.filter(r54IsLiveActive);
-  let cashSatang = 0;
-  try { cashSatang = typeof currentBalanceSatang === "function" ? Number(currentBalanceSatang()) : 0; }
-  catch (_) { cashSatang = 0; }
+  const currentCashSatang = Number(cashSatang || 0);
   const stockQty = Number(targetState?.store?.stockQty || 0);
   const overdue = active.filter(item => {
     const due = String(item?.due || "").slice(0, 10);
@@ -40,7 +38,7 @@ function r54Metrics(targetState, today = r54Today()) {
     if (typeof queueDirection !== "function" || queueDirection(item) !== "OUT") return false;
     return String(item?.due || "").slice(0, 7) === monthKey;
   }).length;
-  return { cashSatang, stockQty, overdue, pendingOut };
+  return { cashSatang: currentCashSatang, stockQty, overdue, pendingOut };
 }
 
 function r54Money(satang) {
@@ -63,13 +61,9 @@ function r54ApplyVisibleVersion() {
 }
 
 function r54ClaimVersionAuthority() {
-  if (typeof globalThis === "undefined" || globalThis.__YGPH_R54_VERSION_AUTHORITY__) return;
-  if (typeof applyProductVersion42 === "function") {
-    applyProductVersion42 = function() {
-      r54ApplyVisibleVersion();
-    };
-  }
-  globalThis.__YGPH_R54_VERSION_AUTHORITY__ = true;
+  if (typeof globalThis === "undefined") return;
+  globalThis.YGPH_METROPOLIS_PRODUCT_VERSION = METROPOLIS_424_PRODUCT_VERSION;
+  globalThis.__YGPH_R54_VERSION_AUTHORITY__ = METROPOLIS_424_PRODUCT_VERSION;
 }
 
 function r54BuildDashboard() {
@@ -111,7 +105,10 @@ function r54SyncDashboard() {
   if (typeof document === "undefined" || typeof state === "undefined" || !state) return;
   const dashboard = r54BuildDashboard();
   if (!dashboard) return;
-  const metrics = r54Metrics(state);
+  let cashSatang = 0;
+  try { cashSatang = typeof currentBalanceSatang === "function" ? Number(currentBalanceSatang()) : 0; }
+  catch (_) { cashSatang = 0; }
+  const metrics = r54Metrics(state, r54Today(), cashSatang);
   const set = (id, value) => {
     const node = document.getElementById(id);
     if (node && node.textContent !== value) node.textContent = value;
@@ -149,15 +146,10 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       });
     };
 
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", queueApply, { once: true });
-    else queueApply();
-
     const install = () => {
-      if (!document.body || globalThis.__YGPH_METROPOLIS_R54_OBSERVER__) return;
+      if (globalThis.__YGPH_METROPOLIS_R54_RUNTIME__) return;
+      globalThis.__YGPH_METROPOLIS_R54_RUNTIME__ = true;
       r54ClaimVersionAuthority();
-      const observer = new MutationObserver(queueApply);
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
-      globalThis.__YGPH_METROPOLIS_R54_OBSERVER__ = observer;
       if (globalThis.YGPHRuntime?.register) {
         globalThis.YGPHRuntime.register("METROPOLIS_R54_HOME_DASHBOARD", {
           afterRender: queueApply,
@@ -166,7 +158,8 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       }
       queueApply();
     };
-    if (document.body) install();
-    else document.addEventListener("DOMContentLoaded", install, { once: true });
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+    else install();
   })();
 }
