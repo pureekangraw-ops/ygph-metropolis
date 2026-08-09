@@ -7,9 +7,16 @@ const assert = require("node:assert/strict");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 
 test("calendar renderer does not depend on hidden cancelled counter DOM", () => {
   assert.doesNotMatch(app, /byId\(["']calCancelled["']\)\.textContent/);
+});
+
+test("calendar source HTML does not carry hidden cancelled controls", () => {
+  assert.doesNotMatch(index, /id=["']calCancelled["']/);
+  assert.doesNotMatch(index, /data-filter=["']CANCELLED["']/);
+  assert.match(index, /id=["']calendarPage["'][\s\S]*?hero-grid r53-three-stats/);
 });
 
 test("core/data provenance version is named separately from product version", () => {
