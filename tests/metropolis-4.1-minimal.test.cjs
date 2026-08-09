@@ -12,26 +12,24 @@ test("Metropolis 4.1 compatibility layer retains its own version marker", () => 
   assert.equal(runtime.METROPOLIS_PRODUCT_VERSION, "4.1.0");
 });
 
-test("launcher cleanup removes explanatory copy while retaining primary app content", () => {
+test("launcher cleanup removes obsolete chrome while retaining the approved subtitle", () => {
   const js = read("metropolis-r5-1.js");
   const css = read("metropolis-r5-1.css");
   assert.match(js, /metropolis-city-copy > p/);
   assert.match(js, /metropolis-section-note/);
-  assert.match(js, /metropolis-app-copy > small, \.metropolis-app-status/);
-  assert.match(css, /\.metropolis-app-copy > small/);
-  assert.match(css, /\.metropolis-app-status/);
+  assert.match(js, /metropolis-app-status/);
+  assert.match(js, /metropolis-open-mark/);
+  assert.doesNotMatch(js, /metropolis-app-copy > small/);
+  assert.doesNotMatch(css, /\.metropolis-app-copy > small/);
 });
 
-test("launcher icons are simplified high-contrast SVG marks", () => {
-  for (const app of ["store", "ride", "ledger", "calendar"]) {
-    const svg = runtime.metropolis41Icon(app);
-    assert.match(svg, new RegExp(`data-metropolis-41-icon="${app}"`));
-    assert.match(svg, /stroke-width="4\.5"/);
-    assert.doesNotMatch(svg, /<text/i);
-  }
+test("launcher icon compatibility delegates to the shared FLOW icon authority", () => {
+  const js = read("metropolis-r5-1.js");
   const css = read("metropolis-r5-1.css");
-  assert.match(css, /background:var\(--app-color\)!important/);
-  assert.match(css, /color:#fff!important/);
+  assert.match(js, /return typeof flowIcon === "function" \? flowIcon\(app\) : ""/);
+  assert.doesNotMatch(js, /data-metropolis-41-icon/);
+  assert.match(css, /\.flow-icon/);
+  assert.doesNotMatch(css, /\.metropolis-41-icon/);
 });
 
 test("4.1 launcher assets load after R5 and stay in the offline shell", () => {
