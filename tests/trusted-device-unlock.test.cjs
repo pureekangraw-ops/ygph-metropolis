@@ -18,13 +18,15 @@ test("trusted-device unlock stores a non-extractable CryptoKey contract, never a
   assert.doesNotMatch(app, /crypto\.subtle\.exportKey/);
 });
 
-test("startup tries the trusted device before showing the password fallback", () => {
+test("startup tries the trusted device before showing the password fallback and still completes app lifecycle setup", () => {
   assert.match(app, /async function unlockVaultWithKey\(/);
   assert.match(app, /async function tryTrustedDeviceUnlock\(/);
-  assert.match(app, /tryTrustedDeviceUnlock\(vault\)/);
   const initBody = app.match(/async function init\(\)[\s\S]*?\n\}/)?.[0] || "";
-  assert.ok(initBody.indexOf("tryTrustedDeviceUnlock(vault)") >= 0);
+  assert.match(initBody, /const trustedUnlocked = await tryTrustedDeviceUnlock\(vault\)/);
+  assert.match(initBody, /if \(!trustedUnlocked\) showUnlock\(\)/);
+  assert.doesNotMatch(initBody, /if \(await tryTrustedDeviceUnlock\(vault\)\) return/);
   assert.ok(initBody.indexOf("tryTrustedDeviceUnlock(vault)") < initBody.indexOf("showUnlock()"));
+  assert.ok(initBody.indexOf("showUnlock()") < initBody.indexOf("setupServiceWorkerLifecycle()"));
 });
 
 test("successful app entry remembers this device and automatic inactivity locks yield to device security", () => {
