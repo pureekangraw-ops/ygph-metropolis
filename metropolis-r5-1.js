@@ -64,16 +64,20 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         metropolis41Apply();
       });
     };
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", queueApply, { once: true });
-    else queueApply();
-    const startObserver = () => {
-      if (!document.body || globalThis.__YGPH_METROPOLIS_41_OBSERVER__) return;
-      const observer = new MutationObserver(queueApply);
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-metropolis-page"] });
-      globalThis.__YGPH_METROPOLIS_41_OBSERVER__ = observer;
+
+    const install = () => {
+      if (globalThis.__YGPH_METROPOLIS_41_RUNTIME__) return;
+      globalThis.__YGPH_METROPOLIS_41_RUNTIME__ = true;
+      if (globalThis.YGPHRuntime?.register) {
+        globalThis.YGPHRuntime.register("METROPOLIS_R51", {
+          afterRender: queueApply,
+          afterPageChange: queueApply
+        });
+      }
       queueApply();
     };
-    if (document.body) startObserver();
-    else document.addEventListener("DOMContentLoaded", startObserver, { once: true });
+
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+    else install();
   })();
 }
