@@ -63,13 +63,9 @@ function r54ApplyVisibleVersion() {
 }
 
 function r54ClaimVersionAuthority() {
-  if (typeof globalThis === "undefined" || globalThis.__YGPH_R54_VERSION_AUTHORITY__) return;
-  if (typeof applyProductVersion42 === "function") {
-    applyProductVersion42 = function() {
-      r54ApplyVisibleVersion();
-    };
-  }
-  globalThis.__YGPH_R54_VERSION_AUTHORITY__ = true;
+  if (typeof globalThis === "undefined") return;
+  globalThis.YGPH_METROPOLIS_PRODUCT_VERSION = METROPOLIS_424_PRODUCT_VERSION;
+  globalThis.__YGPH_R54_VERSION_AUTHORITY__ = METROPOLIS_424_PRODUCT_VERSION;
 }
 
 function r54BuildDashboard() {
