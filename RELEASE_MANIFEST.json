@@ -59,7 +59,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.4-20260809-r18-runtime-visual-followthrough",
+    "releaseId": "v4.2.4-20260809-r19-trusted-device-auto-unlock",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -69,7 +69,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.4 keeps its product/data behavior stable. r16 published the approved visual system; r17 bound Settings version text to the shared 4.2.4 authority; r18 fixes runtime icon resolution for the app/Home glyphs and brings the FLOW-injected Settings button under the authoritative dark header skin."
+    "note": "METROPOLIS 4.2.4 keeps product/data behavior stable. r19 adds trusted-device auto-unlock using a non-extractable CryptoKey stored in this browser IndexedDB; the passphrase remains the fallback for recovery, migration, backup use, or cleared/stale device storage."
   },
   "validation": {
     "command": "npm run deploy:gate",

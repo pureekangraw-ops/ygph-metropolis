@@ -9,6 +9,8 @@ const DB_STORE = "kv";
 const VAULT_KEY = "vault";
 const ROLLBACK_VAULT_KEY = "vault:rollback:latest";
 const ROLLBACK_META_KEY = "vault:rollback:metadata";
+const TRUSTED_DEVICE_KEY = "trusted-device:key";
+const TRUSTED_DEVICE_VERSION = 1;
 const AAD = new TextEncoder().encode("stock-pocket-secure-v1");
 const PBKDF2_ITERATIONS = 600000;
 const TZ = "Asia/Bangkok";
@@ -95,6 +97,7 @@ let modalBusy = false;
 let toastTimer = null;
 let inactivityTimer = null;
 let hiddenAt = null;
+let trustedDeviceActive = false;
 let failedUnlocks = 0;
 let deferredInstallPrompt = null;
 let reportSelection = null;
@@ -705,6 +708,14 @@ function dbPut(key, value) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(DB_STORE, "readwrite");
     tx.objectStore(DB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function dbDelete(key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -1444,12 +1455,80 @@ function showUnlock(message = "") {
   byId("unlockStatus").textContent = message;
   setTimeout(() => byId("unlockPassphrase").focus(), 80);
 }
+function trustedDeviceMatchesVault(record, vault) {
+  return Boolean(
+    record &&
+    record.version === TRUSTED_DEVICE_VERSION &&
+    record.key &&
+    vault?.kdf &&
+    record.salt === vault.kdf.salt &&
+    Number(record.iterations) === Number(vault.kdf.iterations)
+  );
+}
+
+async function rememberTrustedDevice(vault, key) {
+  if (!db || !vault?.kdf || !key) return false;
+  const record = {
+    version: TRUSTED_DEVICE_VERSION,
+    vaultVersion: Number(vault.version || VAULT_VERSION),
+    salt: vault.kdf.salt,
+    iterations: Number(vault.kdf.iterations),
+    key,
+    savedAt: nowIso()
+  };
+  try {
+    await dbPut(TRUSTED_DEVICE_KEY, record);
+    trustedDeviceActive = true;
+    clearTimeout(inactivityTimer);
+    return true;
+  } catch (error) {
+    trustedDeviceActive = false;
+    console.warn("Trusted-device key could not be stored", error);
+    return false;
+  }
+}
+
+async function clearTrustedDevice() {
+  trustedDeviceActive = false;
+  if (!db) return;
+  try {
+    await dbDelete(TRUSTED_DEVICE_KEY);
+  } catch (error) {
+    console.warn("Trusted-device key could not be cleared", error);
+  }
+}
+
+async function tryTrustedDeviceUnlock(vault) {
+  const record = await dbGet(TRUSTED_DEVICE_KEY);
+  if (!record) return false;
+  if (!trustedDeviceMatchesVault(record, vault)) {
+    await clearTrustedDevice();
+    return false;
+  }
+  try {
+    await unlockVaultWithKey(vault, record.key);
+    trustedDeviceActive = true;
+    return true;
+  } catch (error) {
+    console.warn("Trusted-device auto-unlock failed", error);
+    cryptoKey = null;
+    currentVault = null;
+    state = null;
+    await clearTrustedDevice();
+    return false;
+  }
+}
+
 function showApp() {
   showOnly("appShell");
   applyTheme();
   showPage("home");
   renderAll();
-  resetInactivityTimer();
+  if (currentVault && cryptoKey) {
+    void rememberTrustedDevice(currentVault, cryptoKey).finally(resetInactivityTimer);
+  } else {
+    resetInactivityTimer();
+  }
   if (!state.ledger.balanceVerified) setTimeout(() => promptVerifyBalance(true), 250);
 }
 function lockApp(message = "ล็อกแล้ว") {
@@ -1460,7 +1539,7 @@ function lockApp(message = "ล็อกแล้ว") {
 }
 function resetInactivityTimer() {
   clearTimeout(inactivityTimer);
-  if (!state) return;
+  if (!state || trustedDeviceActive) return;
   const minutes = Math.max(1, Number(state.settings.lockMinutes || 5));
   inactivityTimer = setTimeout(() => lockApp("ล็อกอัตโนมัติ"), minutes * 60 * 1000);
 }
@@ -2508,6 +2587,45 @@ function setupActions() {
   }});
 }
 
+async function unlockVaultWithKey(vault, key) {
+  const decrypted = await decryptVault(vault, key);
+  const compatibility = resolveYGPHCore().compatibilityFor(decrypted.schema);
+  if (!compatibility.supported) throw new Error(`Schema ${decrypted.schema} ไม่รองรับ`);
+  if (compatibility.mode === "MIGRATE") {
+    const promoted = await promoteLegacyMigration(vault, key, decrypted);
+    currentVault = promoted.vault;
+    cryptoKey = key;
+    state = promoted.state;
+    lastDurableReadback = promoted.readback;
+  } else {
+    const core = resolveYGPHCore();
+    const prepared = prepareSchema4SafetyRepair(decrypted, core, nowIso());
+    validateState(prepared.state);
+    validateStateInvariants(prepared.state, { quarantine: false });
+    if (prepared.repaired) {
+      const candidateVault = await encryptState(prepared.state, key, vault.kdf);
+      const promoted = await promoteBackupCandidate({
+        originalSchema: STATE_SCHEMA,
+        compatibility,
+        sourceVault: vault,
+        candidateVault,
+        state: prepared.state,
+        key,
+        promotionType: "SCHEMA4_SAFETY_REPAIR"
+      });
+      currentVault = promoted.vault;
+      cryptoKey = key;
+      state = promoted.state;
+      lastDurableReadback = promoted.readback;
+    } else {
+      currentVault = vault;
+      cryptoKey = key;
+      state = prepared.state;
+    }
+  }
+  failedUnlocks = 0; showApp();
+}
+
 function wireEvents() {
   byId("setupForm").addEventListener("submit", async event => {
     event.preventDefault(); const passphrase = byId("setupPassphrase").value;
@@ -2564,42 +2682,7 @@ function wireEvents() {
     try {
       const vault = await dbGet(VAULT_KEY); const salt = base64ToBytes(vault.kdf.salt);
       const key = await deriveKey(byId("unlockPassphrase").value, salt, vault.kdf.iterations);
-      const decrypted = await decryptVault(vault, key);
-      const compatibility = resolveYGPHCore().compatibilityFor(decrypted.schema);
-      if (!compatibility.supported) throw new Error(`Schema ${decrypted.schema} ไม่รองรับ`);
-      if (compatibility.mode === "MIGRATE") {
-        const promoted = await promoteLegacyMigration(vault, key, decrypted);
-        currentVault = promoted.vault;
-        cryptoKey = key;
-        state = promoted.state;
-        lastDurableReadback = promoted.readback;
-      } else {
-        const core = resolveYGPHCore();
-        const prepared = prepareSchema4SafetyRepair(decrypted, core, nowIso());
-        validateState(prepared.state);
-        validateStateInvariants(prepared.state, { quarantine: false });
-        if (prepared.repaired) {
-          const candidateVault = await encryptState(prepared.state, key, vault.kdf);
-          const promoted = await promoteBackupCandidate({
-            originalSchema: STATE_SCHEMA,
-            compatibility,
-            sourceVault: vault,
-            candidateVault,
-            state: prepared.state,
-            key,
-            promotionType: "SCHEMA4_SAFETY_REPAIR"
-          });
-          currentVault = promoted.vault;
-          cryptoKey = key;
-          state = promoted.state;
-          lastDurableReadback = promoted.readback;
-        } else {
-          currentVault = vault;
-          cryptoKey = key;
-          state = prepared.state;
-        }
-      }
-      failedUnlocks = 0; showApp();
+      await unlockVaultWithKey(vault, key);
     } catch (error) {
       failedUnlocks++; console.warn(error); byId("unlockStatus").textContent = failedUnlocks >= 5 ? "รหัสไม่ถูกต้อง กรุณารอสักครู่แล้วลองใหม่" : "รหัสไม่ถูกต้องหรือข้อมูลเสียหาย";
       if (failedUnlocks >= 5) { button.disabled = true; setTimeout(() => { failedUnlocks = 0; button.disabled = false; }, 30000); }
@@ -2635,7 +2718,7 @@ function wireEvents() {
   byId("persistBtn").onclick = async () => { if (!navigator.storage?.persist) return toast("เบราว์เซอร์ไม่รองรับ"); toast(await navigator.storage.persist() ? "อนุญาตพื้นที่ถาวรแล้ว" : "เบราว์เซอร์ยังไม่อนุญาต"); };
   byId("installBtn").onclick = async () => { if (!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; byId("installBtn").disabled = true; };
   ["pointerdown", "keydown", "touchstart"].forEach(name => document.addEventListener(name, registerActivity, { passive: true }));
-  document.addEventListener("visibilitychange", () => { if (document.hidden) { hiddenAt = Date.now(); byId("privacyCover").classList.remove("hidden"); } else { byId("privacyCover").classList.add("hidden"); if (state && hiddenAt && Date.now() - hiddenAt > 30000) lockApp("ล็อกหลังออกจากแอปเกิน 30 วินาที"); hiddenAt = null; } });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) { hiddenAt = Date.now(); byId("privacyCover").classList.remove("hidden"); } else { byId("privacyCover").classList.add("hidden"); if (state && !trustedDeviceActive && hiddenAt && Date.now() - hiddenAt > 30000) lockApp("ล็อกหลังออกจากแอปเกิน 30 วินาที"); hiddenAt = null; } });
   setupActions();
 }
 
@@ -2721,6 +2804,7 @@ async function changePassphrase() {
   currentVault = result.vault;
   state = result.state;
   lastDurableReadback = result.readback;
+  await rememberTrustedDevice(currentVault, cryptoKey);
   closeModal();
   renderAll();
   toast("เปลี่ยนรหัสแล้ว · ตรวจอ่านกลับแล้ว");
@@ -2849,7 +2933,16 @@ async function init() {
   wireEvents();
   byId("reportStart").value = localISO(); byId("reportEnd").value = localISO();
   if (!window.isSecureContext || !window.crypto?.subtle || !window.indexedDB) { showOnly("securityGate"); return; }
-  try { db = await openDb(); const vault = await dbGet(VAULT_KEY); if (vault) showUnlock(); else showSetup(); }
+  try {
+    db = await openDb();
+    const vault = await dbGet(VAULT_KEY);
+    if (!vault) {
+      showSetup();
+    } else {
+      const trustedUnlocked = await tryTrustedDeviceUnlock(vault);
+      if (!trustedUnlocked) showUnlock();
+    }
+  }
   catch (error) { console.error(error); showOnly("securityGate"); }
   setupServiceWorkerLifecycle().catch(error => renderServiceWorkerStatus(`ระบบออฟไลน์เริ่มไม่สำเร็จ: ${error.message}`));
   window.addEventListener("beforeinstallprompt", event => { event.preventDefault(); deferredInstallPrompt = event; byId("installBtn").disabled = false; byId("installHint").textContent = "พร้อมติดตั้งเป็นแอปบนมือถือ"; });
