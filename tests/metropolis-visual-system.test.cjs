@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -19,6 +20,18 @@ const sw = read("sw.js");
 
 function r54MetricsBody() {
   return r54.match(/function r54Metrics\([\s\S]*?\n\}/)?.[0] || "";
+}
+
+function metropolisIconFor(subject) {
+  const marker = "function metropolisActivePage()";
+  const prefix = v4.slice(0, v4.indexOf(marker));
+  const context = {
+    console,
+    flowIcon: name => name
+  };
+  vm.createContext(context);
+  vm.runInContext(`${prefix}\nthis.__metropolisIcon = metropolisIcon;`, context);
+  return context.__metropolisIcon(subject);
 }
 
 test("METROPOLIS stays primary and YGPH is the signature", () => {
@@ -38,6 +51,12 @@ test("core METROPOLIS icons extend the existing shared FLOW icon registry", () =
   assert.doesNotMatch(v4, /<span class="metropolis-emoji"[^>]*>\$\{meta\.emoji\}<\/span>/);
   assert.match(r51, /return typeof flowIcon === "function" \? flowIcon\(app\) : ""/);
   assert.doesNotMatch(r51, /data-metropolis-41-icon/);
+});
+
+test("brand app mark and Home navigation resolve their own shared glyphs", () => {
+  assert.equal(metropolisIconFor("app"), "app");
+  assert.equal(metropolisIconFor("home"), "home");
+  assert.equal(metropolisIconFor("store"), "store");
 });
 
 test("existing bottom navigation is the single five-destination source", () => {
@@ -67,6 +86,12 @@ test("approved production palette and nav state are encoded in the authoritative
   assert.match(css, /\.metropolis-v4 \.bottom-nav/);
   assert.match(css, /\.nav-btn\.is-active/);
   assert.match(css, /env\(safe-area-inset-bottom/);
+});
+
+test("FLOW header Settings control is restyled by the authoritative dark visual layer", () => {
+  assert.match(css, /\.metropolis-v4 \.flow-header-settings\s*\{/);
+  assert.match(css, /\.flow-header-settings[\s\S]*background:\s*#172125!important/);
+  assert.match(css, /\.flow-header-settings[\s\S]*color:\s*var\(--ygph-white\)!important/);
 });
 
 test("settings product version comes from the same 4.2.4 authority", () => {

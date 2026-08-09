@@ -31,6 +31,13 @@
 .metropolis-v4 .status-line{color:#8F9B99!important;opacity:1!important}
 .metropolis-v4 .status-line b{color:var(--ygph-emerald)!important}
 .metropolis-v4 .home-btn{color:var(--ygph-white)!important;border-color:#334145!important;background:#172125!important}
+.metropolis-v4 .flow-header-settings{
+  color:var(--ygph-white)!important;
+  border-color:#334145!important;
+  background:#172125!important;
+  box-shadow:none!important;
+}
+.metropolis-v4 .flow-header-settings .flow-icon{color:var(--ygph-white)!important}
 
 body.metropolis-v4[data-metropolis-page="home"] .shell{background:var(--ygph-deep)!important}
 body.metropolis-v4[data-metropolis-page="home"] #homePage{color:var(--ygph-white)!important;padding-top:2px}
