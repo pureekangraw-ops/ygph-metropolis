@@ -24,24 +24,51 @@ test("live signal hides an otherwise-open queue when its source was cancelled", 
   assert.equal(runtime.liveStatusSignal(queue, "OPEN", "2026-08-08"), "YELLOW");
 });
 
-test("cancelled records are filtered before Calendar and aggregate list renderers execute", () => {
+test("live selectors exclude cancelled records without mutating their inputs", () => {
+  assert.equal(typeof runtime.selectLiveRecords, "function");
+  assert.equal(typeof runtime.selectLiveCalendar, "function");
+
+  const records = [
+    { id: "open", status: "OPEN" },
+    { id: "cancelled", status: "CANCELLED" },
+    { id: "done", status: "COMPLETED" }
+  ];
+  const recordsSnapshot = structuredClone(records);
+  assert.deepEqual(runtime.selectLiveRecords(records).map(item => item.id), ["open", "done"]);
+  assert.deepEqual(records, recordsSnapshot);
+
+  const calendar = [
+    { id: "live", sourceId: "source-live", status: "OPEN", due: "2026-08-08" },
+    { id: "queue-cancelled", sourceId: "source-live", status: "CANCELLED", due: "2026-08-08" },
+    { id: "source-cancelled", sourceId: "source-cancelled", status: "OPEN", due: "2026-08-08" }
+  ];
+  const calendarSnapshot = structuredClone(calendar);
+  const selected = runtime.selectLiveCalendar(
+    calendar,
+    item => item.sourceId === "source-cancelled" ? "CANCELLED" : "OPEN",
+    "2026-08-08"
+  );
+  assert.deepEqual(selected.map(item => item.id), ["live"]);
+  assert.deepEqual(calendar, calendarSnapshot);
+});
+
+test("live rendering uses selectors and post-render lists instead of swapping durable state", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /function withLiveCalendar/);
-  assert.match(js, /function withLiveSourceRecords/);
-  assert.match(js, /function patchLiveRenderers/);
-  assert.match(js, /renderCalendar\s*=\s*function/);
-  assert.match(js, /withLiveCalendar\(\(\) => baseRenderCalendar/);
-  for (const renderer of ["renderStore", "renderRide", "renderLedger", "historyHtml"]) {
-    assert.match(js, new RegExp(`${renderer}\\s*=\\s*function`));
+  assert.doesNotMatch(js, /function withLiveCalendar/);
+  assert.doesNotMatch(js, /function withLiveSourceRecords/);
+  assert.doesNotMatch(js, /state\.calendar\s*=/);
+  assert.doesNotMatch(js, /state\.(?:store|ride|ledger)\?*\.[A-Za-z]+\s*=/);
+  for (const renderer of ["renderCalendar", "renderStore", "renderRide", "renderLedger"]) {
+    assert.doesNotMatch(js, new RegExp(`${renderer}\\s*=\\s*function`));
   }
-  assert.match(js, /withLiveSourceRecords\(\(\) => baseRenderStore/);
-  assert.match(js, /withLiveSourceRecords\(\(\) => baseHistoryHtml/);
-  assert.doesNotMatch(js, /state\.calendar\.(?:splice|pop|shift)|delete\s+state\.calendar/);
+  assert.match(js, /function renderLiveSourceLists/);
+  assert.match(js, /historyHtml\s*=\s*function/);
+  assert.match(js, /flowCalendarItems\s*=\s*function/);
 });
 
 test("calendar day counts and dots exclude cancelled queues", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /state\.calendar\.filter\(item => item\.due === date && queueSignal\(item\) !== STATUS_SIGNALS\.HIDDEN\)/);
+  assert.match(js, /selectLiveCalendar\(state\.calendar/);
   assert.match(js, /items\.slice\(0, 5\)/);
   assert.match(js, /r53-day-dot/);
 });
@@ -64,16 +91,18 @@ test("cancelled controls disappear from Calendar live UI", () => {
   assert.match(js, /r53-three-stats/);
 });
 
-test("selected-day swipe uses a live-only calendar so cancelled queues cannot reappear", () => {
+test("selected-day swipe filters the Calendar selector instead of swapping global state", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /flowRenderCalendarFocus\s*=\s*function/);
-  assert.match(js, /withLiveCalendar\(\(\) => baseFlowCalendarFocus/);
+  assert.match(js, /const baseFlowCalendarItems = flowCalendarItems/);
+  assert.match(js, /flowCalendarItems\s*=\s*function/);
+  assert.match(js, /selectLiveCalendar\(baseFlowCalendarItems\(/);
+  assert.doesNotMatch(js, /flowRenderCalendarFocus\s*=\s*function/);
 });
 
 test("live counters use the same hidden rule as visible queue cards", () => {
   const js = read("metropolis-r5-3.js");
   assert.match(js, /function syncLiveCounters/);
-  assert.match(js, /queueSignal\(item\) !== STATUS_SIGNALS\.HIDDEN/);
+  assert.match(js, /selectLiveCalendar\(state\.calendar/);
   for (const id of ["homeWaitIn", "homeWaitOut", "homeVerify", "calWaitIn", "calWaitOut", "calVerify", "ledgerPendingCount"]) {
     assert.match(js, new RegExp(`setCounter\\("${id}"`));
   }
