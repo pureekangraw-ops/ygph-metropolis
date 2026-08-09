@@ -2936,9 +2936,12 @@ async function init() {
   try {
     db = await openDb();
     const vault = await dbGet(VAULT_KEY);
-    if (!vault) { showSetup(); return; }
-    if (await tryTrustedDeviceUnlock(vault)) return;
-    showUnlock();
+    if (!vault) {
+      showSetup();
+    } else {
+      const trustedUnlocked = await tryTrustedDeviceUnlock(vault);
+      if (!trustedUnlocked) showUnlock();
+    }
   }
   catch (error) { console.error(error); showOnly("securityGate"); }
   setupServiceWorkerLifecycle().catch(error => renderServiceWorkerStatus(`ระบบออฟไลน์เริ่มไม่สำเร็จ: ${error.message}`));
