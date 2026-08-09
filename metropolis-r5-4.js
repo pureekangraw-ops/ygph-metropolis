@@ -1,9 +1,9 @@
 "use strict";
 
-/* YGPH METROPOLIS 4.2.3 — owner home dashboard + visible release authority */
+/* YGPH METROPOLIS 4.2.4 — owner home dashboard + visible release authority */
 
-const METROPOLIS_423_PRODUCT_VERSION = "4.2.3";
-const METROPOLIS_R5_4_VERSION = "5.4.2-calendar-dom-contract";
+const METROPOLIS_424_PRODUCT_VERSION = "4.2.4";
+const METROPOLIS_R5_4_VERSION = "5.4.3-dashboard-current-month";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -35,11 +35,12 @@ function r54Metrics(targetState, today = r54Today()) {
     const due = String(item?.due || "").slice(0, 10);
     return due && due < today;
   }).length;
-  const outgoing = active.filter(item => typeof queueDirection === "function" && queueDirection(item) === "OUT");
-  const pendingOut = outgoing.length;
-  const pendingOutSatang = outgoing.reduce((sum, item) =>
-    sum + Math.max(0, Number(item?.amountSatang || 0) - Number(item?.paidSatang || 0)), 0);
-  return { cashSatang, stockQty, overdue, pendingOut, pendingOutSatang };
+  const monthKey = String(today || "").slice(0, 7);
+  const pendingOut = active.filter(item => {
+    if (typeof queueDirection !== "function" || queueDirection(item) !== "OUT") return false;
+    return String(item?.due || "").slice(0, 7) === monthKey;
+  }).length;
+  return { cashSatang, stockQty, overdue, pendingOut };
 }
 
 function r54Money(satang) {
@@ -50,13 +51,13 @@ function r54Money(satang) {
 function r54ApplyVisibleVersion() {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.metropolisR54 = METROPOLIS_R5_4_VERSION;
-  document.documentElement.dataset.metropolisVersion = METROPOLIS_423_PRODUCT_VERSION;
-  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
+  document.documentElement.dataset.metropolisVersion = METROPOLIS_424_PRODUCT_VERSION;
+  const expectedTitle = `YGPH METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
   if (document.title !== expectedTitle) document.title = expectedTitle;
   const statusVersion = document.querySelector(".status-line b");
   if (statusVersion) {
-    const expectedVersion = `METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
-    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_423_PRODUCT_VERSION}`;
+    const expectedVersion = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
+    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
     statusVersion.setAttribute("aria-label", expectedVersion);
   }
 }
@@ -98,7 +99,7 @@ function r54BuildDashboard() {
       <article class="metro-dash-card metro-dash-purple"><small>เงินที่มี</small><strong id="metroDashCash">0 บาท</strong></article>
       <article class="metro-dash-card metro-dash-green"><small>สต็อกสินค้า</small><strong id="metroDashStock">0 ชิ้น</strong></article>
       <article class="metro-dash-card metro-dash-yellow"><small>งานที่เลยกำหนด</small><strong id="metroDashOverdue">0 งาน</strong></article>
-      <article class="metro-dash-card metro-dash-red"><small>ค้างจ่าย</small><strong id="metroDashPendingOut">0 บาท · 0 รายการ</strong></article>
+      <article class="metro-dash-card metro-dash-red"><small>ค้างจ่ายเดือนนี้</small><strong id="metroDashPendingOut">0 รายการ</strong></article>
     </div>`;
 
   if (appSection?.parentElement === home) home.insertBefore(dashboard, appSection);
@@ -118,7 +119,7 @@ function r54SyncDashboard() {
   set("metroDashCash", `${r54Money(metrics.cashSatang)} บาท`);
   set("metroDashStock", `${metrics.stockQty.toLocaleString("th-TH")} ชิ้น`);
   set("metroDashOverdue", `${metrics.overdue.toLocaleString("th-TH")} งาน`);
-  set("metroDashPendingOut", `${r54Money(metrics.pendingOutSatang)} บาท · ${metrics.pendingOut.toLocaleString("th-TH")} รายการ`);
+  set("metroDashPendingOut", `${metrics.pendingOut.toLocaleString("th-TH")} รายการ`);
 }
 
 function r54Apply() {
@@ -130,7 +131,7 @@ function r54Apply() {
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    METROPOLIS_423_PRODUCT_VERSION,
+    METROPOLIS_424_PRODUCT_VERSION,
     METROPOLIS_R5_4_VERSION,
     r54Metrics
   };

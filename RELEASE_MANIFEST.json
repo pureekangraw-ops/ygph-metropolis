@@ -1,9 +1,9 @@
 {
-  "release": "4.2.3-calendar-dom-contract",
+  "release": "4.2.4-dashboard-current-month",
   "product": "YGPH METROPOLIS",
-  "tagline": "Calendar DOM Contract",
-  "releaseDate": "2026-08-08",
-  "sourceBaseCommit": "ccf6f25",
+  "tagline": "Dashboard Current Month",
+  "releaseDate": "2026-08-09",
+  "sourceBaseCommit": "74f948d",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -36,8 +36,8 @@
     "cancelled Calendar filter can disappear from live UI but the base calCancelled counter node remains mounted and hidden so renderCalendar retains its DOM contract",
     "Calendar month and list use the same green/yellow/red status signal",
     "owner dashboard replaces the Four Apps hero slot and reads current cash, stock and live Calendar state without mutating durable data",
-    "owner dashboard red metric reports unpaid outgoing amount and item count",
-    "4.2.3 owns the visible product version without CSS masking",
+    "owner dashboard red metric counts only active outgoing items due in the current month and displays item count only",
+    "4.2.4 owns the visible product version without CSS masking",
     "every production UI change advances the visible product version"
   ],
   "runtimeOrder": [
@@ -54,7 +54,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.3-20260808-r12-calendar-dom-contract",
+    "releaseId": "v4.2.4-20260809-r13-dashboard-current-month",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -64,7 +64,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.3 preserves the base Calendar DOM contract: cancelled work stays hidden from live UI without deleting the calCancelled node required by renderCalendar, so Calendar list rendering and afterPageChange navigation can complete."
+    "note": "METROPOLIS 4.2.4 keeps durable Ledger and Calendar data unchanged while the Home red dashboard card projects only active outgoing items due in the current month and renders the item count without a baht total."
   },
   "validation": {
     "command": "npm run deploy:gate",
