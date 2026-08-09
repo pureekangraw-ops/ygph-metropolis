@@ -8,6 +8,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 
+// Trusted-device mode removes routine password prompts without removing encrypted Vault recovery.
 test("trusted-device unlock stores a non-extractable CryptoKey contract, never a passphrase", () => {
   assert.match(app, /const TRUSTED_DEVICE_KEY\s*=\s*"trusted-device:key"/);
   assert.match(app, /async function rememberTrustedDevice\(/);
