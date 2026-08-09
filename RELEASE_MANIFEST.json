@@ -33,7 +33,7 @@
     "no direct deletion of protected history",
     "pre-4.2 obligations retain original total-split semantics",
     "cancelled records are filtered before live render/list counting and remain in durable history",
-    "cancelled Calendar filter can disappear from live UI but the base calCancelled counter node remains mounted and hidden so renderCalendar retains its DOM contract",
+    "Calendar source HTML omits cancelled counter and cancelled filter; cancelled records remain in durable history",
     "Calendar month and list use the same green/yellow/red status signal",
     "owner dashboard replaces the Four Apps hero slot and reads current cash, stock and live Calendar state without mutating durable data",
     "owner dashboard red metric counts only active outgoing items due in the current month and displays item count only",
@@ -55,7 +55,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.4-20260809-r14-runtime-authority",
+    "releaseId": "v4.2.4-20260809-r15-calendar-version-boundary",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
