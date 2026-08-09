@@ -42,6 +42,7 @@ const FLOW_ICONS = {
   task: '<svg data-icon="task" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="m8 9 1.4 1.4L12 7.8M8 15l1.4 1.4L12 13.8M13.5 10h2.8M13.5 16h2.8"/></svg>',
   payment: '<svg data-icon="payment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18M7 15h4"/><circle cx="18" cy="17" r="3" fill="currentColor" stroke="none"/></svg>',
   chevron: '<svg data-icon="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>',
+  lock: '<svg data-icon="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14.5v2"/></svg>',
   tree: '<svg data-icon="tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-8"/><path d="M12 14c-4.5 0-7-2.8-7-6 4.2-.5 7 1.1 7 6z"/><path d="M12 11c0-4.5 2.8-7 6-7 .5 4.2-1.1 7-6 7z"/><path d="M8 21h8"/></svg>'
 };
 

@@ -161,7 +161,7 @@ function metropolisBuildLauncher() {
   home.insertBefore(cityHero, firstSection);
 
   const title = firstSection.querySelector(".section-title h2");
-  if (title) title.textContent = "แอปของบิ๊ก";
+  if (title) title.textContent = "เข้าเมือง";
   const sectionTitle = firstSection.querySelector(".section-title");
   if (sectionTitle && !sectionTitle.querySelector(".metropolis-section-note")) {
     const note = document.createElement("p");
@@ -236,8 +236,8 @@ function metropolisBuildLauncher() {
   const utilityBar = document.createElement("div");
   utilityBar.className = "metropolis-utility-bar";
   utilityBar.innerHTML = `
-    <button type="button" data-metropolis-open="report"><span>📊</span><b>รายงาน</b></button>
-    <button type="button" data-metropolis-open="settings"><span>⚙️</span><b>ตั้งค่า</b></button>`;
+    <button type="button" data-metropolis-open="report"><span class="metropolis-utility-icon">${metropolisIcon("report")}</span><b>รายงาน</b></button>
+    <button type="button" data-metropolis-open="settings"><span class="metropolis-utility-icon">${metropolisIcon("settings")}</span><b>ตั้งค่า</b></button>`;
   utilityBar.querySelectorAll("[data-metropolis-open]").forEach(button => {
     button.addEventListener("click", () => metropolisShowPage(button.dataset.metropolisOpen));
   });
@@ -289,8 +289,7 @@ function metropolisBuildAppBar() {
 function metropolisFixLegacyCopy() {
   const replacements = [
     [document.querySelector("#setupScreen h1"), `ตั้งค่า ${METROPOLIS_NAME}`],
-    [document.querySelector("#unlockScreen h1"), METROPOLIS_NAME],
-    [document.querySelector(".brand-copy h1"), METROPOLIS_NAME]
+    [document.querySelector("#unlockScreen h1"), METROPOLIS_NAME]
   ];
   replacements.forEach(([node, text]) => {
     if (node && node.textContent !== text) node.textContent = text;
@@ -319,6 +318,12 @@ function metropolisApplyBranding() {
   const brandSub = document.querySelector(".brand-copy p");
   if (brandTitle) brandTitle.textContent = METROPOLIS_DISPLAY_NAME;
   if (brandSub) brandSub.textContent = METROPOLIS_SIGNATURE;
+  const brandMark = document.querySelector(".brand-mark");
+  if (brandMark) brandMark.innerHTML = metropolisIcon("app");
+  const headerHome = document.getElementById("headerHome");
+  if (headerHome) headerHome.innerHTML = metropolisIcon("home");
+  const headerLock = document.getElementById("headerLockBtn");
+  if (headerLock) headerLock.innerHTML = typeof flowIcon === "function" ? flowIcon("lock") : "";
 
   const status = document.querySelector(".status-line");
   if (status) {
