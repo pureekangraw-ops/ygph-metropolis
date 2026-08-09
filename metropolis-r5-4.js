@@ -3,7 +3,7 @@
 /* YGPH METROPOLIS 4.2.4 — owner home dashboard + visible release authority */
 
 const METROPOLIS_424_PRODUCT_VERSION = "4.2.4";
-const METROPOLIS_R5_4_VERSION = "5.4.4-runtime-authority";
+const METROPOLIS_R5_4_VERSION = "5.4.5-ygph-visual-system";
 
 function r54Today() {
   try { return typeof localISO === "function" ? localISO() : new Date().toISOString().slice(0, 10); }
@@ -46,6 +46,11 @@ function r54Money(satang) {
   catch (_) { return (Number(satang || 0) / 100).toLocaleString("th-TH", { maximumFractionDigits: 2 }); }
 }
 
+function r54Icon(name) {
+  try { return typeof flowIcon === "function" ? flowIcon(name) : ""; }
+  catch (_) { return ""; }
+}
+
 function r54ApplyVisibleVersion() {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.metropolisR54 = METROPOLIS_R5_4_VERSION;
@@ -55,7 +60,7 @@ function r54ApplyVisibleVersion() {
   const statusVersion = document.querySelector(".status-line b");
   if (statusVersion) {
     const expectedVersion = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
-    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = `METROPOLIS v${METROPOLIS_424_PRODUCT_VERSION}`;
+    if (statusVersion.textContent !== expectedVersion) statusVersion.textContent = expectedVersion;
     statusVersion.setAttribute("aria-label", expectedVersion);
   }
 }
@@ -70,10 +75,6 @@ function r54BuildDashboard() {
   if (typeof document === "undefined") return null;
   document.querySelector(".metropolis-city-hero")?.remove();
   document.querySelector(".metropolis-eyebrow")?.remove();
-  const brandSub = document.querySelector(".brand-copy p");
-  if (brandSub && /Four Apps\. One Flow/i.test(brandSub.textContent || "")) {
-    brandSub.textContent = "ข้อมูลเข้ารหัส • ใช้งานออฟไลน์";
-  }
 
   const home = document.getElementById("homePage");
   if (!home) return null;
@@ -88,12 +89,12 @@ function r54BuildDashboard() {
   dashboard.id = "metropolisOwnerDashboard";
   dashboard.className = "metro-owner-dashboard";
   dashboard.innerHTML = `
-    <div class="metro-owner-dashboard-head"><h2>แดชบอร์ด</h2><small>ภาพรวมที่ต้องรู้ตอนนี้</small></div>
+    <div class="metro-owner-dashboard-head"><div><h2>ภาพรวม</h2><small>มองแวบเดียวรู้เรื่องสำคัญ</small></div></div>
     <div class="metro-owner-dashboard-grid">
-      <article class="metro-dash-card metro-dash-purple"><small>เงินที่มี</small><strong id="metroDashCash">0 บาท</strong></article>
-      <article class="metro-dash-card metro-dash-green"><small>สต็อกสินค้า</small><strong id="metroDashStock">0 ชิ้น</strong></article>
-      <article class="metro-dash-card metro-dash-yellow"><small>งานที่เลยกำหนด</small><strong id="metroDashOverdue">0 งาน</strong></article>
-      <article class="metro-dash-card metro-dash-red"><small>ค้างจ่ายเดือนนี้</small><strong id="metroDashPendingOut">0 รายการ</strong></article>
+      <article class="metro-dash-card metro-dash-purple"><span class="metro-dash-icon">${r54Icon("wallet")}</span><small>เงินปัจจุบัน</small><strong id="metroDashCash">0 บาท</strong></article>
+      <article class="metro-dash-card metro-dash-green"><span class="metro-dash-icon">${r54Icon("stock")}</span><small>สต็อก</small><strong id="metroDashStock">0 ชิ้น</strong></article>
+      <article class="metro-dash-card metro-dash-yellow"><span class="metro-dash-icon">${r54Icon("task")}</span><small>งานเลยกำหนด</small><strong id="metroDashOverdue">0 งาน</strong></article>
+      <article class="metro-dash-card metro-dash-red"><span class="metro-dash-icon">${r54Icon("payment")}</span><small>ค้างจ่ายเดือนนี้</small><strong id="metroDashPendingOut">0 รายการ</strong></article>
     </div>`;
 
   if (appSection?.parentElement === home) home.insertBefore(dashboard, appSection);

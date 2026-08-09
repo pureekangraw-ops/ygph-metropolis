@@ -1,9 +1,9 @@
 {
-  "release": "4.2.4-runtime-authority",
+  "release": "4.2.4-ygph-visual-system",
   "product": "YGPH METROPOLIS",
-  "tagline": "Runtime Authority Defrag",
+  "tagline": "METROPOLIS by YGPH Visual System",
   "releaseDate": "2026-08-09",
-  "sourceBaseCommit": "7329448",
+  "sourceBaseCommit": "70600e5",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -35,11 +35,15 @@
     "cancelled records are filtered before live render/list counting and remain in durable history",
     "Calendar source HTML omits cancelled counter and cancelled filter; cancelled records remain in durable history",
     "Calendar month and list use the same green/yellow/red status signal",
-    "owner dashboard replaces the Four Apps hero slot and reads current cash, stock and live Calendar state without mutating durable data",
+    "owner dashboard reads current cash, stock and live Calendar state without mutating durable data",
     "owner dashboard red metric counts only active outgoing items due in the current month and displays item count only",
     "4.2.4 owns the visible product version through one shared runtime authority value",
+    "FLOW_ICONS is the shared geometry authority for METROPOLIS core and utility glyphs",
+    "index.html owns the single five-destination bottom navigation source; METROPOLIS v4 only hydrates icons and syncs active state",
+    "METROPOLIS is the primary visible product name and YGPH — Yggdrasil Personal Helper is its signature",
+    "visual-system rollout does not change money, Vault, state schema, schedule formulas, or durable data semantics",
     "production manifest, Cloudflare allowlist and offline shell are regression-locked against drift",
-    "every production UI change advances the visible product version"
+    "every production UI change advances the service-worker cache/release generation"
   ],
   "runtimeOrder": [
     "sw-bootstrap.js",
@@ -55,7 +59,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.4-20260809-r15-calendar-version-boundary",
+    "releaseId": "v4.2.4-20260809-r16-ygph-visual-system",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -65,7 +69,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.4 keeps the visible product version stable while defragmenting cross-layer authority: R5-2 reads one shared version claim and R5-4 claims it directly instead of replacing another layer's local writer."
+    "note": "METROPOLIS 4.2.4 keeps its product/data behavior stable while r16 publishes the approved METROPOLIS by YGPH icon, brand, Home skin and canonical five-item navigation through existing runtime authorities."
   },
   "validation": {
     "command": "npm run deploy:gate",

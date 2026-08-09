@@ -152,14 +152,11 @@
   }
 
   function markBottomNavigation() {
-    document.querySelectorAll(".bottom-nav .nav-btn").forEach(button => {
-      const text = (button.textContent || "").replace(/\s+/g, " ").trim();
+    const allowed = new Set(["home", "store", "ride", "ledger", "calendar"]);
+    document.querySelectorAll(".bottom-nav .nav-btn[data-page]").forEach(button => {
+      const page = String(button.dataset.page || "").toLowerCase();
       button.classList.remove("flow35-nav-store", "flow35-nav-ride", "flow35-nav-home", "flow35-nav-ledger", "flow35-nav-calendar");
-      if (/ร้านค้า/.test(text)) button.classList.add("flow35-nav-store");
-      else if (/วิ่งงาน/.test(text)) button.classList.add("flow35-nav-ride");
-      else if (/หน้าหลัก/.test(text)) button.classList.add("flow35-nav-home");
-      else if (/การเงิน/.test(text)) button.classList.add("flow35-nav-ledger");
-      else if (/ปฏิทิน/.test(text)) button.classList.add("flow35-nav-calendar");
+      if (allowed.has(page)) button.classList.add(`flow35-nav-${page}`);
     });
   }
 

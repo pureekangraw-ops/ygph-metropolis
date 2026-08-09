@@ -4,12 +4,7 @@ const METROPOLIS_PRODUCT_VERSION = "4.1.0";
 const METROPOLIS_R5_1_VERSION = "5.1.0-minimal-launcher";
 
 function metropolis41Icon(app) {
-  const common = `class="metropolis-41-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-metropolis-41-icon="${app}"`;
-  if (app === "store") return `<svg ${common}><path d="M8 19h32l-4-9H12l-4 9Z"/><path d="M11 19v19h26V19"/><path d="M18 38V27h12v11"/></svg>`;
-  if (app === "ride") return `<svg ${common}><circle cx="13" cy="35" r="5"/><circle cx="36" cy="35" r="5"/><path d="M13 35h10l5-12h7"/><path d="M21 23h8l5 12"/><path d="M24 15h7"/></svg>`;
-  if (app === "ledger") return `<svg ${common}><rect x="10" y="7" width="28" height="34" rx="4"/><path d="M17 7v34M22 17h10M22 25h10M22 33h7"/></svg>`;
-  if (app === "calendar") return `<svg ${common}><rect x="7" y="10" width="34" height="31" rx="5"/><path d="M7 20h34M15 6v8M33 6v8M15 28h5M28 28h5M15 35h5M28 35h5"/></svg>`;
-  return "";
+  return typeof flowIcon === "function" ? flowIcon(app) : "";
 }
 
 function metropolis41ApplyVersion() {
@@ -31,7 +26,7 @@ function metropolis41PolishLauncher() {
     const icon = metropolis41Icon(app);
     if (!icon) return;
     card.querySelectorAll(".metropolis-open-mark").forEach(node => node.remove());
-    card.querySelectorAll(".metropolis-app-copy > small, .metropolis-app-status").forEach(node => node.remove());
+    card.querySelectorAll(".metropolis-app-status").forEach(node => node.remove());
     const target = card.querySelector(".metropolis-app-icon");
     if (target && target.dataset.metropolis41Applied !== "true") {
       target.innerHTML = icon;

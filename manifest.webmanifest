@@ -1,13 +1,13 @@
 {
-  "name": "YGPH METROPOLIS v4.0.0",
+  "name": "METROPOLIS by YGPH",
   "short_name": "METROPOLIS",
-  "description": "Four Apps. One Flow. ร้านค้า วิ่งงาน การเงิน และปฏิทิน แยกประสบการณ์ใช้งานแต่เชื่อมข้อมูลในระบบเดียว — Offline, Encrypted, Route-aware",
+  "description": "METROPOLIS by YGPH — Yggdrasil Personal Helper. ร้านค้า วิ่งงาน การเงิน และปฏิทิน เชื่อมข้อมูลในระบบเดียว ใช้งานออฟไลน์และเก็บข้อมูลแบบเข้ารหัส",
   "lang": "th",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f2f6f4",
-  "theme_color": "#176b4f",
+  "background_color": "#0F1416",
+  "theme_color": "#0F1416",
   "icons": [
     {
       "src": "icon-192.png",

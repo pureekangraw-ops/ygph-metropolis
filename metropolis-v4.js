@@ -10,6 +10,8 @@
 
 const METROPOLIS_VERSION = "4.0.0";
 const METROPOLIS_NAME = "YGPH METROPOLIS";
+const METROPOLIS_DISPLAY_NAME = "METROPOLIS";
+const METROPOLIS_SIGNATURE = "by YGPH — Yggdrasil Personal Helper";
 const METROPOLIS_ARCHITECTURE = "FOUR_APP_CONNECTED_SUITE";
 
 const METROPOLIS_APPS = {
@@ -74,14 +76,14 @@ const METROPOLIS_APPS = {
 
 function metropolisIcon(app) {
   const meta = METROPOLIS_APPS[app] || METROPOLIS_APPS.store;
+  const iconMap = { report: "task", sync: "payment" };
+  const iconName = iconMap[app] || meta.icon || app;
   try {
-    if (typeof flowIcon === "function" && ["store", "ride", "ledger", "calendar", "settings"].includes(meta.icon)) {
-      return flowIcon(meta.icon);
-    }
+    if (typeof flowIcon === "function") return flowIcon(iconName);
   } catch (error) {
-    console.warn("Metropolis icon fallback", error);
+    console.warn("Metropolis icon unavailable", error);
   }
-  return `<span class="metropolis-emoji" aria-hidden="true">${meta.emoji}</span>`;
+  return "";
 }
 
 function metropolisActivePage() {
@@ -97,6 +99,23 @@ function metropolisShowPage(page) {
   }
   document.querySelectorAll(".page").forEach(node => node.classList.toggle("active", node.id === `${page}Page`));
   metropolisApplyPage(page);
+}
+
+function metropolisHydrateBottomNav() {
+  document.querySelectorAll(".bottom-nav .nav-btn[data-page]").forEach(button => {
+    const page = button.dataset.page;
+    const iconHost = button.querySelector("i");
+    if (iconHost) iconHost.innerHTML = metropolisIcon(page);
+  });
+}
+
+function metropolisSyncBottomNav(page = metropolisActivePage()) {
+  document.querySelectorAll(".bottom-nav .nav-btn[data-page]").forEach(button => {
+    const active = button.dataset.page === page;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
 }
 
 function metropolisFormatMoney(value) {
@@ -142,7 +161,7 @@ function metropolisBuildLauncher() {
   home.insertBefore(cityHero, firstSection);
 
   const title = firstSection.querySelector(".section-title h2");
-  if (title) title.textContent = "แอปของบิ๊ก";
+  if (title) title.textContent = "เข้าเมือง";
   const sectionTitle = firstSection.querySelector(".section-title");
   if (sectionTitle && !sectionTitle.querySelector(".metropolis-section-note")) {
     const note = document.createElement("p");
@@ -217,8 +236,8 @@ function metropolisBuildLauncher() {
   const utilityBar = document.createElement("div");
   utilityBar.className = "metropolis-utility-bar";
   utilityBar.innerHTML = `
-    <button type="button" data-metropolis-open="report"><span>📊</span><b>รายงาน</b></button>
-    <button type="button" data-metropolis-open="settings"><span>⚙️</span><b>ตั้งค่า</b></button>`;
+    <button type="button" data-metropolis-open="report"><span class="metropolis-utility-icon">${metropolisIcon("report")}</span><b>รายงาน</b></button>
+    <button type="button" data-metropolis-open="settings"><span class="metropolis-utility-icon">${metropolisIcon("settings")}</span><b>ตั้งค่า</b></button>`;
   utilityBar.querySelectorAll("[data-metropolis-open]").forEach(button => {
     button.addEventListener("click", () => metropolisShowPage(button.dataset.metropolisOpen));
   });
@@ -270,8 +289,7 @@ function metropolisBuildAppBar() {
 function metropolisFixLegacyCopy() {
   const replacements = [
     [document.querySelector("#setupScreen h1"), `ตั้งค่า ${METROPOLIS_NAME}`],
-    [document.querySelector("#unlockScreen h1"), METROPOLIS_NAME],
-    [document.querySelector(".brand-copy h1"), METROPOLIS_NAME]
+    [document.querySelector("#unlockScreen h1"), METROPOLIS_NAME]
   ];
   replacements.forEach(([node, text]) => {
     if (node && node.textContent !== text) node.textContent = text;
@@ -298,8 +316,14 @@ function metropolisApplyBranding() {
 
   const brandTitle = document.querySelector(".brand-copy h1");
   const brandSub = document.querySelector(".brand-copy p");
-  if (brandTitle) brandTitle.textContent = METROPOLIS_NAME;
-  if (brandSub) brandSub.textContent = "Four Apps. One Flow. — แยกเป็นแอป เชื่อมเป็นระบบ";
+  if (brandTitle) brandTitle.textContent = METROPOLIS_DISPLAY_NAME;
+  if (brandSub) brandSub.textContent = METROPOLIS_SIGNATURE;
+  const brandMark = document.querySelector(".brand-mark");
+  if (brandMark) brandMark.innerHTML = metropolisIcon("app");
+  const headerHome = document.getElementById("headerHome");
+  if (headerHome) headerHome.innerHTML = metropolisIcon("home");
+  const headerLock = document.getElementById("headerLockBtn");
+  if (headerLock) headerLock.innerHTML = typeof flowIcon === "function" ? flowIcon("lock") : "";
 
   const status = document.querySelector(".status-line");
   if (status) {
@@ -313,6 +337,7 @@ function metropolisApplyBranding() {
 function metropolisApplyPage(page = metropolisActivePage()) {
   const normalized = METROPOLIS_APPS[page] ? page : "home";
   document.body.dataset.metropolisPage = normalized;
+  metropolisSyncBottomNav(normalized);
 
   const bar = document.getElementById("metropolisAppBar");
   if (!bar) return;
@@ -408,6 +433,7 @@ function metropolisInstall() {
   metropolisApplyBranding();
   metropolisBuildLauncher();
   metropolisBuildAppBar();
+  metropolisHydrateBottomNav();
   metropolisRegisterRuntime();
   metropolisApplyPage(metropolisActivePage());
   metropolisRefresh();

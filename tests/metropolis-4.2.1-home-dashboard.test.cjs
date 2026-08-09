@@ -57,7 +57,7 @@ test("dashboard red card shows current-month item count only", () => {
   assert.doesNotMatch(js, /metroDashPendingOut[^\n]*บาท/);
 });
 
-test("dashboard palette follows purple green yellow red order", () => {
+test("dashboard compatibility class order stays stable for existing selectors", () => {
   const css = read("metropolis-r5-4.css");
   const purple = css.indexOf(".metro-dash-purple");
   const green = css.indexOf(".metro-dash-green");
@@ -69,7 +69,8 @@ test("dashboard palette follows purple green yellow red order", () => {
 test("4.2.4 owns visible version through the shared runtime authority", () => {
   const js = read("metropolis-r5-4.js");
   const css = read("metropolis-r5-4.css");
-  assert.match(js, /statusVersion\.textContent\s*=\s*`METROPOLIS v\$\{METROPOLIS_424_PRODUCT_VERSION\}`/);
+  assert.match(js, /const expectedVersion\s*=\s*`METROPOLIS v\$\{METROPOLIS_424_PRODUCT_VERSION\}`/);
+  assert.match(js, /statusVersion\.textContent\s*=\s*expectedVersion/);
   assert.match(js, /YGPH_METROPOLIS_PRODUCT_VERSION\s*=\s*METROPOLIS_424_PRODUCT_VERSION/);
   assert.doesNotMatch(js, /applyProductVersion42\s*=\s*function/);
   assert.doesNotMatch(css, /\.status-line b::after/);
@@ -83,5 +84,5 @@ test("4.2.4 visible version and assets are loaded as the newest layer", () => {
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-4.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r15-calendar-version-boundary");
+  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r16-ygph-visual-system");
 });
