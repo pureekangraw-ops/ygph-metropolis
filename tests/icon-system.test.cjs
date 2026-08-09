@@ -69,7 +69,7 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.equal(RELEASE_ID, "v4.2.4-20260809-r17-settings-version-authority");
+  assert.equal(RELEASE_ID, "v4.2.4-20260809-r18-runtime-visual-followthrough");
 });
 
 test("approved subjects render from the shared icon registry", () => {
