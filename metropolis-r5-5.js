@@ -215,21 +215,16 @@ function r55MoveExchangeToSettings() {
   if (exportButton?.querySelector("b")) exportButton.querySelector("b").textContent = "ส่งออก";
   if (importButton?.querySelector("b")) importButton.querySelector("b").textContent = "รับเข้า";
 }
-const R55_MONEY_INPUT_IDS = new Set(["setupPrice","setupBalance","rideAmount","defaultPrice","verifiedBalance","saleUnitPrice","saleReceived","buyCost","rideExpenseAmount","otherIncomeAmount","debtAmount","expenseAmount","payAmount","metroDailyTargetInput"]);
-function r55PatchDecimalInputs(root = document) {
-  const inputs = [];
-  if (root?.matches?.('input[type="number"]')) inputs.push(root);
-  if (root?.querySelectorAll) inputs.push(...root.querySelectorAll('input[type="number"]'));
-  for (const input of inputs) {
-    if (!R55_MONEY_INPUT_IDS.has(input.id)) continue;
-    input.setAttribute("step", "0.01");
-    input.setAttribute("inputmode", "decimal");
-    if (input.id === "rideAmount" && Number(input.min || 0) >= 1) input.min = "0.01";
-  }
+function r55EnableRideDecimalInput() {
+  const input = byId("rideAmount");
+  if (!input) return;
+  input.min = "0.01";
+  input.step = "0.01";
+  input.setAttribute("inputmode", "decimal");
 }
 function r55PruneDecorativeCopy() { document.querySelectorAll("#homePage > .notice, .metropolis-home > .notice").forEach(node => node.remove()); }
 function r55BindActions() { if (byId("metroDailyTargetEdit")) byId("metroDailyTargetEdit").onclick = r55OpenTargetEditor; if (byId("metroEndDayBtn")) byId("metroEndDayBtn").onclick = r55OpenEndDay; }
-function r55Apply() { r55ClaimVersionAuthority(); r55ApplyVisibleVersion(); r55EnhanceDashboard(); r55MoveExchangeToSettings(); r55PruneDecorativeCopy(); r55PatchDecimalInputs(); if (typeof r54SyncDashboard === "function") r54SyncDashboard(); r55SyncDailyTarget(); r55BindActions(); }
+function r55Apply() { r55ClaimVersionAuthority(); r55ApplyVisibleVersion(); r55EnhanceDashboard(); r55MoveExchangeToSettings(); r55PruneDecorativeCopy(); r55EnableRideDecimalInput(); if (typeof r54SyncDashboard === "function") r54SyncDashboard(); r55SyncDailyTarget(); r55BindActions(); }
 
 if (typeof module === "object" && module.exports) module.exports = { METROPOLIS_425_PRODUCT_VERSION, METROPOLIS_R5_5_VERSION, R55_DEFAULT_PASS_PERCENT, R55_DUE_SOON_DAYS, r55DailyEarningsSatang, r55DailyTargetProgress, r55PercentDelta, r55RankObligations, r55PaymentPreview };
 
@@ -241,8 +236,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") (() => {
     globalThis.__YGPH_METROPOLIS_R55_RUNTIME__ = true;
     r55ClaimVersionAuthority();
     if (globalThis.YGPHRuntime?.register) globalThis.YGPHRuntime.register("METROPOLIS_R55_FINALIZATION", { afterRender: queueApply, afterPageChange: queueApply });
-    const observer = new MutationObserver(records => { for (const record of records) for (const node of record.addedNodes || []) if (node?.nodeType === 1) r55PatchDecimalInputs(node); });
-    observer.observe(document.body, { childList: true, subtree: true });
     queueApply();
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
