@@ -59,7 +59,7 @@
     "metropolis-r5-4.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.4-20260809-r17-settings-version-authority",
+    "releaseId": "v4.2.4-20260809-r18-runtime-visual-followthrough",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -69,7 +69,7 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js"],
-    "note": "METROPOLIS 4.2.4 keeps its product/data behavior stable. r16 published the approved METROPOLIS by YGPH icon, brand, Home skin and canonical five-item navigation; r17 completes the visible-version authority by binding Settings to the same 4.2.4 source."
+    "note": "METROPOLIS 4.2.4 keeps its product/data behavior stable. r16 published the approved visual system; r17 bound Settings version text to the shared 4.2.4 authority; r18 fixes runtime icon resolution for the app/Home glyphs and brings the FLOW-injected Settings button under the authoritative dark header skin."
   },
   "validation": {
     "command": "npm run deploy:gate",
