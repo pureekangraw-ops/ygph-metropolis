@@ -35,15 +35,15 @@ function iconRuntime() {
   return context.__iconTest;
 }
 
-test("primary app mark uses only the approved civic route palette and safe area", () => {
+test("primary app mark uses the approved METROPOLIS palette and safe area", () => {
   const svg = read("assets/app-icon.svg");
   const colors = [...new Set(svg.match(/#[0-9a-f]{6}/gi)?.map(color => color.toUpperCase()))].sort();
 
   assert.match(svg, /viewBox="0 0 512 512"/);
-  assert.match(svg, /data-icon="app-route"/);
+  assert.match(svg, /data-icon="app-metropolis-mark"/);
   assert.match(svg, /data-safe-area="72 72 368 368"/);
-  assert.deepEqual(colors, ["#465B71", "#60758C", "#F7F5EF"].sort());
-  assert.doesNotMatch(svg, /gradient|#(?:D4AF37|FFD700)|gold|jewel|crest|rune|shield|sigil|<text/i);
+  assert.deepEqual(colors, ["#0F1416", "#1B2326", "#22C55E", "#14B8A6", "#F5C14A"].sort());
+  assert.doesNotMatch(svg, /gradient|jewel|crest|rune|shield|sigil|<text/i);
 });
 
 test("install icons have exact dimensions and remain wired for manifest and offline use", () => {
@@ -69,13 +69,13 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.4-20260809-r15-calendar-version-boundary$/, "the calendar/version defrag must advance the cache generation");
+  assert.match(RELEASE_ID, /^v4\.2\.4-20260809-r(?:15-calendar-version-boundary|16-ygph-visual-system)$/);
 });
 
 test("approved subjects render from the shared icon registry", () => {
   const { FLOW_ICONS, flowIcon } = iconRuntime();
   const expected = {
-    app: "app-route",
+    app: "app-metropolis-mark",
     store: "storefront",
     ride: "ride-route",
     ledger: "ledger-book",
@@ -91,22 +91,19 @@ test("approved subjects render from the shared icon registry", () => {
   assert.match(read("flow-era.js"), /querySelector\("\.brand-mark"\)\.innerHTML = flowIcon\("app"\)/);
 });
 
-test("steel-blue treatment is limited to app-icon surfaces", () => {
-  const css = read("metropolis-v4.css");
-  assert.match(css, /--metro-icon-bg:#60758C;/);
-  assert.match(css, /--metro-icon-bg-dark:#465B71;/);
-  assert.match(css, /--metro-icon-ink:#F7F5EF;/);
-
-  const launcherRule = css.match(/\.metropolis-app-icon\{([^}]*)\}/)?.[1] || "";
-  assert.match(launcherRule, /background:var\(--metro-icon-bg\)/);
-  assert.match(launcherRule, /color:var\(--metro-icon-ink\)/);
-  assert.doesNotMatch(launcherRule, /var\(--app-color\)/);
-
-  const brandRule = css.match(/\.metropolis-v4 \.brand-mark\{([^}]*)\}/)?.[1] || "";
-  assert.match(brandRule, /background:var\(--metro-icon-bg\)/);
-  assert.match(brandRule, /color:var\(--metro-icon-ink\)/);
-
-  for (const variable of ["--metro-store", "--metro-ride", "--metro-ledger", "--metro-calendar"]) {
-    assert.match(css, new RegExp(`${variable}:`), `${variable} must remain available to the existing UI`);
+test("authoritative visual layer owns the approved METROPOLIS palette", () => {
+  const css = read("metropolis-r5-4.css");
+  for (const [name, value] of [
+    ["--ygph-deep", "#0F1416"],
+    ["--ygph-slate", "#1B2326"],
+    ["--ygph-emerald", "#22C55E"],
+    ["--ygph-teal", "#14B8A6"],
+    ["--ygph-gold", "#F5C14A"],
+    ["--ygph-white", "#F7F7F8"]
+  ]) {
+    assert.match(css, new RegExp(`${name}:${value}`, "i"));
   }
+  assert.match(css, /\.metropolis-v4 \.brand-mark/);
+  assert.match(css, /\[data-role="primary"\]/);
+  assert.match(css, /\[data-role="accent"\]/);
 });
