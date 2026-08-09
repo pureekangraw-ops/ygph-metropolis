@@ -69,7 +69,7 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.4-20260809-r14-runtime-authority$/, "the runtime authority defrag must advance the cache generation");
+  assert.match(RELEASE_ID, /^v4\.2\.4-20260809-r15-calendar-version-boundary$/, "the calendar/version defrag must advance the cache generation");
 });
 
 test("approved subjects render from the shared icon registry", () => {

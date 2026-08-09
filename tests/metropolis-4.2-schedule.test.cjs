@@ -107,5 +107,5 @@ test("4.2 assets stay loaded before the additive status and dashboard layers", (
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.css"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r14-runtime-authority");
+  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r15-calendar-version-boundary");
 });

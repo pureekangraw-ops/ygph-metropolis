@@ -6,12 +6,14 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 
-test("R5-3 hides the cancelled counter without deleting the base Calendar node", () => {
+test("Calendar source omits cancelled controls instead of hiding compatibility nodes", () => {
+  const index = read("index.html");
   const js = read("metropolis-r5-3.js");
-  const match = js.match(/function hideCancelledControls\(\)\s*\{([\s\S]*?)\n\s*\}/);
-  assert.ok(match, "hideCancelledControls must exist");
-  const body = match[1];
-  assert.match(body, /getElementById\("calCancelled"\)/);
-  assert.match(body, /classList\.add\("hidden"\)/);
-  assert.doesNotMatch(body, /tile\?\.remove\(\)/);
+
+  assert.doesNotMatch(index, /id="calCancelled"/);
+  assert.doesNotMatch(index, /data-filter="CANCELLED"/);
+  assert.match(index, /id="calendarPage"[\s\S]*?hero-grid r53-three-stats/);
+  assert.doesNotMatch(js, /function hideCancelledControls/);
+  assert.doesNotMatch(js, /getElementById\("calCancelled"\)/);
+  assert.doesNotMatch(js, /data-filter="CANCELLED"/);
 });

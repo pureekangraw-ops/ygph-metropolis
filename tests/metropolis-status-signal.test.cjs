@@ -84,11 +84,15 @@ test("Calendar list pill receives the same three-color signal as its dot", () =>
   assert.doesNotMatch(css, /#queueList \.status\.r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
-test("cancelled controls disappear from Calendar live UI", () => {
+test("Calendar source owns the three-stat layout without cancelled-control cleanup", () => {
   const js = read("metropolis-r5-3.js");
-  assert.match(js, /data-filter="CANCELLED"/);
-  assert.match(js, /getElementById\("calCancelled"\)/);
-  assert.match(js, /r53-three-stats/);
+  const index = read("index.html");
+  assert.doesNotMatch(index, /id="calCancelled"/);
+  assert.doesNotMatch(index, /data-filter="CANCELLED"/);
+  assert.match(index, /hero-grid r53-three-stats/);
+  assert.doesNotMatch(js, /function hideCancelledControls/);
+  assert.doesNotMatch(js, /getElementById\("calCancelled"\)/);
+  assert.doesNotMatch(js, /data-filter="CANCELLED"/);
 });
 
 test("selected-day swipe filters the Calendar selector instead of swapping global state", () => {
@@ -125,5 +129,5 @@ test("status signal assets stay loaded before the 4.2.4 dashboard layer", () => 
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r14-runtime-authority");
+  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r15-calendar-version-boundary");
 });
