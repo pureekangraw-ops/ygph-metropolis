@@ -69,6 +69,13 @@ test("approved production palette and nav state are encoded in the authoritative
   assert.match(css, /env\(safe-area-inset-bottom/);
 });
 
+test("settings product version comes from the same 4.2.4 authority", () => {
+  assert.match(index, /id="settingsProductVersion"/);
+  assert.doesNotMatch(index, /class="hero-value">YGPH METROPOLIS v4\.0\.0/);
+  assert.match(r54, /settingsProductVersion/);
+  assert.match(r54, /METROPOLIS_424_PRODUCT_VERSION/);
+});
+
 test("PWA icon contract keeps stable production filenames", () => {
   assert.match(index, /href="icon-192\.png"/);
   const icons = Array.isArray(manifest.icons) ? manifest.icons.map(icon => icon.src) : [];
