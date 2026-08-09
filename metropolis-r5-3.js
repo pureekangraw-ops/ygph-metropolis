@@ -204,14 +204,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       document.querySelectorAll(".record .status.cancelled").forEach(status => status.closest(".record")?.remove());
     }
 
-    function hideCancelledControls() {
-      document.querySelector('[data-filter="CANCELLED"]')?.remove();
-      const count = document.getElementById("calCancelled");
-      const tile = count?.closest(".mini");
-      if (tile?.parentElement) tile.parentElement.classList.add("r53-three-stats");
-      tile?.classList.add("hidden");
-    }
-
     function syncLiveCounters() {
       if (typeof state === "undefined" || !state || !Array.isArray(state.calendar)) return;
       const active = selectLiveCalendar(state.calendar, sourceStatusOf, todayKey()).filter(item =>
@@ -264,7 +256,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
 
     function apply() {
       document.documentElement.dataset.metropolisR53 = METROPOLIS_R5_3_VERSION;
-      hideCancelledControls();
       renderLiveSourceLists();
       paintMonthGrid();
       paintQueueCards();
