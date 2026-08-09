@@ -42,6 +42,11 @@ test("post-render extensions use the runtime hook bus instead of stacked render 
   assert.match(flow, /YGPHRuntime\.run\("afterRender"/,
     "FLOW must dispatch the canonical post-render hook");
 
+  const v4 = read("metropolis-v4.js");
+  const installBody = v4.match(/function metropolisInstall\(\)\s*\{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(installBody, /YGPHRuntime\.run\("afterRender"/,
+    "initial Metropolis composition must publish one post-render event");
+
   const r5 = read("metropolis-r5.js");
   assert.match(r5, /YGPHRuntime\.register\("METROPOLIS_R5"[\s\S]*afterRender/,
     "R5 must subscribe to afterRender");
