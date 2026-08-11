@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadProductionRuntime } = require("./helpers/metropolis-runtime-harness.cjs");
 
 const root = path.resolve(__dirname, "..");
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
@@ -22,7 +23,7 @@ test("day cycle runtime exposes pure lifecycle planners", () => {
   assert.equal(typeof runtime.dayControlMarkup, "function");
 });
 
-test("Start Day and End Day produce explicit same-day lifecycle state", () => {
+test("Start Day and End Day produce explicit same-day lifecycle state and close only operational daily state", async t => {
   const { normalizeDayCycle, planStartDay, planEndDay } = loadDayCycle();
   assert.deepEqual(normalizeDayCycle(null), {
     status: "NOT_STARTED",
@@ -46,9 +47,54 @@ test("Start Day and End Day produce explicit same-day lifecycle state", () => {
     startedAt: "2026-08-11T23:20:00.000Z",
     endedAt: "2026-08-12T15:00:00.000Z"
   });
+
+  const runtime = loadProductionRuntime();
+  t.after(() => runtime.close());
+  await runtime.flushRuntime();
+  assert.equal(runtime.scriptErrors.length, 0, JSON.stringify(runtime.scriptErrors));
+  assert.equal(typeof runtime.window.YGPHDayCycle?.startDay, "function");
+  assert.equal(typeof runtime.window.YGPHDayCycle?.endDay, "function");
+
+  runtime.evaluate(`
+    persistAndRender = async function(message, meta) {
+      globalThis.__DAY_CYCLE_PERSIST__ = { message, meta, snapshot: clone(state) };
+    };
+    state.settings.dailyTargetSatang = 55000;
+    state.ride.currentRound = {
+      id: "round-day-cycle-test",
+      status: "ACTIVE",
+      revision: 1,
+      createdAt: nowIso(),
+      updatedAt: nowIso()
+    };
+    state.store.sales.push({ id: "sale-day-cycle-history", date: r55Today(), totalSatang: 12300, status: "COMPLETED" });
+  `);
+
+  await runtime.window.YGPHDayCycle.startDay();
+  let snapshot = runtime.evaluate("clone(state)");
+  const today = runtime.evaluate("r55Today()");
+  assert.equal(snapshot.sync.flow.dayCycle.status, "ACTIVE");
+  assert.equal(snapshot.sync.flow.dayCycle.date, today);
+  assert.equal(snapshot.settings.dailyTargetSatang, 0);
+  assert.equal(snapshot.ride.currentRound.id, "round-day-cycle-test", "Start Day must not auto-close a Ride round");
+  assert.equal(snapshot.store.sales.some(item => item.id === "sale-day-cycle-history"), true, "Start Day must preserve source history");
+
+  runtime.evaluate("state.settings.dailyTargetSatang = 88000");
+  await runtime.window.YGPHDayCycle.endDay([]);
+  snapshot = runtime.evaluate("clone(state)");
+  assert.equal(snapshot.sync.flow.dayCycle.status, "ENDED");
+  assert.equal(snapshot.sync.flow.dayCycle.date, today);
+  assert.equal(snapshot.settings.dailyTargetSatang, 0);
+  assert.equal(snapshot.ride.currentRound, null);
+  const closed = snapshot.ride.rounds.find(item => item.id === "round-day-cycle-test");
+  assert.ok(closed, "End Day must retain the active Ride round in history");
+  assert.equal(closed.status, "ENDED");
+  assert.equal(closed.closeReason, "OWNER_END_DAY");
+  assert.equal(snapshot.store.sales.some(item => item.id === "sale-day-cycle-history"), true, "End Day must preserve source history");
+  assert.equal(runtime.window.__DAY_CYCLE_PERSIST__.meta.eventType, "DAY_ENDED");
 });
 
-test("Day Control replaces duplicate Maintenance Reconcile with three day actions", () => {
+test("Day Control replaces duplicate Maintenance Reconcile with three day actions", async t => {
   const { dayControlMarkup } = loadDayCycle();
   const html = dayControlMarkup({ status: "ACTIVE", date: "2026-08-12" });
   assert.match(html, /1 · Day Control/);
@@ -61,6 +107,16 @@ test("Day Control replaces duplicate Maintenance Reconcile with three day action
   assert.equal((index.match(/id="verifyBalanceBtn"/g) || []).length, 1, "cash reconcile keeps one Settings owner");
   const maintenance = read("metropolis-maintenance.js");
   assert.match(maintenance, /id = "adjustStockBtn"/);
+
+  const runtime = loadProductionRuntime();
+  t.after(() => runtime.close());
+  await runtime.flushRuntime();
+  const document = runtime.window.document;
+  assert.ok(document.getElementById("maintenanceStartDayBtn"));
+  assert.equal(document.getElementById("maintenanceReconcileBtn"), null, "duplicate Maintenance Reconcile must be removed at runtime");
+  assert.equal(document.getElementById("metroDailyTargetEdit")?.parentElement?.id, "maintenanceTargetSlot");
+  assert.equal(document.getElementById("metroEndDayBtn")?.parentElement?.id, "maintenanceEndDaySlot");
+  assert.equal(document.querySelectorAll("#verifyBalanceBtn").length, 1, "cash reconciliation remains at its existing owner");
 });
 
 test("day cycle asset is syntax-gated, loaded last, precached and release-declared", () => {
