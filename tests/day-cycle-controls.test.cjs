@@ -14,6 +14,11 @@ function loadDayCycle() {
   return require(dayCyclePath);
 }
 
+async function unlockRuntimeForTest(runtime) {
+  runtime.evaluate("state = defaultState(); renderAll();");
+  await runtime.flushRuntime();
+}
+
 test("day cycle runtime exposes pure lifecycle planners", () => {
   const runtime = loadDayCycle();
   assert.equal(runtime.DAY_CYCLE_VERSION, "1.0.0");
@@ -52,6 +57,7 @@ test("Start Day and End Day produce explicit same-day lifecycle state and close 
   t.after(() => runtime.close());
   await runtime.flushRuntime();
   assert.equal(runtime.scriptErrors.length, 0, JSON.stringify(runtime.scriptErrors));
+  await unlockRuntimeForTest(runtime);
   assert.equal(typeof runtime.window.YGPHDayCycle?.startDay, "function");
   assert.equal(typeof runtime.window.YGPHDayCycle?.endDay, "function");
 
@@ -111,6 +117,7 @@ test("Day Control replaces duplicate Maintenance Reconcile with three day action
   const runtime = loadProductionRuntime();
   t.after(() => runtime.close());
   await runtime.flushRuntime();
+  await unlockRuntimeForTest(runtime);
   const document = runtime.window.document;
   assert.ok(document.getElementById("maintenanceStartDayBtn"));
   assert.equal(document.getElementById("maintenanceReconcileBtn"), null, "duplicate Maintenance Reconcile must be removed at runtime");
