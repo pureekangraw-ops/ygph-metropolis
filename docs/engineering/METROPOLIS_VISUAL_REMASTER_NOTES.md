@@ -2,13 +2,13 @@
 
 Status: WORKING / VERIFY ON DEVICE BEFORE PRODUCTION-VISUAL CLAIM
 Product line: METROPOLIS 4.2.5
-Visual release: `v4.2.5-20260811-r22-visual-remaster`
+Visual release: `v4.2.5-20260811-r23-metro-visual-system`
 Owner / Final Authority: BIG
-Publication PR: #30
+Publication PR: pending from `feat/metro-visual-system-v2`
 
 ## Purpose
 
-Unify Home, Store, Ride, Ledger, Calendar, Settings/Recovery and shared navigation under one visual language without changing business logic, durable state, money ownership, State Schema, IndexedDB identity/version or Vault format.
+Unify Home, Store, Ride, Ledger, Calendar, Settings/Recovery and shared navigation under Metro Visual System V2 without changing business logic, durable state, money ownership, State Schema, IndexedDB identity/version or Vault format.
 
 The approved direction is a dark premium METROPOLIS system with green as the primary/action color, gold as the secondary/warning color, orange/red reserved for destructive paths and blue for informational state.
 
@@ -45,10 +45,13 @@ Primary tokens live in `metropolis-remaster.css`:
 
 - `--metro-bg`, `--metro-bg-deep` — application background.
 - `--metro-surface`, `--metro-surface-2`, `--metro-surface-3` — component elevation.
+- `--metro-text`, `--metro-text-secondary`, `--metro-muted` — readable content hierarchy on every dark surface.
 - `--metro-primary` / `--metro-primary-2` — METROPOLIS green.
 - `--metro-gold` — secondary/warning.
-- `--metro-danger` / `--metro-danger-deep` — destructive action only.
+- `--metro-danger` — destructive action only.
 - `--metro-info` — informational state/focus.
+- `--metro-store`, `--metro-ride`, `--metro-ledger`, `--metro-calendar` — page identity without changing shared component structure.
+- `--metro-touch` and `--metro-gutter` — minimum touch target and responsive mobile spacing.
 - Shared border, radius, shadow and glow tokens keep cards/buttons visually related.
 
 Every major page is explicitly covered: Home, Store, Ride, Ledger, Calendar, Settings, Report and Sync. The bottom navigation is one shared visual component.
@@ -137,8 +140,26 @@ UTF-8 coverage follows `RELEASE_MANIFEST.json.productionFiles` automatically for
 
 **Prevention:** Exactly one test owns the exact Current generation; older layers verify only their own contracts and ordering.
 
+### VBUG-005 — Legacy light surfaces and final dark text produced unreadable device screens
+
+**Symptom:** Physical-device screenshots from r22 showed a white page app bar with a nearly invisible Thai title, primary hero values that blended into the dark card, a white Ride round panel, and a white Calendar focus/swipe surface carrying light text.
+
+**Root cause:** The app loads several historical visual layers before `metropolis-remaster.css`. Legacy rules still used light backgrounds and some used `!important` with selectors more specific than the r22 remaster rules. In particular, `.metropolis-app-bar` remained light, `.hero .hero-value` overruled the generic remaster value color, `.flow-round-panel` kept its legacy white Ride surface, and `flow-era.css` forced the Calendar focus/swipe cards back to light surfaces.
+
+**Fix:** Rebuild the existing final `metropolis-remaster.css` authority as Metro Visual System V2. Add scoped final rules for `.metropolis-v4 .metropolis-app-bar`, `.metropolis-v4 .hero .hero-value`, `.metropolis-v4 #ridePage .flow-round-panel`, `#calendarPage .flow-calendar-focus` and `#calendarPage .flow-swipe-card`, then apply the same token hierarchy to chrome, cards, actions, records, forms, Calendar and navigation. No additional global CSS/runtime layer was created.
+
+**Prevention:** Device-proven conflicts are regression-locked by selector-level contracts. Removing any scoped final override must fail the remaster test before publication. The r22 screenshots are retained as RED evidence, not as proof of the r23 result.
+
 ## TDD / verification evidence
 
+- r23 RED reproduced the device failures as three contract failures: missing scoped app-bar authority, missing V2 tokens/hierarchy, and the still-r22 release id.
+- Metro Visual System V2 made the cascade and hierarchy contracts GREEN; the release-id test intentionally remained RED until r23 publication metadata was advanced.
+- A second authenticated-shell audit closed nested legacy surfaces in Ride rounds, End-day modal rows, audit summaries, import review, queue metadata and technical pipeline cards. Checkbox/radio sizing is explicitly exempted from the full-width text-field rule.
+- Local CSS/source inspection passed without whitespace errors or forbidden light `background:#fff` declarations in the final authority.
+- `LOCAL_VISUAL_RENDER=BLOCKED_NO_BROWSER`: this environment has no installed Chromium/Chrome/Firefox binary. Do not substitute source inspection for physical-device evidence.
+- Fresh r23 deployment gate: `144/144` tests passed, `0` failed; the complete production JavaScript syntax chain passed; UTF-8 verified `32 production text assets + RELEASE_MANIFEST.json`.
+- Compatibility constants rechecked after the gate: State Schema `4`, IndexedDB `stock-pocket-secure` version `1`, Vault format `1`, and money unit `INTEGER_SATANG`.
+- Historical r22 evidence follows:
 - Initial contract-only RED: new visual tests failed because remaster files/publication wiring did not exist yet.
 - First implementation GREEN reached 141/141 tests, but review caught stale UTF-8 coverage from the log; this was not accepted as final.
 - UTF-8 manifest-derived regression was added and observed RED before the production verifier was changed.
@@ -156,13 +177,13 @@ After deployment/activation, capture and inspect at least:
 5. Calendar — month grid, status signals, selected day, bottom navigation.
 6. Settings/Recovery — title contrast and four-level green/gold/orange/red hierarchy.
 7. Modals — forms, destructive confirmation, focus/disabled states.
-8. Offline/reload — r22 shell still renders with icons/styles.
+8. Offline/reload — r23 shell still renders with icons/styles.
 
-The source/CI state must not be described as pixel-matched to the visual concept until physical-device screenshots are reviewed. Expected implementation target is approximately 85% on first device pass, then refine through visual QA.
+The source/CI state must not be described as pixel-matched or Production Visual Verified until fresh r23 physical-device screenshots are reviewed. Expected implementation target is approximately 85% on first device pass, then refine through visual QA.
 
 ## Current pointer for the next worker
 
-Start from `main` after PR #30 is merged. Read, in order:
+While r23 is in review, start from `feat/metro-visual-system-v2`; after merge, start from `main`. Read, in order:
 
 1. `RELEASE_MANIFEST.json`
 2. `docs/engineering/METROPOLIS_VISUAL_REMASTER_NOTES.md`

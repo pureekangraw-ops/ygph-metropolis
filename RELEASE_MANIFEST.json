@@ -1,9 +1,9 @@
 {
-  "release": "4.2.5-visual-remaster",
+  "release": "4.2.5-metro-visual-system",
   "product": "YGPH METROPOLIS",
-  "tagline": "METROPOLIS by YGPH Visual System",
+  "tagline": "METRO Visual System V2",
   "releaseDate": "2026-08-11",
-  "sourceBaseCommit": "d4dec37",
+  "sourceBaseCommit": "b8d7935",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -53,6 +53,8 @@
     "destructive reset requires typed confirmation and database deletion read-back before success",
     "maintenance logic, browser reset adapter, report adapter and UI styles are separate production modules to reduce future rewiring",
     "visual remaster logic and CSS are additive UI-only modules loaded after Maintenance and do not write durable state",
+    "Metro Visual System V2 resolves legacy light/dark cascade conflicts through the existing final remaster authority instead of adding another global CSS layer",
+    "scoped final rules keep the app bar, primary hero value, Ride round panel, Calendar focus panel and Calendar swipe card readable on the dark shell",
     "Home, Store, Ride, Ledger, Calendar, Settings and Recovery share one dark token system and one icon stroke/grid contract",
     "visual remaster retains State Schema 4, IndexedDB version 1, Vault format 1 and all existing money ownership semantics",
     "production manifest, Cloudflare allowlist and offline shell are regression-locked against drift",
@@ -78,7 +80,7 @@
     "metropolis-remaster.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.5-20260811-r22-visual-remaster",
+    "releaseId": "v4.2.5-20260811-r23-metro-visual-system",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -88,13 +90,13 @@
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
     "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js"],
-    "note": "METROPOLIS 4.2.5 r22 remasters the full app visual system and icon family after the r21 Maintenance Center. It is UI-only: durable data, trusted-device unlock, Vault, State Schema and money ownership semantics remain unchanged."
+    "note": "METROPOLIS 4.2.5 r23 publishes Metro Visual System V2 through the existing final remaster layer. It fixes device-proven light/dark cascade conflicts and is presentation-only: durable data, trusted-device unlock, Vault, State Schema and money ownership semantics remain unchanged."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "FINAL_GATE_REQUIRED",
-    "syntax": "FINAL_GATE_REQUIRED",
-    "utf8": "FINAL_GATE_REQUIRED",
+    "nodeTests": "144/144 PASS",
+    "syntax": "PASS — all production JavaScript parsed by node --check",
+    "utf8": "PASS — 32 production text assets + RELEASE_MANIFEST.json",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
