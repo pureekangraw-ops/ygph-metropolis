@@ -23,6 +23,13 @@ function loadVisualCore() {
   return require(visualPath);
 }
 
+function cssRule(source, selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = source.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 's'));
+  assert.ok(match, `missing CSS rule: ${selector}`);
+  return match[1];
+}
+
 test('full-app remaster publishes one coherent icon registry', () => {
   assert.equal(fs.existsSync(visualPath), true, 'missing metropolis-remaster-core.js');
   const core = loadVisualCore();
@@ -70,6 +77,90 @@ test('remaster stylesheet applies one dark visual system to every major app surf
   assert.doesNotMatch(css, /background:\s*#fff\b/i);
 });
 
+test('Metro V2 overrides every device-proven light/dark cascade conflict', () => {
+  const css = read(cssPath);
+  const appBar = cssRule(css, '.metropolis-v4 .metropolis-app-bar');
+  const heroValue = cssRule(css, '.metropolis-v4 .hero .hero-value');
+  const rideRound = cssRule(css, '.metropolis-v4 #ridePage .flow-round-panel');
+  const rideRoundStat = cssRule(css, '#ridePage .flow-round-grid>div');
+  const latestCashIn = cssRule(css, '#flowLatestCashList .flow35-cash-in');
+  const latestCashOut = cssRule(css, '#flowLatestCashList .flow35-cash-out');
+  const calendarFocus = cssRule(css, '#calendarPage .flow-calendar-focus');
+  const calendarSwipe = cssRule(css, '#calendarPage .flow-swipe-card');
+  const gateStatus = cssRule(css, '.gate .status-text');
+  const gateRestore = cssRule(css, '.gate .text-btn');
+
+  assert.match(appBar, /background:[^;]*var\(--metro-surface/i);
+  assert.match(appBar, /color:var\(--metro-text\)!important/i);
+  assert.match(heroValue, /color:var\(--metro-text\)!important/i);
+  assert.match(rideRound, /background:[^;]*var\(--metro-surface/i);
+  assert.match(rideRound, /color:var\(--metro-text\)!important/i);
+  assert.match(rideRoundStat, /background:[^;]*var\(--metro-surface/i);
+  assert.match(latestCashIn, /background:[^;]*var\(--metro-surface[^;]*!important/i);
+  assert.match(latestCashOut, /background:[^;]*var\(--metro-surface[^;]*!important/i);
+  assert.match(calendarFocus, /background:[^;]*var\(--metro-surface[^;]*!important/i);
+  assert.match(calendarFocus, /color:var\(--metro-text\)!important/i);
+  assert.match(calendarSwipe, /background:[^;]*var\(--metro-surface[^;]*!important/i);
+  assert.match(gateStatus, /color:var\(--metro-danger\)!important/i);
+  assert.match(gateRestore, /color:var\(--metro-info\)!important/i);
+});
+
+test('Metro V2 defines one mobile hierarchy across chrome, pages, actions, records and calendar', () => {
+  const css = read(cssPath);
+  for (const token of [
+    '--metro-text-secondary', '--metro-store', '--metro-ride',
+    '--metro-ledger', '--metro-calendar', '--metro-touch'
+  ]) assert.match(css, new RegExp(token.replace('--', '\\-\\-')));
+
+  for (const selector of [
+    '.metropolis-v4 .topbar',
+    '.metropolis-v4 .metropolis-app-bar',
+    '.metropolis-v4 .hero .hero-value',
+    '.metropolis-v4 .action-row',
+    '.metropolis-v4 .content-card',
+    '#calendarPage .flow-calendar-focus',
+    '#calendarPage .day-cell',
+    '.metropolis-v4 .bottom-nav'
+  ]) assert.match(css, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  for (const selector of [
+    '.metropolis-v4 .hub-mini',
+    '.metropolis-v4 .flow-audit-summary>div',
+    '.metropolis-v4 .flow-review-meta',
+    '.metropolis-v4 .flow35-ride-daily-summary>div',
+    '.metropolis-v4 .flow35-report-summary span',
+    '.metropolis-v4 .flow35-round-history',
+    '.metropolis-v4 .r52-schedule-preview',
+    '.metropolis-v4 .r52-preview-list>span',
+    '.metropolis-v4 .metro-end-stat',
+    '.metropolis-v4 .metro-end-item',
+    '.metropolis-v4 .source-badge',
+    '.metropolis-v4 .meta',
+    '.metropolis-v4 .arch-role',
+    '.metropolis-v4 .pipe-step',
+    '.metropolis-v4 .scope-chip',
+    '.metropolis-v4 .change-card',
+    '.metropolis-v4 .flow-node'
+  ]) {
+    const rule = cssRule(css, selector);
+    assert.match(rule, /background:[^;]*var\(--metro-surface/i, `${selector} must close its legacy light surface`);
+    assert.match(rule, /color:var\(--metro-text\)!important/i, `${selector} must keep dark-theme copy readable`);
+  }
+
+  const checkbox = cssRule(css, '.metropolis-v4 input[type="checkbox"]');
+  assert.match(checkbox, /width:auto!important/i, 'checkboxes must not inherit full-width text-field layout');
+  const calendarSwipeNav = cssRule(css, '#calendarPage .flow-swipe-nav button');
+  assert.match(calendarSwipeNav, /min-width:var\(--metro-touch\)!important/i, 'Calendar swipe navigation must keep a 44px-wide touch target');
+  const maintenanceThree = cssRule(css, '#maintenanceRecoveryCard .maintenance-three button');
+  const maintenanceChoice = cssRule(css, '.metropolis-v4 .maintenance-choice-grid button');
+  assert.match(maintenanceThree, /min-height:var\(--metro-touch\)!important/i, 'Partial Reset controls must keep a 44px touch target');
+  assert.match(maintenanceChoice, /min-height:var\(--metro-touch\)!important/i, 'Reconcile choices must keep a 44px touch target');
+  assert.doesNotMatch(css, /\.metropolis-v4 \.bottom-nav \.nav-btn(?: span)?\{[^}]*font-size:\.5\drem/i, 'mobile navigation labels must not shrink below the readable V2 size');
+
+  assert.match(css, /@media\s*\(max-width:420px\)/);
+  assert.match(css, /min-height:var\(--metro-touch\)/);
+});
+
 test('visual remaster is wired atomically into loader, cloudflare, syntax, offline shell, and manifest', () => {
   const loader = read(loaderPath);
   const allowlist = read(allowlistPath);
@@ -86,7 +177,7 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
   for (const script of ['metropolis-remaster-core.js', 'metropolis-remaster.js']) {
     assert.match(pkg, new RegExp(`node --check ${script.replaceAll('.', '\\.')}`));
   }
-  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r22-visual-remaster');
+  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r23-metro-visual-system');
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster-core.js') > manifest.runtimeOrder.indexOf('metropolis-maintenance-report.js'));
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster.js') > manifest.runtimeOrder.indexOf('metropolis-remaster-core.js'));
 });
