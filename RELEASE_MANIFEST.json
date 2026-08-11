@@ -1,9 +1,9 @@
 {
-  "release": "4.2.5-maintenance-center",
+  "release": "4.2.5-visual-remaster",
   "product": "YGPH METROPOLIS",
   "tagline": "METROPOLIS by YGPH Visual System",
   "releaseDate": "2026-08-11",
-  "sourceBaseCommit": "0291119",
+  "sourceBaseCommit": "d4dec37",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
   "database": {
@@ -41,8 +41,8 @@
     "daily target progress is derived from current-day Store sales plus Ride jobs and does not create competing money truth",
     "end-day obligation selection previews the resulting balance without mutation; stale or VERIFY items remain disabled",
     "confirmed end-day obligation payments use existing Ledger and Calendar mutation paths and one durable commit",
-    "FLOW_ICONS is the shared geometry authority for METROPOLIS core and utility glyphs",
-    "index.html owns the single five-destination bottom navigation source; METROPOLIS v4 only hydrates icons and syncs active state",
+    "FLOW_ICONS remains the legacy shared geometry source while the remaster layer synchronizes its production glyphs from one new 24px icon authority",
+    "index.html owns the single five-destination bottom navigation source; the remaster hydrates icons without creating a competing navigation tree",
     "METROPOLIS is the primary visible product name and YGPH — Yggdrasil Personal Helper is its signature",
     "manual stock adjustment records before, delta, after, reason, actor and time without creating an automatic Ledger transaction",
     "manual stock adjustment history lives in state.store.adjustments without changing state schema or IndexedDB version",
@@ -52,7 +52,9 @@
     "Full Local Cleanup additionally removes METROPOLIS app/meta caches and unregisters the current service worker, and is blocked while offline",
     "destructive reset requires typed confirmation and database deletion read-back before success",
     "maintenance logic, browser reset adapter, report adapter and UI styles are separate production modules to reduce future rewiring",
-    "finalization and maintenance rollout do not change Vault format, state schema, database identity, or existing money ownership semantics",
+    "visual remaster logic and CSS are additive UI-only modules loaded after Maintenance and do not write durable state",
+    "Home, Store, Ride, Ledger, Calendar, Settings and Recovery share one dark token system and one icon stroke/grid contract",
+    "visual remaster retains State Schema 4, IndexedDB version 1, Vault format 1 and all existing money ownership semantics",
     "production manifest, Cloudflare allowlist and offline shell are regression-locked against drift",
     "every production UI change advances the service-worker cache/release generation"
   ],
@@ -71,10 +73,12 @@
     "metropolis-r5-5.js",
     "metropolis-maintenance-core.js",
     "metropolis-maintenance.js",
-    "metropolis-maintenance-report.js"
+    "metropolis-maintenance-report.js",
+    "metropolis-remaster-core.js",
+    "metropolis-remaster.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.5-20260811-r21-maintenance-center",
+    "releaseId": "v4.2.5-20260811-r22-visual-remaster",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -83,8 +87,8 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js"],
-    "note": "METROPOLIS 4.2.5 maintenance center adds auditable stock reconciliation, safe partial resets, typed-confirmation Factory Reset, Full Local Cleanup, and an isolated report adapter. Trusted-device auto-unlock and all existing money/data ownership semantics remain unchanged."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js"],
+    "note": "METROPOLIS 4.2.5 r22 remasters the full app visual system and icon family after the r21 Maintenance Center. It is UI-only: durable data, trusted-device unlock, Vault, State Schema and money ownership semantics remain unchanged."
   },
   "validation": {
     "command": "npm run deploy:gate",
@@ -93,7 +97,7 @@
     "utf8": "FINAL_GATE_REQUIRED",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
-    "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY"
+    "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
   },
   "productionFiles": [
     { "path": "index.html" },
@@ -109,6 +113,7 @@
     { "path": "metropolis-r5-4.css" },
     { "path": "metropolis-r5-5.css" },
     { "path": "metropolis-maintenance.css" },
+    { "path": "metropolis-remaster.css" },
     { "path": "sw-bootstrap.js" },
     { "path": "highway-gate.js" },
     { "path": "app.js" },
@@ -124,6 +129,8 @@
     { "path": "metropolis-maintenance-core.js" },
     { "path": "metropolis-maintenance.js" },
     { "path": "metropolis-maintenance-report.js" },
+    { "path": "metropolis-remaster-core.js" },
+    { "path": "metropolis-remaster.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }

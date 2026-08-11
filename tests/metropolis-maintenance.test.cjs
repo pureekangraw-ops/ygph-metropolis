@@ -214,16 +214,21 @@ test('cloudflare allowlist and syntax gate include every maintenance production 
   }
 });
 
-test('offline shell and release manifest publish maintenance center as r21', () => {
+test('maintenance assets remain published before later visual layers', () => {
   const sw = readSource(swPath);
   const manifest = JSON.parse(readSource(manifestPath));
-  assert.match(sw, /v4\.2\.5-20260811-r21-maintenance-center/);
+  const releaseMatch = sw.match(/const RELEASE_ID = "([^"]+)"/);
+  assert.ok(releaseMatch, 'service worker release id missing');
+  assert.equal(manifest.serviceWorker.releaseId, releaseMatch[1]);
+  assert.match(manifest.serviceWorker.releaseId, /^v4\.2\.5-/);
   for (const asset of ['metropolis-maintenance.css', 'metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js']) {
     assert.match(sw, new RegExp(`"${asset.replaceAll('.', '\\.')}"`));
     assert.ok(manifest.productionFiles.some(item => item.path === asset), `manifest productionFiles missing ${asset}`);
   }
-  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r21-maintenance-center');
-  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance-core.js'));
-  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance.js'));
-  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance-report.js'));
+  const order = ['metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js'];
+  const positions = order.map(name => manifest.runtimeOrder.indexOf(name));
+  assert.ok(positions.every(position => position >= 0), `manifest missing maintenance runtime: ${positions}`);
+  assert.ok(positions.every((position, index) => index === 0 || position > positions[index - 1]), `maintenance runtime order changed: ${positions}`);
+  const remasterPosition = manifest.runtimeOrder.indexOf('metropolis-remaster-core.js');
+  if (remasterPosition >= 0) assert.ok(remasterPosition > positions.at(-1), 'visual remaster must load after maintenance report');
 });
