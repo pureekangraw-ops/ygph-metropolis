@@ -104,15 +104,27 @@ function defaultAdjustmentDate(record) {
   return String(record?.at || record?.createdAt || record?.date || "").slice(0, 10);
 }
 
-function stockAdjustmentDeltaAt(adjustments = [], endDate, dateOf = defaultAdjustmentDate) {
+function latestStockAdjustmentAt(adjustments = [], endDate, dateOf = defaultAdjustmentDate) {
   const end = String(endDate || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) throw new Error("วันสิ้นสุดรายงานไม่ถูกต้อง");
-  return (Array.isArray(adjustments) ? adjustments : []).reduce((sum, item) => {
-    const delta = Number(item?.adjustmentQty || 0);
-    if (!Number.isSafeInteger(delta)) throw new Error("ประวัติปรับสต็อกมีจำนวนไม่ถูกต้อง");
-    const date = String(dateOf(item) || "").slice(0, 10);
-    return date && date <= end ? sum + delta : sum;
-  }, 0);
+  return (Array.isArray(adjustments) ? adjustments : [])
+    .filter(item => {
+      const date = String(dateOf(item) || "").slice(0, 10);
+      return date && date <= end;
+    })
+    .sort((a, b) => String(a?.at || a?.createdAt || a?.date || "").localeCompare(String(b?.at || b?.createdAt || b?.date || "")))
+    .at(-1) || null;
+}
+
+function stockReportCorrectionAt(adjustments = [], endDate, baseQtyAtDate, dateOf = defaultAdjustmentDate) {
+  if (typeof baseQtyAtDate !== "function") throw new Error("ต้องมีตัวอ่านสต็อกฐานตามวันที่");
+  const anchor = latestStockAdjustmentAt(adjustments, endDate, dateOf);
+  if (!anchor) return 0;
+  const anchorDate = String(dateOf(anchor) || "").slice(0, 10);
+  const baseQty = Number(baseQtyAtDate(anchorDate));
+  if (!Number.isSafeInteger(baseQty) || baseQty < 0) throw new Error("สต็อกฐานของรายงานไม่ถูกต้อง");
+  const afterQty = integerQuantity(anchor.afterQty, { allowZero: true, label: "สต็อกหลัง Adjustment" });
+  return afterQty - baseQty;
 }
 
 function planPartialReset({ domain, state } = {}) {
@@ -162,7 +174,8 @@ const api = Object.freeze({
   integerQuantity,
   planStockAdjustment,
   applyStockAdjustmentToState,
-  stockAdjustmentDeltaAt,
+  latestStockAdjustmentAt,
+  stockReportCorrectionAt,
   planPartialReset,
   isFactoryConfirmation,
   isFullCleanupConfirmation,
