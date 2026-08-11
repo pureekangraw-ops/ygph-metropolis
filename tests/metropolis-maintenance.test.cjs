@@ -5,7 +5,6 @@ const path = require('node:path');
 
 const corePath = path.join(__dirname, '..', 'metropolis-maintenance-core.js');
 const runtimePath = path.join(__dirname, '..', 'metropolis-maintenance.js');
-const appPath = path.join(__dirname, '..', 'app.js');
 
 function loadCore() {
   delete require.cache[require.resolve(corePath)];
@@ -121,6 +120,16 @@ test('maintenance cache targeting touches only METROPOLIS app generations and me
   ]), ['ygph-metropolis-app-v4.2.5-r20', 'ygph-metropolis-meta', 'ygph-metropolis-app-v4.2.4-r19']);
 });
 
+test('stock adjustment report delta includes only movements at or before report end', () => {
+  const core = loadCore();
+  const adjustments = [
+    { at: '2026-08-10T01:00:00.000Z', adjustmentQty: 3 },
+    { at: '2026-08-11T01:00:00.000Z', adjustmentQty: -1 },
+    { at: '2026-08-12T01:00:00.000Z', adjustmentQty: 5 }
+  ];
+  assert.equal(core.stockAdjustmentDeltaAt(adjustments, '2026-08-11'), 2);
+});
+
 test('browser runtime routes safe mutations through durable commit and destructive reset through local storage adapters', () => {
   const source = readSource(runtimePath);
   assert.match(source, /persistAndRender/);
@@ -132,14 +141,8 @@ test('browser runtime routes safe mutations through durable commit and destructi
   assert.match(source, /unregister\(\)/);
   assert.match(source, /Recovery & Reset/);
   assert.match(source, /adjustStockBtn/);
+  assert.match(source, /afterReport/);
+  assert.match(source, /stockAdjustmentDeltaAt/);
   assert.doesNotMatch(source, /ledger\.transactions\.push/);
   assert.doesNotMatch(source, /addTransaction\s*\(/);
-});
-
-test('app integration normalizes stock adjustments and includes their deltas in historical stock reports', () => {
-  const source = readSource(appPath);
-  assert.match(source, /value\.store\.adjustments\s*=\s*Array\.isArray/);
-  assert.match(source, /state\.store\.adjustments/);
-  assert.match(source, /adjustmentQty/);
-  assert.match(source, /STOCK_ADJUSTMENT/);
 });
