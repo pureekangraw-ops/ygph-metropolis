@@ -28,6 +28,8 @@ Workflow `Phase 1 Deploy Gate` ทำงานแบบนี้:
 - ตอน merge/push เข้า `main`: ตรวจ gate อีกครั้ง และถ้าผ่านจึง Deploy YGPH METROPOLIS ไป Cloudflare
 - ถ้า gate ไม่ผ่าน งาน Deploy จะไม่เดินต่อ
 
+เจ้าของการ Deploy ทางการมีทางเดียวคือ GitHub Actions จากไฟล์ `.github/workflows/phase1-deploy-gate.yml` ส่วน Git integration ใน Cloudflare `Settings > Builds` ต้องคงสถานะ Disconnect เพื่อไม่ให้ Workers Builds สร้างงานซ้ำหรือแย่งกัน Deploy จาก commit เดียวกัน
+
 ดังนั้นอย่าดูแค่ว่าไฟล์เข้า `main` แล้ว ให้ตรวจผล workflow/deploy ด้วยเมื่อทำได้
 
 ## ถ้าอัปด้วยวิธีอื่น
