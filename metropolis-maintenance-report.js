@@ -2,7 +2,7 @@
 
 /* METROPOLIS 4.2.5 — maintenance report seam */
 
-const METROPOLIS_MAINTENANCE_REPORT_VERSION = "1.0.0";
+const METROPOLIS_MAINTENANCE_REPORT_VERSION = "1.0.1";
 
 function maintenanceReportDate(item) {
   try {
@@ -32,26 +32,44 @@ function maintenanceUpdateReportDom(stockQty, correctionQty) {
   }
 }
 
-function applyMaintenanceStockToReport(context = {}) {
+function applyMaintenanceStockToReport(context = {}, dependencies = {}) {
   const report = context.report;
-  if (!report?.snapshot || !report.end || report.__maintenanceStockAnchorApplied) return report;
-  const adjustments = Array.isArray(state?.store?.adjustments) ? state.store.adjustments : [];
-  const correction = globalThis.YGPHMaintenanceCore.stockReportCorrectionAt(
+  if (!report?.snapshot || !report.end) return report;
+
+  const core = dependencies.core || globalThis.YGPHMaintenanceCore;
+  const targetState = dependencies.state || (typeof state !== "undefined" ? state : null);
+  const stockAtFn = dependencies.stockAtFn || (date => stockAt(date));
+  const dateOf = dependencies.dateOf || maintenanceReportDate;
+  const syncDomFn = dependencies.syncDomFn || maintenanceUpdateReportDom;
+  if (!core?.stockReportCorrectionAt) throw new Error("Maintenance Core ยังไม่พร้อมสำหรับ Report Adapter");
+
+  if (report.__maintenanceStockAnchorApplied) {
+    const correction = Number(report.store?.manualAdjustmentCorrectionQty || 0);
+    syncDomFn(Number(report.snapshot.stockQty || 0), correction);
+    return report;
+  }
+
+  const adjustments = Array.isArray(targetState?.store?.adjustments) ? targetState.store.adjustments : [];
+  const correction = core.stockReportCorrectionAt(
     adjustments,
     report.end,
-    date => stockAt(date),
-    maintenanceReportDate
+    stockAtFn,
+    dateOf
   );
   report.store ||= {};
   report.store.manualAdjustmentCorrectionQty = correction;
   report.snapshot.stockQty = Math.max(0, Number(report.snapshot.stockQty || 0) + correction);
   Object.defineProperty(report, "__maintenanceStockAnchorApplied", { value: true, enumerable: false, configurable: false });
-  maintenanceUpdateReportDom(report.snapshot.stockQty, correction);
+  syncDomFn(report.snapshot.stockQty, correction);
   return report;
 }
 
 if (typeof module === "object" && module.exports) {
-  module.exports = { METROPOLIS_MAINTENANCE_REPORT_VERSION };
+  module.exports = {
+    METROPOLIS_MAINTENANCE_REPORT_VERSION,
+    maintenanceReportDate,
+    applyMaintenanceStockToReport
+  };
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
