@@ -18,6 +18,7 @@ const FACTORY_CONFIRMATION = "RESET";
 const FULL_CLEANUP_CONFIRMATION = "RESET ALL";
 const APP_CACHE_PREFIX = "ygph-metropolis-app-";
 const META_CACHE = "ygph-metropolis-meta";
+const LEGACY_CACHE_PREFIXES = Object.freeze(["ygph-metropolis-0.1.0-preview."]);
 
 function copy(value) {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -159,7 +160,12 @@ function isFullCleanupConfirmation(value) {
 }
 
 function maintenanceCacheTargets(cacheNames = []) {
-  return (Array.isArray(cacheNames) ? cacheNames : []).filter(name => String(name).startsWith(APP_CACHE_PREFIX) || name === META_CACHE);
+  return (Array.isArray(cacheNames) ? cacheNames : []).filter(name => {
+    const key = String(name);
+    return key.startsWith(APP_CACHE_PREFIX)
+      || key === META_CACHE
+      || LEGACY_CACHE_PREFIXES.some(prefix => key.startsWith(prefix));
+  });
 }
 
 const api = Object.freeze({
@@ -171,6 +177,7 @@ const api = Object.freeze({
   FULL_CLEANUP_CONFIRMATION,
   APP_CACHE_PREFIX,
   META_CACHE,
+  LEGACY_CACHE_PREFIXES,
   integerQuantity,
   planStockAdjustment,
   applyStockAdjustmentToState,
