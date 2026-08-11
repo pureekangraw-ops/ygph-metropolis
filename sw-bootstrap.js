@@ -40,6 +40,7 @@
     loadStylesheet("metropolis-remaster.css", "data-metropolis-remaster");
     loadScript("metropolis-remaster-core.js", "data-metropolis-remaster-core");
     loadScript("metropolis-remaster.js", "data-metropolis-remaster-runtime");
+    loadScript("metropolis-day-cycle.js", "data-metropolis-day-cycle");
   }
 
   loadMetropolisLayers();

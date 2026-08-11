@@ -41,6 +41,9 @@
     "daily target progress is derived from current-day Store sales plus Ride jobs and does not create competing money truth",
     "end-day obligation selection previews the resulting balance without mutation; stale or VERIFY items remain disabled",
     "confirmed end-day obligation payments use existing Ledger and Calendar mutation paths and one durable commit",
+    "manual Start Day and End Day persist state.sync.flow.dayCycle without changing State Schema 4 or deleting source history",
+    "End Day always creates a durable closure even when no obligation payment is selected and safely closes an active Ride round",
+    "Maintenance no longer exposes duplicate Reconcile; stock and cash corrections remain with their existing source-specific owners",
     "FLOW_ICONS remains the legacy shared geometry source while the remaster layer synchronizes its production glyphs from one new 24px icon authority",
     "index.html owns the single five-destination bottom navigation source; the remaster hydrates icons without creating a competing navigation tree",
     "METROPOLIS is the primary visible product name and YGPH — Yggdrasil Personal Helper is its signature",
@@ -83,7 +86,8 @@
     "metropolis-maintenance.js",
     "metropolis-maintenance-report.js",
     "metropolis-remaster-core.js",
-    "metropolis-remaster.js"
+    "metropolis-remaster.js",
+    "metropolis-day-cycle.js"
   ],
   "rootRegressionTests": [
     "tests/runtime-composition.test.cjs",
@@ -96,7 +100,7 @@
     "tests/durable-ui-guard.test.cjs"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.6-20260811-r24-root-stabilization",
+    "releaseId": "v4.2.6-20260812-r25-day-cycle-control",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -105,14 +109,14 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js"],
-    "note": "METROPOLIS 4.2.6 r24 stabilizes shared runtime, Calendar, durable-write, capacity, stock-evidence and report roots while retaining State Schema 4, IndexedDB version 1, Vault format 1 and the existing money authorities."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js", "metropolis-day-cycle.js"],
+    "note": "METROPOLIS 4.2.6 r25 adds durable manual day-cycle control while retaining State Schema 4, IndexedDB version 1, Vault format 1 and existing money/source authorities."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "172/172 PASS",
+    "nodeTests": "177/177 PASS",
     "syntax": "PASS — all production JavaScript parsed by node --check",
-    "utf8": "PASS — 32 production text assets + RELEASE_MANIFEST.json",
+    "utf8": "PASS — 33 production text assets + RELEASE_MANIFEST.json",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
@@ -149,6 +153,7 @@
     { "path": "metropolis-maintenance-report.js" },
     { "path": "metropolis-remaster-core.js" },
     { "path": "metropolis-remaster.js" },
+    { "path": "metropolis-day-cycle.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }
