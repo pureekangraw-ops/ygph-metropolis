@@ -2,7 +2,7 @@
 
 /* METROPOLIS 4.2.5 — maintenance/recovery browser adapter */
 
-const METROPOLIS_MAINTENANCE_RUNTIME_VERSION = "1.0.0";
+const METROPOLIS_MAINTENANCE_RUNTIME_VERSION = "1.0.1";
 
 function maintenanceCore() {
   if (!globalThis.YGPHMaintenanceCore) throw new Error("Maintenance Core ยังไม่พร้อม");
@@ -195,11 +195,11 @@ function requestDatabaseDeletion(timeoutMs = 8000) {
       clearTimeout(timer);
       callback(value);
     };
-    const timer = setTimeout(finish(reject), timeoutMs, new Error("ลบฐานข้อมูลนานเกินกำหนด อาจมีอีกหน้าต่างเปิดค้าง"));
+    const timer = setTimeout(() => finish(reject)(new Error("ลบฐานข้อมูลนานเกินกำหนด อาจมีอีกหน้าต่างเปิดค้าง")), timeoutMs);
     const request = indexedDB.deleteDatabase(DB_NAME);
-    request.onsuccess = finish(resolve);
-    request.onerror = finish(reject);
-    request.onblocked = finish(reject).bind(null, new Error("ลบฐานข้อมูลไม่ได้ เพราะยังมีอีกหน้าต่างของแอปเปิดอยู่"));
+    request.onsuccess = () => finish(resolve)();
+    request.onerror = () => finish(reject)(request.error || new Error("ลบฐานข้อมูลไม่สำเร็จ"));
+    request.onblocked = () => finish(reject)(new Error("ลบฐานข้อมูลไม่ได้ เพราะยังมีอีกหน้าต่างของแอปเปิดอยู่"));
   });
 }
 
