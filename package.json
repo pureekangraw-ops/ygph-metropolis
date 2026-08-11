@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "check:syntax": "node --check sw-bootstrap.js && node --check highway-gate.js && node --check app.js && node --check flow-era.js && node --check flow-era-3.5.js && node --check metropolis-v4.js && node --check metropolis-r5.js && node --check metropolis-r5-1.js && node --check metropolis-r5-2.js && node --check metropolis-r5-3.js && node --check metropolis-r5-4.js && node --check metropolis-r5-5.js && node --check sw.js",
+    "check:syntax": "node --check sw-bootstrap.js && node --check highway-gate.js && node --check app.js && node --check flow-era.js && node --check flow-era-3.5.js && node --check metropolis-v4.js && node --check metropolis-r5.js && node --check metropolis-r5-1.js && node --check metropolis-r5-2.js && node --check metropolis-r5-3.js && node --check metropolis-r5-4.js && node --check metropolis-r5-5.js && node --check metropolis-maintenance-core.js && node --check metropolis-maintenance.js && node --check metropolis-maintenance-report.js && node --check sw.js",
     "check:utf8": "node scripts/verify-utf8.mjs",
     "deploy:gate": "npm test && npm run check:syntax && npm run check:utf8"
   },
