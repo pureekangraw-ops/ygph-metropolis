@@ -33,6 +33,10 @@
     loadScript("metropolis-r5-4.js", "data-metropolis-r5-4");
     loadStylesheet("metropolis-r5-5.css", "data-metropolis-r5-5");
     loadScript("metropolis-r5-5.js", "data-metropolis-r5-5");
+    loadStylesheet("metropolis-maintenance.css", "data-metropolis-maintenance");
+    loadScript("metropolis-maintenance-core.js", "data-metropolis-maintenance-core");
+    loadScript("metropolis-maintenance.js", "data-metropolis-maintenance-runtime");
+    loadScript("metropolis-maintenance-report.js", "data-metropolis-maintenance-report");
   }
 
   loadMetropolisLayers();
