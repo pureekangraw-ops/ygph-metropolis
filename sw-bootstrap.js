@@ -37,6 +37,9 @@
     loadScript("metropolis-maintenance-core.js", "data-metropolis-maintenance-core");
     loadScript("metropolis-maintenance.js", "data-metropolis-maintenance-runtime");
     loadScript("metropolis-maintenance-report.js", "data-metropolis-maintenance-report");
+    loadStylesheet("metropolis-remaster.css", "data-metropolis-remaster");
+    loadScript("metropolis-remaster-core.js", "data-metropolis-remaster-core");
+    loadScript("metropolis-remaster.js", "data-metropolis-remaster-runtime");
   }
 
   loadMetropolisLayers();
