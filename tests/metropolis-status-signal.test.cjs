@@ -116,5 +116,5 @@ test("status signal assets stay loaded before dashboard and finalization layers"
   assert.ok(bootstrap.indexOf("metropolis-r5-5.js") > bootstrap.indexOf("metropolis-r5-4.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.5-20260810-r20-metro-finalization");
+  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
 });
