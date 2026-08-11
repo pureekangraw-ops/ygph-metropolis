@@ -65,6 +65,14 @@ test("installment manager supports one, future, payment holiday, and early settl
   assert.match(runtimeSource, /payment:early-close/);
 });
 
+test("installment manager exposes one named API and does not rewrite queue action DOM", () => {
+  assert.match(runtimeSource, /globalThis\.YGPHMetropolisSchedule\s*=\s*Object\.freeze/);
+  assert.match(runtimeSource, /isManagedQueue/);
+  assert.match(runtimeSource, /openManager\(queueId\)/);
+  assert.doesNotMatch(runtimeSource, /querySelectorAll\([^\n]*data-move/);
+  assert.doesNotMatch(runtimeSource, /decorateInstallmentActions/);
+});
+
 test("4.2 reconciliation treats installment records as authoritative", () => {
   assert.equal(typeof runtime.derivePerInstallmentSchedule, "function", "4.2 schedule runtime must export derivePerInstallmentSchedule");
   const obligation = {
@@ -108,5 +116,6 @@ test("4.2 assets stay loaded before the additive status, dashboard, and finaliza
   assert.ok(bootstrap.indexOf("metropolis-r5-5.js") > bootstrap.indexOf("metropolis-r5-4.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.css"));
-  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
+  assert.equal(sw.RELEASE_ID, JSON.parse(read("RELEASE_MANIFEST.json")).serviceWorker.releaseId);
+  assert.match(sw.RELEASE_ID, /^v4\.2\.6-/);
 });

@@ -1,6 +1,8 @@
 "use strict";
 
-/* METROPOLIS 4.2.5 — maintenance/recovery pure rules */
+/* METROPOLIS 4.2.6 — maintenance/recovery pure rules */
+
+(() => {
 
 const MAINTENANCE_CORE_VERSION = "1.0.0";
 const DEFAULT_MAX_QUANTITY = 1_000_000;
@@ -85,7 +87,7 @@ function planStockAdjustment({
     adjustmentQty,
     afterQty,
     affectsLedger: false,
-    affectsStockValue: false
+    affectsValue: false
   };
 }
 
@@ -168,6 +170,29 @@ function maintenanceCacheTargets(cacheNames = []) {
   });
 }
 
+function classifyStorageCapacity({
+  usage,
+  quota,
+  currentVaultBytes = 0,
+  nextVaultBytes = currentVaultBytes
+} = {}) {
+  const supported = Number.isFinite(usage) && Number.isFinite(quota) && quota > 0;
+  if (!supported) {
+    return { supported: false, ratio: null, projectedRatio: null, level: "UNKNOWN", blocksWrite: false };
+  }
+  const ratio = Math.max(0, usage / quota);
+  const projectedUsage = Math.max(0, usage + Math.max(0, nextVaultBytes - currentVaultBytes));
+  const projectedRatio = projectedUsage / quota;
+  const level = projectedRatio >= 0.95
+    ? "CRITICAL"
+    : projectedRatio >= 0.85
+      ? "WARNING"
+      : projectedRatio >= 0.70
+        ? "WATCH"
+        : "NORMAL";
+  return { supported: true, ratio, projectedRatio, level, blocksWrite: projectedUsage >= quota };
+}
+
 const api = Object.freeze({
   MAINTENANCE_CORE_VERSION,
   DEFAULT_MAX_QUANTITY,
@@ -186,8 +211,11 @@ const api = Object.freeze({
   planPartialReset,
   isFactoryConfirmation,
   isFullCleanupConfirmation,
-  maintenanceCacheTargets
+  maintenanceCacheTargets,
+  classifyStorageCapacity
 });
 
 if (typeof globalThis !== "undefined") globalThis.YGPHMaintenanceCore = api;
 if (typeof module === "object" && module.exports) module.exports = api;
+
+})();

@@ -1,8 +1,9 @@
 "use strict";
 
-/* METROPOLIS 4.2.5 — maintenance/recovery browser adapter */
+/* METROPOLIS 4.2.6 — maintenance/recovery browser adapter */
 
 const METROPOLIS_MAINTENANCE_RUNTIME_VERSION = "1.0.1";
+let storageCapacityRefreshSequence = 0;
 
 function maintenanceCore() {
   if (!globalThis.YGPHMaintenanceCore) throw new Error("Maintenance Core ยังไม่พร้อม");
@@ -12,6 +13,87 @@ function maintenanceCore() {
 function maintenanceAudit(event, note) {
   state.audit = Array.isArray(state.audit) ? state.audit : [];
   state.audit.unshift({ id: uid("AUD"), at: nowIso(), event, note });
+}
+
+function maintenanceVaultBytes(value) {
+  if (!value) return 0;
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function maintenanceFormatBytes(value) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes.toLocaleString("th-TH")} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString("th-TH", { maximumFractionDigits: 1 })} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("th-TH", { maximumFractionDigits: 1 })} MB`;
+}
+
+function maintenanceCapacityCopy(level, ratio) {
+  const percent = Number.isFinite(ratio) ? `${Math.round(ratio * 100)}%` : null;
+  if (level === "NORMAL") return `ปกติ · ใช้พื้นที่ ${percent}`;
+  if (level === "WATCH") return `เริ่มสะสม ${percent} · ควรสำรองข้อมูลสม่ำเสมอ`;
+  if (level === "WARNING") return `พื้นที่เริ่มสูง ${percent} · ควรสำรองและเพิ่มพื้นที่ในเครื่อง`;
+  if (level === "CRITICAL") return `พื้นที่ใกล้เต็ม ${percent} · สำรองข้อมูลก่อนเพิ่มรายการจำนวนมาก`;
+  return "เบราว์เซอร์ไม่เปิดเผยโควตา ระบบยังแสดงขนาด Vault และจำนวนหลักฐานได้";
+}
+
+function setCapacityBytes(id, value) {
+  const element = byId(id);
+  if (!element) return;
+  if (Number.isFinite(value)) {
+    element.dataset.bytes = String(value);
+    element.textContent = maintenanceFormatBytes(value);
+  } else {
+    delete element.dataset.bytes;
+    element.textContent = "ไม่รองรับ";
+  }
+}
+
+async function refreshStorageCapacity() {
+  const card = byId("storageCapacityCard");
+  if (!card || typeof state === "undefined" || !state) return;
+  const sequence = ++storageCapacityRefreshSequence;
+  let vault = typeof currentVault !== "undefined" ? currentVault : null;
+  try {
+    if (typeof db !== "undefined" && db && typeof dbGet === "function") vault = await dbGet(VAULT_KEY) || vault;
+  } catch (_) {
+    // The in-memory encrypted Vault remains an exact size fallback.
+  }
+  let estimate = {};
+  try {
+    estimate = typeof navigator.storage?.estimate === "function" ? await navigator.storage.estimate() : {};
+  } catch (_) {
+    estimate = {};
+  }
+  if (sequence !== storageCapacityRefreshSequence || !byId("storageCapacityCard")) return;
+
+  const vaultBytes = maintenanceVaultBytes(vault);
+  const capacity = maintenanceCore().classifyStorageCapacity({
+    usage: estimate?.usage,
+    quota: estimate?.quota,
+    currentVaultBytes: vaultBytes,
+    nextVaultBytes: vaultBytes
+  });
+  card.dataset.level = capacity.level;
+  ["normal", "watch", "warning", "critical", "unknown"].forEach(level => card.classList.remove(`storage-capacity-${level}`));
+  card.classList.add(`storage-capacity-${capacity.level.toLowerCase()}`);
+  byId("storageCapacityLevel").textContent = capacity.level;
+  byId("storageCapacityStatus").textContent = maintenanceCapacityCopy(capacity.level, capacity.ratio);
+  setCapacityBytes("storageVaultBytes", vaultBytes);
+  setCapacityBytes("storageBrowserUsage", capacity.supported ? Number(estimate.usage) : NaN);
+  setCapacityBytes("storageBrowserQuota", capacity.supported ? Number(estimate.quota) : NaN);
+  byId("storageTransactionCount").textContent = String(state.ledger?.transactions?.length || 0);
+  byId("storageCalendarCount").textContent = String(state.calendar?.length || 0);
+  byId("storageAuditCount").textContent = String(state.audit?.length || 0);
+  byId("storageEventCount").textContent = String(state.events?.length || 0);
+}
+
+function ensureStorageCapacityActions() {
+  const refresh = byId("storageRefreshBtn");
+  if (!refresh || refresh.dataset.bound === "true") return;
+  refresh.dataset.bound = "true";
+  refresh.onclick = () => void refreshStorageCapacity();
+  byId("storagePersistBtn").onclick = () => byId("persistBtn")?.click();
+  byId("storageBackupBtn").onclick = () => byId("exportBackupBtn")?.click();
 }
 
 function maintenanceReasonOptions() {
@@ -49,7 +131,8 @@ async function commitStockPlan(plan, message = "ปรับสต็อกแ�
       beforeQty: plan.beforeQty,
       adjustmentQty: plan.adjustmentQty,
       afterQty: plan.afterQty,
-      affectsLedger: false
+      affectsLedger: false,
+      affectsValue: false
     }
   });
 }
@@ -342,6 +425,8 @@ function installMaintenanceRuntime() {
   if (typeof document === "undefined") return;
   ensureStoreMaintenanceEntry();
   ensureSettingsMaintenanceEntry();
+  ensureStorageCapacityActions();
+  void refreshStorageCapacity();
 }
 
 if (typeof module === "object" && module.exports) {

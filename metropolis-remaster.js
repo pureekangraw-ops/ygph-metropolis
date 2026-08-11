@@ -1,6 +1,6 @@
 "use strict";
 
-/* METROPOLIS 4.2.5 — app-wide visual remaster adapter. UI-only; no durable state writes. */
+/* METROPOLIS 4.2.6 — app-wide visual remaster adapter. UI-only; no durable state writes. */
 
 const METROPOLIS_REMASTER_RUNTIME_VERSION = "1.0.0";
 
@@ -61,12 +61,16 @@ function decorateBrand() {
   const settingsButton = document.querySelector(".flow-header-settings, #headerSettingsBtn");
   if (settingsButton) {
     settingsButton.classList.add("metro-icon-button");
-    let icon = settingsButton.querySelector(".metro-action-icon");
+    const iconHosts = [...settingsButton.querySelectorAll(".flow-icon, .metro-action-icon")];
+    let icon = iconHosts.find(host => host.classList.contains("flow-icon")) || iconHosts[0];
     if (!icon) {
       icon = document.createElement("span");
-      icon.className = "metro-action-icon";
+      icon.className = "flow-icon";
       settingsButton.prepend(icon);
     }
+    icon.classList.add("flow-icon");
+    icon.classList.remove("metro-action-icon");
+    iconHosts.filter(host => host !== icon).forEach(host => host.remove());
     setIconHost(icon, "settings");
   }
 }

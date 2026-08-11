@@ -106,9 +106,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     }
 
     function queueIdFromCard(card) {
-      const action = card.querySelector("[data-history],[data-cancel],[data-move],[data-full],[data-partial],[data-complete],[data-refresh],[data-verify-edit]");
-      if (!action) return null;
-      return action.dataset.history || action.dataset.cancel || action.dataset.move || action.dataset.full || action.dataset.partial || action.dataset.complete || action.dataset.refresh || action.dataset.verifyEdit || null;
+      return card?.dataset?.queueId || null;
     }
 
     function ensureInlineDot(container, signal) {
@@ -281,7 +279,8 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       if (globalThis.YGPHRuntime?.register) {
         globalThis.YGPHRuntime.register("METROPOLIS_R53_LIVE_STATUS", {
           afterRender: queueApply,
-          afterPageChange: queueApply
+          afterPageChange: queueApply,
+          afterCalendarRender: queueApply
         });
       }
       apply();

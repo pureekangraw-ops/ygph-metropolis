@@ -69,7 +69,7 @@ test("icon rollout follows the current Metropolis cache generation", () => {
   const { RELEASE_ID } = require("../sw.js");
 
   assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
-  assert.match(RELEASE_ID, /^v4\.2\.5-/);
+  assert.match(RELEASE_ID, /^v4\.2\.6-/);
 });
 
 test("approved subjects render from the shared icon registry", () => {

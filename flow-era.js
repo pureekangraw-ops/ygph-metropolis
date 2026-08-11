@@ -13,6 +13,7 @@ const FLOW_FORMAT_VERSION = 3;
 let flowCalendarIndex = 0;
 let flowLastAudit = null;
 let flowPendingExportLineage = null;
+let flowFullRenderActive = false;
 
 const flowBase = {
   renderAll,
@@ -364,7 +365,7 @@ async function flowBuildExchange() {
     evidenceSchemaVersion: "3.1",
     app: "YGPH FLOW ERA",
     appVersion: FLOW_VERSION,
-    coreVersion: typeof RELEASE_VERSION === "string" ? RELEASE_VERSION : "2.1.4",
+    coreVersion: typeof CORE_DATA_RELEASE_VERSION === "string" ? CORE_DATA_RELEASE_VERSION : "2.1.5",
     packageId: `FLOW-${Date.now()}`,
     packageMode: "SNAPSHOT_AND_DELTA",
     snapshotAsOf,
@@ -688,7 +689,7 @@ function flowRunAudit() {
     version: 3,
     generatedAt: nowIso(),
     appVersion: FLOW_VERSION,
-    coreVersion: typeof RELEASE_VERSION === "string" ? RELEASE_VERSION : "2.1.4",
+    coreVersion: typeof CORE_DATA_RELEASE_VERSION === "string" ? CORE_DATA_RELEASE_VERSION : "2.1.5",
     stateSchema: state.schema,
     stateRevision: state.revision,
     status,
@@ -1063,7 +1064,7 @@ function flowRenderCalendarFocus() {
   state.sync.flow.lastCalendarDiagnostic = flowCalendarDiagnostic(selectedDate);
   if (!items.length) {
     focus.innerHTML = `<div class="flow-focus-head"><b>${dateTH(selectedDate)}</b><button id="flowClearDay" class="secondary-btn">ดูทุกวัน</button></div><div class="empty">ไม่มีรายการในวันนี้</div>`;
-    byId("flowClearDay").onclick = () => { selectedDate = null; flowCalendarIndex = 0; renderCalendar(); };
+    byId("flowClearDay").onclick = () => { selectedDate = null; flowCalendarIndex = 0; renderCalendar("flow-clear"); };
     return;
   }
   flowCalendarIndex = ((flowCalendarIndex % items.length) + items.length) % items.length;
@@ -1072,53 +1073,17 @@ function flowRenderCalendarFocus() {
   const displayAmount = flowQueueDisplayAmount(item);
   const title = item.displayName || source?.name || source?.customer || source?.note || actionLabel(item.actionType);
   focus.innerHTML = `<div class="flow-focus-head"><div><b>${dateTH(selectedDate)}</b><small>รายการ ${flowCalendarIndex+1}/${items.length}</small></div><button id="flowClearDay" class="secondary-btn">ดูทุกวัน</button></div>
-    <div class="flow-swipe-card" style="--item-color:${esc(item.userColor || "#4384d4")}">
+    <div class="flow-swipe-card" data-queue-id="${esc(item.id)}" style="--item-color:${esc(item.userColor || "#4384d4")}">
       <span class="flow-color-bar"></span>
       <div class="flow-swipe-main"><div><h3>${esc(title)}</h3><small>${sourceLabel(item.source)} · ${actionLabel(item.actionType)}</small><span class="status ${statusClass(item.status)}">${statusLabel(item.status)}</span></div><div class="flow-swipe-amount">${money(displayAmount.value)} ฿<small>${esc(displayAmount.label)} · ${dateTH(item.due)}</small></div></div>
       ${item.note ? `<div class="flow-note">${esc(item.note)}</div>` : ""}
-      <div class="flow-swipe-actions"><button class="edit" data-flow-edit="${item.id}">แก้ข้อมูลแผน</button>${queueActionButtons(item)}</div>
+      <div class="flow-swipe-actions">${queueActionButtons(item)}</div>
     </div>
     <div class="flow-swipe-nav"><button id="flowPrevCard" aria-label="ก่อนหน้า">‹</button><div class="flow-swipe-dots">${items.map((_,i)=>`<span class="${i===flowCalendarIndex?"active":""}"></span>`).join("")}</div><button id="flowNextCard" aria-label="ถัดไป">›</button></div>`;
-  byId("flowClearDay").onclick = () => { selectedDate = null; flowCalendarIndex = 0; renderCalendar(); };
-  byId("flowPrevCard").onclick = () => { flowCalendarIndex--; flowRenderCalendarFocus(); };
-  byId("flowNextCard").onclick = () => { flowCalendarIndex++; flowRenderCalendarFocus(); };
-  document.querySelectorAll("[data-flow-edit]").forEach(button => button.onclick = () => flowEditQueue(button.dataset.flowEdit));
+  byId("flowClearDay").onclick = () => { selectedDate = null; flowCalendarIndex = 0; renderCalendar("flow-clear"); };
+  byId("flowPrevCard").onclick = () => { flowCalendarIndex--; flowRenderCalendarFocus(); flowNotifyCalendarRendered("flow-prev"); };
+  byId("flowNextCard").onclick = () => { flowCalendarIndex++; flowRenderCalendarFocus(); flowNotifyCalendarRendered("flow-next"); };
   bindQueueActions();
-}
-
-function flowEditQueue(id) {
-  const item = findQueue(id);
-  if (!item) return toast("ไม่พบคิว");
-  if (["COMPLETED","CANCELLED"].includes(item.status)) return showHistory(item.id);
-  const source = findSource(item.source, item.sourceId);
-  const name = item.displayName || source?.name || source?.customer || source?.note || "";
-  openModal({
-    title: "แก้ข้อมูลแผน",
-    text: "ปฏิทินแก้ข้อมูลของเหตุการณ์ ส่วนยอดธุรกิจและเงินจริงยังเป็นของต้นทาง",
-    body: `<div class="form-grid">
-      <div class="field full"><label>ชื่อที่ใช้แสดง</label><input id="flowEditName" maxlength="100" value="${esc(name)}"></div>
-      <div class="field"><label>วันกำหนด</label><input id="flowEditDue" type="date" value="${esc(item.due)}"></div>
-      <div class="field"><label>สีประจำรายการ</label><input id="flowEditColor" type="color" value="${esc(item.userColor || "#4384d4")}"></div>
-      <div class="field full"><label>หมายเหตุ</label><input id="flowEditNote" maxlength="180" value="${esc(item.note || "")}"></div>
-      <div class="field full"><label><input id="flowEditReminder" type="checkbox" ${item.reminderEnabled !== false ? "checked" : ""}> แสดงในสิ่งที่ต้องจัดการ</label></div>
-      <div class="field full"><div class="flow-note"><b>ยอดตามต้นทาง ${money(Math.max(0,Number(item.amountSatang||0)-Number(item.paidSatang||0)))} บาท</b><br>ยอดนี้ไม่ถูกแก้ทับจากปฏิทิน เพื่อไม่ให้ต้นทางกับคิวไม่ตรงกัน</div></div>
-    </div>`,
-    confirm: "บันทึกข้อมูลแผน",
-    onConfirm: async () => {
-      const due = byId("flowEditDue").value;
-      if (!validISODate(due)) { toast("วันกำหนดไม่ถูกต้อง"); modalBusy = false; return; }
-      const oldDue = item.due;
-      item.displayName = cleanImportText(byId("flowEditName").value,100);
-      item.note = cleanImportText(byId("flowEditNote").value,180);
-      item.userColor = byId("flowEditColor").value;
-      item.reminderEnabled = byId("flowEditReminder").checked;
-      item.due = due; item.dueAt = `${due}T09:00:00+07:00`; item.triggerAt = item.dueAt;
-      addHistory(item, "PLAN_EDITED", `${oldDue} → ${due}`);
-      bumpQueue(item);
-      closeModal();
-      await persistAndRender("แก้ข้อมูลแผนแล้ว");
-    }
-  });
 }
 
 function flowRenderSync() {
@@ -1143,11 +1108,21 @@ function flowRenderSettings() {
 renderHome = function() { flowBase.renderHome(); flowRenderHome(); };
 renderRide = function() { flowBase.renderRide(); flowRenderRide(); };
 renderLedger = function() { flowBase.renderLedger(); flowRenderLedger(); };
-renderCalendar = function() {
+function flowNotifyCalendarRendered(reason = "partial") {
+  YGPHRuntime.run("afterCalendarRender", {
+    reason,
+    selectedDate,
+    calendarMonth,
+    stateRevision: state?.revision || null
+  });
+}
+
+renderCalendar = function(reason = "partial") {
   flowBase.renderCalendar();
   const verifyCount = flowActiveQueues().filter(flowNeedsVerification).length;
   if (byId("calVerify")) byId("calVerify").textContent = verifyCount;
   flowRenderCalendarFocus();
+  if (!flowFullRenderActive) flowNotifyCalendarRendered(reason);
 };
 renderSync = function() { flowBase.renderSync(); flowRenderSync(); };
 renderSettings = function() { flowBase.renderSettings(); flowRenderSettings(); };
@@ -1155,7 +1130,12 @@ renderAll = function() {
   if (!state) return;
   flowEnsureState();
   flowInstallDom();
-  flowBase.renderAll();
+  flowFullRenderActive = true;
+  try {
+    flowBase.renderAll();
+  } finally {
+    flowFullRenderActive = false;
+  }
   flowRenderAuditStatus();
   YGPHRuntime.run("afterRender", { page: currentPage, stateRevision: state.revision });
 };

@@ -1,7 +1,7 @@
 "use strict";
 
 /*
-  YGPH Highway Gate v2.0.0
+  YGPH Highway Gate v2.0.1
   Pure command and evidence core for the local encrypted vault.
 
   This file intentionally has no DOM, IndexedDB, rendering, or app globals.
@@ -13,7 +13,7 @@
   if (typeof module === "object" && module.exports) module.exports = core;
   if (root) root.YGPHCore = core;
 })(typeof globalThis !== "undefined" ? globalThis : this, function createCore() {
-  const VERSION = "2.0.0";
+  const VERSION = "2.0.1";
   const STATE_SCHEMA = 4;
   const MAX_ALLOWED_SATANG = 10_000_000_000;
   const ALLOWED_DOMAINS = new Set(["STORE", "RIDE", "LEDGER", "CALENDAR", "AUDIT", "CORE", "SYSTEM"]);
@@ -33,6 +33,7 @@
     ["store", "sales", "STORE", "SALE"],
     ["store", "purchases", "STORE", "PURCHASE"],
     ["store", "withdrawals", "STORE", "STOCK_WITHDRAWAL"],
+    ["store", "adjustments", "STORE", "STOCK_ADJUSTMENT", "adjustmentId"],
     ["ride", "rounds", "RIDE", "RIDE_ROUND"],
     ["ride", "jobs", "RIDE", "RIDE_JOB"],
     ["ride", "expenses", "RIDE", "RIDE_EXPENSE"],
@@ -274,6 +275,40 @@
     return value;
   }
 
+  function validateStockAdjustment(item) {
+    const id = String(item?.adjustmentId || "").trim();
+    if (!id) throw gateError("BLOCKED", "Adjustment ปรับสต็อกไม่มี adjustmentId");
+    const beforeQty = item.beforeQty;
+    const adjustmentQty = item.adjustmentQty;
+    const afterQty = item.afterQty;
+    if (![beforeQty, adjustmentQty, afterQty].every(Number.isSafeInteger)) {
+      throw gateError("BLOCKED", `Adjustment ${id} ต้องใช้จำนวนเต็มที่ปลอดภัย`);
+    }
+    if (beforeQty < 0 || afterQty < 0 || beforeQty + adjustmentQty !== afterQty) {
+      throw gateError("BLOCKED", `สมการ Adjustment ${id} ไม่ตรง: ก่อน + ปรับ ต้องเท่ากับหลังและไม่ติดลบ`);
+    }
+    if (typeof item.reason !== "string" || !item.reason.trim() || typeof item.actor !== "string" || !item.actor.trim() || typeof item.note !== "string") {
+      throw gateError("BLOCKED", `Adjustment ${id} ไม่มีเหตุผลหรือผู้ดำเนินการ`);
+    }
+    if (typeof item.at !== "string" || !Number.isFinite(Date.parse(item.at))) throw gateError("BLOCKED", `เวลา Adjustment ${id} ไม่ถูกต้อง`);
+    const hasCurrentValueFlag = Object.prototype.hasOwnProperty.call(item, "affectsValue");
+    const hasLegacyValueFlag = Object.prototype.hasOwnProperty.call(item, "affectsStockValue");
+    if (item.affectsLedger !== false
+      || (!hasCurrentValueFlag && !hasLegacyValueFlag)
+      || (hasCurrentValueFlag && item.affectsValue !== false)
+      || (hasLegacyValueFlag && item.affectsStockValue !== false)) {
+      throw gateError("BLOCKED", `ผลกระทบของ Adjustment ${id} ต้องเป็นข้อมูลจำนวนเท่านั้น`);
+    }
+    return true;
+  }
+
+  function validateStockAdjustmentTopology(root) {
+    const adjustments = list(root, "store", "adjustments");
+    indexById(adjustments, "STORE/STOCK_ADJUSTMENT", "adjustmentId");
+    adjustments.forEach(validateStockAdjustment);
+    return true;
+  }
+
   function validateStateAmounts(root) {
     const seen = new Set();
     const visit = (value, path) => {
@@ -464,6 +499,7 @@
     }
 
     validateStateAmounts(after);
+    validateStockAdjustmentTopology(after);
 
     for (const [parent, key, owner, recordType, idField = "id"] of PROTECTED_COLLECTIONS) {
       indexById(list(after, parent, key), `${owner}/${recordType}`, idField);
@@ -490,6 +526,9 @@
       if (!routeAllowed(route)) throw gateError("BLOCKED", `Route ไม่อนุญาต ${route.from} → ${route.to} (${route.permission})`);
       if (change.recordType === "TRANSACTION" && change.changeType === "UPDATE") validateTransactionUpdate(change, after);
       if (change.recordType === "CALENDAR_ACTION") validateQueue(change.after, after, change.before);
+      if (change.recordType === "STOCK_ADJUSTMENT" && change.changeType === "UPDATE") {
+        throw gateError("BLOCKED", `หลักฐาน Adjustment ${change.recordId} แก้ย้อนหลังไม่ได้ ต้อง append รายการใหม่`);
+      }
       if (change.before?.revision != null && change.after?.revision != null && Number(change.after.revision) < Number(change.before.revision)) {
         throw gateError("BLOCKED", `Revision ของ ${change.owner}/${change.recordId} ย้อนกลับ`);
       }
@@ -635,6 +674,7 @@
     buildPlan,
     validatePlan,
     validateStateAmounts,
+    validateStockAdjustmentTopology,
     validateReversalTopology,
     createEventEnvelope,
     durableProjection,

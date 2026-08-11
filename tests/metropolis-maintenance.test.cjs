@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { JSDOM } = require('jsdom');
 
 const root = path.join(__dirname, '..');
 const corePath = path.join(root, 'metropolis-maintenance-core.js');
@@ -50,7 +51,7 @@ test('manual stock increase creates auditable quantity-only plan', () => {
     adjustmentQty: 2,
     afterQty: 6,
     affectsLedger: false,
-    affectsStockValue: false
+    affectsValue: false
   });
 });
 
@@ -92,6 +93,18 @@ test('applying stock adjustment preserves history and ledger while appending mov
   assert.deepEqual(next.ledger.transactions, [{ id: 'TX1', amountSatang: 80000 }]);
   assert.equal(next.store.adjustments.length, 1);
   assert.equal(next.store.adjustments[0].adjustmentId, 'ADJ-3');
+  assert.equal(next.store.adjustments[0].affectsValue, false);
+});
+
+test('applying a new adjustment preserves legacy adjustment fields without rewriting evidence', () => {
+  const core = loadCore();
+  const legacy = { adjustmentId: 'ADJ-OLD', beforeQty: 1, adjustmentQty: 1, afterQty: 2, reason: 'OTHER', note: '', at: '2026-08-10T01:00:00.000Z', actor: 'OWNER', affectsLedger: false, affectsStockValue: false };
+  const original = { store: { stockQty: 2, stockValueSatang: 160000, adjustments: [legacy] } };
+  const plan = core.planStockAdjustment({ currentQty: 2, mode: 'MANUAL_IN', quantity: 1, reason: 'MISSED_RECEIPT', timestamp: '2026-08-11T01:00:00.000Z', adjustmentId: 'ADJ-NEW' });
+  const next = core.applyStockAdjustmentToState(original, plan);
+  assert.deepEqual(next.store.adjustments[0], legacy);
+  assert.equal(next.store.adjustments[1].affectsValue, false);
+  assert.equal(next.store.stockValueSatang, 160000);
 });
 
 test('partial reset plans only safe operational changes and blocks calendar deletion', () => {
@@ -168,6 +181,30 @@ test('report adapter re-syncs visible report on repeated render without double-a
   assert.deepEqual(calls, [[7, -3], [7, -3]]);
 });
 
+test('report adapter trusts RECONSTRUCTED_V2 and never adds a second correction row', () => {
+  const adapter = loadReportRuntime();
+  const dom = new JSDOM('<div id="storeReport"><div class="stat-line"><span>สต็อก ณ วันสิ้นสุด</span><b>0 ชิ้น</b></div></div>');
+  const previousDocument = global.document;
+  global.document = dom.window.document;
+  try {
+    const report = { end: '2026-08-31', store: {}, snapshot: { stockQty: 5, stockBasis: 'RECONSTRUCTED_V2', stockMovementEvidence: { adjustments: 1 } } };
+    const dependencies = {
+      core: { stockReportCorrectionAt: () => { throw new Error('must not apply legacy correction'); } },
+      state: { store: { adjustments: [{ adjustmentId: 'ADJ-1' }] } }
+    };
+    adapter.applyMaintenanceStockToReport({ report }, dependencies);
+    adapter.applyMaintenanceStockToReport({ report }, dependencies);
+    assert.equal(report.snapshot.stockQty, 5);
+    assert.equal(report.store.manualAdjustmentCorrectionQty, undefined);
+    assert.equal(global.document.querySelector('#storeReport .stat-line b').textContent, '5 ชิ้น');
+    assert.equal(global.document.querySelectorAll('#maintenanceReportStockCorrection').length, 0);
+  } finally {
+    if (previousDocument === undefined) delete global.document;
+    else global.document = previousDocument;
+    dom.window.close();
+  }
+});
+
 test('browser runtime routes safe mutations through durable commit and destructive reset through local storage adapters', () => {
   const source = readSource(runtimePath);
   assert.match(source, /persistAndRender/);
@@ -220,7 +257,7 @@ test('maintenance assets remain published before later visual layers', () => {
   const releaseMatch = sw.match(/const RELEASE_ID = "([^"]+)"/);
   assert.ok(releaseMatch, 'service worker release id missing');
   assert.equal(manifest.serviceWorker.releaseId, releaseMatch[1]);
-  assert.match(manifest.serviceWorker.releaseId, /^v4\.2\.5-/);
+  assert.match(manifest.serviceWorker.releaseId, /^v4\.2\.6-/);
   for (const asset of ['metropolis-maintenance.css', 'metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js']) {
     assert.match(sw, new RegExp(`"${asset.replaceAll('.', '\\.')}"`));
     assert.ok(manifest.productionFiles.some(item => item.path === asset), `manifest productionFiles missing ${asset}`);

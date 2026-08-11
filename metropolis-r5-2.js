@@ -164,12 +164,13 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
           text: "กรอกยอดต่องวด แล้วให้ปฏิทินสร้างตารางจ่ายรายสัปดาห์หรือรายเดือน",
           body: `<div class="form-grid">
             <div class="field full"><label>รายละเอียด</label><input id="debtName" maxlength="120" placeholder="เช่น ค่ารถ"></div>
-            <div class="field full"><label>หมายเหตุเพิ่มเติม</label><input id="debtDetail" maxlength="180"></div>
             <div class="field"><label>ยอดต่องวด</label><input id="debtInstallmentAmount" type="number" min="0.01" step="0.01" inputmode="decimal"></div>
             <div class="field"><label>จำนวนงวด</label><input id="debtInstallments" type="number" min="1" max="120" step="1" value="1"></div>
             <div class="field"><label>ความถี่</label><select id="debtFrequency"><option value="MONTHLY">รายเดือน</option><option value="WEEKLY">รายสัปดาห์</option></select></div>
             <div class="field"><label>วันครบกำหนดงวดแรก</label><input id="debtDue" type="date" value="${localISO()}"></div>
-            <div class="field full"><div id="debtSchedulePreview" class="r52-schedule-preview"><small>กรอกยอดต่องวดเพื่อดูตารางก่อนบันทึก</small></div></div>
+            <div class="field full"><label class="r5-check"><input id="debtHasDetail" type="checkbox" aria-controls="debtDetailField" aria-expanded="false"> เพิ่มหมายเหตุ</label></div>
+            <div class="field full" id="debtDetailField" hidden><label>หมายเหตุเพิ่มเติม</label><input id="debtDetail" maxlength="180" disabled></div>
+            <details id="debtScheduleDetails" class="field full r5-disclosure"><summary>ดูตารางงวด</summary><div id="debtSchedulePreview" class="r52-schedule-preview"><small>กรอกยอดต่องวดเพื่อดูตารางก่อนบันทึก</small></div></details>
           </div>`,
           confirm: "เพิ่มภาระ",
           onConfirm: async () => {
@@ -187,7 +188,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
             const obligation = {
               id,
               name: byId("debtName").value.trim() || "ภาระ",
-              detail: byId("debtDetail").value.trim(),
+              detail: byId("debtDetail").disabled ? "" : byId("debtDetail").value.trim(),
               scheduleMode: "PER_INSTALLMENT",
               scheduleFrequency,
               installmentAmountSatang,
@@ -223,6 +224,19 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
             await persistAndRender(`เพิ่ม ${installmentCount} งวด · รวม ${displayScheduleMoney(originalSatang)}`);
           }
         });
+
+        const noteToggle = byId("debtHasDetail");
+        const noteField = byId("debtDetailField");
+        const noteInput = byId("debtDetail");
+        const syncNote = () => {
+          noteField.hidden = !noteToggle.checked;
+          noteInput.disabled = !noteToggle.checked;
+          noteToggle.setAttribute("aria-expanded", String(noteToggle.checked));
+          if (!noteToggle.checked) noteInput.value = "";
+          else setTimeout(() => noteInput.focus(), 0);
+        };
+        noteToggle.addEventListener("change", syncNote);
+        syncNote();
 
         const updatePreview = () => {
           const preview = byId("debtSchedulePreview");
@@ -486,21 +500,25 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       });
     }
 
-    function decorateInstallmentActions() {
-      if (typeof state === "undefined" || !state) return;
-      document.querySelectorAll("[data-move]").forEach(button => {
-        if (button.dataset.r52Manager === "true") return;
-        const queue = findQueue(button.dataset.move);
-        const source = queue && findSource(queue.source, queue.sourceId);
-        if (!queue || !source || source.scheduleMode !== "PER_INSTALLMENT" || !["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(queue.actionType)) return;
-        if (["COMPLETED", "CANCELLED"].includes(queue.status)) return;
-        button.textContent = "จัดการงวด";
-        button.dataset.r52Manager = "true";
-        button.onclick = event => {
-          event.preventDefault();
-          event.stopPropagation();
-          openInstallmentManager(queue.id);
-        };
+    function isManagedQueue(queueId) {
+      const queue = typeof findQueue === "function" ? findQueue(queueId) : null;
+      const source = queue && typeof findSource === "function" ? findSource(queue.source, queue.sourceId) : null;
+      return Boolean(
+        queue &&
+        source?.scheduleMode === "PER_INSTALLMENT" &&
+        ["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(queue.actionType) &&
+        !["COMPLETED", "CANCELLED"].includes(queue.status)
+      );
+    }
+
+    function installScheduleApi() {
+      globalThis.YGPHMetropolisSchedule = Object.freeze({
+        isManagedQueue,
+        openManager(queueId) {
+          if (!isManagedQueue(queueId)) return false;
+          openInstallmentManager(queueId);
+          return true;
+        }
       });
     }
 
@@ -510,7 +528,6 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       requestAnimationFrame(() => {
         runtimeQueued = false;
         applyProductVersion42();
-        decorateInstallmentActions();
         schedule42Reconciliation();
       });
     }
@@ -529,7 +546,7 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
       document.documentElement.dataset.metropolisR52 = METROPOLIS_R5_2_VERSION;
       applyProductVersion42();
       installDebtAction42();
-      decorateInstallmentActions();
+      installScheduleApi();
       schedule42Reconciliation();
       if (globalThis.YGPHRuntime?.register) {
         globalThis.YGPHRuntime.register("METROPOLIS_R52_SCHEDULE", {

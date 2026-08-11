@@ -20,7 +20,9 @@
   display: flex;
   align-items: center;
   gap: .55rem;
+  min-height: 44px;
   font-weight: 700;
+  cursor: pointer;
 }
 
 .r5-check input[type="checkbox"] {
@@ -32,6 +34,24 @@
 #saleShippingCost:disabled {
   opacity: .48;
   cursor: not-allowed;
+}
+
+.r5-disclosure {
+  border: 1px solid var(--metro-line, #dfe9e4);
+  border-radius: 16px;
+  padding: 0 .8rem;
+}
+
+.r5-disclosure > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.r5-disclosure-body {
+  padding: .2rem 0 .8rem;
 }
 
 @media (max-width: 640px) {

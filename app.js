@@ -1,7 +1,7 @@
 "use strict";
 
 const VAULT_VERSION = 1;
-const CORE_DATA_RELEASE_VERSION = "2.1.4";
+const CORE_DATA_RELEASE_VERSION = "2.1.5";
 const STATE_SCHEMA = 4;
 const DB_NAME = "stock-pocket-secure";
 const DB_VERSION = 1;
@@ -79,6 +79,17 @@ const dateKey = (value = new Date()) => {
 const recordDate = (record) => String(record?.date || record?.due || dateKey(record?.createdAt || new Date())).slice(0, 10);
 const isInRange = (record, start, end) => { const d = recordDate(record); return d >= start && d <= end; };
 const isToday = (record) => recordDate(record) === localISO();
+function queueCreatedDate(item) {
+  return dateKey(item?.createdAt || item?.updatedAt || item?.due);
+}
+function queuePendingAtEnd(item, end) {
+  const created = queueCreatedDate(item);
+  const completed = item?.completedAt ? dateKey(item.completedAt) : null;
+  const cancelled = item?.cancelledAt ? dateKey(item.cancelledAt) : null;
+  return created <= end
+    && (!completed || completed > end)
+    && (!cancelled || cancelled > end);
+}
 const sortNewest = (records) => [...records].sort((a, b) => String(b.createdAt || b.updatedAt || "").localeCompare(String(a.createdAt || a.updatedAt || "")));
 const lastFive = (records) => sortNewest(records).slice(0, 5);
 const displayTime = (value) => value ? new Date(value).toLocaleString("th-TH", { timeZone: TZ }) : "—";
@@ -103,6 +114,8 @@ let deferredInstallPrompt = null;
 let reportSelection = null;
 let lastReportData = null;
 let durableCommitInProgress = false;
+const durableButtonDisabledState = new WeakMap();
+let durableBusyButtons = [];
 let lastDurableReadback = null;
 let pendingBackupCandidate = null;
 let serviceWorkerRegistration = null;
@@ -110,7 +123,7 @@ let serviceWorkerStatus = null;
 let reloadForServiceWorker = false;
 
 const YGPHRuntime = globalThis.YGPHRuntime || (() => {
-  const hookNames = ["afterRender", "afterPageChange", "afterReport"];
+  const hookNames = ["afterRender", "afterPageChange", "afterCalendarRender", "afterReport"];
   const transformNames = ["exchange", "audit"];
   const hooks = Object.fromEntries(hookNames.map(name => [name, []]));
   const transforms = Object.fromEntries(transformNames.map(name => [name, []]));
@@ -176,7 +189,7 @@ function defaultState(defaultPriceSatang = 80000, openingBalanceSatang = 0) {
     createdAt,
     updatedAt: createdAt,
     settings: { defaultPriceSatang, lockMinutes: 5, lowStockThreshold: 3, themeColor: "navy" },
-    store: { stockQty: 0, stockValueSatang: 0, sales: [], purchases: [], withdrawals: [] },
+    store: { stockQty: 0, stockValueSatang: 0, sales: [], purchases: [], withdrawals: [], adjustments: [] },
     ride: { currentRound: null, rounds: [], jobs: [], expenses: [], creditBalanceSatang: 0, creditWithdrawals: [] },
     ledger: { openingBalanceSatang, balanceVerified: true, verifiedAt: createdAt, transactions: [], obligations: [] },
     calendar: [],
@@ -202,6 +215,7 @@ function normalizeState(value) {
   value.store.sales = Array.isArray(value.store.sales) ? value.store.sales : [];
   value.store.purchases = Array.isArray(value.store.purchases) ? value.store.purchases : [];
   value.store.withdrawals = Array.isArray(value.store.withdrawals) ? value.store.withdrawals : [];
+  value.store.adjustments = Array.isArray(value.store.adjustments) ? value.store.adjustments : [];
   value.ride ||= {};
   value.ride.currentRound ||= null;
   value.ride.rounds = Array.isArray(value.ride.rounds) ? value.ride.rounds : [];
@@ -631,6 +645,8 @@ function validateStateInvariants(target, { quarantine = false } = {}) {
   catch (error) { fatal.push(error.message); }
   try { resolveYGPHCore().validateReversalTopology(target, { allowLegacyUnlinked: true }); }
   catch (error) { fatal.push(error.message); }
+  try { resolveYGPHCore().validateStockAdjustmentTopology(target); }
+  catch (error) { fatal.push(error.message); }
   const failMoney = (value, label, allowZero = true) => {
     try { parseSatang(value, { allowZero, label }); } catch (error) { fatal.push(error.message); }
   };
@@ -781,6 +797,61 @@ function validateVault(vault) {
   if (vault.kdf?.name !== "PBKDF2" || vault.kdf?.hash !== "SHA-256") throw new Error("รูปแบบรหัสไม่รองรับ");
   if (!Number.isInteger(vault.kdf.iterations) || vault.kdf.iterations < 100000) throw new Error("ค่าความปลอดภัยไม่ถูกต้อง");
   if (vault.cipher?.name !== "AES-GCM") throw new Error("รูปแบบการเข้ารหัสไม่รองรับ");
+}
+function vaultStorageBytes(vault) {
+  if (!vault) return 0;
+  return new TextEncoder().encode(JSON.stringify(vault)).byteLength;
+}
+async function preflightVaultCapacity(previousVault, candidateVault, dependencies = {}) {
+  const classify = dependencies.classify
+    || globalThis.YGPHMaintenanceCore?.classifyStorageCapacity
+    || (typeof module === "object" && module.exports && typeof require === "function"
+      ? require("./metropolis-maintenance-core.js").classifyStorageCapacity
+      : null);
+  const estimate = dependencies.estimate
+    || (typeof navigator !== "undefined" && typeof navigator.storage?.estimate === "function"
+      ? () => navigator.storage.estimate()
+      : null);
+  if (typeof classify !== "function" || typeof estimate !== "function") {
+    return { supported: false, ratio: null, projectedRatio: null, level: "UNKNOWN", blocksWrite: false };
+  }
+  let measured;
+  try {
+    measured = await estimate();
+  } catch (_) {
+    return { supported: false, ratio: null, projectedRatio: null, level: "UNKNOWN", blocksWrite: false };
+  }
+  const capacity = classify({
+    usage: measured?.usage,
+    quota: measured?.quota,
+    currentVaultBytes: vaultStorageBytes(previousVault),
+    nextVaultBytes: vaultStorageBytes(candidateVault)
+  });
+  if (capacity.blocksWrite) {
+    const error = new Error("พื้นที่จัดเก็บไม่พอ ระบบหยุดก่อนเขียน กรุณาส่งออกไฟล์สำรองและเพิ่มพื้นที่ในเครื่อง");
+    error.name = "StorageCapacityError";
+    error.code = "STORAGE_CAPACITY_BLOCKED";
+    error.capacity = capacity;
+    throw error;
+  }
+  return capacity;
+}
+function isQuotaExceededFailure(error) {
+  let current = error;
+  for (let depth = 0; current && depth < 5; depth += 1, current = current.cause) {
+    if (current.name === "QuotaExceededError" || current.code === "QUOTA_EXCEEDED_ERR" || /quota.?exceeded/i.test(String(current.message || ""))) return true;
+  }
+  return false;
+}
+function storageCapacityFailure(error) {
+  if (error?.code === "STORAGE_CAPACITY_BLOCKED") return error;
+  if (!isQuotaExceededFailure(error)) return error;
+  const failure = new Error("พื้นที่จัดเก็บไม่พอ บันทึกไม่ได้และคืนข้อมูลล่าสุดแล้ว กรุณาส่งออกไฟล์สำรองและเพิ่มพื้นที่ในเครื่อง");
+  failure.name = "StorageCapacityError";
+  failure.code = "STORAGE_QUOTA_EXCEEDED";
+  failure.cause = error;
+  failure.rollbackVerified = error?.rollbackVerified;
+  return failure;
 }
 async function decryptVault(vault, key) {
   validateVault(vault);
@@ -1141,13 +1212,35 @@ function resolveYGPHCore() {
   throw new Error("YGPH Core ไม่พร้อมใช้งาน กรุณาโหลด highway-gate.js ก่อน app.js");
 }
 
+function setDurableUiBusy(active) {
+  if (typeof document === "undefined") return;
+  const appRoot = byId("appShell");
+  if (active) {
+    appRoot?.setAttribute("aria-busy", "true");
+    durableBusyButtons = [...document.querySelectorAll("button")];
+    durableBusyButtons.forEach(button => {
+      durableButtonDisabledState.set(button, button.disabled);
+      button.disabled = true;
+    });
+    return;
+  }
+  appRoot?.removeAttribute("aria-busy");
+  durableBusyButtons.forEach(button => {
+    const wasDisabled = durableButtonDisabledState.get(button);
+    durableButtonDisabledState.delete(button);
+    if (button.isConnected && typeof wasDisabled === "boolean") button.disabled = wasDisabled;
+  });
+  durableBusyButtons = [];
+}
+
 async function commitCurrentState(commandContext = {}) {
   if (!cryptoKey || !state || !currentVault) throw new Error("แอปยังล็อกอยู่");
   if (durableCommitInProgress) throw new Error("กำลังบันทึกคำสั่งก่อนหน้า กรุณารอสักครู่");
   durableCommitInProgress = true;
-  const proposed = clone(state);
   let durableBefore = null;
   try {
+    setDurableUiBusy(true);
+    const proposed = clone(state);
     const core = resolveYGPHCore();
     const previousVault = await dbGet(VAULT_KEY);
     if (!previousVault) throw new Error("ไม่พบ Vault ก่อนบันทึก");
@@ -1166,7 +1259,11 @@ async function commitCurrentState(commandContext = {}) {
         validateStateInvariants(candidate, { quarantine: true });
         return candidate;
       },
-      encrypt: candidate => encryptState(candidate, cryptoKey, previousVault.kdf),
+      encrypt: async candidate => {
+        const vault = await encryptState(candidate, cryptoKey, previousVault.kdf);
+        await preflightVaultCapacity(previousVault, vault);
+        return vault;
+      },
       writeVault: vault => commandContext.snapshotBeforeWrite
         ? writeVaultWithSnapshot({
           core,
@@ -1207,8 +1304,9 @@ async function commitCurrentState(commandContext = {}) {
     } catch (recoveryError) {
       console.error("ROLLBACK_STATE_RECOVERY_FAILED", recoveryError);
     }
-    throw error;
+    throw storageCapacityFailure(error);
   } finally {
+    setDurableUiBusy(false);
     durableCommitInProgress = false;
   }
 }
@@ -1364,6 +1462,69 @@ function stockAt(end) {
   const sold = state.store.sales.filter(item => activeAt(item, end)).reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const withdrawn = state.store.withdrawals.filter(item => activeAt(item, end)).reduce((sum, item) => sum + Number(item.qty || 0), 0);
   return Math.max(0, purchased - sold - withdrawn);
+}
+function reportMovementDate(targetState, record, ...preferred) {
+  const candidates = [...preferred, record?.date, record?.createdAt, record?.updatedAt, targetState?.createdAt];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").slice(0, 10);
+    if (validISODate(value)) return value;
+  }
+  return "0001-01-01";
+}
+function reportStockMovements(targetState) {
+  const movements = [];
+  const add = (kind, recordId, quantity, date, reversal = false) => {
+    const signed = Number(quantity);
+    if (!Number.isSafeInteger(signed) || signed === 0) return;
+    movements.push({ kind, recordId: String(recordId), quantity: signed, date, reversal });
+  };
+  const store = targetState?.store || {};
+
+  for (const purchase of store.purchases || []) {
+    const quantity = Number(purchase.qty || 0);
+    add("PURCHASE", purchase.id, quantity, reportMovementDate(targetState, purchase));
+    if (purchase.status === "CANCELLED" || purchase.returnedAt) {
+      add("REVERSAL", purchase.id, -quantity, reportMovementDate(targetState, purchase, purchase.returnedAt, purchase.cancelledAt), true);
+    }
+  }
+  for (const sale of store.sales || []) {
+    const quantity = Number(sale.qty || 0);
+    add("SALE", sale.id, -quantity, reportMovementDate(targetState, sale));
+    if (sale.stockRestored === true) {
+      add("REVERSAL", sale.id, quantity, reportMovementDate(targetState, sale, sale.cancelledAt), true);
+    }
+  }
+  for (const withdrawal of store.withdrawals || []) {
+    add("WITHDRAWAL", withdrawal.id, -Number(withdrawal.qty || 0), reportMovementDate(targetState, withdrawal));
+  }
+  for (const adjustment of store.adjustments || []) {
+    add("ADJUSTMENT", adjustment.adjustmentId, Number(adjustment.adjustmentQty || 0), reportMovementDate(targetState, adjustment, adjustment.at));
+  }
+  return movements;
+}
+function calendarReportSnapshot(start, end, targetState = state) {
+  const movements = reportStockMovements(targetState);
+  const currentStockQty = Number(targetState?.store?.stockQty || 0);
+  const allMovementQty = movements.reduce((sum, movement) => sum + movement.quantity, 0);
+  const stockOpeningQty = currentStockQty - allMovementQty;
+  const throughEnd = movements.filter(movement => movement.date <= end);
+  const stockQty = Math.max(0, stockOpeningQty + throughEnd.reduce((sum, movement) => sum + movement.quantity, 0));
+  const count = kind => movements.filter(movement => movement.kind === kind).length;
+  return {
+    stockQty,
+    stockBasis: "RECONSTRUCTED_V2",
+    stockOpeningQty,
+    stockMovementEvidence: {
+      purchases: count("PURCHASE"),
+      sales: count("SALE"),
+      withdrawals: count("WITHDRAWAL"),
+      adjustments: count("ADJUSTMENT"),
+      reversals: count("REVERSAL"),
+      total: movements.length,
+      throughEnd: throughEnd.length,
+      inRange: movements.filter(movement => movement.date >= start && movement.date <= end).length
+    }
+  };
 }
 function receivableAt(end) {
   return state.store.sales.filter(sale => activeAt(sale, end)).reduce((sum, sale) => {
@@ -1715,30 +1876,27 @@ function renderMonth() {
     html += `<button class="day-cell ${other ? "other" : ""} ${date === localISO() ? "today" : ""} ${date === selectedDate ? "selected" : ""}" data-date="${date}"><span class="day-num">${day}</span>${items.length ? `<span class="day-count">${items.length}</span>` : ""}<span class="day-dots">${dots}</span></button>`;
   }
   byId("monthGrid").innerHTML = html;
-  $$(".day-cell").forEach(button => button.onclick = () => { selectedDate = button.dataset.date; renderCalendar(); });
+  $$(".day-cell").forEach(button => button.onclick = () => { selectedDate = button.dataset.date; renderCalendar("day"); });
 }
+function queuePrimarySpec(item) {
+  if (needsLocalVerification(item)) return { action: "primary", label: "ยืนยัน", className: "settle" };
+  if (item.actionType === "RECEIVE_CUSTOMER_PAYMENT") return { action: "primary", label: "รับ", className: "receive" };
+  if (["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) return { action: "primary", label: "จ่าย", className: "pay" };
+  return { action: "primary", label: "ดำเนินการ", className: "settle" };
+}
+
+function queueActionSpecs(item) {
+  if (!item || item.status === "CANCELLED") return [];
+  if (item.status === "COMPLETED") return [{ action: "history", label: "ประวัติ", className: "edit" }];
+  return [
+    queuePrimarySpec(item),
+    { action: "edit", label: "แก้ไข", className: "edit" },
+    { action: "cancel", label: "ยกเลิก", className: "cancel" }
+  ];
+}
+
 function queueActionButtons(item) {
-  if (["COMPLETED", "CANCELLED"].includes(item.status)) return `<button class="edit" data-history="${item.id}">ดูประวัติ</button>`;
-  const buttons = [];
-  if (needsLocalVerification(item)) {
-    buttons.push(`<button class="settle" data-refresh="${item.id}">ยืนยันข้อมูลถูกต้อง</button>`);
-    buttons.push(`<button class="edit" data-verify-edit="${item.id}">แก้ไขข้อมูล</button>`);
-    buttons.push(`<button class="cancel" data-cancel="${item.id}">ยกเลิกรายการ</button>`);
-    buttons.push(`<button class="edit" data-history="${item.id}">ประวัติ</button>`);
-    return buttons.join("");
-  }
-  if (["RECEIVE_CUSTOMER_PAYMENT", "PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) {
-    const incoming = item.actionType === "RECEIVE_CUSTOMER_PAYMENT";
-    buttons.push(`<button class="${incoming ? "receive" : "pay"}" data-partial="${item.id}">${incoming ? "รับบางส่วน" : "จ่ายบางส่วน"}</button>`);
-    buttons.push(`<button class="${incoming ? "receive" : "pay"}" data-full="${item.id}">${incoming ? "รับครบ" : "จ่ายครบ"}</button>`);
-  } else {
-    const label = item.actionType === "PURCHASE_RETURN_WINDOW" ? "เก็บสินค้าไว้" : item.actionType === "VERIFY_SOURCE" ? "ตรวจแล้ว" : item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" ? "ยืนยันเงินเข้า" : "ยืนยันรายได้";
-    buttons.push(`<button class="settle" data-complete="${item.id}">${label}</button>`);
-  }
-  buttons.push(`<button class="edit" data-move="${item.id}">เลื่อน</button>`);
-  buttons.push(`<button class="cancel" data-cancel="${item.id}">ยกเลิก</button>`);
-  buttons.push(`<button class="edit" data-history="${item.id}">ประวัติ</button>`);
-  return buttons.join("");
+  return queueActionSpecs(item).map(spec => `<button type="button" class="${spec.className}" data-queue-action="${spec.action}" data-queue-id="${esc(item.id)}">${spec.label}</button>`).join("");
 }
 
 function renderCalendar() {
@@ -1757,7 +1915,7 @@ function renderCalendar() {
     const gate = gateLabel(item);
     const installment = item.installmentNumber ? ` · งวด ${item.installmentNumber}/${item.installmentCount}` : "";
     const remaining = Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0));
-    return `<div class="queue-item" data-queue-source="${item.source}:${item.sourceId}"><div class="queue-top"><div class="source-badge">${item.source === "STORE" ? "🏪" : item.source === "RIDE" ? "🛵" : "📒"}</div><div class="queue-title"><b>${actionLabel(item.actionType)}${installment}</b><small>${sourceLabel(item.source)} · ${esc(source?.name || source?.customer || source?.note || item.sourceId)}</small><span class="user-status ${gate.cls}">${gate.text}</span></div><div class="queue-money"><b>${money(remaining)} ฿</b><span class="status ${statusClass(item.status)}">${statusLabel(item.status)}</span></div></div><div class="meta-grid"><div class="meta"><small>กำหนด</small><b>${dateTH(item.due)}</b></div><div class="meta"><small>ต้นทาง</small><b>${item.source} · รุ่น ${item.expectedRevision}</b></div></div><div class="queue-actions">${queueActionButtons(item)}</div></div>`;
+    return `<div class="queue-item" data-queue-id="${esc(item.id)}" data-queue-source="${item.source}:${item.sourceId}"><div class="queue-top"><div class="source-badge">${item.source === "STORE" ? "🏪" : item.source === "RIDE" ? "🛵" : "📒"}</div><div class="queue-title"><b>${actionLabel(item.actionType)}${installment}</b><small>${sourceLabel(item.source)} · ${esc(source?.name || source?.customer || source?.note || item.sourceId)}</small><span class="user-status ${gate.cls}">${gate.text}</span></div><div class="queue-money"><b>${money(remaining)} ฿</b><span class="status ${statusClass(item.status)}">${statusLabel(item.status)}</span></div></div><div class="meta-grid"><div class="meta"><small>กำหนด</small><b>${dateTH(item.due)}</b></div><div class="meta"><small>ต้นทาง</small><b>${item.source} · รุ่น ${item.expectedRevision}</b></div></div><div class="queue-actions">${queueActionButtons(item)}</div></div>`;
   }).join("") : '<div class="empty">ไม่มีรายการตามตัวกรองนี้</div>';
   bindQueueActions();
 }
@@ -1806,7 +1964,8 @@ function buildReportData(start, end) {
   const inSatang = cashTransactions.filter(tx => tx.direction === "IN").reduce((sum, tx) => sum + tx.amountSatang, 0);
   const outSatang = cashTransactions.filter(tx => tx.direction === "OUT").reduce((sum, tx) => sum + tx.amountSatang, 0);
   const audit = state.audit.filter(item => { const d = dateKey(item.at); return d >= start && d <= end; });
-  const pendingAtEnd = state.calendar.filter(item => recordDate(item) <= end && (!item.completedAt || dateKey(item.completedAt) > end) && (!item.cancelledAt || dateKey(item.cancelledAt) > end)).length;
+  const pendingAtEnd = state.calendar.filter(item => queuePendingAtEnd(item, end)).length;
+  const reconstructedStock = calendarReportSnapshot(start, end, state);
   return {
     format: "YGPH_REPORT",
     version: 1,
@@ -1830,11 +1989,11 @@ function buildReportData(start, end) {
     },
     ledger: { inSatang, outSatang, otherIncomeSatang, adjustmentSatang, receivableCorrectionSatang, netSatang: inSatang - outSatang, transactions: cashTransactions.length },
     calendar: {
-      created: state.calendar.filter(item => isInRange(item, start, end)).length,
+      created: state.calendar.filter(item => { const created = queueCreatedDate(item); return created >= start && created <= end; }).length,
       completed: state.calendar.filter(item => item.completedAt && dateKey(item.completedAt) >= start && dateKey(item.completedAt) <= end).length,
       cancelled: state.calendar.filter(item => item.cancelledAt && dateKey(item.cancelledAt) >= start && dateKey(item.cancelledAt) <= end).length
     },
-    snapshot: { balanceSatang: currentBalanceAt(end), stockQty: stockAt(end), receivableSatang: receivableAt(end), rideCreditSatang: rideCreditAt(end), pendingQueues: pendingAtEnd },
+    snapshot: { balanceSatang: currentBalanceAt(end), ...reconstructedStock, receivableSatang: receivableAt(end), rideCreditSatang: rideCreditAt(end), pendingQueues: pendingAtEnd },
     audit
   };
 }
@@ -1851,8 +2010,8 @@ function downloadReport() {
   downloadJson(lastReportData, `YGPH_REPORT_${lastReportData.start}_${lastReportData.end}.json`);
 }
 
-function exchangeRecord({ recordId, source, type, title, detail = "", amountSatang = null, quantity = null, installmentCount = null, installmentNumber = null, dueDate = null, status = null, createdAt = null, updatedAt = null }) {
-  return { recordId, source, type, title, detail, amountSatang, quantity, installmentCount, installmentNumber, dueDate, status, createdAt, updatedAt, reviewStatus: "MATCHED", proposedAction: "NONE", proposedValue: null, reason: "" };
+function exchangeRecord({ recordId, source, type, title, detail = "", amountSatang = null, quantity = null, installmentCount = null, installmentNumber = null, dueDate = null, status = null, createdAt = null, updatedAt = null, reason = "" }) {
+  return { recordId, source, type, title, detail, amountSatang, quantity, installmentCount, installmentNumber, dueDate, status, createdAt, updatedAt, reviewStatus: "MATCHED", proposedAction: "NONE", proposedValue: null, reason };
 }
 
 function buildExchange() {
@@ -1860,6 +2019,7 @@ function buildExchange() {
   state.store.sales.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "STORE", type: "SALE", title: item.customer, detail: item.note || "", amountSatang: item.totalSatang, quantity: item.qty, dueDate: queueFor("STORE", item.id)?.due || null, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt })));
   state.store.purchases.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "STORE", type: "PURCHASE", title: item.name, detail: "รับสินค้าเข้า", amountSatang: item.costSatang, quantity: item.qty, dueDate: queueFor("STORE", item.id)?.due || null, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt })));
   state.store.withdrawals.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "STORE", type: "STOCK_WITHDRAWAL", title: item.reason, detail: item.note || "", amountSatang: item.costSatang, quantity: item.qty, status: "COMPLETED", createdAt: item.createdAt, updatedAt: item.updatedAt })));
+  state.store.adjustments.forEach(item => records.push(exchangeRecord({ recordId: item.adjustmentId, source: "STORE", type: "STOCK_ADJUSTMENT", title: `ปรับสต็อก ${item.beforeQty} → ${item.afterQty}`, detail: item.note || item.reason, quantity: item.adjustmentQty, status: "COMPLETED", createdAt: item.at, updatedAt: item.at, reason: item.reason })));
   state.ride.jobs.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "RIDE", type: "RIDE_JOB", title: item.note || "งานวิ่ง", detail: item.paymentMode || "LEGACY_PENDING", amountSatang: item.amountSatang, quantity: item.distanceKm, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt })));
   state.ride.expenses.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "RIDE", type: "RIDE_EXPENSE", title: item.name, detail: item.type || "", amountSatang: item.amountSatang, status: "COMPLETED", createdAt: item.createdAt, updatedAt: item.updatedAt })));
   state.ride.creditWithdrawals.forEach(item => records.push(exchangeRecord({ recordId: item.id, source: "RIDE", type: "CREDIT_WITHDRAWAL", title: "เบิกเครดิตจากแอปงาน", detail: item.note || "", amountSatang: item.amountSatang, dueDate: item.due, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt })));
@@ -2274,15 +2434,22 @@ function bindHistoryButtons() {
 }
 
 function bindGoCalendar() { $$('[data-go-calendar]').forEach(button => button.onclick = () => { const [source, id] = button.dataset.goCalendar.split(":"); goCalendar(source, id); }); }
+function runQueuePrimaryAction(id) {
+  const item = findQueue(id);
+  if (!item) return toast("ไม่พบคิว");
+  if (needsLocalVerification(item)) return refreshQueueVerification(id);
+  if (["RECEIVE_CUSTOMER_PAYMENT", "PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) return openPayment(id);
+  return completeQueue(id);
+}
+
 function bindQueueActions() {
-  $$('[data-partial]').forEach(button => button.onclick = () => openPayment(button.dataset.partial, false));
-  $$('[data-full]').forEach(button => button.onclick = () => openPayment(button.dataset.full, true));
-  $$('[data-complete]').forEach(button => button.onclick = () => completeQueue(button.dataset.complete));
-  $$('[data-cancel]').forEach(button => button.onclick = () => cancelQueue(button.dataset.cancel));
-  $$('[data-move]').forEach(button => button.onclick = () => moveQueue(button.dataset.move));
-  $$('[data-history]').forEach(button => button.onclick = () => showHistory(button.dataset.history));
-  $$('[data-refresh]').forEach(button => button.onclick = () => refreshQueueVerification(button.dataset.refresh));
-  $$('[data-verify-edit]').forEach(button => button.onclick = () => editQueueVerification(button.dataset.verifyEdit));
+  $$('[data-queue-action][data-queue-id]').forEach(button => {
+    const id = button.dataset.queueId;
+    if (button.dataset.queueAction === "primary") button.onclick = () => runQueuePrimaryAction(id);
+    if (button.dataset.queueAction === "edit") button.onclick = () => openQueueEditor(id);
+    if (button.dataset.queueAction === "cancel") button.onclick = () => cancelQueue(id);
+    if (button.dataset.queueAction === "history") button.onclick = () => showHistory(id);
+  });
 }
 
 function refreshQueueVerification(id) {
@@ -2306,41 +2473,86 @@ function refreshQueueVerification(id) {
     await persistAndRender("ยืนยันข้อมูลในเครื่องและปลด Safety Gate แล้ว");
   }});
 }
-function editQueueVerification(id) {
-  const item = findQueue(id);
-  if (!item) return toast("ไม่พบคิว");
-  openModal({ title: "แก้ไขข้อมูลที่ต้องตรวจ", text: "แก้เฉพาะกำหนดและหมายเหตุในเครื่อง โดยยังไม่ทำเงินจริง", body: `<div class="field"><label>วันกำหนด</label><input id="verifyEditDue" type="date" value="${esc(item.due)}"></div><div class="field"><label>หมายเหตุ</label><input id="verifyEditNote" maxlength="180" value="${esc(item.reviewNote || item.verifiedNote || "")}" placeholder="ระบุข้อมูลที่ต้องแก้หรือตรวจเพิ่ม"></div><div class="flow-note"><b>ยอด ${money(Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0)))} บาท</b><br>ยอดเงินจริงผูกกับข้อมูลต้นทาง จึงไม่แก้ทับจากคิวนี้</div>`, confirm: "บันทึกการแก้ไข", onConfirm: async () => {
-    const due = byId("verifyEditDue").value;
-    const note = cleanImportText(byId("verifyEditNote").value, 180);
-    if (!validISODate(due)) { toast("วันกำหนดไม่ถูกต้อง"); modalBusy = false; return; }
-    item.due = due; item.dueAt = `${due}T09:00:00+07:00`; item.triggerAt = item.dueAt;
-    item.reviewNote = note;
-    item.status = "VERIFY";
-    item.requiresRefreshBeforePayment = true;
-    item.completedAt = null;
-    const source = findSource(item.source, item.sourceId);
-    if (source?.installments && item.installmentNumber) {
-      const installment = source.installments.find(entry => entry.number === item.installmentNumber);
-      if (installment) installment.due = due;
-    }
-    if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source) source.due = due;
-    if (source) { bumpSource(source); syncQueueRevisionsForSource(item.source, item.sourceId); }
-    addHistory(item, "OWNER_EDITED_VERIFY", note || `แก้กำหนดเป็น ${due}`);
-    bumpQueue(item);
-    closeModal();
-    await persistAndRender("แก้ข้อมูลแล้ว รายการยังถูกล็อกจนกว่าจะยืนยัน");
-  }});
+function queueHistoryMarkup(item) {
+  if (!Array.isArray(item?.history) || !item.history.length) return '<div class="empty">ยังไม่มีประวัติ</div>';
+  return item.history.map(entry => `<div class="audit"><b>${esc(entry.event)}</b><small>${new Date(entry.at).toLocaleString("th-TH")} · ${esc(entry.note || "")}</small></div>`).join("");
 }
 
-async function openPayment(id, full) {
+function openQueueEditor(id) {
+  const item = findQueue(id);
+  if (!item) return toast("ไม่พบคิว");
+  if (["COMPLETED", "CANCELLED"].includes(item.status)) return showHistory(id);
+  const source = findSource(item.source, item.sourceId);
+  const displayName = item.displayName || source?.name || source?.customer || source?.note || "";
+  const note = item.note || item.reviewNote || item.verifiedNote || "";
+  const scheduleApi = globalThis.YGPHMetropolisSchedule;
+  const hasSchedule = Boolean(scheduleApi?.isManagedQueue?.(id) || source?.scheduleMode === "PER_INSTALLMENT");
+  const history = queueHistoryMarkup(item);
+  openModal({
+    title: "แก้ไข",
+    text: "แก้ข้อมูลแผนและวันกำหนด โดยยอดเงินจริงยังยึดข้อมูลต้นทาง",
+    body: `<div class="form-grid queue-editor">
+      <div class="field full"><label>ชื่อที่ใช้แสดง</label><input id="queueEditName" maxlength="100" value="${esc(displayName)}"></div>
+      <div class="field"><label>วันกำหนด</label><input id="queueEditDue" type="date" value="${esc(item.due)}"></div>
+      <div class="field full"><label>หมายเหตุ</label><input id="queueEditNote" maxlength="180" value="${esc(note)}"></div>
+      <div class="field full"><label><input id="queueEditReminder" type="checkbox" ${item.reminderEnabled !== false ? "checked" : ""}> แสดงในสิ่งที่ต้องจัดการ</label></div>
+      ${hasSchedule ? '<div class="field full"><button type="button" class="secondary-btn wide" id="queueScheduleManager">จัดการตารางงวด</button></div>' : ""}
+      <div class="field full"><details id="queueEditHistory" class="queue-edit-history"><summary>ประวัติ</summary><div class="history-modal">${history}</div></details></div>
+      <div class="field full"><div class="flow-note"><b>ยอดตามต้นทาง ${money(Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0)))} บาท</b><br>ช่องแก้ไขนี้ไม่เขียนทับยอดเงินจริง</div></div>
+    </div>`,
+    confirm: "บันทึก",
+    onConfirm: async () => {
+      const due = byId("queueEditDue").value;
+      if (!validISODate(due)) { toast("วันกำหนดไม่ถูกต้อง"); modalBusy = false; return; }
+      const oldDue = item.due;
+      item.displayName = cleanImportText(byId("queueEditName").value, 100);
+      item.note = cleanImportText(byId("queueEditNote").value, 180);
+      item.reminderEnabled = byId("queueEditReminder").checked;
+      item.due = due;
+      item.dueAt = `${due}T09:00:00+07:00`;
+      item.triggerAt = item.dueAt;
+      if (needsLocalVerification(item)) item.reviewNote = item.note;
+
+      let sourceChanged = false;
+      if (source?.installments && item.installmentNumber) {
+        const installment = source.installments.find(entry => Number(entry.number) === Number(item.installmentNumber));
+        if (installment && installment.due !== due) {
+          installment.due = due;
+          if (Number(item.installmentNumber) === 1) source.firstDue = due;
+          sourceChanged = true;
+        }
+      }
+      if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source && source.due !== due) {
+        source.due = due;
+        sourceChanged = true;
+      }
+      if (sourceChanged) {
+        bumpSource(source);
+        syncQueueRevisionsForSource(item.source, item.sourceId);
+      }
+      addHistory(item, "PLAN_EDITED", `${oldDue} → ${due}`);
+      bumpQueue(item);
+      closeModal();
+      await persistAndRender("แก้ไขแล้ว");
+    }
+  });
+  const scheduleButton = byId("queueScheduleManager");
+  if (scheduleButton) scheduleButton.onclick = () => {
+    const api = globalThis.YGPHMetropolisSchedule;
+    if (!api?.openManager) return toast("ระบบตารางงวดยังไม่พร้อม");
+    api.openManager(item.id);
+  };
+}
+
+async function openPayment(id) {
   const item = findQueue(id);
   const source = findSource(item.source, item.sourceId);
   withGates(item, async () => {
     const incoming = item.actionType === "RECEIVE_CUSTOMER_PAYMENT";
     const maximum = incoming ? Number(source.outstandingSatang || 0) : Math.min(Number(source.remainingSatang || 0), Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0)));
     if (maximum <= 0) return toast("รายการนี้ไม่มียอดคงเหลือ");
-    openModal({ title: incoming ? "รับเงินลูกค้า" : `จ่ายภาระ${item.installmentNumber ? ` งวด ${item.installmentNumber}/${item.installmentCount}` : ""}`, text: "เงินจริงจะเปลี่ยนเมื่อยืนยันเท่านั้น", body: full ? "" : `<div class="field"><label>ยอดครั้งนี้</label><input id="payAmount" type="number" min="0.01" max="${satangToBaht(maximum)}" step="0.01" value="${satangToBaht(maximum)}"></div>`, confirm: incoming ? "รับเงิน" : "จ่ายเงิน", onConfirm: async () => {
-      const amount = full ? maximum : parseMoneyToSatang(byId("payAmount").value, { allowZero: false, label: "ยอดครั้งนี้" });
+    openModal({ title: incoming ? "รับเงินลูกค้า" : `จ่ายภาระ${item.installmentNumber ? ` งวด ${item.installmentNumber}/${item.installmentCount}` : ""}`, text: "ยอดสูงสุดถูกกรอกไว้แล้ว ลดจำนวนเมื่อต้องการทำบางส่วน", body: `<div class="field"><label>ยอดครั้งนี้</label><input id="payAmount" type="number" min="0.01" max="${satangToBaht(maximum)}" step="0.01" value="${satangToBaht(maximum)}"></div>`, confirm: incoming ? "รับเงิน" : "จ่ายเงิน", onConfirm: async () => {
+      const amount = parseMoneyToSatang(byId("payAmount").value, { allowZero: false, label: "ยอดครั้งนี้" });
       if (amount <= 0 || amount > maximum) { toast("ยอดไม่ถูกต้อง"); modalBusy = false; return; }
       const sequence = item.history.filter(h => h.event === "PAYMENT_APPLIED").length + 1;
       const key = `payment:${sequence}:${amount}`;
@@ -2437,25 +2649,10 @@ async function cancelQueue(id) {
   }});
 }
 
-function moveQueue(id) {
-  const item = findQueue(id);
-  openModal({ title: "เลื่อนกำหนด", text: `${sourceLabel(item.source)} · ${item.sourceId}`, body: `<div class="field"><label>วันใหม่</label><input id="newDue" type="date" value="${item.due}"></div>`, confirm: "บันทึกวันใหม่", onConfirm: async () => {
-    const due = byId("newDue").value;
-    if (!validISODate(due)) { toast("วันใหม่ไม่ถูกต้อง"); modalBusy = false; return; }
-    runOnce(item, `move:${due}`, () => {
-      item.due = due; item.dueAt = `${due}T09:00:00+07:00`; item.triggerAt = item.dueAt;
-      const source = findSource(item.source, item.sourceId);
-      if (source?.installments && item.installmentNumber) { const installment = source.installments.find(x => x.number === item.installmentNumber); if (installment) installment.due = due; }
-      if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source) source.due = due;
-      addHistory(item, "MOVED", `เลื่อนไป ${due}`);
-    });
-    closeModal(); await persistAndRender("เลื่อนคิวแล้ว");
-  }});
-}
-
 function showHistory(id) {
   const item = findQueue(id);
-  openModal({ title: `ประวัติ ${item.id}`, text: `${sourceLabel(item.source)} · ${item.sourceId}`, body: item.history.map(h => `<div class="audit"><b>${esc(h.event)}</b><small>${new Date(h.at).toLocaleString("th-TH")} · ${esc(h.note)}</small></div>`).join(""), confirm: "ปิด", onConfirm: closeModal });
+  if (!item) return toast("ไม่พบคิว");
+  openModal({ title: `ประวัติ ${item.id}`, text: `${sourceLabel(item.source)} · ${item.sourceId}`, body: queueHistoryMarkup(item), confirm: "ปิด", onConfirm: closeModal });
 }
 
 function promptVerifyBalance(migrationPrompt = false) {
@@ -2690,10 +2887,10 @@ function wireEvents() {
   });
   byId("headerHome").onclick = () => showPage("home"); byId("headerLockBtn").onclick = () => lockApp();
   $$('[data-page]').forEach(button => button.onclick = () => showPage(button.dataset.page));
-  $$('[data-filter]').forEach(button => button.onclick = () => { queueFilter = button.dataset.filter; $$('.filter-btn').forEach(item => item.classList.toggle('active', item === button)); renderCalendar(); });
-  byId("prevMonth").onclick = () => { const [y, m] = calendarMonth.split("-").map(Number); const date = new Date(y, m - 2, 1); calendarMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; selectedDate = null; renderCalendar(); };
-  byId("nextMonth").onclick = () => { const [y, m] = calendarMonth.split("-").map(Number); const date = new Date(y, m, 1); calendarMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; selectedDate = null; renderCalendar(); };
-  byId("clearDateFilter").onclick = () => { selectedDate = null; renderCalendar(); };
+  $$('[data-filter]').forEach(button => button.onclick = () => { queueFilter = button.dataset.filter; $$('.filter-btn').forEach(item => item.classList.toggle('active', item === button)); renderCalendar("filter"); });
+  byId("prevMonth").onclick = () => { const [y, m] = calendarMonth.split("-").map(Number); const date = new Date(y, m - 2, 1); calendarMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; selectedDate = null; renderCalendar("prev-month"); };
+  byId("nextMonth").onclick = () => { const [y, m] = calendarMonth.split("-").map(Number); const date = new Date(y, m, 1); calendarMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; selectedDate = null; renderCalendar("next-month"); };
+  byId("clearDateFilter").onclick = () => { selectedDate = null; renderCalendar("clear-date"); };
   byId("modalCancel").onclick = closeModal; byId("modal").onclick = event => { if (event.target.id === "modal") closeModal(); };
   byId("modalConfirm").onclick = async () => { if (modalBusy) return; modalBusy = true; try { await modalHandler?.(); } catch (error) { console.error(error); toast(error.message || "ดำเนินการไม่สำเร็จ"); } finally { setTimeout(() => { modalBusy = false; }, 250); } };
   ["exportJsonBtn", "homeExportBtn"].forEach(id => byId(id).onclick = downloadExport);
@@ -2964,7 +3161,10 @@ if (typeof module === "object" && module.exports) {
     backupPreviewForState,
     migrateStateToCurrent,
     applyLegacySchema3ReceivablePatch,
-    prepareSchema4SafetyRepair
+    prepareSchema4SafetyRepair,
+    queueCreatedDate,
+    queuePendingAtEnd,
+    calendarReportSnapshot
   };
 }
 

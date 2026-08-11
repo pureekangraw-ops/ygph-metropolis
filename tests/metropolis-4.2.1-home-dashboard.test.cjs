@@ -77,7 +77,7 @@ test("4.2.4 dashboard layer uses the shared runtime authority without monkey-pat
   assert.doesNotMatch(css, /\.status-line b\s*\{[\s\S]{0,80}font-size\s*:\s*0/);
 });
 
-test("4.2.5 finalization assets remain before later additive maintenance layers", () => {
+test("finalization assets remain before later additive maintenance layers", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-4.css") > bootstrap.indexOf("metropolis-r5-3.css"));
@@ -86,5 +86,6 @@ test("4.2.5 finalization assets remain before later additive maintenance layers"
   assert.ok(bootstrap.indexOf("metropolis-r5-5.js") > bootstrap.indexOf("metropolis-r5-4.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-5.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-5.js"));
-  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
+  assert.equal(sw.RELEASE_ID, JSON.parse(read("RELEASE_MANIFEST.json")).serviceWorker.releaseId);
+  assert.match(sw.RELEASE_ID, /^v4\.2\.6-/);
 });

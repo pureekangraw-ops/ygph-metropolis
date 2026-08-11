@@ -13,7 +13,7 @@ const r53 = read("metropolis-r5-3.js");
 
 test("service worker generation advances for the current Metropolis release", () => {
   assert.equal(sw.RELEASE_ID, manifest.serviceWorker.releaseId);
-  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
+  assert.match(sw.RELEASE_ID, /^v4\.2\.6-/);
 });
 
 test("release manifest describes the current Calendar contract, not the old hidden-node workaround", () => {

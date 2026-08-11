@@ -1,6 +1,6 @@
 "use strict";
 
-/* METROPOLIS 4.2.5 — maintenance report seam */
+/* METROPOLIS 4.2.6 — maintenance report seam */
 
 const METROPOLIS_MAINTENANCE_REPORT_VERSION = "1.0.1";
 
@@ -12,13 +12,17 @@ function maintenanceReportDate(item) {
   }
 }
 
-function maintenanceUpdateReportDom(stockQty, correctionQty) {
+function maintenanceUpdateReportDom(stockQty, correctionQty = null) {
   if (typeof document === "undefined") return;
   const rows = [...document.querySelectorAll("#storeReport .stat-line")];
   const stockRow = rows.find(row => row.querySelector("span")?.textContent?.trim() === "สต็อก ณ วันสิ้นสุด");
   if (stockRow?.querySelector("b")) stockRow.querySelector("b").textContent = `${stockQty.toLocaleString("th-TH")} ชิ้น`;
 
   let correctionRow = document.getElementById("maintenanceReportStockCorrection");
+  if (correctionQty == null) {
+    correctionRow?.remove();
+    return;
+  }
   if (!correctionRow && stockRow?.parentElement) {
     correctionRow = document.createElement("div");
     correctionRow.id = "maintenanceReportStockCorrection";
@@ -36,11 +40,17 @@ function applyMaintenanceStockToReport(context = {}, dependencies = {}) {
   const report = context.report;
   if (!report?.snapshot || !report.end) return report;
 
+  const syncDomFn = dependencies.syncDomFn || maintenanceUpdateReportDom;
+  if (report.snapshot.stockBasis === "RECONSTRUCTED_V2") {
+    if (report.store) delete report.store.manualAdjustmentCorrectionQty;
+    syncDomFn(Number(report.snapshot.stockQty || 0), null);
+    return report;
+  }
+
   const core = dependencies.core || globalThis.YGPHMaintenanceCore;
   const targetState = dependencies.state || (typeof state !== "undefined" ? state : null);
   const stockAtFn = dependencies.stockAtFn || (date => stockAt(date));
   const dateOf = dependencies.dateOf || maintenanceReportDate;
-  const syncDomFn = dependencies.syncDomFn || maintenanceUpdateReportDom;
   if (!core?.stockReportCorrectionAt) throw new Error("Maintenance Core ยังไม่พร้อมสำหรับ Report Adapter");
 
   if (report.__maintenanceStockAnchorApplied) {

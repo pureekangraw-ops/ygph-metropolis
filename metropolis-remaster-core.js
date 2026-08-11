@@ -1,6 +1,8 @@
 "use strict";
 
-/* METROPOLIS 4.2.5 — visual remaster pure icon authority */
+/* METROPOLIS 4.2.6 — visual remaster pure icon authority */
+
+(() => {
 
 const METROPOLIS_REMASTER_CORE_VERSION = "1.0.0";
 const STROKE_WIDTH = "1.8";
@@ -49,3 +51,5 @@ const api = Object.freeze({ METROPOLIS_REMASTER_CORE_VERSION, STROKE_WIDTH, ICON
 
 if (typeof globalThis !== "undefined") globalThis.YGPHMetropolisRemasterCore = api;
 if (typeof module === "object" && module.exports) module.exports = api;
+
+})();

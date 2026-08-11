@@ -1,10 +1,9 @@
 /* YGPH METROPOLIS 4.2 — schedule engine */
 
 .r52-schedule-preview{
-  border:1px solid var(--metro-line,#dfe9e4);
-  border-radius:18px;
+  border-top:1px solid var(--metro-line,#dfe9e4);
   background:#f8fbf9;
-  padding:.85rem;
+  padding:.85rem 0;
   color:var(--metro-ink,#17251f);
 }
 

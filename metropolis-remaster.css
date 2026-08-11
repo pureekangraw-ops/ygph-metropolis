@@ -1,4 +1,4 @@
-/* METRO Visual System V2 — final presentation authority for METROPOLIS 4.2.5 */
+/* METRO Visual System V2 — final presentation authority for METROPOLIS 4.2.6 */
 :root{
   color-scheme:dark;
   --metro-bg:#070c0e;
@@ -117,6 +117,23 @@ body.metropolis-v4[data-metropolis-page="calendar"]{--metro-accent:var(--metro-c
   color:var(--metro-text)!important;
   box-shadow:none!important;
 }
+.metropolis-v4 .flow-header-settings{
+  width:48px!important;
+  height:48px!important;
+  min-width:var(--metro-touch)!important;
+  min-height:var(--metro-touch)!important;
+  padding:0!important;
+  color:var(--metro-text-secondary)!important;
+}
+.metropolis-v4 .flow-header-settings .flow-icon{
+  width:20px!important;
+  height:20px!important;
+  margin:0!important;
+  font-size:20px!important;
+  color:var(--metro-text-secondary)!important;
+}
+.metropolis-v4 .flow-header-settings .flow-icon svg{width:20px!important;height:20px!important}
+.metropolis-v4 .flow-header-settings>span:not(.flow-icon){display:none!important}
 
 .flow-icon,.metro-remaster-icon,.metro-action-icon,.metro-heading-icon,.metro-level-icon{
   display:inline-grid;
@@ -753,6 +770,45 @@ body.metropolis-v4[data-metropolis-page="calendar"]{--metro-accent:var(--metro-c
 #calendarPage .flow-swipe-card strong,
 #calendarPage .flow-swipe-amount{color:var(--metro-text)!important}
 #calendarPage .flow-swipe-card small{color:var(--metro-muted)!important;opacity:1!important}
+#calendarPage .queue-actions:has(> [data-queue-action]),
+#calendarPage .flow-swipe-actions:has(> [data-queue-action]){
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  overflow:visible;
+  width:100%;
+}
+#calendarPage .queue-actions>[data-queue-action],
+#calendarPage .flow-swipe-actions>[data-queue-action]{
+  min-width:0;
+  min-height:var(--metro-touch);
+  padding:9px 7px;
+  white-space:normal;
+}
+#calendarPage .queue-actions>[data-queue-action="history"]:only-child,
+#calendarPage .flow-swipe-actions>[data-queue-action="history"]:only-child{grid-column:1/-1}
+.metropolis-v4 .queue-edit-history{
+  padding:12px;
+  border:1px solid var(--metro-border);
+  border-radius:var(--metro-radius-md);
+  background:var(--metro-surface);
+  color:var(--metro-text-secondary);
+}
+.metropolis-v4 .queue-edit-history summary{min-height:var(--metro-touch);display:flex;align-items:center;cursor:pointer;font-weight:800;color:#9dceff}
+.metropolis-v4 .r5-disclosure{
+  border-color:var(--metro-border);
+  background:var(--metro-surface);
+  color:var(--metro-text-secondary);
+}
+.metropolis-v4 .r5-disclosure>summary{color:#9dceff}
+.metropolis-v4 .r52-schedule-preview{
+  border-color:var(--metro-border);
+  background:transparent;
+  color:var(--metro-text);
+}
+.metropolis-v4 .r52-schedule-preview>small,
+.metropolis-v4 .r52-preview-list>span>em{color:var(--metro-muted)}
+.metropolis-v4 .r52-preview-list>span{background:var(--metro-surface-strong);border-color:var(--metro-border)}
 #calendarPage .flow-swipe-nav button{
   min-width:var(--metro-touch)!important;
   min-height:var(--metro-touch)!important;
@@ -789,6 +845,16 @@ body.metropolis-v4[data-metropolis-page="calendar"]{--metro-accent:var(--metro-c
   color:var(--metro-text-secondary)!important;
 }
 .metropolis-v4 #settingsPage summary{color:var(--metro-text-secondary)!important}
+.metropolis-v4 .storage-capacity-card{border-color:var(--metro-border)!important;background:linear-gradient(145deg,#151f22,#11191b)!important}
+.metropolis-v4 .storage-capacity-head small{color:var(--metro-muted)}
+.metropolis-v4 .storage-capacity-normal #storageCapacityLevel{color:var(--metro-primary)}
+.metropolis-v4 .storage-capacity-watch #storageCapacityLevel{color:var(--metro-gold)}
+.metropolis-v4 .storage-capacity-warning #storageCapacityLevel,
+.metropolis-v4 .storage-capacity-critical #storageCapacityLevel{color:var(--metro-danger)}
+.metropolis-v4 .storage-capacity-unknown #storageCapacityLevel{color:var(--metro-muted)}
+.metropolis-v4 .storage-capacity-watch{border-color:rgba(245,193,74,.52)!important}
+.metropolis-v4 .storage-capacity-warning,
+.metropolis-v4 .storage-capacity-critical{border-color:rgba(255,107,107,.58)!important}
 #maintenanceRecoveryCard{
   padding:20px!important;
   background:linear-gradient(180deg,#0d1719,#091113)!important;

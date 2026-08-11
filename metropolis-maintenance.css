@@ -1,4 +1,4 @@
-/* METROPOLIS 4.2.5 — Maintenance Center */
+/* METROPOLIS 4.2.6 — Maintenance Center */
 
 .metropolis-v4 .maintenance-adjust-stock{
   margin:10px 0 18px;
@@ -76,6 +76,22 @@
 .metropolis-v4 .maintenance-confirm-field{margin-top:12px}
 .metropolis-v4 .maintenance-inline-note{color:#8e9b98;line-height:1.45}
 .metropolis-v4 .maintenance-report-adjustment b{color:#f5c14a}
+
+.metropolis-v4 .storage-capacity-card{display:grid;gap:12px}
+.metropolis-v4 .storage-capacity-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.metropolis-v4 .storage-capacity-head h3{margin:0}
+.metropolis-v4 .storage-capacity-head small{display:block;margin-top:4px;line-height:1.45}
+.metropolis-v4 #storageCapacityLevel{flex:0 0 auto;border:1px solid currentColor;border-radius:999px;padding:5px 8px;font-size:.65rem;font-weight:850;letter-spacing:.04em}
+.metropolis-v4 .storage-capacity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.metropolis-v4 .storage-capacity-grid>div{min-width:0;padding:10px;border:1px solid #2a3639;border-radius:13px;background:#121b1e}
+.metropolis-v4 .storage-capacity-grid small{display:block;color:#8e9b98;font-size:.7rem}
+.metropolis-v4 .storage-capacity-grid b{display:block;margin-top:4px;overflow-wrap:anywhere}
+.metropolis-v4 .storage-capacity-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.metropolis-v4 .storage-capacity-actions button{min-width:0;min-height:44px;padding:9px 7px;white-space:normal}
+
+@media (max-width:420px){
+  .metropolis-v4 .storage-capacity-actions{grid-template-columns:1fr}
+}
 
 @media (max-width:420px){
   .metropolis-v4 .maintenance-three{grid-template-columns:1fr}

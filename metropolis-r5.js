@@ -113,11 +113,14 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
             <div class="field"><label>จำนวนชิ้น</label><input id="saleQty" type="number" min="1" value="1"></div>
             <div class="field"><label>ราคาต่อชิ้น</label><input id="saleUnitPrice" type="number" min="0" step="0.01" value="${satangToBaht(state.settings.defaultPriceSatang)}"></div>
             <div class="field"><label>รับเงินจริงครั้งนี้</label><input id="saleReceived" type="number" min="0" step="0.01" value="0"><small>ยอดที่ยังไม่รับจะเป็นลูกหนี้</small></div>
-            <div class="field"><label class="r5-check"><input id="saleHasShippingCost" type="checkbox"> มีค่าจัดส่ง</label><input id="saleShippingCost" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="ค่าจัดส่งที่ร้านจ่าย" disabled></div>
-            <div class="field"><label>ลูกค้า</label><input id="saleCustomer" maxlength="80"></div>
-            <div class="field full"><label>ช่องทางติดต่อ</label><input id="saleContact" maxlength="100"></div>
-            <div class="field full"><label>วันนัดยอดค้าง</label><input id="saleDue" type="date" value="${localISO()}"></div>
-            <div class="field full"><label>หมายเหตุ</label><input id="saleNote" maxlength="200"></div>
+            <div class="field"><label class="r5-check"><input id="saleHasShippingCost" type="checkbox" aria-controls="saleShippingCostField" aria-expanded="false"> มีค่าจัดส่ง</label></div>
+            <div class="field full" id="saleShippingCostField" hidden><label>ค่าจัดส่งที่ร้านจ่าย</label><input id="saleShippingCost" type="number" min="0.01" step="0.01" inputmode="decimal" disabled></div>
+            <div class="field" id="saleCustomerField"><label>ลูกค้า</label><input id="saleCustomer" maxlength="80" required></div>
+            <div class="field" id="saleDueField"><label>วันนัดยอดค้าง</label><input id="saleDue" type="date" value="${localISO()}" required></div>
+            <details id="saleMoreDetails" class="field full r5-disclosure"><summary>ดูรายละเอียดเพิ่ม</summary><div class="form-grid r5-disclosure-body">
+              <div class="field full"><label>ช่องทางติดต่อ</label><input id="saleContact" maxlength="100"></div>
+              <div class="field full"><label>หมายเหตุ</label><input id="saleNote" maxlength="200"></div>
+            </div></details>
           </div>`,
           confirm: "บันทึกขาย",
           onConfirm: async () => {
@@ -130,9 +133,11 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
               ? parseMoneyToSatang(byId("saleShippingCost").value, { allowZero: false, label: "ค่าจัดส่ง" })
               : 0;
             if (receivedSatang > totalSatang || qty > state.store.stockQty) { toast("ตรวจเงินรับและสต็อก"); modalBusy = false; return; }
-            const customer = byId("saleCustomer").value.trim() || (receivedSatang < totalSatang ? "ลูกค้าไม่ระบุชื่อ" : "ขายเงินสด");
-            const due = byId("saleDue").value;
-            if (receivedSatang < totalSatang && !due) { toast("รายการค้างต้องมีวันนัด"); modalBusy = false; return; }
+            const hasOutstanding = receivedSatang < totalSatang;
+            const customer = hasOutstanding ? byId("saleCustomer").value.trim() : "ขายเงินสด";
+            const due = hasOutstanding ? byId("saleDue").value : "";
+            if (hasOutstanding && !customer) { toast("รายการค้างต้องมีชื่อลูกค้า"); modalBusy = false; return; }
+            if (hasOutstanding && !validISODate(due)) { toast("รายการค้างต้องมีวันนัด"); modalBusy = false; return; }
             const costSatang = takeStockFromPool(state, qty);
             const id = uid("SALE");
             const createdAt = nowIso();
@@ -154,13 +159,40 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
         });
         const toggle = byId("saleHasShippingCost");
         const field = byId("saleShippingCost");
-        const sync = () => {
+        const fieldWrap = byId("saleShippingCostField");
+        const syncShipping = () => {
+          fieldWrap.hidden = !toggle.checked;
           field.disabled = !toggle.checked;
+          toggle.setAttribute("aria-expanded", String(toggle.checked));
           if (!toggle.checked) field.value = "";
           else setTimeout(() => field.focus(), 0);
         };
-        toggle.addEventListener("change", sync);
-        sync();
+        const syncOutstanding = () => {
+          let hasOutstanding = false;
+          try {
+            const qty = parseQuantity(byId("saleQty")?.value, { label: "จำนวนขาย" });
+            const unitPriceSatang = parseMoneyToSatang(byId("saleUnitPrice")?.value, { allowZero: true, label: "ราคาต่อชิ้น" });
+            const receivedSatang = parseMoneyToSatang(byId("saleReceived")?.value, { allowZero: true, label: "เงินรับ" });
+            const totalSatang = parseSatang(qty * unitPriceSatang, { allowZero: true, label: "ยอดขายรวม" });
+            hasOutstanding = receivedSatang < totalSatang;
+          } catch (_) {
+            hasOutstanding = false;
+          }
+          [["saleCustomerField", "saleCustomer"], ["saleDueField", "saleDue"]].forEach(([wrapId, inputId]) => {
+            const wrap = byId(wrapId);
+            const input = byId(inputId);
+            wrap.hidden = !hasOutstanding;
+            input.disabled = !hasOutstanding;
+            input.required = hasOutstanding;
+          });
+        };
+        toggle.addEventListener("change", syncShipping);
+        ["saleQty", "saleUnitPrice", "saleReceived"].forEach(id => {
+          byId(id)?.addEventListener("input", syncOutstanding);
+          byId(id)?.addEventListener("change", syncOutstanding);
+        });
+        syncShipping();
+        syncOutstanding();
       };
     }
 

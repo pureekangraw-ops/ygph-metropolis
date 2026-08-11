@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const metro = require('../metropolis-r5-5.js');
+const highway = require('../highway-gate.js');
+
+const root = path.resolve(__dirname, '..');
 
 test('daily target progress uses store + ride earnings and pass-game thresholds', () => {
   const state = { store: { sales: [{ date:'2026-08-10', totalSatang:40000, status:'COMPLETED' }, { date:'2026-08-10', totalSatang:5000, status:'CANCELLED' }] }, ride: { jobs: [{ date:'2026-08-10', amountSatang:32000, status:'SETTLED' }] } };
@@ -23,6 +28,11 @@ test('payment preview subtracts selected obligations without mutating real balan
   assert.deepEqual(metro.r55PaymentPreview(400000,[{remainingSatang:150000},{remainingSatang:50000}]),{selectedSatang:200000,afterSatang:200000});
 });
 
-test('release layer is 4.2.5', () => {
-  assert.equal(metro.METROPOLIS_425_PRODUCT_VERSION,'4.2.5');
+test('release authorities advance together for the 4.2.6 root stabilization', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'RELEASE_MANIFEST.json'), 'utf8'));
+  assert.equal(metro.METROPOLIS_426_PRODUCT_VERSION, '4.2.6');
+  assert.equal(highway.VERSION, '2.0.1');
+  assert.equal(pkg.version, '2.1.5');
+  assert.equal(manifest.release, '4.2.6-root-stabilization');
 });

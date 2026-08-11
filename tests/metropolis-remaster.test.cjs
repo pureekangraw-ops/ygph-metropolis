@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadProductionRuntime } = require('./helpers/metropolis-runtime-harness.cjs');
 
 const root = path.join(__dirname, '..');
 const visualPath = path.join(root, 'metropolis-remaster-core.js');
@@ -105,6 +106,25 @@ test('Metro V2 overrides every device-proven light/dark cascade conflict', () =>
   assert.match(gateRestore, /color:var\(--metro-info\)!important/i);
 });
 
+test('Settings reuses one icon host while keeping a 44px target and a smaller glyph', async t => {
+  const css = read(cssPath);
+  const buttonRule = cssRule(css, '.metropolis-v4 .flow-header-settings');
+  const iconRule = cssRule(css, '.metropolis-v4 .flow-header-settings .flow-icon');
+  assert.match(buttonRule, /min-width:var\(--metro-touch\)!important/i);
+  assert.match(buttonRule, /min-height:var\(--metro-touch\)!important/i);
+  assert.match(iconRule, /font-size:20px!important/i);
+  assert.match(iconRule, /color:var\(--metro-text-secondary\)!important/i);
+
+  const runtime = loadProductionRuntime();
+  t.after(() => runtime.close());
+  await runtime.flushRuntime();
+  const button = runtime.window.document.getElementById('flowHeaderSettings');
+  assert.ok(button, 'Settings control must exist');
+  assert.equal(button.querySelectorAll('svg').length, 1, 'Remaster must evolve the FLOW icon host instead of adding a second gear');
+  assert.equal(button.querySelectorAll('.flow-icon').length, 1);
+  assert.equal(button.querySelectorAll('.metro-action-icon').length, 0);
+});
+
 test('Metro V2 defines one mobile hierarchy across chrome, pages, actions, records and calendar', () => {
   const css = read(cssPath);
   for (const token of [
@@ -155,6 +175,8 @@ test('Metro V2 defines one mobile hierarchy across chrome, pages, actions, recor
   const maintenanceChoice = cssRule(css, '.metropolis-v4 .maintenance-choice-grid button');
   assert.match(maintenanceThree, /min-height:var\(--metro-touch\)!important/i, 'Partial Reset controls must keep a 44px touch target');
   assert.match(maintenanceChoice, /min-height:var\(--metro-touch\)!important/i, 'Reconcile choices must keep a 44px touch target');
+  assert.match(cssRule(css, '.metropolis-v4 .storage-capacity-normal #storageCapacityLevel'), /color:var\(--metro-primary\)/i, 'normal capacity must use an existing green token');
+  assert.match(cssRule(css, '.metropolis-v4 .storage-capacity-watch #storageCapacityLevel'), /color:var\(--metro-gold\)/i, 'watch capacity must use an existing yellow token');
   assert.doesNotMatch(css, /\.metropolis-v4 \.bottom-nav \.nav-btn(?: span)?\{[^}]*font-size:\.5\drem/i, 'mobile navigation labels must not shrink below the readable V2 size');
 
   assert.match(css, /@media\s*\(max-width:420px\)/);
@@ -177,7 +199,8 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
   for (const script of ['metropolis-remaster-core.js', 'metropolis-remaster.js']) {
     assert.match(pkg, new RegExp(`node --check ${script.replaceAll('.', '\\.')}`));
   }
-  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r23-metro-visual-system');
+  assert.equal(manifest.release, '4.2.6-root-stabilization');
+  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.6-20260811-r24-root-stabilization');
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster-core.js') > manifest.runtimeOrder.indexOf('metropolis-maintenance-report.js'));
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster.js') > manifest.runtimeOrder.indexOf('metropolis-remaster-core.js'));
 });

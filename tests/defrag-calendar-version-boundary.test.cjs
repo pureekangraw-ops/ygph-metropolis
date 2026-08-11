@@ -20,7 +20,7 @@ test("calendar source HTML does not carry hidden cancelled controls", () => {
 });
 
 test("core/data provenance version is named separately from product version", () => {
-  assert.match(app, /const CORE_DATA_RELEASE_VERSION = ["']2\.1\.4["']/);
-  assert.doesNotMatch(app, /const RELEASE_VERSION = ["']2\.1\.4["']/);
+  assert.match(app, /const CORE_DATA_RELEASE_VERSION = ["']2\.1\.5["']/);
+  assert.doesNotMatch(app, /const RELEASE_VERSION = ["']2\.1\.5["']/);
   assert.match(app, /releaseVersion:\s*CORE_DATA_RELEASE_VERSION/);
 });

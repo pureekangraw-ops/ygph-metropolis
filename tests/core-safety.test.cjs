@@ -9,7 +9,7 @@ const fixtureState = () => ({
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-05T00:00:00.000Z",
   settings: { defaultPriceSatang: 80000 },
-  store: { stockQty: 1, stockValueSatang: 50000, sales: [], purchases: [], withdrawals: [] },
+  store: { stockQty: 1, stockValueSatang: 50000, sales: [], purchases: [], withdrawals: [], adjustments: [] },
   ride: { currentRound: null, rounds: [], jobs: [], expenses: [], creditBalanceSatang: 0, creditWithdrawals: [] },
   ledger: { openingBalanceSatang: 0, transactions: [], obligations: [] },
   calendar: [],
@@ -21,6 +21,20 @@ const fixtureState = () => ({
 });
 
 const clone = (value) => structuredClone(value);
+
+const stockAdjustment = (overrides = {}) => ({
+  adjustmentId: "ADJ-1",
+  beforeQty: 1,
+  adjustmentQty: 2,
+  afterQty: 3,
+  reason: "STOCK_COUNT_MISMATCH",
+  note: "นับจริง",
+  at: "2026-08-11T07:00:00.000Z",
+  actor: "OWNER",
+  affectsLedger: false,
+  affectsValue: false,
+  ...overrides
+});
 
 test("loads one authoritative core API without browser runtime globals", () => {
   let core;
@@ -304,4 +318,76 @@ test("read-back ignores undefined fields that JSON storage cannot persist", () =
   const actual = JSON.parse(JSON.stringify(expected));
 
   assert.doesNotThrow(() => core.assertReadback(expected, actual));
+});
+
+test("rejects malformed stock-adjustment topology and duplicate durable identity", () => {
+  const core = require("../highway-gate.js");
+  const cases = [
+    ["fractional before", { beforeQty: 1.5 }],
+    ["broken equation", { adjustmentQty: 1, afterQty: 9 }],
+    ["negative result", { beforeQty: 1, adjustmentQty: -2, afterQty: -1 }],
+    ["ledger effect", { affectsLedger: true }],
+    ["value effect", { affectsValue: true }],
+    ["missing effect contract", { affectsValue: undefined }],
+    ["invalid timestamp", { at: "not-a-date" }]
+  ];
+  for (const [label, overrides] of cases) {
+    const before = fixtureState();
+    const after = clone(before);
+    after.store.stockQty = Math.max(0, Number(overrides.afterQty ?? 3));
+    after.store.adjustments.push(stockAdjustment(overrides));
+    const plan = core.buildPlan(before, after, { idempotencyKey: `adjustment:invalid:${label}` });
+    assert.throws(() => core.validatePlan(plan, before, after), /Adjustment|adjustment|ปรับสต็อก|สมการ|จำนวนเต็ม|ผลกระทบ|เวลา/i, label);
+  }
+
+  const before = fixtureState();
+  const duplicate = clone(before);
+  duplicate.store.adjustments.push(stockAdjustment(), stockAdjustment({ note: "ซ้ำ" }));
+  assert.throws(() => core.buildPlan(before, duplicate, { idempotencyKey: "adjustment:duplicate" }), /ซ้ำ|duplicate/i);
+});
+
+test("stock-adjustment evidence is append-only and immutable", () => {
+  const core = require("../highway-gate.js");
+  const before = fixtureState();
+  before.store.stockQty = 3;
+  before.store.adjustments.push(stockAdjustment());
+
+  const mutated = clone(before);
+  mutated.store.adjustments[0].note = "แก้ย้อนหลัง";
+  assert.throws(
+    () => core.validatePlan(core.buildPlan(before, mutated, { idempotencyKey: "adjustment:mutate" }), before, mutated),
+    /แก้|immutable|Adjustment|หลักฐาน/i
+  );
+
+  const deleted = clone(before);
+  deleted.store.adjustments = [];
+  assert.throws(
+    () => core.validatePlan(core.buildPlan(before, deleted, { idempotencyKey: "adjustment:delete" }), before, deleted),
+    /ห้ามลบ|Adjustment|หลักฐาน/i
+  );
+});
+
+test("accepts one valid stock-adjustment append including legacy value-effect compatibility", () => {
+  const core = require("../highway-gate.js");
+  const before = fixtureState();
+  const after = clone(before);
+  after.revision = 8;
+  after.store.stockQty = 3;
+  after.store.adjustments.push(stockAdjustment());
+  assert.doesNotThrow(() => core.validatePlan(
+    core.buildPlan(before, after, { idempotencyKey: "adjustment:append", sourceDomain: "STORE", targetDomain: ["STORE"] }),
+    before,
+    after
+  ));
+
+  const legacyBefore = clone(after);
+  delete legacyBefore.store.adjustments[0].affectsValue;
+  legacyBefore.store.adjustments[0].affectsStockValue = false;
+  const legacyAfter = clone(legacyBefore);
+  legacyAfter.settings.themeColor = "green";
+  assert.doesNotThrow(() => core.validatePlan(
+    core.buildPlan(legacyBefore, legacyAfter, { idempotencyKey: "adjustment:legacy-compatible" }),
+    legacyBefore,
+    legacyAfter
+  ));
 });
