@@ -10,6 +10,8 @@
 !/metropolis-r5-2.css
 !/metropolis-r5-3.css
 !/metropolis-r5-4.css
+!/metropolis-r5-5.css
+!/metropolis-maintenance.css
 !/sw-bootstrap.js
 !/highway-gate.js
 !/app.js
@@ -21,6 +23,10 @@
 !/metropolis-r5-2.js
 !/metropolis-r5-3.js
 !/metropolis-r5-4.js
+!/metropolis-r5-5.js
+!/metropolis-maintenance-core.js
+!/metropolis-maintenance.js
+!/metropolis-maintenance-report.js
 !/sw.js
 !/icon-192.png
 !/icon-512.png

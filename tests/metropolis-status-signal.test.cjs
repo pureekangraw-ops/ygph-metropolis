@@ -27,27 +27,17 @@ test("live signal hides an otherwise-open queue when its source was cancelled", 
 test("live selectors exclude cancelled records without mutating their inputs", () => {
   assert.equal(typeof runtime.selectLiveRecords, "function");
   assert.equal(typeof runtime.selectLiveCalendar, "function");
-
-  const records = [
-    { id: "open", status: "OPEN" },
-    { id: "cancelled", status: "CANCELLED" },
-    { id: "done", status: "COMPLETED" }
-  ];
+  const records = [{ id: "open", status: "OPEN" }, { id: "cancelled", status: "CANCELLED" }, { id: "done", status: "COMPLETED" }];
   const recordsSnapshot = structuredClone(records);
   assert.deepEqual(runtime.selectLiveRecords(records).map(item => item.id), ["open", "done"]);
   assert.deepEqual(records, recordsSnapshot);
-
   const calendar = [
     { id: "live", sourceId: "source-live", status: "OPEN", due: "2026-08-08" },
     { id: "queue-cancelled", sourceId: "source-live", status: "CANCELLED", due: "2026-08-08" },
     { id: "source-cancelled", sourceId: "source-cancelled", status: "OPEN", due: "2026-08-08" }
   ];
   const calendarSnapshot = structuredClone(calendar);
-  const selected = runtime.selectLiveCalendar(
-    calendar,
-    item => item.sourceId === "source-cancelled" ? "CANCELLED" : "OPEN",
-    "2026-08-08"
-  );
+  const selected = runtime.selectLiveCalendar(calendar, item => item.sourceId === "source-cancelled" ? "CANCELLED" : "OPEN", "2026-08-08");
   assert.deepEqual(selected.map(item => item.id), ["live"]);
   assert.deepEqual(calendar, calendarSnapshot);
 });
@@ -58,9 +48,7 @@ test("live rendering uses selectors and post-render lists instead of swapping du
   assert.doesNotMatch(js, /function withLiveSourceRecords/);
   assert.doesNotMatch(js, /state\.calendar\s*=/);
   assert.doesNotMatch(js, /state\.(?:store|ride|ledger)\?*\.[A-Za-z]+\s*=/);
-  for (const renderer of ["renderCalendar", "renderStore", "renderRide", "renderLedger"]) {
-    assert.doesNotMatch(js, new RegExp(`${renderer}\\s*=\\s*function`));
-  }
+  for (const renderer of ["renderCalendar", "renderStore", "renderRide", "renderLedger"]) assert.doesNotMatch(js, new RegExp(`${renderer}\\s*=\\s*function`));
   assert.match(js, /function renderLiveSourceLists/);
   assert.match(js, /historyHtml\s*=\s*function/);
   assert.match(js, /flowCalendarItems\s*=\s*function/);
@@ -107,9 +95,7 @@ test("live counters use the same hidden rule as visible queue cards", () => {
   const js = read("metropolis-r5-3.js");
   assert.match(js, /function syncLiveCounters/);
   assert.match(js, /selectLiveCalendar\(state\.calendar/);
-  for (const id of ["homeWaitIn", "homeWaitOut", "homeVerify", "calWaitIn", "calWaitOut", "calVerify", "ledgerPendingCount"]) {
-    assert.match(js, new RegExp(`setCounter\\("${id}"`));
-  }
+  for (const id of ["homeWaitIn", "homeWaitOut", "homeVerify", "calWaitIn", "calWaitOut", "calVerify", "ledgerPendingCount"]) assert.match(js, new RegExp(`setCounter\\("${id}"`));
 });
 
 test("status stylesheet exposes exactly the three owner-approved signal colors", () => {
@@ -121,13 +107,14 @@ test("status stylesheet exposes exactly the three owner-approved signal colors",
   assert.doesNotMatch(css, /r53-status-(?:blue|orange|purple|gray|grey)/);
 });
 
-test("status signal assets stay loaded before the 4.2.4 dashboard layer", () => {
+test("status signal assets stay loaded before dashboard and finalization layers", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-3.css") > bootstrap.indexOf("metropolis-r5-2.css"));
   assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
+  assert.ok(bootstrap.indexOf("metropolis-r5-5.js") > bootstrap.indexOf("metropolis-r5-4.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.css"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-3.js"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r19-trusted-device-auto-unlock");
+  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
 });

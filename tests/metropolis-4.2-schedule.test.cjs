@@ -98,14 +98,15 @@ test("4.1 version observer yields when the 4.2 runtime is present", () => {
   assert.match(r51, /metropolisR52/);
 });
 
-test("4.2 assets stay loaded before the additive status and dashboard layers", () => {
+test("4.2 assets stay loaded before the additive status, dashboard, and finalization layers", () => {
   const bootstrap = read("sw-bootstrap.js");
   const sw = require("../sw.js");
   assert.ok(bootstrap.indexOf("metropolis-r5-2.js") > bootstrap.indexOf("metropolis-r5-1.js"));
   assert.ok(bootstrap.indexOf("metropolis-r5-2.css") > bootstrap.indexOf("metropolis-r5-1.css"));
   assert.ok(bootstrap.indexOf("metropolis-r5-3.js") > bootstrap.indexOf("metropolis-r5-2.js"));
   assert.ok(bootstrap.indexOf("metropolis-r5-4.js") > bootstrap.indexOf("metropolis-r5-3.js"));
+  assert.ok(bootstrap.indexOf("metropolis-r5-5.js") > bootstrap.indexOf("metropolis-r5-4.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.js"));
   assert.ok(sw.APP_SHELL.includes("metropolis-r5-2.css"));
-  assert.equal(sw.RELEASE_ID, "v4.2.4-20260809-r19-trusted-device-auto-unlock");
+  assert.match(sw.RELEASE_ID, /^v4\.2\.5-/);
 });
