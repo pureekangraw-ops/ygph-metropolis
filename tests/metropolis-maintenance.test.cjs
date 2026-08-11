@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const corePath = path.join(__dirname, '..', 'metropolis-maintenance-core.js');
 const runtimePath = path.join(__dirname, '..', 'metropolis-maintenance.js');
+const appPath = path.join(__dirname, '..', 'app.js');
 
 function loadCore() {
   delete require.cache[require.resolve(corePath)];
@@ -133,4 +134,12 @@ test('browser runtime routes safe mutations through durable commit and destructi
   assert.match(source, /adjustStockBtn/);
   assert.doesNotMatch(source, /ledger\.transactions\.push/);
   assert.doesNotMatch(source, /addTransaction\s*\(/);
+});
+
+test('app integration normalizes stock adjustments and includes their deltas in historical stock reports', () => {
+  const source = readSource(appPath);
+  assert.match(source, /value\.store\.adjustments\s*=\s*Array\.isArray/);
+  assert.match(source, /state\.store\.adjustments/);
+  assert.match(source, /adjustmentQty/);
+  assert.match(source, /STOCK_ADJUSTMENT/);
 });
