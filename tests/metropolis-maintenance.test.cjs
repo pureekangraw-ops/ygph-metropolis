@@ -4,10 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const corePath = path.join(__dirname, '..', 'metropolis-maintenance-core.js');
+const runtimePath = path.join(__dirname, '..', 'metropolis-maintenance.js');
 
 function loadCore() {
   delete require.cache[require.resolve(corePath)];
   return require(corePath);
+}
+
+function readSource(filePath) {
+  return fs.readFileSync(filePath, 'utf8');
 }
 
 test('manual stock increase creates auditable quantity-only plan', () => {
@@ -115,4 +120,17 @@ test('maintenance cache targeting touches only METROPOLIS app generations and me
   ]), ['ygph-metropolis-app-v4.2.5-r20', 'ygph-metropolis-meta', 'ygph-metropolis-app-v4.2.4-r19']);
 });
 
-// Integration/source-contract tests are appended after the runtime layer exists.
+test('browser runtime routes safe mutations through durable commit and destructive reset through local storage adapters', () => {
+  const source = readSource(runtimePath);
+  assert.match(source, /persistAndRender/);
+  assert.match(source, /promptVerifyBalance/);
+  assert.match(source, /YGPHMaintenanceCore\.isFactoryConfirmation/);
+  assert.match(source, /YGPHMaintenanceCore\.isFullCleanupConfirmation/);
+  assert.match(source, /indexedDB\.deleteDatabase/);
+  assert.match(source, /navigator\.onLine/);
+  assert.match(source, /unregister\(\)/);
+  assert.match(source, /Recovery & Reset/);
+  assert.match(source, /adjustStockBtn/);
+  assert.doesNotMatch(source, /ledger\.transactions\.push/);
+  assert.doesNotMatch(source, /addTransaction\s*\(/);
+});
