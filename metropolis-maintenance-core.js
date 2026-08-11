@@ -100,6 +100,21 @@ function applyStockAdjustmentToState(sourceState, plan) {
   return next;
 }
 
+function defaultAdjustmentDate(record) {
+  return String(record?.at || record?.createdAt || record?.date || "").slice(0, 10);
+}
+
+function stockAdjustmentDeltaAt(adjustments = [], endDate, dateOf = defaultAdjustmentDate) {
+  const end = String(endDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) throw new Error("วันสิ้นสุดรายงานไม่ถูกต้อง");
+  return (Array.isArray(adjustments) ? adjustments : []).reduce((sum, item) => {
+    const delta = Number(item?.adjustmentQty || 0);
+    if (!Number.isSafeInteger(delta)) throw new Error("ประวัติปรับสต็อกมีจำนวนไม่ถูกต้อง");
+    const date = String(dateOf(item) || "").slice(0, 10);
+    return date && date <= end ? sum + delta : sum;
+  }, 0);
+}
+
 function planPartialReset({ domain, state } = {}) {
   const target = String(domain || "").trim().toUpperCase();
   if (!state || typeof state !== "object") throw new Error("ไม่พบ State สำหรับ Reset");
@@ -147,6 +162,7 @@ const api = Object.freeze({
   integerQuantity,
   planStockAdjustment,
   applyStockAdjustmentToState,
+  stockAdjustmentDeltaAt,
   planPartialReset,
   isFactoryConfirmation,
   isFullCleanupConfirmation,
