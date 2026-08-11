@@ -1,8 +1,8 @@
 {
-  "release": "4.2.5-metro-finalization",
+  "release": "4.2.5-maintenance-center",
   "product": "YGPH METROPOLIS",
   "tagline": "METROPOLIS by YGPH Visual System",
-  "releaseDate": "2026-08-10",
+  "releaseDate": "2026-08-11",
   "sourceBaseCommit": "0291119",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
@@ -44,7 +44,15 @@
     "FLOW_ICONS is the shared geometry authority for METROPOLIS core and utility glyphs",
     "index.html owns the single five-destination bottom navigation source; METROPOLIS v4 only hydrates icons and syncs active state",
     "METROPOLIS is the primary visible product name and YGPH — Yggdrasil Personal Helper is its signature",
-    "finalization rollout does not change Vault, state schema, database identity, or existing money ownership semantics",
+    "manual stock adjustment records before, delta, after, reason, actor and time without creating an automatic Ledger transaction",
+    "manual stock adjustment history lives in state.store.adjustments without changing state schema or IndexedDB version",
+    "historical stock reports use the latest physical adjustment as an anchor through the afterReport maintenance adapter instead of rewriting app.js report logic",
+    "partial reset preserves durable sales, purchases, ride jobs, Ledger transactions and source-linked Calendar history",
+    "Factory Reset deletes the complete stock-pocket-secure IndexedDB so Vault, rollback data and trusted-device key are removed together",
+    "Full Local Cleanup additionally removes METROPOLIS app/meta caches and unregisters the current service worker, and is blocked while offline",
+    "destructive reset requires typed confirmation and database deletion read-back before success",
+    "maintenance logic, browser reset adapter, report adapter and UI styles are separate production modules to reduce future rewiring",
+    "finalization and maintenance rollout do not change Vault format, state schema, database identity, or existing money ownership semantics",
     "production manifest, Cloudflare allowlist and offline shell are regression-locked against drift",
     "every production UI change advances the service-worker cache/release generation"
   ],
@@ -60,10 +68,13 @@
     "metropolis-r5-2.js",
     "metropolis-r5-3.js",
     "metropolis-r5-4.js",
-    "metropolis-r5-5.js"
+    "metropolis-r5-5.js",
+    "metropolis-maintenance-core.js",
+    "metropolis-maintenance.js",
+    "metropolis-maintenance-report.js"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.5-20260810-r20-metro-finalization",
+    "releaseId": "v4.2.5-20260811-r21-maintenance-center",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -72,8 +83,8 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js"],
-    "note": "METROPOLIS 4.2.5 adds the final daily-target, end-day, compact exchange, decimal Ride input, and UI cleanup layer. Trusted-device auto-unlock and all 4.2.4 security/data behavior remain unchanged."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js"],
+    "note": "METROPOLIS 4.2.5 maintenance center adds auditable stock reconciliation, safe partial resets, typed-confirmation Factory Reset, Full Local Cleanup, and an isolated report adapter. Trusted-device auto-unlock and all existing money/data ownership semantics remain unchanged."
   },
   "validation": {
     "command": "npm run deploy:gate",
@@ -97,6 +108,7 @@
     { "path": "metropolis-r5-3.css" },
     { "path": "metropolis-r5-4.css" },
     { "path": "metropolis-r5-5.css" },
+    { "path": "metropolis-maintenance.css" },
     { "path": "sw-bootstrap.js" },
     { "path": "highway-gate.js" },
     { "path": "app.js" },
@@ -109,6 +121,9 @@
     { "path": "metropolis-r5-3.js" },
     { "path": "metropolis-r5-4.js" },
     { "path": "metropolis-r5-5.js" },
+    { "path": "metropolis-maintenance-core.js" },
+    { "path": "metropolis-maintenance.js" },
+    { "path": "metropolis-maintenance-report.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }
