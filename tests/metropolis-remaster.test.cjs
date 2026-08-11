@@ -94,9 +94,9 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
 test('utf8 verification derives text production files from release manifest instead of a stale hard-coded list', () => {
   const source = read(utf8VerifierPath);
   assert.match(source, /RELEASE_MANIFEST\.json/);
-  assert.match(source, /productionFiles/);
-  assert.match(source, /\.json|\.js|\.css|\.html|\.webmanifest/);
-  assert.doesNotMatch(source, /const productionFiles\s*=\s*\[/);
+  assert.match(source, /manifest\.productionFiles/);
+  assert.match(source, /TEXT_ASSET_PATTERN/);
+  assert.doesNotMatch(source, /const productionFiles\s*=\s*\[\s*["']/);
 });
 
 test('visual remaster keeps durable data compatibility unchanged', () => {
