@@ -3,9 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const corePath = path.join(__dirname, '..', 'metropolis-maintenance-core.js');
-const runtimePath = path.join(__dirname, '..', 'metropolis-maintenance.js');
-const reportRuntimePath = path.join(__dirname, '..', 'metropolis-maintenance-report.js');
+const root = path.join(__dirname, '..');
+const corePath = path.join(root, 'metropolis-maintenance-core.js');
+const runtimePath = path.join(root, 'metropolis-maintenance.js');
+const reportRuntimePath = path.join(root, 'metropolis-maintenance-report.js');
+const loaderPath = path.join(root, 'sw-bootstrap.js');
+const assetsIgnorePath = path.join(root, '.assetsignore');
+const packagePath = path.join(root, 'package.json');
+const swPath = path.join(root, 'sw.js');
+const manifestPath = path.join(root, 'RELEASE_MANIFEST.json');
 
 function loadCore() {
   delete require.cache[require.resolve(corePath)];
@@ -153,4 +159,38 @@ test('report adapter uses afterReport hook and stock anchor without patching app
   assert.match(source, /stockReportCorrectionAt/);
   assert.match(source, /stockAt/);
   assert.match(source, /manualAdjustmentCorrectionQty/);
+});
+
+test('bootstrap loads maintenance layers after r5-5 in deterministic order', () => {
+  const source = readSource(loaderPath);
+  const order = ['metropolis-r5-5.js', 'metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js'];
+  const positions = order.map(name => source.indexOf(name));
+  assert.ok(positions.every(position => position >= 0), `missing loader asset: ${positions}`);
+  assert.ok(positions.every((position, index) => index === 0 || position > positions[index - 1]), `wrong loader order: ${positions}`);
+  assert.match(source, /metropolis-maintenance\.css/);
+});
+
+test('cloudflare allowlist and syntax gate include every maintenance production asset', () => {
+  const allowlist = readSource(assetsIgnorePath);
+  const pkg = readSource(packagePath);
+  for (const asset of ['metropolis-maintenance.css', 'metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js']) {
+    assert.match(allowlist, new RegExp(`!/${asset.replaceAll('.', '\\.')}`));
+  }
+  for (const script of ['metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js']) {
+    assert.match(pkg, new RegExp(`node --check ${script.replaceAll('.', '\\.')}`));
+  }
+});
+
+test('offline shell and release manifest publish maintenance center as r21', () => {
+  const sw = readSource(swPath);
+  const manifest = JSON.parse(readSource(manifestPath));
+  assert.match(sw, /v4\.2\.5-20260811-r21-maintenance-center/);
+  for (const asset of ['metropolis-maintenance.css', 'metropolis-maintenance-core.js', 'metropolis-maintenance.js', 'metropolis-maintenance-report.js']) {
+    assert.match(sw, new RegExp(`"${asset.replaceAll('.', '\\.')}"`));
+    assert.ok(manifest.productionFiles.some(item => item.path === asset), `manifest productionFiles missing ${asset}`);
+  }
+  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r21-maintenance-center');
+  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance-core.js'));
+  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance.js'));
+  assert.ok(manifest.runtimeOrder.includes('metropolis-maintenance-report.js'));
 });
