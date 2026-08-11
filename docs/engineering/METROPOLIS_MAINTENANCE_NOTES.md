@@ -41,14 +41,14 @@ Future workers should extend this slice instead of adding another maintenance bl
 
 ### Historical stock report seam
 
-The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. Maintenance does not rewrite that function. The report adapter finds the latest adjustment at/before report end, treats its `afterQty` as a physical-count anchor, compares that to the base `stockAt(anchorDate)`, and applies only that correction to the report snapshot. This is intentionally stronger than blindly summing adjustment deltas because it also repairs reports when the pre-adjustment current stock had already drifted from transaction-derived history.
+The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. Maintenance does not rewrite that function. The report adapter finds the latest adjustment at/before report end, treats its `afterQty` as a physical-count anchor, compares that to the base `stockAt(anchorDate)`, and applies only that correction to the report snapshot. This is intentionally stronger than blindly summing adjustment deltas because it also repairs reports when the pre-adjustment current stock had already drifted from transaction-derived history. The adapter keeps durable report data idempotent while re-synchronizing the visible correction row after every report re-render.
 
 ### Recovery & Reset levels
 
 1. Reconcile — route Stock to Manual Stock Adjustment and Cash to the existing balance verification flow.
 2. Partial Reset — safe operational reset only: Store current stock to zero via auditable Correction; Ride current round only; Preferences only. Do not destructively delete Calendar/source-linked history.
 3. Factory Reset — typed `RESET`; close IndexedDB; delete entire `stock-pocket-secure` database; verify deletion where browser API supports database enumeration, otherwise use successful delete event; clear in-memory references; reload to Setup. Code/app caches remain.
-4. Full Local Cleanup — typed `RESET ALL`; requires network; Factory Reset plus delete METROPOLIS app/meta caches and unregister current Service Worker; reload from network.
+4. Full Local Cleanup — typed `RESET ALL`; requires network; Factory Reset plus delete current/old METROPOLIS app caches, legacy preview caches, lifecycle meta cache and unregister current Service Worker; reload from network.
 
 ## Bug / fix log
 
@@ -106,6 +106,33 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 **Prevention / test:** One current release owner only. A future r22 should change current publication authority/tests, not force edits across historical component tests.
 
+### BUG-007 — Report correction row could disappear after a normal re-render
+**Symptom:** The first report render showed the physical-stock correction and fixed snapshot. A later `renderAll()` rebuilt `#storeReport`, but the report adapter returned early because its data marker said the correction was already applied, so the extra correction row could disappear even though downloaded data stayed corrected.
+
+**Root cause:** Data idempotency and DOM synchronization were treated as the same gate. The non-enumerable `__maintenanceStockAnchorApplied` marker correctly prevented double-mutating data, but incorrectly prevented re-applying presentation state.
+
+**Fix:** `metropolis-maintenance-report.js` v1.0.1 separates the two. If data is already corrected, it skips arithmetic but always calls the DOM synchronization adapter again.
+
+**Prevention / test:** Regression test invokes the report adapter twice and requires stock to remain corrected once while `syncDomFn` runs on both passes.
+
+### BUG-008 — Full Local Cleanup initially missed legacy preview caches
+**Symptom:** Full Local Cleanup targeted current `ygph-metropolis-app-*` generations and `ygph-metropolis-meta` but could leave an old `ygph-metropolis-0.1.0-preview.*` cache behind.
+
+**Root cause:** Maintenance cache targeting copied only the current cache namespace and metadata cache, while the Service Worker already knew about the legacy preview prefix.
+
+**Fix:** `maintenanceCacheTargets()` now includes the same legacy preview prefix in addition to current app generations and meta cache.
+
+**Prevention / test:** Cache-target regression includes a legacy preview cache plus an unrelated cache and requires only METROPOLIS-owned caches to be selected.
+
+### BUG-009 — IndexedDB delete error path could surface an event instead of the real error
+**Symptom:** On Factory Reset database deletion failure, the Promise rejection could receive the browser event object from `request.onerror`, producing weak or misleading error text; the `onblocked` path also used a brittle bound callback shape.
+
+**Root cause:** `request.onerror = finish(reject)` passed the event argument through directly instead of reading `request.error`, and `onblocked` relied on `bind()` to replace that event.
+
+**Fix:** Runtime v1.0.1 uses explicit zero-argument handlers: `request.onerror` rejects with `request.error` or a clear fallback Error, `request.onblocked` rejects with a dedicated blocked Error, and timeout rejection is explicit.
+
+**Prevention / test:** Source-contract test requires explicit arrow handlers plus `request.error` before the destructive reset code can pass CI.
+
 ## Verification matrix
 
 ### Covered by repository/CI gates
@@ -113,14 +140,15 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 - No automatic Ledger creation from manual stock adjustment.
 - Partial-reset safety boundaries.
 - Exact destructive confirmation phrases.
-- Report anchor correction rule.
-- Runtime source contracts for durable commit, IndexedDB deletion, cache cleanup and SW unregister.
+- Report anchor correction rule and repeated-render idempotency/UI sync.
+- Runtime source contracts for durable commit, IndexedDB deletion, explicit error handling, cache cleanup and SW unregister.
+- Current + legacy METROPOLIS cache targeting without touching unrelated caches.
 - Loader order, Cloudflare allowlist, syntax gate, offline shell and release manifest publication.
 - Existing repository regression/syntax/UTF-8 suite through `npm run deploy:gate` on PR.
 
 ### Requires physical/browser runtime readback before calling Production Verified
 - Store: perform one harmless/manual correction test and confirm reload preserves the adjusted stock + audit evidence.
-- Report: generate a report after a known adjustment and confirm displayed/downloaded stock agrees.
+- Report: generate a report after a known adjustment and confirm displayed/downloaded stock agrees after navigating away/back.
 - Reconcile Cash: existing balance verification still opens and persists normally.
 - Partial Reset: verify Store/Ride/Preferences each preserve historical records.
 - Factory Reset: only on a disposable/test data state or after encrypted backup; confirm reload lands on first-run Setup.
@@ -128,4 +156,4 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 ## Current publication status
 
-PR #29 is the publication path. First CI run failed only because five historical tests still owned the old r20 exact release id; Maintenance behavior/publication tests themselves passed in that run. Do not label this Maintenance release `PRODUCTION VERIFIED` until the rerun is green, merge/deploy is verified, and the required mobile runtime checks above are complete. Source/PR success is not device proof.
+PR #29 is the publication path. First CI run failed only because five historical tests still owned the old r20 exact release id; Maintenance behavior/publication tests themselves passed in that run. A later CI run passed before final review found BUG-007/008/009; therefore that earlier green run is not sufficient for completion. Do not label this Maintenance release `PRODUCTION VERIFIED` until CI passes on the final review-fix head, merge/deploy is verified, and the required mobile runtime checks above are complete. Source/PR success is not device proof.
