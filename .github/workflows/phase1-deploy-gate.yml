@@ -20,6 +20,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
       - name: Run regression, syntax, and UTF-8 gates
         run: npm run deploy:gate
 
