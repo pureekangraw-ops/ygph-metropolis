@@ -12,6 +12,7 @@ const allowlistPath = path.join(root, '.assetsignore');
 const packagePath = path.join(root, 'package.json');
 const swPath = path.join(root, 'sw.js');
 const manifestPath = path.join(root, 'RELEASE_MANIFEST.json');
+const utf8VerifierPath = path.join(root, 'scripts/verify-utf8.mjs');
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -88,6 +89,14 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
   assert.equal(manifest.serviceWorker.releaseId, 'v4.2.5-20260811-r22-visual-remaster');
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster-core.js') > manifest.runtimeOrder.indexOf('metropolis-maintenance-report.js'));
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster.js') > manifest.runtimeOrder.indexOf('metropolis-remaster-core.js'));
+});
+
+test('utf8 verification derives text production files from release manifest instead of a stale hard-coded list', () => {
+  const source = read(utf8VerifierPath);
+  assert.match(source, /RELEASE_MANIFEST\.json/);
+  assert.match(source, /productionFiles/);
+  assert.match(source, /\.json|\.js|\.css|\.html|\.webmanifest/);
+  assert.doesNotMatch(source, /const productionFiles\s*=\s*\[/);
 });
 
 test('visual remaster keeps durable data compatibility unchanged', () => {
