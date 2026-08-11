@@ -1,0 +1,82 @@
+/* METROPOLIS 4.2.5 — Maintenance Center */
+
+.metropolis-v4 .maintenance-adjust-stock{
+  margin:10px 0 18px;
+  border-color:#2f4440!important;
+  background:#14201d!important;
+  color:#dce9e5!important;
+}
+
+.metropolis-v4 .maintenance-recovery-card{
+  border-color:#2a3639!important;
+  background:linear-gradient(145deg,#151f22,#11191b)!important;
+}
+.metropolis-v4 .maintenance-title-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.metropolis-v4 .maintenance-title-row h3{margin:0;color:#f7f7f8}
+.metropolis-v4 .maintenance-title-row small{display:block;margin-top:4px;color:#8e9b98}
+.metropolis-v4 .maintenance-title-row>span{
+  flex:0 0 auto;
+  padding:5px 8px;
+  border:1px solid #344348;
+  border-radius:999px;
+  color:#22c55e;
+  font-size:.64rem;
+  font-weight:800;
+  letter-spacing:.05em;
+}
+.metropolis-v4 .maintenance-level{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+  padding:13px;
+  border:1px solid #2a3639;
+  border-radius:16px;
+  background:#121b1e;
+}
+.metropolis-v4 .maintenance-level>b{color:#f7f7f8}
+.metropolis-v4 .maintenance-level>small,
+.metropolis-v4 .maintenance-level>em{color:#8e9b98;font-size:.74rem;line-height:1.45;font-style:normal}
+.metropolis-v4 .maintenance-level.safe{border-color:#254437;background:#12201a}
+.metropolis-v4 .maintenance-level.danger{border-color:#4a3434;background:#211718}
+.metropolis-v4 .maintenance-level.strongest{border-color:#633737;background:#28191a}
+.metropolis-v4 .maintenance-three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.metropolis-v4 .maintenance-three button,
+.metropolis-v4 .maintenance-choice-grid button{
+  min-height:42px;
+  border:1px solid #344348;
+  border-radius:12px;
+  background:#172125;
+  color:#dbe4e2;
+  font-weight:750;
+}
+.metropolis-v4 .maintenance-danger-btn{
+  min-height:44px;
+  border:1px solid #714141;
+  border-radius:12px;
+  background:#3a2022;
+  color:#ffe8e8;
+  font-weight:850;
+}
+.metropolis-v4 .maintenance-warning,
+.metropolis-v4 .maintenance-danger{
+  margin:8px 0 14px;
+  padding:11px 12px;
+  border-radius:13px;
+  line-height:1.5;
+}
+.metropolis-v4 .maintenance-warning{border:1px solid #3b4937;background:#1b2218;color:#dce6d8}
+.metropolis-v4 .maintenance-danger{border:1px solid #5d3838;background:#27191a;color:#f3dcdc}
+.metropolis-v4 .maintenance-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.metropolis-v4 .maintenance-confirm-field{margin-top:12px}
+.metropolis-v4 .maintenance-inline-note{color:#8e9b98;line-height:1.45}
+.metropolis-v4 .maintenance-report-adjustment b{color:#f5c14a}
+
+@media (max-width:420px){
+  .metropolis-v4 .maintenance-three{grid-template-columns:1fr}
+}
