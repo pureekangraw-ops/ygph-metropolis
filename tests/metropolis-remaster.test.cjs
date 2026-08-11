@@ -47,7 +47,9 @@ test('runtime remasters navigation, actions, headings, and maintenance without m
   for (const id of ['addSaleBtn', 'addPurchaseBtn', 'withdrawStockBtn', 'toggleRoundBtn', 'withdrawRideCreditBtn', 'addRideExpenseBtn', 'addRideJobBtn', 'verifyBalanceBtn']) {
     assert.match(source, new RegExp(id));
   }
-  assert.match(source, /Recovery & Reset/);
+  for (const maintenanceId of ['maintenanceRecoveryCard', 'maintenanceReconcileBtn', 'maintenanceResetStoreBtn', 'maintenanceResetRideBtn', 'maintenanceResetSettingsBtn', 'maintenanceFactoryResetBtn', 'maintenanceFullCleanupBtn']) {
+    assert.match(source, new RegExp(maintenanceId));
+  }
   assert.match(source, /metropolisRemaster/);
   assert.doesNotMatch(source, /state\s*=/);
   assert.doesNotMatch(source, /persistAndRender\s*\(/);
