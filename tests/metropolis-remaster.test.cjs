@@ -200,7 +200,7 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
     assert.match(pkg, new RegExp(`node --check ${script.replaceAll('.', '\\.')}`));
   }
   assert.equal(manifest.release, '4.2.6-root-stabilization');
-  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.6-20260811-r24-root-stabilization');
+  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.6-20260812-r25-day-cycle-control');
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster-core.js') > manifest.runtimeOrder.indexOf('metropolis-maintenance-report.js'));
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster.js') > manifest.runtimeOrder.indexOf('metropolis-remaster-core.js'));
 });
