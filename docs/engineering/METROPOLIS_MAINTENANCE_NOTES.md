@@ -26,6 +26,7 @@ Future workers should extend this slice instead of adding another maintenance bl
 3. Use existing YGPH runtime hooks when a cross-cutting view/report extension is sufficient; avoid editing `app.js` unless no stable seam exists.
 4. Any new production file must be added together to loader, `.assetsignore`, `package.json` syntax gate, `sw.js` APP_SHELL, `RELEASE_MANIFEST.json`, and regression tests.
 5. Advance Service Worker release generation for every production UI/runtime asset change.
+6. Exact current release generation has one current-owner test. Historical layer tests must not hard-code the same generation; they verify ordering/contracts and `SW ↔ manifest` consistency.
 
 ## Maintenance behavior
 
@@ -46,7 +47,7 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 1. Reconcile — route Stock to Manual Stock Adjustment and Cash to the existing balance verification flow.
 2. Partial Reset — safe operational reset only: Store current stock to zero via auditable Correction; Ride current round only; Preferences only. Do not destructively delete Calendar/source-linked history.
-3. Factory Reset — typed `RESET`; close IndexedDB; delete entire `stock-pocket-secure` database; verify deletion; clear in-memory references; reload to Setup. Code/app caches remain.
+3. Factory Reset — typed `RESET`; close IndexedDB; delete entire `stock-pocket-secure` database; verify deletion where browser API supports database enumeration, otherwise use successful delete event; clear in-memory references; reload to Setup. Code/app caches remain.
 4. Full Local Cleanup — typed `RESET ALL`; requires network; Factory Reset plus delete METROPOLIS app/meta caches and unregister current Service Worker; reload from network.
 
 ## Bug / fix log
@@ -76,7 +77,7 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 **Fix:** Add isolated `metropolis-maintenance-report.js` and `stockReportCorrectionAt()`. Use latest physical adjustment as an anchor against `stockAt(anchorDate)` through `afterReport`.
 
-**Prevention / test:** `metropolis-maintenance.test.cjs` includes a divergence case where current/physical correction cannot be represented by naive delta summing.
+**Prevention / test:** `metropolis-maintenance.test.cjs` includes a divergence case where current/physical correction cannot be represented correctly by naive delta summing.
 
 ### BUG-004 — Production asset drift can create partial releases
 **Symptom:** A new JS/CSS file may exist in GitHub but be omitted by Cloudflare `.assetsignore`, runtime loader, syntax gate, Service Worker APP_SHELL or Release Manifest, causing online/offline/version mismatch.
@@ -94,7 +95,16 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 **Fix:** Factory Reset deletes the entire `stock-pocket-secure` IndexedDB database instead of deleting individual keys.
 
-**Prevention / test:** Typed confirmation plus whole-database deletion and readback; no per-key Factory Reset implementation.
+**Prevention / test:** Typed confirmation plus whole-database deletion and readback/provider-success evidence; no per-key Factory Reset implementation.
+
+### BUG-006 — Current Service Worker generation was duplicated across historical layer tests
+**Symptom:** First PR CI run failed 5 otherwise-unrelated regression tests after the Maintenance release correctly advanced from r20 to r21. All failures showed the same mismatch: actual `v4.2.5-20260811-r21-maintenance-center` versus stale expected `v4.2.5-20260810-r20-metro-finalization`.
+
+**Root cause:** Five historical/component tests independently hard-coded the current Service Worker generation. The release identifier had multiple test owners, so a legitimate release bump required editing unrelated tests.
+
+**Fix:** Keep the exact r21 assertion in the current Maintenance publication test only. Historical defrag/icon/schedule/dashboard/status tests now verify `SW ↔ manifest` agreement or the compatible `^v4.2.5-` line while retaining their own layer-order and behavior assertions.
+
+**Prevention / test:** One current release owner only. A future r22 should change current publication authority/tests, not force edits across historical component tests.
 
 ## Verification matrix
 
@@ -118,4 +128,4 @@ The original 4.2.5 report derives stock from Purchase − Sale − Withdrawal. M
 
 ## Current publication status
 
-Do not label this Maintenance release `PRODUCTION VERIFIED` until CI, merge/deploy, and the required mobile runtime checks above are complete. Source/PR success is not device proof.
+PR #29 is the publication path. First CI run failed only because five historical tests still owned the old r20 exact release id; Maintenance behavior/publication tests themselves passed in that run. Do not label this Maintenance release `PRODUCTION VERIFIED` until the rerun is green, merge/deploy is verified, and the required mobile runtime checks above are complete. Source/PR success is not device proof.
