@@ -114,9 +114,9 @@
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "172/172 PASS",
+    "nodeTests": "177/177 PASS",
     "syntax": "PASS — all production JavaScript parsed by node --check",
-    "utf8": "PASS — 32 production text assets + RELEASE_MANIFEST.json",
+    "utf8": "PASS — 33 production text assets + RELEASE_MANIFEST.json",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
