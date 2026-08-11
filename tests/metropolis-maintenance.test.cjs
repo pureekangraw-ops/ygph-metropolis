@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const corePath = path.join(__dirname, '..', 'metropolis-maintenance-core.js');
 const runtimePath = path.join(__dirname, '..', 'metropolis-maintenance.js');
+const reportRuntimePath = path.join(__dirname, '..', 'metropolis-maintenance-report.js');
 
 function loadCore() {
   delete require.cache[require.resolve(corePath)];
@@ -120,14 +121,15 @@ test('maintenance cache targeting touches only METROPOLIS app generations and me
   ]), ['ygph-metropolis-app-v4.2.5-r20', 'ygph-metropolis-meta', 'ygph-metropolis-app-v4.2.4-r19']);
 });
 
-test('stock adjustment report delta includes only movements at or before report end', () => {
+test('report correction anchors to the latest physical stock adjustment instead of blindly summing deltas', () => {
   const core = loadCore();
   const adjustments = [
-    { at: '2026-08-10T01:00:00.000Z', adjustmentQty: 3 },
-    { at: '2026-08-11T01:00:00.000Z', adjustmentQty: -1 },
-    { at: '2026-08-12T01:00:00.000Z', adjustmentQty: 5 }
+    { at: '2026-08-10T01:00:00.000Z', afterQty: 6, adjustmentQty: -2 },
+    { at: '2026-08-11T01:00:00.000Z', afterQty: 7, adjustmentQty: 1 },
+    { at: '2026-08-12T01:00:00.000Z', afterQty: 9, adjustmentQty: 2 }
   ];
-  assert.equal(core.stockAdjustmentDeltaAt(adjustments, '2026-08-11'), 2);
+  const baseByDate = { '2026-08-10': 10, '2026-08-11': 10, '2026-08-12': 11 };
+  assert.equal(core.stockReportCorrectionAt(adjustments, '2026-08-11', date => baseByDate[date]), -3);
 });
 
 test('browser runtime routes safe mutations through durable commit and destructive reset through local storage adapters', () => {
@@ -141,8 +143,14 @@ test('browser runtime routes safe mutations through durable commit and destructi
   assert.match(source, /unregister\(\)/);
   assert.match(source, /Recovery & Reset/);
   assert.match(source, /adjustStockBtn/);
-  assert.match(source, /afterReport/);
-  assert.match(source, /stockAdjustmentDeltaAt/);
   assert.doesNotMatch(source, /ledger\.transactions\.push/);
   assert.doesNotMatch(source, /addTransaction\s*\(/);
+});
+
+test('report adapter uses afterReport hook and stock anchor without patching app.js', () => {
+  const source = readSource(reportRuntimePath);
+  assert.match(source, /afterReport/);
+  assert.match(source, /stockReportCorrectionAt/);
+  assert.match(source, /stockAt/);
+  assert.match(source, /manualAdjustmentCorrectionQty/);
 });
