@@ -18,6 +18,11 @@ function loadCore() {
   return require(corePath);
 }
 
+function loadReportRuntime() {
+  delete require.cache[require.resolve(reportRuntimePath)];
+  return require(reportRuntimePath);
+}
+
 function readSource(filePath) {
   return fs.readFileSync(filePath, 'utf8');
 }
@@ -117,14 +122,20 @@ test('destructive confirmation phrases are exact', () => {
   assert.equal(core.isFullCleanupConfirmation('RESET'), false);
 });
 
-test('maintenance cache targeting touches only METROPOLIS app generations and meta cache', () => {
+test('maintenance cache targeting removes current, metadata, and legacy METROPOLIS caches only', () => {
   const core = loadCore();
   assert.deepEqual(core.maintenanceCacheTargets([
-    'ygph-metropolis-app-v4.2.5-r20',
+    'ygph-metropolis-app-v4.2.5-r21',
     'ygph-metropolis-meta',
+    'ygph-metropolis-0.1.0-preview.old',
     'other-app-cache',
     'ygph-metropolis-app-v4.2.4-r19'
-  ]), ['ygph-metropolis-app-v4.2.5-r20', 'ygph-metropolis-meta', 'ygph-metropolis-app-v4.2.4-r19']);
+  ]), [
+    'ygph-metropolis-app-v4.2.5-r21',
+    'ygph-metropolis-meta',
+    'ygph-metropolis-0.1.0-preview.old',
+    'ygph-metropolis-app-v4.2.4-r19'
+  ]);
 });
 
 test('report correction anchors to the latest physical stock adjustment instead of blindly summing deltas', () => {
@@ -136,6 +147,25 @@ test('report correction anchors to the latest physical stock adjustment instead 
   ];
   const baseByDate = { '2026-08-10': 10, '2026-08-11': 10, '2026-08-12': 11 };
   assert.equal(core.stockReportCorrectionAt(adjustments, '2026-08-11', date => baseByDate[date]), -3);
+});
+
+test('report adapter re-syncs visible report on repeated render without double-applying stock correction', () => {
+  const adapter = loadReportRuntime();
+  assert.equal(typeof adapter.applyMaintenanceStockToReport, 'function');
+  const report = { end: '2026-08-11', store: {}, snapshot: { stockQty: 10 } };
+  const calls = [];
+  const dependencies = {
+    core: { stockReportCorrectionAt: () => -3 },
+    state: { store: { adjustments: [{ at: '2026-08-11T01:00:00.000Z', afterQty: 7, adjustmentQty: -3 }] } },
+    stockAtFn: () => 10,
+    dateOf: item => String(item.at).slice(0, 10),
+    syncDomFn: (stockQty, correctionQty) => calls.push([stockQty, correctionQty])
+  };
+  adapter.applyMaintenanceStockToReport({ report }, dependencies);
+  adapter.applyMaintenanceStockToReport({ report }, dependencies);
+  assert.equal(report.snapshot.stockQty, 7);
+  assert.equal(report.store.manualAdjustmentCorrectionQty, -3);
+  assert.deepEqual(calls, [[7, -3], [7, -3]]);
 });
 
 test('browser runtime routes safe mutations through durable commit and destructive reset through local storage adapters', () => {
