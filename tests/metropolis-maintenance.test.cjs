@@ -175,6 +175,9 @@ test('browser runtime routes safe mutations through durable commit and destructi
   assert.match(source, /YGPHMaintenanceCore\.isFactoryConfirmation/);
   assert.match(source, /YGPHMaintenanceCore\.isFullCleanupConfirmation/);
   assert.match(source, /indexedDB\.deleteDatabase/);
+  assert.match(source, /request\.onerror\s*=\s*\(\)\s*=>/);
+  assert.match(source, /request\.error/);
+  assert.match(source, /request\.onblocked\s*=\s*\(\)\s*=>/);
   assert.match(source, /navigator\.onLine/);
   assert.match(source, /unregister\(\)/);
   assert.match(source, /Recovery & Reset/);
