@@ -14,9 +14,10 @@ Do not add this feature as another large block inside `app.js`.
 Create a maintenance slice with clear boundaries:
 1. `metropolis-maintenance-core.js` — pure validation/planning logic. No DOM, IndexedDB, Cache API, Service Worker, or global state writes. Must be Node-testable.
 2. `metropolis-maintenance.js` — browser runtime adapter. Owns DOM wiring, calls existing encrypted commit pipeline for auditable changes, and owns destructive local reset adapters.
-3. `metropolis-maintenance.css` — maintenance UI only.
-4. `tests/metropolis-maintenance.test.cjs` — behavior tests for pure rules and source-contract checks for runtime wiring.
-5. `docs/engineering/METROPOLIS_MAINTENANCE_NOTES.md` — continuation map plus bug/fix log.
+3. `metropolis-maintenance-report.js` — isolated report seam. Uses the existing `afterReport` runtime hook and existing `stockAt(date)` base to reconcile historical stock snapshots from physical adjustment anchors without patching `app.js` report logic.
+4. `metropolis-maintenance.css` — maintenance UI only.
+5. `tests/metropolis-maintenance.test.cjs` — behavior tests for pure rules and source/publication contracts for runtime wiring.
+6. `docs/engineering/METROPOLIS_MAINTENANCE_NOTES.md` — continuation map plus bug/fix log.
 
 This makes future workers extend one bounded maintenance slice instead of rewiring `app.js` or the existing r5 visual/runtime chain.
 
@@ -33,10 +34,13 @@ Correct stock when physical quantity and system quantity do not match without re
 - Preserve existing sales/purchases/withdrawals.
 - Do not create a Ledger transaction automatically.
 - Persist through the existing `persistAndRender` / durable readback path with an explicit STORE event and idempotency key.
-- Store movement evidence in a dedicated `state.store.adjustments` array normalized lazily for backward compatibility. Do not change the encrypted vault format or DB version.
+- Store movement evidence in a dedicated `state.store.adjustments` array handled lazily for backward compatibility. Do not change the encrypted vault format, State Schema, or DB version.
 
 ### Stock value rule
 To avoid inventing a financial valuation, manual quantity correction changes quantity only. If the resulting quantity becomes zero, stock value is normalized to zero by the existing invariant. Otherwise existing `stockValueSatang` remains unchanged and the audit record clearly states that no financial transaction or valuation was created.
+
+### Historical stock report rule
+The pre-maintenance report computes stock from historical Purchase − Sale − Withdrawal and therefore cannot infer an out-of-band physical count correction. Do not rewrite that core report function. Instead, the report adapter finds the latest manual adjustment at or before the report end date, treats that record's `afterQty` as the physical-count anchor, compares it with the existing `stockAt(anchorDate)` result, and applies the resulting correction to the report snapshot through `afterReport`. This is intentionally stronger than summing adjustment deltas because the system may already have drifted before the first adjustment.
 
 ## Capability B — Recovery & Reset Center
 Four levels, ordered from safest to most destructive.
@@ -59,7 +63,7 @@ Purpose: return the app to first-run Setup while leaving deployed application co
 - User must type exact confirmation phrase `RESET`.
 - Close the live IndexedDB handle.
 - Delete the entire `stock-pocket-secure` IndexedDB database, which removes vault, rollback snapshot metadata, trusted-device CryptoKey and all local domain records together.
-- Read back database absence before declaring success.
+- Read back database absence when `indexedDB.databases()` is available; otherwise the browser's successful delete event is the fallback evidence.
 - Clear in-memory state/key/vault references.
 - Reload to first-run Setup.
 - Do not touch Cloudflare deployment, GitHub, remote code, or app caches.
@@ -70,7 +74,7 @@ Purpose: factory reset plus refresh local application runtime caches.
 - Perform Factory Reset database deletion.
 - Delete METROPOLIS app caches and lifecycle meta cache.
 - Unregister this app's service worker registration.
-- Verify targeted caches are absent and registration is removed where browser APIs expose readback.
+- Verify targeted caches are absent and registration removal succeeded where browser APIs expose readback.
 - Reload. This level requires network availability to reconstruct the application shell; block it when offline and explain why.
 
 ## Confirmation and safety rules
@@ -86,14 +90,16 @@ Purpose: factory reset plus refresh local application runtime caches.
 - Use existing modal system and approved METROPOLIS dark visual tokens; no new visual language.
 
 ## Error handling
-- Manual adjustment: validation failures leave state untouched and modal open.
-- Partial reset: clone-before-change semantics; on persistence failure existing commit pipeline rolls back/readbacks and UI re-renders durable state.
-- IndexedDB deletion: handle `blocked`, `error`, and timeout; never claim success without readback.
-- Cache/service worker cleanup: report partial failure and do not claim Full Cleanup complete if targeted cache/SW readback fails.
+- Manual adjustment: validation failures leave durable state untouched; UI reports the reason.
+- Partial reset: existing commit pipeline performs durable write/readback and rollback/recovery on failure.
+- IndexedDB deletion: handle `blocked`, `error`, and timeout; never claim success without provider success/readback evidence.
+- Cache/service worker cleanup: report partial failure and do not claim Full Cleanup complete if targeted cache/SW cleanup fails.
 
-## Testing
-- Pure tests for adjustment planning, non-negative/maximum bounds, reason requirement, zero-stock semantics, partial reset planning, destructive confirmation phrases and cache targeting.
-- Source-contract tests assert runtime module contains typed confirmation, database deletion/readback, existing balance reconcile route, existing durable persistence route and does not create Ledger transactions for manual stock adjustment.
+## Testing and release-authority rule
+- Pure tests for adjustment planning, non-negative/maximum bounds, reason requirement, zero-stock semantics, physical-anchor report correction, partial reset planning, destructive confirmation phrases and cache targeting.
+- Source-contract tests assert runtime modules contain typed confirmation, database deletion/readback, existing balance reconcile route, existing durable persistence route and no automatic Ledger transaction from manual stock adjustment.
+- Publication tests assert loader, Cloudflare allowlist, syntax gate, offline shell and release manifest contain the same maintenance assets.
+- Exact current Service Worker release id has one current-owner assertion in the current release/publication test. Historical layer tests must not hard-code the same generation; they verify ordering/contracts and `SW ↔ manifest` agreement so a future r22 does not require rewiring many unrelated tests.
 - Run complete existing `npm test`, syntax and UTF-8 deploy gate before merge.
 
 ## Documentation / continuation contract
