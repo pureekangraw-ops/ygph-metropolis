@@ -25,6 +25,8 @@
     const item = findQueue(text(id, "queueId"));
     if (!item) throw new Error("DOMAIN_SOURCE_NOT_FOUND:queue");
     if (["COMPLETED", "CANCELLED"].includes(item.status)) throw new Error(`DOMAIN_QUEUE_CLOSED:${item.status}`);
+    item.appliedActions ||= {};
+    item.history ||= [];
     return item;
   }
 
@@ -32,6 +34,13 @@
     const source = findSource(item.source, item.sourceId);
     if (!source) throw new Error(`DOMAIN_SOURCE_NOT_FOUND:${item.source}/${item.sourceId}`);
     return source;
+  }
+
+  function applyLegacyOnce(item, key, fn) {
+    if (item.appliedActions[key]) throw new Error(`DUPLICATE_DOMAIN_COMMAND:${item.id}:${key}`);
+    item.appliedActions[key] = nowIso();
+    fn();
+    bumpQueue(item);
   }
 
   function markCommand(command) {
@@ -135,7 +144,7 @@
     } else {
       const reason = text(payload.reason, "reason");
       const difference = targetSatang - current;
-      if (difference) {
+      if (difference !== 0) {
         const tx = addTransactionToState(state, {
           direction: difference > 0 ? "IN" : "OUT",
           amountSatang: Math.abs(difference),
@@ -149,8 +158,9 @@
       }
       state.ledger.balanceVerified = true;
       state.ledger.verifiedAt = nowIso();
+      addAudit("BALANCE_RECONCILED", `${reason} · ${difference >= 0 ? "+" : ""}${money(difference)} บาท`);
     }
-    return finish(command, "ยืนยันยอดเงินแล้ว", { targetSatang }, ["LEDGER"]);
+    return finish(command, payload.initialVerification ? "ยืนยันยอดตั้งต้นแล้ว" : "บันทึกส่วนต่าง ณ วันนี้แล้ว", { targetSatang }, ["LEDGER"]);
   });
 
   register("LEDGER_CREATE_OBLIGATION", async command => {
@@ -226,112 +236,215 @@
 
   register("CALENDAR_PAY_QUEUE", async command => {
     const item = liveQueue(command.payload.queueId);
-    if (!["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) throw new Error(`UNSUPPORTED_CALENDAR_PAYMENT:${item.actionType}`);
+    if (!["RECEIVE_CUSTOMER_PAYMENT", "PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) throw new Error(`UNSUPPORTED_CALENDAR_PAYMENT:${item.actionType}`);
     const source = sourceFor(item);
-    const maximum = Math.min(
-      Number(source.remainingSatang || 0),
-      Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0))
-    );
+    const incoming = item.actionType === "RECEIVE_CUSTOMER_PAYMENT";
+    const maximum = incoming
+      ? Number(source.outstandingSatang || 0)
+      : Math.min(Number(source.remainingSatang || 0), Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0)));
     const amount = parseSatang(Number(command.payload.amountSatang), { allowZero: false, label: "ยอดครั้งนี้" });
     if (amount > maximum) throw new Error("INVALID_DOMAIN_COMMAND:payment-over-remaining");
+    const legacyActionKey = String(command.payload.legacyActionKey || `payment:${item.history.filter(entry => entry.event === "PAYMENT_APPLIED").length + 1}:${amount}`);
+    let transactionId = null;
 
-    const tx = addTransactionToState(state, {
-      direction: "OUT",
-      amountSatang: amount,
-      label: `ชำระ ${source.name}${item.installmentNumber ? ` งวด ${item.installmentNumber}` : ""}`,
-      source: "LEDGER",
-      sourceId: source.id,
-      subtype: "OBLIGATION_PAYMENT",
-      actionKey: `${item.id}:${command.idempotencyKey}`
+    applyLegacyOnce(item, legacyActionKey, () => {
+      if (incoming) {
+        const tx = addTransactionToState(state, {
+          direction: "IN",
+          amountSatang: amount,
+          label: `รับชำระ ${source.id}`,
+          source: "STORE",
+          sourceId: source.id,
+          subtype: "SALE_RECEIPT",
+          actionKey: `${item.id}:${legacyActionKey}`
+        });
+        if (!tx) throw new Error("DOMAIN_TRANSACTION_NOT_CREATED");
+        transactionId = tx.id;
+        addAudit("LEDGER_MOVEMENT", `${tx.direction} ${money(tx.amountSatang)} · ${tx.label}`);
+        source.receivedSatang = Number(source.receivedSatang || 0) + amount;
+        source.outstandingSatang = Math.max(0, Number(source.totalSatang || 0) - source.receivedSatang);
+        source.status = source.outstandingSatang === 0 ? "COMPLETED" : "PARTIAL";
+        item.amountSatang = source.outstandingSatang;
+      } else {
+        const tx = addTransactionToState(state, {
+          direction: "OUT",
+          amountSatang: amount,
+          label: `ชำระ ${source.name}${item.installmentNumber ? ` งวด ${item.installmentNumber}` : ""}`,
+          source: "LEDGER",
+          sourceId: source.id,
+          subtype: "OBLIGATION_PAYMENT",
+          actionKey: `${item.id}:${legacyActionKey}`
+        });
+        if (!tx) throw new Error("DOMAIN_TRANSACTION_NOT_CREATED");
+        transactionId = tx.id;
+        addAudit("LEDGER_MOVEMENT", `${tx.direction} ${money(tx.amountSatang)} · ${tx.label}`);
+        source.paidSatang = Number(source.paidSatang || 0) + amount;
+        source.remainingSatang = Math.max(0, Number(source.originalSatang || 0) - source.paidSatang);
+        source.status = source.remainingSatang === 0 ? "COMPLETED" : "PARTIAL";
+        item.paidSatang = Number(item.paidSatang || 0) + amount;
+        const installment = source.installments?.find(entry => Number(entry.number) === Number(item.installmentNumber));
+        if (installment) {
+          installment.paidSatang = Number(installment.paidSatang || 0) + amount;
+          installment.status = installment.paidSatang >= installment.amountSatang ? "COMPLETED" : "PARTIAL";
+          installment.paidAt = installment.status === "COMPLETED" ? nowIso() : null;
+        }
+      }
+      bumpSource(source);
+      item.expectedRevision = source.revision;
+      item.sourceRevision = source.revision;
+      const queueRemaining = incoming ? Number(source.outstandingSatang || 0) : Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0));
+      item.status = queueRemaining === 0 ? "COMPLETED" : "PARTIAL";
+      item.completedAt = item.status === "COMPLETED" ? nowIso() : null;
+      addHistory(item, "PAYMENT_APPLIED", `${incoming ? "IN" : "OUT"} ${money(amount)}`);
+      syncQueueRevisionsForSource(item.source, item.sourceId);
     });
-    if (!tx) throw new Error("DOMAIN_TRANSACTION_NOT_CREATED");
-    addAudit("LEDGER_MOVEMENT", `${tx.direction} ${money(tx.amountSatang)} · ${tx.label}`);
 
-    source.paidSatang = Number(source.paidSatang || 0) + amount;
-    source.remainingSatang = Math.max(0, Number(source.originalSatang || 0) - source.paidSatang);
-    source.status = source.remainingSatang === 0 ? "COMPLETED" : "PARTIAL";
-    item.paidSatang = Number(item.paidSatang || 0) + amount;
-    const installment = source.installments?.find(entry => entry.number === item.installmentNumber);
-    if (installment) {
-      installment.paidSatang = Number(installment.paidSatang || 0) + amount;
-      installment.status = installment.paidSatang >= installment.amountSatang ? "COMPLETED" : "PARTIAL";
-      installment.paidAt = installment.status === "COMPLETED" ? nowIso() : null;
-    }
-    bumpSource(source);
-    item.expectedRevision = source.revision;
-    item.sourceRevision = source.revision;
-    item.status = Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0)) === 0 ? "COMPLETED" : "PARTIAL";
-    item.completedAt = item.status === "COMPLETED" ? nowIso() : null;
-    addHistory(item, "PAYMENT_APPLIED", `OUT ${money(amount)}`);
-    syncQueueRevisionsForSource(item.source, item.sourceId);
-
-    return finish(command, `−${money(amount)} บาท`, { queueId: item.id, transactionId: tx.id, status: item.status }, ["LEDGER", "CALENDAR"]);
+    return finish(command, `${incoming ? "+" : "−"}${money(amount)} บาท`, { queueId: item.id, transactionId, status: item.status }, ["LEDGER", "CALENDAR", item.source]);
   });
 
   register("CALENDAR_EDIT_QUEUE", async command => {
     const item = liveQueue(command.payload.queueId);
     const source = sourceFor(item);
     const payload = command.payload;
+    const due = payload.due === undefined ? item.due : text(payload.due, "due");
+    if (!validISODate(due)) throw new Error("INVALID_DOMAIN_COMMAND:due");
+    const oldDue = item.due;
     if (payload.displayName !== undefined) item.displayName = String(payload.displayName || "").trim();
     if (payload.note !== undefined) item.note = String(payload.note || "").trim();
     if (payload.reminderEnabled !== undefined) item.reminderEnabled = Boolean(payload.reminderEnabled);
-    if (payload.due !== undefined) {
-      const due = text(payload.due, "due");
-      if (!validISODate(due)) throw new Error("INVALID_DOMAIN_COMMAND:due");
-      item.due = due;
-      item.dueAt = `${due}T09:00:00+07:00`;
-      item.triggerAt = item.dueAt;
-      const installment = source.installments?.find(entry => entry.number === item.installmentNumber);
-      if (installment) installment.due = due;
+    item.due = due;
+    item.dueAt = `${due}T09:00:00+07:00`;
+    item.triggerAt = item.dueAt;
+    if (needsLocalVerification(item)) item.reviewNote = item.note;
+
+    let sourceChanged = false;
+    if (source?.installments && item.installmentNumber) {
+      const installment = source.installments.find(entry => Number(entry.number) === Number(item.installmentNumber));
+      if (installment && installment.due !== due) {
+        installment.due = due;
+        if (Number(item.installmentNumber) === 1) source.firstDue = due;
+        sourceChanged = true;
+      }
     }
-    item.updatedAt = nowIso();
-    addHistory(item, "PLAN_EDITED", "แก้แผนจาก Calendar");
-    return finish(command, "แก้ไขแผนแล้ว", { queueId: item.id }, ["CALENDAR", item.source]);
+    if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source && source.due !== due) {
+      source.due = due;
+      sourceChanged = true;
+    }
+    if (sourceChanged) {
+      bumpSource(source);
+      syncQueueRevisionsForSource(item.source, item.sourceId);
+    }
+    addHistory(item, "PLAN_EDITED", `${oldDue} → ${due}`);
+    bumpQueue(item);
+    return finish(command, "แก้ไขแล้ว", { queueId: item.id }, ["CALENDAR", item.source]);
+  });
+
+  register("CALENDAR_COMPLETE_QUEUE", async command => {
+    const item = liveQueue(command.payload.queueId);
+    const source = sourceFor(item);
+    applyLegacyOnce(item, "complete", () => {
+      if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL") {
+        addTransaction({ direction: "IN", amountSatang: source.amountSatang, label: `เงินเข้าจากเครดิตงานวิ่ง ${source.id}`, source: "RIDE", sourceId: source.id, subtype: "RIDE_CREDIT_WITHDRAWAL", actionKey: `${item.id}:complete` });
+        source.status = "COMPLETED";
+        source.confirmedAt = nowIso();
+        bumpSource(source);
+      }
+      if (item.actionType === "SETTLE_RIDE_JOB") {
+        addTransaction({ direction: "IN", amountSatang: source.amountSatang, label: `รายได้งานเดิม ${source.id}`, source: "RIDE", sourceId: source.id, subtype: "RIDE_INCOME", actionKey: `${item.id}:complete` });
+        source.status = "SETTLED";
+        source.paymentMode ||= "LEGACY_PENDING";
+        bumpSource(source);
+      }
+      if (item.actionType === "PURCHASE_RETURN_WINDOW") {
+        source.status = "ACTIVE";
+        bumpSource(source);
+      }
+      if (item.actionType === "VERIFY_SOURCE") {
+        source.verifiedAt = nowIso();
+        bumpSource(source);
+      }
+      item.expectedRevision = source.revision;
+      item.sourceRevision = source.revision;
+      syncQueueRevisionsForSource(item.source, item.sourceId);
+      item.status = "COMPLETED";
+      item.completedAt = nowIso();
+      addHistory(item, "COMPLETED", "แอคชันสำเร็จ");
+    });
+    return finish(command, item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" ? "เงินเข้าการเงินแล้ว" : "ปิดคิวแล้ว", { queueId: item.id }, ["CALENDAR", "LEDGER", item.source]);
   });
 
   register("CALENDAR_CANCEL_QUEUE", async command => {
     const item = liveQueue(command.payload.queueId);
     const source = sourceFor(item);
-    if (!["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) throw new Error(`UNSUPPORTED_CALENDAR_CANCEL:${item.actionType}`);
-    const originals = state.ledger.transactions.filter(tx =>
-      tx.actionKey?.startsWith(`${item.id}:`)
-      && !String(tx.subtype || "").startsWith("REVERSAL_")
-      && !tx.reversedBy
-    );
-    let reversed = 0;
-    for (const original of originals) {
-      const reversal = addTransactionToState(state, {
-        direction: original.direction === "IN" ? "OUT" : "IN",
-        amountSatang: original.amountSatang,
-        label: `ย้อน ${original.label}`,
-        source: original.source,
-        sourceId: original.sourceId,
-        subtype: `REVERSAL_${original.subtype || "TRANSACTION"}`,
-        actionKey: `${command.idempotencyKey}:${original.id}`,
-        reversalOf: original.id,
-        reversalReason: String(command.payload.reason || "ยกเลิกคิว")
-      });
-      original.reversedBy = reversal.id;
-      reversed += Number(original.amountSatang || 0);
+    const reason = String(command.payload.reason || "ยกเลิกจาก Calendar");
+
+    if (item.actionType === "PURCHASE_RETURN_WINDOW" && state.store.stockQty < source.qty) {
+      item.status = "VERIFY";
+      item.requiresRefreshBeforePayment = true;
+      addHistory(item, "CANCEL_BLOCKED", "จำนวนสต็อกคงเหลือไม่พอสำหรับคืนลอต");
+      return finish(command, "ต้องตรวจสต็อกก่อนคืนของ", { queueId: item.id, status: item.status, blocked: true }, ["CALENDAR", "STORE"]);
     }
-    source.paidSatang = Math.max(0, Number(source.paidSatang || 0) - reversed);
-    source.remainingSatang = Math.max(0, Number(source.originalSatang || 0) - source.paidSatang);
-    source.status = source.paidSatang ? "PARTIAL" : "OPEN";
-    const installment = source.installments?.find(entry => entry.number === item.installmentNumber);
-    if (installment) {
-      installment.paidSatang = Math.max(0, Number(installment.paidSatang || 0) - reversed);
-      installment.status = installment.paidSatang ? "PARTIAL" : "PENDING";
-      installment.paidAt = null;
-    }
-    bumpSource(source);
-    item.status = "CANCELLED";
-    item.cancelledAt = nowIso();
-    item.completedAt = null;
-    item.expectedRevision = source.revision;
-    item.sourceRevision = source.revision;
-    addHistory(item, "CANCELLED", String(command.payload.reason || "ยกเลิกคิว"));
-    syncQueueRevisionsForSource(item.source, item.sourceId);
-    return finish(command, "ยกเลิกคิวแล้ว", { queueId: item.id, reversedSatang: reversed }, ["LEDGER", "CALENDAR"]);
+
+    let cashDelta = 0;
+    applyLegacyOnce(item, "cancel", () => {
+      if (item.actionType === "RECEIVE_CUSTOMER_PAYMENT") {
+        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
+        if (!source.stockRestored) {
+          state.store.stockQty += source.qty;
+          state.store.stockValueSatang += source.costSatang;
+          source.stockRestored = true;
+        }
+        source.status = "CANCELLED";
+        source.cancelledAt = nowIso();
+        source.receivedSatang = 0;
+        source.outstandingSatang = 0;
+        bumpSource(source);
+      } else if (item.actionType === "PURCHASE_RETURN_WINDOW") {
+        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
+        const inventoryCostSatang = takeStockFromPool(state, Number(source.qty));
+        source.returnInventoryCostSatang = inventoryCostSatang;
+        source.returnCostDifferenceSatang = Number(source.costSatang || 0) - inventoryCostSatang;
+        source.returnedAt = nowIso();
+        addAudit("STOCK_RETURN_VALUATION", `${source.id} · คืน ${source.qty} ชิ้น · ต้นทุนกอง ${money(inventoryCostSatang)} · ส่วนต่าง ${source.returnCostDifferenceSatang >= 0 ? "+" : ""}${money(source.returnCostDifferenceSatang)}`);
+        source.status = "CANCELLED";
+        source.cancelledAt = nowIso();
+        source.paidAmountSatang = 0;
+        bumpSource(source);
+      } else if (item.actionType === "SETTLE_RIDE_JOB") {
+        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
+        source.status = "CANCELLED";
+        source.cancelledAt = nowIso();
+        bumpSource(source);
+      } else if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL") {
+        if (source.status === "PENDING") state.ride.creditBalanceSatang += source.amountSatang;
+        source.status = "CANCELLED";
+        source.cancelledAt = nowIso();
+        bumpSource(source);
+      } else if (["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType)) {
+        const reversed = reverseQueuePayments(item, `${item.id}:cancel`);
+        source.paidSatang = Math.max(0, Number(source.paidSatang || 0) - reversed);
+        source.remainingSatang = Math.max(0, Number(source.originalSatang || 0) - source.paidSatang);
+        source.status = source.paidSatang ? "PARTIAL" : "OPEN";
+        const installment = source.installments?.find(entry => Number(entry.number) === Number(item.installmentNumber));
+        if (installment) {
+          installment.paidSatang = Math.max(0, Number(installment.paidSatang || 0) - reversed);
+          installment.status = installment.paidSatang ? "PARTIAL" : "CANCELLED";
+          installment.paidAt = null;
+        }
+        cashDelta = reversed;
+        bumpSource(source);
+      } else {
+        throw new Error(`UNSUPPORTED_CALENDAR_CANCEL:${item.actionType}`);
+      }
+      item.status = "CANCELLED";
+      item.cancelledAt = nowIso();
+      item.completedAt = null;
+      item.expectedRevision = source.revision;
+      item.sourceRevision = source.revision;
+      syncQueueRevisionsForSource(item.source, item.sourceId);
+      addHistory(item, "CANCELLED", `ผลเงินจริงสุทธิ ${cashDelta >= 0 ? "+" : ""}${money(cashDelta)} · ${reason}`);
+    });
+    return finish(command, "ยกเลิกแล้ว", { queueId: item.id, cashDelta }, ["CALENDAR", "LEDGER", item.source]);
   });
 
   async function execute(command) {
