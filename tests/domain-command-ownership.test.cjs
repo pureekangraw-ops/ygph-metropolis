@@ -163,7 +163,7 @@ test("migrated UI blocks request domain commands instead of owning durable Ledge
     sourceBetween(app, "async function openPayment(id)", "async function completeQueue(id)"),
     sourceBetween(app, "async function completeQueue(id)", "async function cancelQueue(id)"),
     sourceBetween(app, "async function cancelQueue(id)", "function showHistory(id)"),
-    sourceBetween(app, "function promptVerifyBalance(migrationPrompt = false)", "function recordHtml("),
+    sourceBetween(app, "function promptVerifyBalance(migrationPrompt = false)", "function setupActions()"),
     sourceBetween(app, 'byId("addDebtBtn").onclick', 'byId("addExpenseBtn").onclick')
   ];
 
