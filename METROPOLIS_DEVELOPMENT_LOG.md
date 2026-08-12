@@ -8,7 +8,7 @@ This file records implementation history for METROPOLIS development phases. It i
 - Working branch: `hardening/domain-command-ownership-2a`
 - Pull request: `#34` — `hardening: centralize Ledger and Calendar command ownership`
 - Publication commit: `86f3604728965263bbbf5ccfa66bfdac4ca90abd`
-- Verified pre-log Gate head: `3684f4474dacb72a666774ef105e1f42711e62fb`
+- Verified implementation Gate head: `e509adaf44dff88f75936569988b8717480ebd21`
 - Internal release: `v4.2.6-20260812-r27-domain-command-ownership`
 
 ### Problem
@@ -34,7 +34,8 @@ Live Ledger and Calendar handlers could mutate in-memory business state before t
 ### TDD evidence
 
 - Initial RED contract: `189` tests total — `185 PASS / 4 intentional FAIL` because `metropolis-domain-commands.js` / `YGPHDomainCommands` did not yet exist. Existing regression behavior remained green.
-- Final verified pre-log Gate: `191/191 PASS`, `0 FAIL`.
+- Final implementation verification: GitHub Actions `Phase 1 Deploy Gate` run `31566769824` (#451) — safety gate SUCCESS; Cloudflare deploy SKIPPED for pull request as designed.
+- Node tests: `191/191 PASS`, `0 FAIL`.
 - Syntax: PASS, including `metropolis-domain-commands.js`.
 - UTF-8: PASS — `35 production text assets + RELEASE_MANIFEST.json`.
 - Locked dependencies audit: `0 vulnerabilities`.
@@ -52,6 +53,7 @@ Live Ledger and Calendar handlers could mutate in-memory business state before t
 ### Gate status
 
 - Phase 2A implementation: COMPLETE.
-- Second verification: required on the final log commit head before marking the PR Ready for review.
+- Second verification: PASS on implementation head; final documentation-only seal commit must retain the same Gate result before Owner handoff.
+- Pull request: READY FOR REVIEW after final documentation-head Gate confirmation.
 - Merge to `main`: NOT AUTHORIZED / NOT MERGED.
 - Production deploy: NOT AUTHORIZED / NOT DEPLOYED.
