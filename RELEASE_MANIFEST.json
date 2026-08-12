@@ -67,7 +67,11 @@
     "stock adjustments and protected histories are append-only evidence; capacity levels trigger backup guidance rather than destructive cleanup",
     "durable commands disable live controls before the first asynchronous boundary and restore exact prior button states after success or failure",
     "production manifest, Cloudflare allowlist and offline shell are regression-locked against drift",
-    "every production UI change advances the service-worker cache/release generation"
+    "every production UI change advances the service-worker cache/release generation",
+    "all normal durable persistence entry points pass through one command runtime gate before the existing Vault commit engine",
+    "the command runtime gate re-reads durable Vault revision before commit and blocks stale cross-context writes before encryption or database mutation",
+    "successful guarded writes require matching durable read-back revision and publish the new revision to sibling contexts when BroadcastChannel is available",
+    "persistent browser storage and cross-context transport availability are diagnostic health signals and never replace durable Vault truth"
   ],
   "runtimeOrder": [
     "sw-bootstrap.js",
@@ -87,7 +91,8 @@
     "metropolis-maintenance-report.js",
     "metropolis-remaster-core.js",
     "metropolis-remaster.js",
-    "metropolis-day-cycle.js"
+    "metropolis-day-cycle.js",
+    "metropolis-command-gate.js"
   ],
   "rootRegressionTests": [
     "tests/runtime-composition.test.cjs",
@@ -97,10 +102,11 @@
     "tests/storage-capacity.test.cjs",
     "tests/stock-adjustment-runtime.test.cjs",
     "tests/report-semantics.test.cjs",
-    "tests/durable-ui-guard.test.cjs"
+    "tests/durable-ui-guard.test.cjs",
+    "tests/runtime-command-gate.test.cjs"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.6-20260812-r25-day-cycle-control",
+    "releaseId": "v4.2.6-20260812-r26-command-runtime-gate",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
@@ -109,14 +115,14 @@
     "legacyRescueBootstrap": "sw-bootstrap.js",
     "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js", "metropolis-day-cycle.js"],
-    "note": "METROPOLIS 4.2.6 r25 adds durable manual day-cycle control while retaining State Schema 4, IndexedDB version 1, Vault format 1 and existing money/source authorities."
+    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js", "metropolis-day-cycle.js", "metropolis-command-gate.js"],
+    "note": "METROPOLIS 4.2.6 r26 centralizes durable write guarding, stale cross-context detection and runtime fingerprint health while retaining State Schema 4, IndexedDB version 1, Vault format 1 and existing money/source authorities."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "177/177 PASS",
+    "nodeTests": "185/185 PASS",
     "syntax": "PASS — all production JavaScript parsed by node --check",
-    "utf8": "PASS — 33 production text assets + RELEASE_MANIFEST.json",
+    "utf8": "PASS — 34 production text assets + RELEASE_MANIFEST.json",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
     "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
@@ -154,6 +160,7 @@
     { "path": "metropolis-remaster-core.js" },
     { "path": "metropolis-remaster.js" },
     { "path": "metropolis-day-cycle.js" },
+    { "path": "metropolis-command-gate.js" },
     { "path": "sw.js" },
     { "path": "icon-192.png" },
     { "path": "icon-512.png" }

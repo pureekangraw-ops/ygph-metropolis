@@ -183,12 +183,13 @@ test('Metro V2 defines one mobile hierarchy across chrome, pages, actions, recor
   assert.match(css, /min-height:var\(--metro-touch\)/);
 });
 
-test('visual remaster is wired atomically into loader, cloudflare, syntax, offline shell, and manifest', () => {
+test('visual remaster remains wired atomically without owning the current service-worker generation', () => {
   const loader = read(loaderPath);
   const allowlist = read(allowlistPath);
   const pkg = read(packagePath);
   const sw = read(swPath);
   const manifest = JSON.parse(read(manifestPath));
+  const { RELEASE_ID } = require('../sw.js');
   const assets = ['metropolis-remaster.css', 'metropolis-remaster-core.js', 'metropolis-remaster.js'];
   for (const asset of assets) {
     assert.match(loader, new RegExp(asset.replaceAll('.', '\\.')));
@@ -200,7 +201,7 @@ test('visual remaster is wired atomically into loader, cloudflare, syntax, offli
     assert.match(pkg, new RegExp(`node --check ${script.replaceAll('.', '\\.')}`));
   }
   assert.equal(manifest.release, '4.2.6-root-stabilization');
-  assert.equal(manifest.serviceWorker.releaseId, 'v4.2.6-20260812-r25-day-cycle-control');
+  assert.equal(manifest.serviceWorker.releaseId, RELEASE_ID);
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster-core.js') > manifest.runtimeOrder.indexOf('metropolis-maintenance-report.js'));
   assert.ok(manifest.runtimeOrder.indexOf('metropolis-remaster.js') > manifest.runtimeOrder.indexOf('metropolis-remaster-core.js'));
 });
