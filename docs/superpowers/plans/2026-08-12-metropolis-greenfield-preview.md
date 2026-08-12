@@ -11,13 +11,13 @@
 - No legacy runtime scripts or legacy database references.
 - Calendar remains Action Hub, not cash owner.
 - First initialization requires owner Evidence package rev28 or a verified Greenfield encrypted backup.
-- Cloudflare `.assetsignore` must explicitly allow Greenfield backend + preview paths.
+- Preview remains source-only in this phase; legacy Production `.assetsignore` remains exact until the Hard Cut changes manifest, allowlist, root assets, and tests together.
 - Root Production UI remains unchanged until Owner Final Gate.
 
 ### Tasks
 - [x] Write RED static/UI-model tests before preview files exist.
 - [x] Build clean preview shell, single stylesheet, UI model, app adapter, manifest, and scoped service worker.
 - [x] Prove `app.mjs` imports only the runtime facade.
-- [x] Add Cloudflare allowlist regression for Greenfield paths.
-- [x] Run local Greenfield suite + preview syntax: PASS.
+- [x] Preserve legacy Production publication contract during preview validation.
+- [x] Run local preview contract: 5/5 PASS.
 - [ ] Run repository PR Gate; Production deploy must remain skipped.
