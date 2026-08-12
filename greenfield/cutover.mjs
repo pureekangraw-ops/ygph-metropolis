@@ -1,6 +1,6 @@
 import { createGreenfieldState } from './core.mjs';
 import { importEvidenceSnapshot } from './import-evidence.mjs';
-import { checkLedgerSnapshot } from './projections.mjs';
+import { checkLedgerSnapshot, projectLedgerBalance } from './projections.mjs';
 import { commitEncryptedState, readEncryptedState } from './persistence.mjs';
 
 function domainCounts(state) {
@@ -25,7 +25,8 @@ export async function initializeGreenfieldFromEvidence({
       status: 'ALREADY_INITIALIZED',
       state: existing,
       counts: domainCounts(existing),
-      ledger: checkLedgerSnapshot(existing),
+      importVerification: existing.meta?.importVerification ?? null,
+      currentLedgerBalanceSatang: projectLedgerBalance(existing),
     };
   }
 
@@ -38,8 +39,22 @@ export async function initializeGreenfieldFromEvidence({
   if (ledger.status !== 'PASS') {
     throw new Error(`GREENFIELD_LEDGER_RECONCILIATION_FAILED:${ledger.calculatedBalanceSatang}/${ledger.snapshotBalanceSatang}`);
   }
+  imported.meta.importVerification = {
+    verifiedAt: now,
+    packageId: imported.meta.importedFrom.packageId,
+    sourceRevision: imported.meta.importedFrom.sourceRevision,
+    ledger: structuredClone(ledger),
+  };
 
   const commit = await commitEncryptedState({ store, passphrase, state: imported, expectedDurableRevision: null });
   const durable = await readEncryptedState({ store, passphrase });
-  return { status: 'IMPORTED_VERIFIED', state: durable, counts: domainCounts(durable), ledger, commit };
+  return {
+    status: 'IMPORTED_VERIFIED',
+    state: durable,
+    counts: domainCounts(durable),
+    ledger,
+    importVerification: durable.meta.importVerification,
+    currentLedgerBalanceSatang: projectLedgerBalance(durable),
+    commit,
+  };
 }
