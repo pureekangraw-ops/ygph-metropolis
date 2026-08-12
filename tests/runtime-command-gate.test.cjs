@@ -175,9 +175,9 @@ test("release wiring reserves command gate as last runtime authority", () => {
   assert.match(bootstrap, /loadScript\("metropolis-command-gate\.js", "data-metropolis-command-gate"\)/);
   assert.ok(bootstrap.indexOf("metropolis-command-gate.js") > bootstrap.indexOf("metropolis-day-cycle.js"));
   assert.ok(sw.includes('"metropolis-command-gate.js"'));
-  assert.match(sw, /v4\.2\.6-20260812-r26-command-runtime-gate/);
+  assert.match(manifest.serviceWorker.releaseId, /^v4\.2\.6-\d{8}-r\d+-/);
+  assert.ok(sw.includes(`const RELEASE_ID = "${manifest.serviceWorker.releaseId}";`));
   assert.match(pkg.scripts["check:syntax"], /node --check metropolis-command-gate\.js/);
-  assert.equal(manifest.serviceWorker.releaseId, "v4.2.6-20260812-r26-command-runtime-gate");
   assert.equal(manifest.runtimeOrder.at(-1), "metropolis-command-gate.js");
   assert.ok(manifest.serviceWorker.runtimeAssets.includes("metropolis-command-gate.js"));
   assert.ok(manifest.productionFiles.some(item => item.path === "metropolis-command-gate.js"));

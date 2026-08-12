@@ -2,7 +2,7 @@
   "release": "4.2.6-root-stabilization",
   "product": "YGPH METROPOLIS",
   "tagline": "RULEFORGE Root Stabilization",
-  "releaseDate": "2026-08-11",
+  "releaseDate": "2026-08-12",
   "sourceBaseCommit": "db1ff63",
   "uploadMode": "OVERWRITE_STABLE_PATHS",
   "stateSchema": 4,
@@ -14,7 +14,12 @@
     "vaultFormat": 1
   },
   "compatibility": {
-    "readableSchemas": [1, 2, 3, 4],
+    "readableSchemas": [
+      1,
+      2,
+      3,
+      4
+    ],
     "targetSchema": 4,
     "moneyUnit": "INTEGER_SATANG",
     "transactionCorrection": "LINKED_REVERSAL_ONLY",
@@ -40,7 +45,7 @@
     "4.2.6 owns the visible product version through one shared runtime authority value",
     "daily target progress is derived from current-day Store sales plus Ride jobs and does not create competing money truth",
     "end-day obligation selection previews the resulting balance without mutation; stale or VERIFY items remain disabled",
-    "confirmed end-day obligation payments use existing Ledger and Calendar mutation paths and one durable commit",
+    "confirmed end-day obligation payments delegate to the Ledger/Calendar domain command owner and retain one durable commit",
     "manual Start Day and End Day persist state.sync.flow.dayCycle without changing State Schema 4 or deleting source history",
     "End Day always creates a durable closure even when no obligation payment is selected and safely closes an active Ride round",
     "Maintenance no longer exposes duplicate Reconcile; stock and cash corrections remain with their existing source-specific owners",
@@ -71,12 +76,17 @@
     "all normal durable persistence entry points pass through one command runtime gate before the existing Vault commit engine",
     "the command runtime gate re-reads durable Vault revision before commit and blocks stale cross-context writes before encryption or database mutation",
     "successful guarded writes require matching durable read-back revision and publish the new revision to sibling contexts when BroadcastChannel is available",
-    "persistent browser storage and cross-context transport availability are diagnostic health signals and never replace durable Vault truth"
+    "persistent browser storage and cross-context transport availability are diagnostic health signals and never replace durable Vault truth",
+    "live Ledger and Calendar durable mutations enter through one metropolis-domain-commands.js public owner before the existing durable command gate",
+    "migrated Calendar payment, edit, completion and cancellation handlers request named commands instead of directly owning Ledger or Calendar state mutation",
+    "balance reconciliation and live obligation creation request named Ledger commands while validated import and migration owners retain their existing bounded responsibilities",
+    "domain command idempotency rejects duplicate effects before mutation and the r26 durable gate still provides cross-context lock, stale-write protection and verified read-back"
   ],
   "runtimeOrder": [
     "sw-bootstrap.js",
     "highway-gate.js",
     "app.js",
+    "metropolis-domain-commands.js",
     "flow-era.js",
     "flow-era-3.5.js",
     "metropolis-v4.js",
@@ -103,75 +113,188 @@
     "tests/stock-adjustment-runtime.test.cjs",
     "tests/report-semantics.test.cjs",
     "tests/durable-ui-guard.test.cjs",
-    "tests/runtime-command-gate.test.cjs"
+    "tests/runtime-command-gate.test.cjs",
+    "tests/domain-command-ownership.test.cjs"
   ],
   "serviceWorker": {
-    "releaseId": "v4.2.6-20260812-r26-command-runtime-gate",
+    "releaseId": "v4.2.6-20260812-r27-domain-command-ownership",
     "htmlRewriting": false,
     "explicitStableShell": true,
     "waitingActivation": true,
     "rollbackGenerations": 1,
     "legacyMixedCacheAsRollback": false,
     "legacyRescueBootstrap": "sw-bootstrap.js",
-    "legacyCachePrefixes": ["ygph-metropolis-0.1.0-preview."],
+    "legacyCachePrefixes": [
+      "ygph-metropolis-0.1.0-preview."
+    ],
     "legacyBridgeAutoActivation": "ONLY_WITHOUT_SAFE_LIFECYCLE",
-    "runtimeAssets": ["metropolis-r5.css", "metropolis-r5.js", "metropolis-r5-1.css", "metropolis-r5-1.js", "metropolis-r5-2.css", "metropolis-r5-2.js", "metropolis-r5-3.css", "metropolis-r5-3.js", "metropolis-r5-4.css", "metropolis-r5-4.js", "metropolis-r5-5.css", "metropolis-r5-5.js", "metropolis-maintenance.css", "metropolis-maintenance-core.js", "metropolis-maintenance.js", "metropolis-maintenance-report.js", "metropolis-remaster.css", "metropolis-remaster-core.js", "metropolis-remaster.js", "metropolis-day-cycle.js", "metropolis-command-gate.js"],
-    "note": "METROPOLIS 4.2.6 r26 centralizes durable write guarding, stale cross-context detection and runtime fingerprint health while retaining State Schema 4, IndexedDB version 1, Vault format 1 and existing money/source authorities."
+    "runtimeAssets": [
+      "metropolis-r5.css",
+      "metropolis-r5.js",
+      "metropolis-r5-1.css",
+      "metropolis-r5-1.js",
+      "metropolis-r5-2.css",
+      "metropolis-r5-2.js",
+      "metropolis-r5-3.css",
+      "metropolis-r5-3.js",
+      "metropolis-r5-4.css",
+      "metropolis-r5-4.js",
+      "metropolis-r5-5.css",
+      "metropolis-r5-5.js",
+      "metropolis-maintenance.css",
+      "metropolis-maintenance-core.js",
+      "metropolis-maintenance.js",
+      "metropolis-maintenance-report.js",
+      "metropolis-remaster.css",
+      "metropolis-remaster-core.js",
+      "metropolis-remaster.js",
+      "metropolis-day-cycle.js",
+      "metropolis-command-gate.js",
+      "metropolis-domain-commands.js"
+    ],
+    "note": "METROPOLIS 4.2.6 r27 centralizes live Ledger/Calendar command ownership before the existing r26 durable write guard while retaining State Schema 4, IndexedDB version 1, Vault format 1 and protected financial-history semantics."
   },
   "validation": {
     "command": "npm run deploy:gate",
-    "nodeTests": "185/185 PASS",
-    "syntax": "PASS — all production JavaScript parsed by node --check",
-    "utf8": "PASS — 34 production text assets + RELEASE_MANIFEST.json",
+    "nodeTests": "191/191 PASS",
+    "syntax": "PASS — all production JavaScript parsed by node --check, including metropolis-domain-commands.js",
+    "utf8": "PASS — 35 production text assets + RELEASE_MANIFEST.json",
     "encryptedBackupRoundTrip": "COVERED_BY_REGRESSION_GATE",
     "browserPersistence": "COVERED_BY_REGRESSION_GATE",
-    "publication": "MERGE_MAIN_THEN_VERIFY_LIVE_DELIVERY_AND_DEVICE_VISUALS"
+    "publication": "OWNER_GATE_AFTER_PR_GATE_PASS"
   },
   "productionFiles": [
-    { "path": "index.html" },
-    { "path": "manifest.webmanifest" },
-    { "path": "styles.css" },
-    { "path": "flow-era.css" },
-    { "path": "flow-era-3.5.css" },
-    { "path": "metropolis-v4.css" },
-    { "path": "metropolis-r5.css" },
-    { "path": "metropolis-r5-1.css" },
-    { "path": "metropolis-r5-2.css" },
-    { "path": "metropolis-r5-3.css" },
-    { "path": "metropolis-r5-4.css" },
-    { "path": "metropolis-r5-5.css" },
-    { "path": "metropolis-maintenance.css" },
-    { "path": "metropolis-remaster.css" },
-    { "path": "sw-bootstrap.js" },
-    { "path": "highway-gate.js" },
-    { "path": "app.js" },
-    { "path": "flow-era.js" },
-    { "path": "flow-era-3.5.js" },
-    { "path": "metropolis-v4.js" },
-    { "path": "metropolis-r5.js" },
-    { "path": "metropolis-r5-1.js" },
-    { "path": "metropolis-r5-2.js" },
-    { "path": "metropolis-r5-3.js" },
-    { "path": "metropolis-r5-4.js" },
-    { "path": "metropolis-r5-5.js" },
-    { "path": "metropolis-maintenance-core.js" },
-    { "path": "metropolis-maintenance.js" },
-    { "path": "metropolis-maintenance-report.js" },
-    { "path": "metropolis-remaster-core.js" },
-    { "path": "metropolis-remaster.js" },
-    { "path": "metropolis-day-cycle.js" },
-    { "path": "metropolis-command-gate.js" },
-    { "path": "sw.js" },
-    { "path": "icon-192.png" },
-    { "path": "icon-512.png" }
+    {
+      "path": "index.html"
+    },
+    {
+      "path": "manifest.webmanifest"
+    },
+    {
+      "path": "styles.css"
+    },
+    {
+      "path": "flow-era.css"
+    },
+    {
+      "path": "flow-era-3.5.css"
+    },
+    {
+      "path": "metropolis-v4.css"
+    },
+    {
+      "path": "metropolis-r5.css"
+    },
+    {
+      "path": "metropolis-r5-1.css"
+    },
+    {
+      "path": "metropolis-r5-2.css"
+    },
+    {
+      "path": "metropolis-r5-3.css"
+    },
+    {
+      "path": "metropolis-r5-4.css"
+    },
+    {
+      "path": "metropolis-r5-5.css"
+    },
+    {
+      "path": "metropolis-maintenance.css"
+    },
+    {
+      "path": "metropolis-remaster.css"
+    },
+    {
+      "path": "sw-bootstrap.js"
+    },
+    {
+      "path": "highway-gate.js"
+    },
+    {
+      "path": "app.js"
+    },
+    {
+      "path": "metropolis-domain-commands.js"
+    },
+    {
+      "path": "flow-era.js"
+    },
+    {
+      "path": "flow-era-3.5.js"
+    },
+    {
+      "path": "metropolis-v4.js"
+    },
+    {
+      "path": "metropolis-r5.js"
+    },
+    {
+      "path": "metropolis-r5-1.js"
+    },
+    {
+      "path": "metropolis-r5-2.js"
+    },
+    {
+      "path": "metropolis-r5-3.js"
+    },
+    {
+      "path": "metropolis-r5-4.js"
+    },
+    {
+      "path": "metropolis-r5-5.js"
+    },
+    {
+      "path": "metropolis-maintenance-core.js"
+    },
+    {
+      "path": "metropolis-maintenance.js"
+    },
+    {
+      "path": "metropolis-maintenance-report.js"
+    },
+    {
+      "path": "metropolis-remaster-core.js"
+    },
+    {
+      "path": "metropolis-remaster.js"
+    },
+    {
+      "path": "metropolis-day-cycle.js"
+    },
+    {
+      "path": "metropolis-command-gate.js"
+    },
+    {
+      "path": "sw.js"
+    },
+    {
+      "path": "icon-192.png"
+    },
+    {
+      "path": "icon-512.png"
+    }
   ],
   "repositoryGateFiles": [
-    { "path": ".assetsignore" },
-    { "path": ".github/workflows/phase1-deploy-gate.yml" },
-    { "path": "package.json" },
-    { "path": "scripts/verify-utf8.mjs" },
-    { "path": "wrangler.jsonc" },
-    { "path": "UPLOAD_GUIDE.md" }
+    {
+      "path": ".assetsignore"
+    },
+    {
+      "path": ".github/workflows/phase1-deploy-gate.yml"
+    },
+    {
+      "path": "package.json"
+    },
+    {
+      "path": "scripts/verify-utf8.mjs"
+    },
+    {
+      "path": "wrangler.jsonc"
+    },
+    {
+      "path": "UPLOAD_GUIDE.md"
+    }
   ],
   "manualUpload": [
     "Extract the ZIP at repository root.",

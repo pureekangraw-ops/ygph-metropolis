@@ -2503,37 +2503,18 @@ function openQueueEditor(id) {
     confirm: "บันทึก",
     onConfirm: async () => {
       const due = byId("queueEditDue").value;
-      if (!validISODate(due)) { toast("วันกำหนดไม่ถูกต้อง"); modalBusy = false; return; }
-      const oldDue = item.due;
-      item.displayName = cleanImportText(byId("queueEditName").value, 100);
-      item.note = cleanImportText(byId("queueEditNote").value, 180);
-      item.reminderEnabled = byId("queueEditReminder").checked;
-      item.due = due;
-      item.dueAt = `${due}T09:00:00+07:00`;
-      item.triggerAt = item.dueAt;
-      if (needsLocalVerification(item)) item.reviewNote = item.note;
-
-      let sourceChanged = false;
-      if (source?.installments && item.installmentNumber) {
-        const installment = source.installments.find(entry => Number(entry.number) === Number(item.installmentNumber));
-        if (installment && installment.due !== due) {
-          installment.due = due;
-          if (Number(item.installmentNumber) === 1) source.firstDue = due;
-          sourceChanged = true;
-        }
-      }
-      if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source && source.due !== due) {
-        source.due = due;
-        sourceChanged = true;
-      }
-      if (sourceChanged) {
-        bumpSource(source);
-        syncQueueRevisionsForSource(item.source, item.sourceId);
-      }
-      addHistory(item, "PLAN_EDITED", `${oldDue} → ${due}`);
-      bumpQueue(item);
+      if (!validISODate(due)) { toast("ตรวจวันกำหนด"); modalBusy = false; return; }
+      const commandId = uid("CMD");
+      const idempotencyKey = `${item.id}:edit:${Date.now()}`;
+      const payload = {
+        queueId: item.id,
+        displayName: cleanImportText(byId("queueEditName").value, 100),
+        due,
+        note: cleanImportText(byId("queueEditNote").value, 180),
+        reminderEnabled: byId("queueEditReminder").checked
+      };
       closeModal();
-      await persistAndRender("แก้ไขแล้ว");
+      await YGPHDomainCommands.execute({ type: "CALENDAR_EDIT_QUEUE", commandId, idempotencyKey, payload });
     }
   });
   const scheduleButton = byId("queueScheduleManager");
@@ -2555,30 +2536,15 @@ async function openPayment(id) {
       const amount = parseMoneyToSatang(byId("payAmount").value, { allowZero: false, label: "ยอดครั้งนี้" });
       if (amount <= 0 || amount > maximum) { toast("ยอดไม่ถูกต้อง"); modalBusy = false; return; }
       const sequence = item.history.filter(h => h.event === "PAYMENT_APPLIED").length + 1;
-      const key = `payment:${sequence}:${amount}`;
-      runOnce(item, key, () => {
-        if (incoming) {
-          addTransaction({ direction: "IN", amountSatang: amount, label: `รับชำระ ${source.id}`, source: "STORE", sourceId: source.id, subtype: "SALE_RECEIPT", actionKey: `${item.id}:${key}` });
-          source.receivedSatang += amount; source.outstandingSatang = Math.max(0, source.totalSatang - source.receivedSatang);
-          source.status = source.outstandingSatang === 0 ? "COMPLETED" : "PARTIAL";
-          item.amountSatang = source.outstandingSatang;
-        } else {
-          addTransaction({ direction: "OUT", amountSatang: amount, label: `ชำระ ${source.name}${item.installmentNumber ? ` งวด ${item.installmentNumber}` : ""}`, source: "LEDGER", sourceId: source.id, subtype: "OBLIGATION_PAYMENT", actionKey: `${item.id}:${key}` });
-          source.paidSatang += amount; source.remainingSatang = Math.max(0, source.originalSatang - source.paidSatang);
-          source.status = source.remainingSatang === 0 ? "COMPLETED" : "PARTIAL";
-          item.paidSatang = Number(item.paidSatang || 0) + amount;
-          const installment = source.installments?.find(x => x.number === item.installmentNumber);
-          if (installment) { installment.paidSatang = Number(installment.paidSatang || 0) + amount; installment.status = installment.paidSatang >= installment.amountSatang ? "COMPLETED" : "PARTIAL"; installment.paidAt = installment.status === "COMPLETED" ? nowIso() : null; }
-        }
-        bumpSource(source);
-        item.expectedRevision = source.revision; item.sourceRevision = source.revision;
-        const queueRemaining = incoming ? Number(source.outstandingSatang || 0) : Math.max(0, Number(item.amountSatang || 0) - Number(item.paidSatang || 0));
-        item.status = queueRemaining === 0 ? "COMPLETED" : "PARTIAL";
-        if (item.status === "COMPLETED") item.completedAt = nowIso();
-        addHistory(item, "PAYMENT_APPLIED", `${incoming ? "IN" : "OUT"} ${money(amount)}`);
-        syncQueueRevisionsForSource(item.source, item.sourceId);
+      const legacyActionKey = `payment:${sequence}:${amount}`;
+      const commandId = uid("CMD");
+      closeModal();
+      await YGPHDomainCommands.execute({
+        type: "CALENDAR_PAY_QUEUE",
+        commandId,
+        idempotencyKey: `${item.id}:${legacyActionKey}`,
+        payload: { queueId: item.id, amountSatang: amount, legacyActionKey }
       });
-      closeModal(); await persistAndRender(`${incoming ? "+" : "−"}${money(amount)} บาท`);
     }});
   });
 }
@@ -2586,21 +2552,14 @@ async function openPayment(id) {
 async function completeQueue(id) {
   const item = findQueue(id); const source = findSource(item.source, item.sourceId);
   withGates(item, async () => openModal({ title: item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" ? "ยืนยันว่าเงินเข้าแล้ว" : "ยืนยันแอคชัน", text: `${sourceLabel(item.source)} · ${actionLabel(item.actionType)}`, body: `<div class="flow-note"><b>ยอด:</b> ${money(item.amountSatang)} บาท</div>`, confirm: "ดำเนินการ", onConfirm: async () => {
-    runOnce(item, "complete", () => {
-      if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL") {
-        addTransaction({ direction: "IN", amountSatang: source.amountSatang, label: `เงินเข้าจากเครดิตงานวิ่ง ${source.id}`, source: "RIDE", sourceId: source.id, subtype: "RIDE_CREDIT_WITHDRAWAL", actionKey: `${item.id}:complete` });
-        source.status = "COMPLETED"; source.confirmedAt = nowIso(); bumpSource(source);
-      }
-      if (item.actionType === "SETTLE_RIDE_JOB") {
-        addTransaction({ direction: "IN", amountSatang: source.amountSatang, label: `รายได้งานเดิม ${source.id}`, source: "RIDE", sourceId: source.id, subtype: "RIDE_INCOME", actionKey: `${item.id}:complete` });
-        source.status = "SETTLED"; source.paymentMode ||= "LEGACY_PENDING"; bumpSource(source);
-      }
-      if (item.actionType === "PURCHASE_RETURN_WINDOW") { source.status = "ACTIVE"; bumpSource(source); }
-      if (item.actionType === "VERIFY_SOURCE" && source) { source.verifiedAt = nowIso(); bumpSource(source); }
-      if (source) { item.expectedRevision = source.revision; item.sourceRevision = source.revision; syncQueueRevisionsForSource(item.source, item.sourceId); }
-      item.status = "COMPLETED"; item.completedAt = nowIso(); addHistory(item, "COMPLETED", "แอคชันสำเร็จ");
+    const commandId = uid("CMD");
+    closeModal();
+    await YGPHDomainCommands.execute({
+      type: "CALENDAR_COMPLETE_QUEUE",
+      commandId,
+      idempotencyKey: `${item.id}:complete`,
+      payload: { queueId: item.id }
     });
-    closeModal(); await persistAndRender(item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" ? "เงินเข้าการเงินแล้ว" : "ปิดคิวแล้ว");
   }}));
 }
 
@@ -2608,44 +2567,14 @@ async function cancelQueue(id) {
   const item = findQueue(id); const source = findSource(item.source, item.sourceId);
   if (item.status === "CANCELLED") return toast("รายการนี้ยกเลิกแล้ว");
   openModal({ title: "ยกเลิกรายการ", text: "ระบบจะย้อนเฉพาะผลที่เคยเกิดจากคิวนี้", body: `<div class="flow-note"><b>${item.source}/${item.sourceId}</b><br>${actionLabel(item.actionType)}</div>`, confirm: "ยืนยันยกเลิก", onConfirm: async () => {
-    if (item.actionType === "PURCHASE_RETURN_WINDOW" && source && state.store.stockQty < source.qty) {
-      item.status = "VERIFY"; item.requiresRefreshBeforePayment = true; addHistory(item, "CANCEL_BLOCKED", "จำนวนสต็อกคงเหลือไม่พอสำหรับคืนลอต"); closeModal(); await persistAndRender("ต้องตรวจสต็อกก่อนคืนของ"); return;
-    }
-    runOnce(item, "cancel", () => {
-      let cashDelta = 0;
-      if (item.actionType === "RECEIVE_CUSTOMER_PAYMENT" && source) {
-        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
-        if (!source.stockRestored) { state.store.stockQty += source.qty; state.store.stockValueSatang += source.costSatang; source.stockRestored = true; }
-        source.status = "CANCELLED"; source.cancelledAt = nowIso(); source.receivedSatang = 0; source.outstandingSatang = 0; bumpSource(source);
-      } else if (item.actionType === "PURCHASE_RETURN_WINDOW" && source) {
-        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
-        const inventoryCostSatang = takeStockFromPool(state, Number(source.qty));
-        source.returnInventoryCostSatang = inventoryCostSatang;
-        source.returnCostDifferenceSatang = Number(source.costSatang || 0) - inventoryCostSatang;
-        source.returnedAt = nowIso();
-        addAudit("STOCK_RETURN_VALUATION", `${source.id} · คืน ${source.qty} ชิ้น · ต้นทุนกอง ${money(inventoryCostSatang)} · ส่วนต่าง ${source.returnCostDifferenceSatang >= 0 ? "+" : ""}${money(source.returnCostDifferenceSatang)}`);
-        source.status = "CANCELLED"; source.cancelledAt = nowIso(); source.paidAmountSatang = 0; bumpSource(source);
-      } else if (item.actionType === "SETTLE_RIDE_JOB" && source) {
-        cashDelta = reverseTransactions(item.source, item.sourceId, `${item.id}:cancel`);
-        source.status = "CANCELLED"; source.cancelledAt = nowIso(); bumpSource(source);
-      } else if (item.actionType === "CONFIRM_RIDE_CREDIT_WITHDRAWAL" && source) {
-        if (source.status === "PENDING") state.ride.creditBalanceSatang += source.amountSatang;
-        source.status = "CANCELLED"; source.cancelledAt = nowIso(); bumpSource(source);
-      } else if (["PAY_OBLIGATION", "PAY_OBLIGATION_INSTALLMENT"].includes(item.actionType) && source) {
-        const reversed = reverseQueuePayments(item, `${item.id}:cancel`);
-        source.paidSatang = Math.max(0, source.paidSatang - reversed);
-        source.remainingSatang = Math.max(0, source.originalSatang - source.paidSatang);
-        source.status = source.paidSatang ? "PARTIAL" : "OPEN";
-        const installment = source.installments?.find(x => x.number === item.installmentNumber);
-        if (installment) { installment.paidSatang = Math.max(0, Number(installment.paidSatang || 0) - reversed); installment.status = installment.paidSatang ? "PARTIAL" : "CANCELLED"; installment.paidAt = null; }
-        cashDelta = reversed;
-        bumpSource(source);
-      }
-      item.status = "CANCELLED"; item.cancelledAt = nowIso(); item.completedAt = null;
-      if (source) { item.expectedRevision = source.revision; item.sourceRevision = source.revision; syncQueueRevisionsForSource(item.source, item.sourceId); }
-      addHistory(item, "CANCELLED", `ผลเงินจริงสุทธิ ${cashDelta >= 0 ? "+" : ""}${money(cashDelta)}`);
+    const commandId = uid("CMD");
+    closeModal();
+    await YGPHDomainCommands.execute({
+      type: "CALENDAR_CANCEL_QUEUE",
+      commandId,
+      idempotencyKey: `${item.id}:cancel`,
+      payload: { queueId: item.id, reason: "ยกเลิกจาก Calendar" }
     });
-    closeModal(); await persistAndRender("ยกเลิกแล้ว");
   }});
 }
 
@@ -2658,23 +2587,17 @@ function showHistory(id) {
 function promptVerifyBalance(migrationPrompt = false) {
   const initialVerification = migrationPrompt || !state.ledger.balanceVerified;
   openModal({ title: initialVerification ? "ยืนยันยอดเงินปัจจุบันหลังย้ายข้อมูล" : "กระทบยอดเงินปัจจุบัน", text: initialVerification ? "ตั้งฐานเงินครั้งแรกหลัง Migration เท่านั้น" : "ระบบจะสร้างรายการปรับยอด ณ เวลานี้ โดยไม่เปลี่ยนประวัติย้อนหลัง", body: `<div class="field"><label>เงินปัจจุบัน</label><input id="verifiedBalance" type="number" min="0" step="0.01" value="${state.ledger.balanceVerified ? satangToBaht(currentBalanceSatang()) : 0}"></div>${initialVerification ? "" : '<div class="field"><label>เหตุผลส่วนต่าง</label><input id="balanceReason" maxlength="180" placeholder="เช่น ตรวจเงินสดและยอดบัญชีแล้ว"></div>'}`, confirm: initialVerification ? "ยืนยันยอดตั้งต้น" : "บันทึกรายการปรับยอด", onConfirm: async () => {
-    const target = parseMoneyToSatang(byId("verifiedBalance").value, { allowZero: true, label: "เงินปัจจุบัน" });
-    const current = currentBalanceSatang();
-    if (initialVerification) {
-      const movement = state.ledger.transactions.reduce((sum, tx) => sum + signedTransaction(tx), 0);
-      state.ledger.openingBalanceSatang = target - movement;
-      state.ledger.balanceVerified = true;
-      state.ledger.verifiedAt = nowIso();
-      addAudit("BALANCE_INITIALIZED", `เงินตั้งต้น ${money(target)} บาท`);
-    } else {
-      const reason = cleanImportText(byId("balanceReason").value, 180);
-      if (reason.length < 3) { toast("ระบุเหตุผลการปรับยอด"); modalBusy = false; return; }
-      const difference = target - current;
-      if (difference !== 0) addTransaction({ direction: difference > 0 ? "IN" : "OUT", amountSatang: Math.abs(difference), label: `ปรับยอดจากการตรวจจริง: ${reason}`, source: "LEDGER", sourceId: "LEDGER-CURRENT", subtype: "BALANCE_RECONCILIATION", actionKey: `balance-reconciliation:${Date.now()}` });
-      state.ledger.verifiedAt = nowIso();
-      addAudit("BALANCE_RECONCILED", `${reason} · ${difference >= 0 ? "+" : ""}${money(difference)} บาท`);
-    }
-    closeModal(); await persistAndRender(initialVerification ? "ยืนยันยอดตั้งต้นแล้ว" : "บันทึกส่วนต่าง ณ วันนี้แล้ว");
+    const targetSatang = parseMoneyToSatang(byId("verifiedBalance").value, { allowZero: true, label: "เงินปัจจุบัน" });
+    const reason = initialVerification ? "" : cleanImportText(byId("balanceReason").value, 180);
+    if (!initialVerification && reason.length < 3) { toast("ระบุเหตุผลการปรับยอด"); modalBusy = false; return; }
+    const commandId = uid("CMD");
+    closeModal();
+    await YGPHDomainCommands.execute({
+      type: "LEDGER_RECONCILE_BALANCE",
+      commandId,
+      idempotencyKey: `balance-reconciliation:${Date.now()}`,
+      payload: { targetSatang, initialVerification, reason }
+    });
   }});
 }
 
@@ -2767,16 +2690,11 @@ function setupActions() {
   byId("addDebtBtn").onclick = () => openModal({ title: "เพิ่มภาระ", text: "รายการตั้งแต่ 2 งวดขึ้นไปจะสร้างคิวทุกงวดในปฏิทิน", body: `<div class="form-grid"><div class="field full"><label>รายละเอียด</label><input id="debtName" maxlength="120" placeholder="เช่น ค่าซ่อมห้อง"></div><div class="field full"><label>หมายเหตุเพิ่มเติม</label><input id="debtDetail" maxlength="180"></div><div class="field"><label>ยอดรวม</label><input id="debtAmount" type="number" min="0.01" step="0.01"></div><div class="field"><label>จำนวนงวด</label><input id="debtInstallments" type="number" min="1" max="120" step="1" value="1"></div><div class="field full"><label>วันครบกำหนดงวดแรก</label><input id="debtDue" type="date" value="${localISO()}"></div></div>`, confirm: "เพิ่มภาระ", onConfirm: async () => {
     const originalSatang = parseMoneyToSatang(byId("debtAmount").value, { allowZero: false, label: "ยอดภาระ" }), installmentCount = Number(byId("debtInstallments").value), firstDue = byId("debtDue").value;
     if (!Number.isInteger(installmentCount) || installmentCount < 1 || installmentCount > MAX_INSTALLMENTS || originalSatang < installmentCount || !validISODate(firstDue)) { toast("ตรวจยอด จำนวนงวด 1–120 และวันครบกำหนด"); modalBusy = false; return; }
-    const id = uid("OBL"), createdAt = nowIso(), amounts = splitInstallments(originalSatang, installmentCount);
-    const obligation = { id, name: byId("debtName").value.trim() || "ภาระ", detail: byId("debtDetail").value.trim(), originalSatang, paidSatang: 0, remainingSatang: originalSatang, installmentCount, firstDue, installments: [], status: "OPEN", createdAt, updatedAt: createdAt, revision: 1, cancelledAt: null };
-    state.ledger.obligations.push(obligation);
-    amounts.forEach((amountSatang, index) => {
-      const number = index + 1, due = addMonths(firstDue, index);
-      const queue = addQueue({ source: "LEDGER", sourceId: id, actionType: installmentCount >= 2 ? "PAY_OBLIGATION_INSTALLMENT" : "PAY_OBLIGATION", amountSatang, due, effects: { complete: "หักเงินจริงและลดยอดภาระ", cancel: "ยกเลิกคิวและย้อนเฉพาะยอดที่จ่ายจากคิวนี้" } });
-      queue.installmentNumber = number; queue.installmentCount = installmentCount;
-      obligation.installments.push({ number, amountSatang, paidSatang: 0, due, status: "PENDING", queueId: queue.id, paidAt: null });
-    });
-    closeModal(); await persistAndRender(`เพิ่มภาระ ${installmentCount} งวดในปฏิทินแล้ว`);
+    const commandId = uid("CMD");
+    const idempotencyKey = `obligation-create:${Date.now()}`;
+    const payload = { name: byId("debtName").value.trim() || "ภาระ", detail: byId("debtDetail").value.trim(), originalSatang, installmentCount, firstDue };
+    closeModal();
+    await YGPHDomainCommands.execute({ type: "LEDGER_CREATE_OBLIGATION", commandId, idempotencyKey, payload });
   }});
   byId("addExpenseBtn").onclick = () => openModal({ title: "เพิ่มรายจ่าย", text: "รายการที่จ่ายแล้วจะหักเงินทันทีและไม่เข้าปฏิทิน", body: `<div class="form-grid"><div class="field full"><label>รายการ</label><input id="expenseName" maxlength="120"></div><div class="field"><label>จำนวนเงิน</label><input id="expenseAmount" type="number" min="0" step="0.01"></div><div class="field"><label>หมวด</label><select id="expenseCategory"><option value="GENERAL">ทั่วไป</option><option value="STORE">ร้านค้า</option><option value="RIDE">วิ่งงาน</option></select></div></div>`, confirm: "หักเงินทันที", onConfirm: async () => {
     const amountSatang = parseMoneyToSatang(byId("expenseAmount").value, { allowZero: false, label: "รายจ่าย" }); if (amountSatang <= 0) { toast("กรอกยอด"); modalBusy = false; return; }
