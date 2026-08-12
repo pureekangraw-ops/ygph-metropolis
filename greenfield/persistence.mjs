@@ -37,16 +37,16 @@ async function deriveKey(passphrase, salt, iterations) {
   return globalThis.crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
-async function encryptState(state, passphrase, iterations = PBKDF2_ITERATIONS) {
+async function encryptState(state, passphrase) {
   assertGreenfieldState(state);
   const salt = randomBytes(16);
   const iv = randomBytes(12);
-  const key = await deriveKey(passphrase, salt, iterations);
+  const key = await deriveKey(passphrase, salt, PBKDF2_ITERATIONS);
   const ciphertext = await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: AAD, tagLength: 128 }, key, encoder.encode(JSON.stringify(state)));
   return {
     format: VAULT_FORMAT,
     version: VAULT_VERSION,
-    kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations, salt: bytesToBase64(salt) },
+    kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations: PBKDF2_ITERATIONS, salt: bytesToBase64(salt) },
     cipher: { name: 'AES-GCM', iv: bytesToBase64(iv), tagLength: 128 },
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
   };
@@ -55,8 +55,9 @@ async function encryptState(state, passphrase, iterations = PBKDF2_ITERATIONS) {
 async function decryptState(vault, passphrase) {
   if (!vault || vault.format !== VAULT_FORMAT || vault.version !== VAULT_VERSION) throw new Error('INVALID_GREENFIELD_VAULT');
   if (vault.kdf?.name !== 'PBKDF2' || vault.kdf?.hash !== 'SHA-256') throw new Error('INVALID_GREENFIELD_KDF');
+  if (Number(vault.kdf?.iterations) !== PBKDF2_ITERATIONS) throw new Error('INVALID_GREENFIELD_KDF_ITERATIONS');
   if (vault.cipher?.name !== 'AES-GCM' || Number(vault.cipher?.tagLength) !== 128) throw new Error('INVALID_GREENFIELD_CIPHER');
-  const key = await deriveKey(passphrase, base64ToBytes(vault.kdf.salt), Number(vault.kdf.iterations));
+  const key = await deriveKey(passphrase, base64ToBytes(vault.kdf.salt), PBKDF2_ITERATIONS);
   try {
     const plaintext = await globalThis.crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(vault.cipher.iv), additionalData: AAD, tagLength: 128 }, key, base64ToBytes(vault.ciphertext));
     return assertGreenfieldState(JSON.parse(decoder.decode(plaintext)));
@@ -80,12 +81,12 @@ export async function readEncryptedState({ store, passphrase }) {
   return decryptState(vault, passphrase);
 }
 
-export async function commitEncryptedState({ store, passphrase, state, expectedDurableRevision, iterations = PBKDF2_ITERATIONS }) {
+export async function commitEncryptedState({ store, passphrase, state, expectedDurableRevision }) {
   assertGreenfieldState(state);
   const durableBefore = await readEncryptedState({ store, passphrase });
   const observedRevision = durableBefore?.revision ?? null;
   if (observedRevision !== expectedDurableRevision) throw new Error(`STALE_DURABLE_STATE:${expectedDurableRevision}/${observedRevision}`);
-  const vault = await encryptState(state, passphrase, iterations);
+  const vault = await encryptState(state, passphrase);
   await store.put(VAULT_KEY, vault);
   const durableAfter = await readEncryptedState({ store, passphrase });
   if (canonicalStringify(durableAfter) !== canonicalStringify(state)) throw new Error('DURABLE_READBACK_MISMATCH');

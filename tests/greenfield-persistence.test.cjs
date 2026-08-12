@@ -17,6 +17,8 @@ test('encrypted commit performs durable decrypt readback and rejects stale expec
   const initial = createGreenfieldState({ now: '2026-08-12T10:00:00.000Z' });
   const first = await commitEncryptedState({ store, passphrase: 'correct horse battery staple', state: initial, expectedDurableRevision: null, iterations: 1000 });
   assert.equal(first.status, 'VERIFIED');
+  const rawVault = await store.get('current');
+  assert.equal(rawVault.kdf.iterations, 600000);
   const read = await readEncryptedState({ store, passphrase: 'correct horse battery staple' });
   assert.equal(read.revision, 1);
   await assert.rejects(commitEncryptedState({ store, passphrase: 'correct horse battery staple', state: { ...read, revision: 2 }, expectedDurableRevision: 0, iterations: 1000 }), /STALE_DURABLE_STATE/);
