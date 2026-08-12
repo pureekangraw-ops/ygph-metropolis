@@ -1,4 +1,4 @@
-name: Phase 1 Deploy Gate
+name: Greenfield Deploy Gate
 
 on:
   pull_request:
@@ -11,10 +11,10 @@ permissions:
 
 jobs:
   safety-gate:
-    name: Cloudflare upload safety gate
+    name: Greenfield safety gate
     runs-on: ubuntu-latest
     steps:
-      - name: Check out stable filenames
+      - name: Check out release candidate
         uses: actions/checkout@v4
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -22,11 +22,11 @@ jobs:
           node-version: 22
       - name: Install locked dependencies
         run: npm ci
-      - name: Run regression, syntax, and UTF-8 gates
+      - name: Run Greenfield tests, syntax, and UTF-8 gates
         run: npm run deploy:gate
 
   deploy:
-    name: Deploy YGPH Metropolis to Cloudflare
+    name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: safety-gate
     runs-on: ubuntu-latest
