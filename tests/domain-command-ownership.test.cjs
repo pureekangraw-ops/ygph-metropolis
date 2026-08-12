@@ -10,6 +10,14 @@ function snapshot(runtime, expression) {
   return JSON.parse(runtime.evaluate(`JSON.stringify(${expression})`));
 }
 
+function sourceBetween(source, start, end) {
+  const from = source.indexOf(start);
+  const to = source.indexOf(end, from + start.length);
+  assert.ok(from >= 0, `missing source marker: ${start}`);
+  assert.ok(to > from, `missing end marker: ${end}`);
+  return source.slice(from, to);
+}
+
 async function commandRuntime(t) {
   const runtime = loadProductionRuntime();
   t.after(() => runtime.close());
@@ -44,6 +52,17 @@ test("production runtime publishes one Ledger/Calendar domain command owner in t
   assert.equal(runtime.window.YGPHDomainCommands.version, "1.0.0");
   assert.equal(typeof runtime.window.YGPHDomainCommands.execute, "function");
   assert.equal(typeof runtime.window.YGPHDomainCommands.supports, "function");
+  for (const type of [
+    "LEDGER_ADD_TRANSACTION",
+    "LEDGER_REVERSE_SOURCE_TRANSACTIONS",
+    "LEDGER_RECONCILE_BALANCE",
+    "LEDGER_CREATE_OBLIGATION",
+    "CALENDAR_CREATE_QUEUE",
+    "CALENDAR_PAY_QUEUE",
+    "CALENDAR_EDIT_QUEUE",
+    "CALENDAR_COMPLETE_QUEUE",
+    "CALENDAR_CANCEL_QUEUE"
+  ]) assert.equal(runtime.window.YGPHDomainCommands.supports(type), true, type);
 });
 
 test("invalid or duplicate command envelopes fail before durable persistence", async t => {
@@ -135,4 +154,46 @@ test("Ledger reversal remains append-only and linked", async t => {
   ]);
   assert.equal(runtime.evaluate("state.ledger.transactions[0].reversedBy === state.ledger.transactions[1].id"), true);
   assert.equal(runtime.evaluate("globalThis.__persistCalls.length"), 1);
+});
+
+test("migrated UI blocks request domain commands instead of owning durable Ledger/Calendar mutation", () => {
+  const app = fs.readFileSync(path.join(DEFAULT_ROOT, "app.js"), "utf8");
+  const blocks = [
+    sourceBetween(app, "function openQueueEditor(id)", "async function openPayment(id)"),
+    sourceBetween(app, "async function openPayment(id)", "async function completeQueue(id)"),
+    sourceBetween(app, "async function completeQueue(id)", "async function cancelQueue(id)"),
+    sourceBetween(app, "async function cancelQueue(id)", "function showHistory(id)"),
+    sourceBetween(app, "function promptVerifyBalance(migrationPrompt = false)", "function recordHtml("),
+    sourceBetween(app, 'byId("addDebtBtn").onclick', 'byId("addExpenseBtn").onclick')
+  ];
+
+  for (const block of blocks) {
+    assert.match(block, /YGPHDomainCommands\.execute/);
+    assert.doesNotMatch(block, /await\s+persistAndRender\s*\(/);
+  }
+
+  const combined = blocks.join("\n");
+  assert.doesNotMatch(combined, /state\.ledger\.obligations\.push\s*\(/);
+  assert.doesNotMatch(combined, /state\.ledger\.openingBalanceSatang\s*=/);
+  assert.doesNotMatch(combined, /state\.calendar\.push\s*\(/);
+  assert.doesNotMatch(combined, /\baddQueue\s*\(/);
+  assert.doesNotMatch(combined, /\breverseQueuePayments\s*\(/);
+});
+
+test("one idempotency key produces one financial effect and one persistence call", async t => {
+  const runtime = await commandRuntime(t);
+  await runtime.evaluate(`YGPHDomainCommands.execute({
+    type: "LEDGER_ADD_TRANSACTION",
+    commandId: "CMD-ONE",
+    idempotencyKey: "ONE-EFFECT",
+    payload: { direction: "OUT", amountSatang: 12345, label: "one effect", source: "LEDGER", sourceId: "LEDGER-CURRENT" }
+  })`);
+  const second = runtime.evaluate(`YGPHDomainCommands.execute({
+    type: "LEDGER_ADD_TRANSACTION",
+    commandId: "CMD-TWO",
+    idempotencyKey: "ONE-EFFECT",
+    payload: { direction: "OUT", amountSatang: 12345, label: "duplicate", source: "LEDGER", sourceId: "LEDGER-CURRENT" }
+  })`);
+  await assert.rejects(second, /DUPLICATE_DOMAIN_COMMAND/);
+  assert.deepEqual(snapshot(runtime, `({ tx: state.ledger.transactions.length, persist: globalThis.__persistCalls.length })`), { tx: 1, persist: 1 });
 });
