@@ -19,6 +19,7 @@ test("command gate exposes pure hardening contract", () => {
   assert.equal(typeof gate.revisionFreshness, "function");
   assert.equal(typeof gate.buildRuntimeFingerprint, "function");
   assert.equal(typeof gate.normalizeGateStatus, "function");
+  assert.equal(typeof gate.createGuardedCommit, "function");
 });
 
 test("revision freshness rejects stale or regressed durable truth", () => {
@@ -38,6 +39,78 @@ test("revision freshness rejects stale or regressed durable truth", () => {
     memoryRevision: 22,
     durableRevision: 21
   });
+});
+
+test("guarded commit blocks a stale context before commit and restores durable truth", async () => {
+  const { createGuardedCommit } = loadGate();
+  let memoryRevision = 21;
+  let commits = 0;
+  let restored = null;
+  const durable = { state: { revision: 22, marker: "newer" }, vault: { cipher: "durable" } };
+
+  const guarded = createGuardedCommit({
+    readDurableTruth: async () => durable,
+    getMemoryRevision: () => memoryRevision,
+    restoreDurableTruth: async value => {
+      restored = value;
+      memoryRevision = value.state.revision;
+    },
+    commit: async () => {
+      commits += 1;
+      return { stateRevision: 22 };
+    },
+    withLock: task => task(),
+    onCommitted: () => {}
+  });
+
+  await assert.rejects(
+    () => guarded("save", { eventType: "TEST" }),
+    error => error?.code === "STALE_CONTEXT"
+  );
+  assert.equal(commits, 0, "stale context must never reach the durable commit");
+  assert.deepEqual(restored, durable, "newest durable truth must replace stale in-memory state");
+});
+
+test("guarded commit verifies the durable read-back revision before announcing success", async () => {
+  const { createGuardedCommit } = loadGate();
+  let memoryRevision = 21;
+  const announcements = [];
+  const guarded = createGuardedCommit({
+    readDurableTruth: async () => ({ state: { revision: 21 }, vault: {} }),
+    getMemoryRevision: () => memoryRevision,
+    restoreDurableTruth: async () => assert.fail("current context must not restore"),
+    commit: async () => {
+      memoryRevision = 22;
+      return { status: "VERIFIED", stateRevision: 22, durableHash: "hash" };
+    },
+    withLock: task => task(),
+    onCommitted: revision => announcements.push(revision)
+  });
+
+  const readback = await guarded("save", { eventType: "TEST" });
+  assert.equal(readback.stateRevision, 22);
+  assert.deepEqual(announcements, [22]);
+});
+
+test("guarded commit rejects a mismatched post-write read-back revision", async () => {
+  const { createGuardedCommit } = loadGate();
+  let memoryRevision = 21;
+  const guarded = createGuardedCommit({
+    readDurableTruth: async () => ({ state: { revision: 21 }, vault: {} }),
+    getMemoryRevision: () => memoryRevision,
+    restoreDurableTruth: async () => {},
+    commit: async () => {
+      memoryRevision = 22;
+      return { status: "VERIFIED", stateRevision: 21 };
+    },
+    withLock: task => task(),
+    onCommitted: () => assert.fail("mismatched read-back must not be announced")
+  });
+
+  await assert.rejects(
+    () => guarded("save", {}),
+    error => error?.code === "READBACK_REVISION_MISMATCH"
+  );
 });
 
 test("runtime fingerprint keeps one diagnostic identity across layers", () => {
