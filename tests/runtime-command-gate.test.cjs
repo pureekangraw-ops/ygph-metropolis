@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadProductionRuntime, readRuntimeOrder } = require("./helpers/metropolis-runtime-harness.cjs");
 
 const root = path.resolve(__dirname, "..");
 const gatePath = path.join(root, "metropolis-command-gate.js");
@@ -151,6 +152,18 @@ test("runtime fingerprint keeps one diagnostic identity across layers", () => {
     storage: "PERSISTENT",
     crossContext: "LOCK+BROADCAST"
   });
+});
+
+test("production runtime loads command gate last and wraps durable persistence", async t => {
+  const runtime = loadProductionRuntime();
+  t.after(() => runtime.close());
+  await runtime.flushRuntime();
+
+  assert.equal(runtime.scriptErrors.length, 0, JSON.stringify(runtime.scriptErrors));
+  assert.equal(readRuntimeOrder().at(-1), "metropolis-command-gate.js");
+  assert.equal(runtime.window.YGPHCommandGate?.VERSION, "1.0.0");
+  assert.equal(runtime.evaluate("Boolean(persistAndRender.__YGPH_COMMAND_GATE__)"), true);
+  assert.equal(runtime.evaluate("Boolean(saveEncryptedState.__YGPH_COMMAND_GATE__)"), true);
 });
 
 test("release wiring reserves command gate as last runtime authority", () => {
