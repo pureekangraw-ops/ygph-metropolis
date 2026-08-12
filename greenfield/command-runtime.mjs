@@ -34,7 +34,12 @@ export function createCommandRuntime() {
     if (!command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) throw new Error('INVALID_COMMAND_PAYLOAD');
 
     const next = structuredClone(state);
-    await registration.handler({ state: next, payload: structuredClone(command.payload), command: structuredClone(command) });
+    await registration.handler({
+      domainState: next.domains[domain],
+      payload: structuredClone(command.payload),
+      command: structuredClone(command),
+      context: Object.freeze({ domain, revision: state.revision }),
+    });
     const committedAt = new Date().toISOString();
     next.revision = state.revision + 1;
     next.updatedAt = committedAt;
