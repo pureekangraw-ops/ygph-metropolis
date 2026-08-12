@@ -1,0 +1,114 @@
+function text(value, code) {
+  const output = String(value ?? '').trim();
+  if (!output) throw new Error(code);
+  return output;
+}
+
+function satang(value, { allowZero = false, code = 'INVALID_AMOUNT' } = {}) {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0 || (!allowZero && amount === 0)) throw new Error(code);
+  return amount;
+}
+
+function quantity(value) {
+  const output = Number(value);
+  if (!Number.isSafeInteger(output) || output <= 0) throw new Error('INVALID_QUANTITY');
+  return output;
+}
+
+function isoDate(value) {
+  const input = text(value, 'INVALID_DUE_DATE');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!match) throw new Error('INVALID_DUE_DATE');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3])) throw new Error('INVALID_DUE_DATE');
+  return input;
+}
+
+function command(workflowId, index, domain, type, payload, suffix = type) {
+  return { commandId: `${workflowId}:${index}`, idempotencyKey: `${workflowId}:${suffix}`, domain, type, payload };
+}
+
+export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, calendarQueueId, title, amountSatang, quantity: qty, receivedSatang = 0, dueDate }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  saleId = text(saleId, 'INVALID_SALE_ID');
+  const total = satang(amountSatang, { code: 'INVALID_SALE_AMOUNT' });
+  const received = satang(receivedSatang, { allowZero: true, code: 'INVALID_RECEIVED_AMOUNT' });
+  if (received > total) throw new Error('RECEIVED_OVER_TOTAL');
+  const outstanding = total - received;
+  const commands = [command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
+    recordId: saleId, type: 'SALE', title: text(title, 'INVALID_SALE_TITLE'), amountSatang: total, totalSatang: total,
+    receivedSatang: received, outstandingSatang: outstanding, quantity: quantity(qty),
+    status: outstanding === 0 ? 'COMPLETED' : received > 0 ? 'PARTIAL' : 'OPEN',
+  } }, `STORE:${saleId}`)];
+  if (received > 0) {
+    ledgerTransactionId = text(ledgerTransactionId, 'LEDGER_TRANSACTION_ID_REQUIRED');
+    commands.push(command(workflowId, commands.length + 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
+      recordId: ledgerTransactionId, direction: 'IN', amountSatang: received, title: `รับเงิน ${title}`, subtype: 'SALE', sourceRef: `STORE/${saleId}`,
+    }, `LEDGER:${ledgerTransactionId}`));
+  }
+  if (outstanding > 0) {
+    calendarQueueId = text(calendarQueueId, 'CALENDAR_QUEUE_ID_REQUIRED');
+    const due = isoDate(dueDate);
+    commands.push(command(workflowId, commands.length + 1, 'CALENDAR', 'CALENDAR_CREATE_RECORD', { record: {
+      recordId: calendarQueueId, type: 'RECEIVE_CUSTOMER_PAYMENT', title: 'รับเงินลูกค้า', detail: `STORE/${saleId}`,
+      amountSatang: outstanding, paidSatang: 0, dueDate: due, status: 'OPEN',
+    } }, `CALENDAR:${calendarQueueId}`));
+  }
+  return { workflowId, commands };
+}
+
+export function buildReceiveCustomerPaymentWorkflow({ workflowId, saleId, queueId, ledgerTransactionId, amountSatang }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  saleId = text(saleId, 'INVALID_SALE_ID');
+  queueId = text(queueId, 'INVALID_QUEUE_ID');
+  ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
+  const amount = satang(amountSatang, { code: 'INVALID_PAYMENT_AMOUNT' });
+  return { workflowId, commands: [
+    command(workflowId, 1, 'STORE', 'STORE_APPLY_RECEIVABLE_PAYMENT', { recordId: saleId, amountSatang: amount }, `STORE:${saleId}:RECEIPT`),
+    command(workflowId, 2, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', { recordId: ledgerTransactionId, direction: 'IN', amountSatang: amount, title: `รับชำระ ${saleId}`, subtype: 'SALE_RECEIPT', sourceRef: `STORE/${saleId}` }, `LEDGER:${ledgerTransactionId}`),
+    command(workflowId, 3, 'CALENDAR', 'CALENDAR_APPLY_PAYMENT', { recordId: queueId, amountSatang: amount }, `CALENDAR:${queueId}:RECEIPT`),
+  ] };
+}
+
+export function buildObligationWorkflow({ workflowId, obligationId, title, totalSatang, installments, detail = '' }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  obligationId = text(obligationId, 'INVALID_OBLIGATION_ID');
+  const total = satang(totalSatang, { code: 'INVALID_OBLIGATION_TOTAL' });
+  if (!Array.isArray(installments) || installments.length === 0) throw new Error('INSTALLMENTS_REQUIRED');
+  const seen = new Set();
+  const normalized = installments.map((item, index) => {
+    const queueId = text(item.queueId, 'INVALID_QUEUE_ID');
+    if (seen.has(queueId)) throw new Error(`DUPLICATE_QUEUE_ID:${queueId}`);
+    seen.add(queueId);
+    return { queueId, amountSatang: satang(item.amountSatang, { code: 'INVALID_INSTALLMENT_AMOUNT' }), dueDate: isoDate(item.dueDate), number: index + 1 };
+  });
+  const sum = normalized.reduce((acc, item) => acc + item.amountSatang, 0);
+  if (sum !== total) throw new Error(`INSTALLMENT_TOTAL_MISMATCH:${sum}/${total}`);
+  const commands = [command(workflowId, 1, 'LEDGER', 'LEDGER_CREATE_OBLIGATION', {
+    recordId: obligationId, title: text(title, 'INVALID_OBLIGATION_TITLE'), detail: String(detail || ''), totalSatang: total,
+    installmentCount: normalized.length, dueDate: normalized[0].dueDate, installmentPlan: normalized,
+  }, `LEDGER:${obligationId}`)];
+  for (const item of normalized) {
+    commands.push(command(workflowId, commands.length + 1, 'CALENDAR', 'CALENDAR_CREATE_RECORD', { record: {
+      recordId: item.queueId, type: normalized.length === 1 ? 'PAY_OBLIGATION' : 'PAY_OBLIGATION_INSTALLMENT',
+      title: normalized.length === 1 ? 'จ่ายภาระ' : 'จ่ายงวดภาระ', detail: `LEDGER/${obligationId}`,
+      amountSatang: item.amountSatang, paidSatang: 0, dueDate: item.dueDate, installmentCount: normalized.length,
+      installmentNumber: item.number, status: 'OPEN',
+    } }, `CALENDAR:${item.queueId}`));
+  }
+  return { workflowId, commands };
+}
+
+export function buildPayObligationWorkflow({ workflowId, obligationId, queueId, ledgerTransactionId, amountSatang }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  obligationId = text(obligationId, 'INVALID_OBLIGATION_ID');
+  queueId = text(queueId, 'INVALID_QUEUE_ID');
+  ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
+  const amount = satang(amountSatang, { code: 'INVALID_PAYMENT_AMOUNT' });
+  return { workflowId, commands: [
+    command(workflowId, 1, 'LEDGER', 'LEDGER_APPLY_OBLIGATION_PAYMENT', { recordId: obligationId, amountSatang: amount }, `LEDGER:${obligationId}:PAYMENT`),
+    command(workflowId, 2, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', { recordId: ledgerTransactionId, direction: 'OUT', amountSatang: amount, title: `ชำระ ${obligationId}`, subtype: 'OBLIGATION_PAYMENT', sourceRef: `LEDGER/${obligationId}` }, `LEDGER:${ledgerTransactionId}`),
+    command(workflowId, 3, 'CALENDAR', 'CALENDAR_APPLY_PAYMENT', { recordId: queueId, amountSatang: amount }, `CALENDAR:${queueId}:PAYMENT`),
+  ] };
+}
