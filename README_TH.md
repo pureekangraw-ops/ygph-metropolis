@@ -1,22 +1,23 @@
-# YGPH METROPOLIS — One-shot Flat Release
+# YGPH METROPOLIS — Greenfield RC
 
-ชุดนี้ทำไว้สำหรับอัปโหลดไฟล์ทั้งหมดลง **root ของ repository** ครั้งเดียว
+**Release candidate:** `5.0.0-greenfield-rc1`  
+**Status:** BRANCH ONLY / NOT PRODUCTION  
+**Branch:** `greenfield/metropolis-vnext`
 
-## วิธีอัปโหลด
+METROPOLIS รุ่นนี้รื้อ runtime เดิมออกจาก working tree และสร้าง backend ใหม่โดยยึด `STORE / LEDGER / CALENDAR` เป็นสาม domain ปัจจุบันเท่านั้น
 
-1. เข้า repository `pureekangraw-ops/ygph-metropolis`
-2. เลือก Add file → Upload files
-3. เลือกไฟล์ทั้งหมดในโฟลเดอร์นี้
-4. Commit ด้วยข้อความ:
+## Storage
 
-```text
-feat: update YGPH Metropolis preview release
-```
+- State Schema `1`
+- Database `ygph-metropolis-greenfield-secure` v1
+- Vault `ygph-metropolis-greenfield-vault` v1
+- AES-GCM 256-bit + PBKDF2-SHA256 600,000 iterations
+- ฐานเก่า `stock-pocket-secure` เป็น rollback source เท่านั้น Greenfield RC ไม่เปิด ไม่เขียน และไม่ลบฐานนี้
 
-ไฟล์ทั้งหมดตั้งใจให้อยู่ root ไม่ต้องสร้างโฟลเดอร์ `public`, `tests`, `scripts` หรือ `docs`
+## Cutover
 
-## Deployment
+ข้อมูลตั้งต้นมาจาก Evidence `FLOW-1786527289637` source revision `28` แบบ one-time import เท่านั้น Import ต้องผ่าน reconciliation และ Ledger projection ก่อน durable write; `RIDE` ถูกตัดออกตาม Current semantic scope
 
-Cloudflare/Wrangler ใช้ `wrangler.jsonc` และเสิร์ฟ asset จาก root โดย `.assetsignore` กันไฟล์เครื่องมือออกจากเว็บไซต์
+## Verification
 
-ชุดนี้ใช้ Worker ชื่อ `ygph-metropolis-preview` และยังไม่ทับ Production เดิม
+`npm run deploy:gate` รันเฉพาะ Greenfield tests, production syntax และ UTF-8 gate. Pull request ไม่ deploy Production. การ merge เข้า `main`, Cloudflare Production deploy และ real-device cutover ต้องผ่าน Owner Final Gate ก่อน

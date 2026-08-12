@@ -1,146 +1,25 @@
 <!doctype html>
 <html lang="th">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0F1416">
-  <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self';">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="flow-era.css">
-  <link rel="stylesheet" href="flow-era-3.5.css">
-  <link rel="stylesheet" href="metropolis-v4.css">
-  <title>YGPH METROPOLIS v4.0.0</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101617"><meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><title>YGPH METROPOLIS — Greenfield RC</title>
 </head>
 <body>
-  <section id="securityGate" class="gate hidden" aria-live="polite">
-    <div class="gate-card"><div class="gate-icon">🔒</div><h1>เปิดผ่านช่องทางที่ปลอดภัย</h1><p>แอปต้องเปิดผ่าน HTTPS หรือ localhost เพื่อใช้ระบบเข้ารหัสและฐานข้อมูลในเครื่องอย่างถูกต้อง</p></div>
-  </section>
-
-  <section id="setupScreen" class="gate hidden">
-    <div class="gate-card">
-      <div class="gate-icon">🌳</div>
-      <h1>ตั้งค่า YGPH METROPOLIS</h1>
-      <p>ข้อมูลทั้งหมดจะถูกเข้ารหัสและเก็บในเครื่อง รหัสนี้ไม่มีระบบกู้คืน</p>
-      <form id="setupForm" autocomplete="off">
-        <div class="field"><label for="setupPassphrase">ตั้งรหัสปลดล็อก</label><input id="setupPassphrase" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div>
-        <div class="field"><label for="setupConfirm">ยืนยันรหัสอีกครั้ง</label><input id="setupConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></div>
-        <div class="field"><label for="setupPrice">ราคาขายตั้งต้นต่อชิ้น</label><input id="setupPrice" type="number" min="0" step="0.01" inputmode="decimal" value="800" required></div>
-        <div class="field"><label for="setupBalance">เงินปัจจุบันตอนเริ่มใช้</label><input id="setupBalance" type="number" min="0" step="0.01" inputmode="decimal" value="0" required><small>ใช้เป็นฐานเริ่มต้นครั้งเดียว ภายหลังระบบจะสร้างรายการปรับยอดตามวันที่</small></div>
-        <button class="primary-btn wide" type="submit">สร้างคลังข้อมูลเข้ารหัส</button>
-      </form>
-      <div class="warning">ลืมรหัส = เปิดข้อมูลและไฟล์สำรองไม่ได้</div>
-    </div>
-  </section>
-
-  <section id="unlockScreen" class="gate hidden">
-    <div class="gate-card">
-      <div class="gate-icon">🌿</div><h1>YGPH METROPOLIS</h1><p>ใส่รหัสเพื่อปลดล็อกข้อมูลในเครื่อง</p>
-      <form id="unlockForm" autocomplete="off">
-        <div class="field"><label for="unlockPassphrase">รหัสปลดล็อก</label><input id="unlockPassphrase" type="password" maxlength="128" autocomplete="current-password" required></div>
-        <button id="unlockBtn" class="primary-btn wide" type="submit">ปลดล็อก</button>
-      </form>
-      <div id="unlockStatus" class="status-text" aria-live="polite"></div>
-      <button id="restoreFromLockBtn" class="text-btn" type="button">กู้คืนจากไฟล์สำรองเข้ารหัส</button>
-      <input id="restoreFromLockInput" type="file" accept="application/json,.json" hidden>
-    </div>
-  </section>
-
-  <div id="appShell" class="shell hidden">
-    <header class="topbar">
-      <div class="brand"><div class="brand-mark">🌳</div><div class="brand-copy"><h1>YGPH METROPOLIS</h1><p>Four Apps. One Flow. — แยกเป็นแอป เชื่อมเป็นระบบ</p></div><button class="home-btn" id="headerHome" aria-label="กลับหน้าหลัก">⌂</button><button class="home-btn" id="headerLockBtn" aria-label="ล็อกแอป">🔒</button></div>
-      <div class="status-line"><span class="dot"></span><b>METROPOLIS v4.0.0</b><span>• 4 แอป • ออฟไลน์ • เข้ารหัส</span><time id="clock">--:--</time></div>
-    </header>
-    <main>
-<section class="page active" id="homePage">
-        <div class="section"><div class="section-title"><h2>ภาพรวมวันนี้</h2></div>
-          <div class="source-grid">
-            <button class="source-card store" data-page="store"><i>🏪</i><b>ร้านค้า</b><strong id="homeStoreValue">0</strong><small>ยอดขายวันนี้</small></button>
-            <button class="source-card ride" data-page="ride"><i>🛵</i><b>วิ่งงาน</b><strong id="homeRideValue">0</strong><small>รายได้งานวันนี้</small></button>
-            <button class="source-card ledger" data-page="ledger"><i>📒</i><b>การเงิน</b><strong id="homeLedgerValue">0</strong><small>เงินปัจจุบัน</small></button>
-          </div>
-        </div>
-        <div class="hub-card">
-          <h2>แดชบอร์ด</h2><p>รายการที่ยังจบไม่ได้ทันที และรายการตั้งแต่ 2 งวดขึ้นไป</p>
-          <div class="hub-grid"><div class="hub-mini"><small>รอรับเงิน</small><b id="homeWaitIn">0</b></div><div class="hub-mini"><small>รอจ่าย</small><b id="homeWaitOut">0</b></div><div class="hub-mini"><small>ต้องตรวจสอบ</small><b id="homeVerify">0</b></div><div class="hub-mini"><small>ยกเลิกแล้ว</small><b id="homeCancelled">0</b></div></div>
-          <button class="hub-open" data-page="calendar">เปิดปฏิทินและจัดการคิว</button>
-        </div>
-        <div class="card content-card exchange-card"><h3>รับ–ส่งข้อมูลกับโก</h3><div class="exchange-grid"><button class="exchange-action" id="homeExportBtn"><span>⬆️</span><b>ส่งไฟล์ให้โกตรวจ</b><small>สร้าง FLOW EVENT EXCHANGE v3</small></button><button class="exchange-action" id="homeImportBtn"><span>⬇️</span><b>รับผลตรวจกลับเข้าแอป</b><small>ตรวจ Route ก่อนแสดง Review Center</small></button></div><div class="exchange-status"><div><small>ส่งล่าสุด</small><b id="homeLastExport">—</b></div><div><small>รับล่าสุด</small><b id="homeLastImport">—</b></div><div><small>รอยืนยัน</small><b id="homePendingImport">0 รายการ</b></div></div></div>
-        <div class="home-actions two"><button class="soft-green" data-page="report">▥ ดึงรายงาน</button><button class="soft-blue" data-page="settings">⚙ ตั้งค่า</button></div>
-      </section>
-<section class="page" id="storePage">
-        <div class="hero store"><h2>ร้านค้า</h2><p>ยอดกิจกรรมวันนี้และสต็อกคงเหลือจริง</p><div class="hero-value"><span id="storeRevenue">0</span> บาท</div><div class="hero-grid"><div class="mini"><small>เงินสุทธิวันนี้</small><b id="storeNetRevenue">0</b></div><div class="mini"><small>สต็อกคงเหลือ</small><b id="storeStock">0 ชิ้น</b></div><div class="mini"><small>ลูกค้าค้าง</small><b id="storeOutstanding">0</b></div><div class="mini"><small>ซื้อเข้าวันนี้</small><b id="storePurchases">0</b></div></div></div>
-        <div class="action-row three balanced-actions"><button class="balanced-main" id="addSaleBtn">＋ ขายสินค้า</button><button class="balanced-peer" id="addPurchaseBtn">＋ รับสินค้าเข้า</button><button class="soft-orange" id="withdrawStockBtn">＋ เบิกสินค้า</button></div>
-        <div class="card content-card"><h3>รายการขายล่าสุด</h3><div id="saleList"></div><button class="secondary-btn wide history-more" id="allSalesBtn">ดูทั้งหมด</button></div>
-        <div class="card content-card"><h3>รายการรับสินค้าล่าสุด</h3><div id="purchaseList"></div><button class="secondary-btn wide history-more" id="allPurchasesBtn">ดูทั้งหมด</button></div>
-        <div class="card content-card"><h3>การเบิกสินค้าล่าสุด</h3><div id="withdrawList"></div><button class="secondary-btn wide history-more" id="allWithdrawalsBtn">ดูทั้งหมด</button></div>
-      </section>
-<section class="page" id="ridePage">
-        <div class="hero ride"><h2>วิ่งงาน</h2><p>ศูนย์ควบคุมรอบวิ่ง เงินสด เครดิต และค่าใช้จ่าย</p><div class="hero-value"><span id="rideSourceIncome">0</span> บาท</div><div class="hero-grid"><div class="mini"><small>เงินสดวันนี้</small><b id="rideCashToday">0</b></div><div class="mini"><small>เครดิตคงเหลือ</small><b id="rideCreditBalance">0</b></div><div class="mini"><small>เครดิตรอเบิก</small><b id="ridePendingWithdrawal">0</b></div><div class="mini"><small>รอบปัจจุบัน</small><b id="rideRoundStatus">ยังไม่เริ่ม</b></div></div></div>
-        <div class="action-row three balanced-actions"><button class="balanced-main" id="toggleRoundBtn">▶ เริ่มรอบ</button><button class="balanced-purple" id="withdrawRideCreditBtn">⇩ เบิกเครดิต</button><button class="soft-red" id="addRideExpenseBtn">＋ ค่าใช้จ่ายรอบ</button></div>
-        <div class="card content-card"><h3>บันทึกงานในรอบ</h3><div class="form-grid"><div class="field"><label>จำนวนเงิน</label><input id="rideAmount" type="number" min="1" inputmode="decimal"></div><div class="field"><label>ระยะทาง (กม.)</label><input id="rideKm" type="number" min="0.1" step="0.1" inputmode="decimal"></div><div class="field full"><label>รูปแบบรายได้</label><select id="ridePaymentMode"><option value="CASH">เงินสด — เข้าการเงินทันที</option><option value="CREDIT">เครดิต — สะสมในแอปงาน</option></select></div><div class="field full"><label>หมายเหตุ</label><input id="rideNote" maxlength="120" placeholder="พื้นที่หรืองาน"></div><div class="field full"><button class="primary-btn wide" id="addRideJobBtn">บันทึกงาน</button></div></div></div>
-        <div class="card content-card"><h3>งานล่าสุด</h3><div id="rideList"></div><button class="secondary-btn wide history-more" id="allRideJobsBtn">ดูทั้งหมด</button></div>
-        <div class="card content-card"><h3>การเบิกเครดิตล่าสุด</h3><div id="rideWithdrawalList"></div><button class="secondary-btn wide history-more" id="allRideWithdrawalsBtn">ดูทั้งหมด</button></div>
-      </section>
-<section class="page" id="ledgerPage">
-        <div class="hero ledger"><h2>การเงิน</h2><p>เงินจริงที่เกิดขึ้นแล้วและตรวจย้อนกลับถึงต้นทางได้</p><div class="hero-value"><span id="ledgerBalance">0</span> บาท <small id="balanceVerifyBadge"></small></div><div class="hero-grid"><div class="mini"><small>เงินจริงเข้าวันนี้</small><b id="ledgerIn">0</b></div><div class="mini"><small>เงินจริงออกวันนี้</small><b id="ledgerOut">0</b></div><div class="mini"><small>ปรับยอดวันนี้</small><b id="ledgerAdjustment">0</b></div><div class="mini"><small>ลูกหนี้คงเหลือ</small><b id="ledgerReceivable">0</b></div><div class="mini"><small>รายการวันนี้</small><b id="ledgerTxCount">0 รายการ</b></div><div class="mini"><small>คิวรอจ่าย</small><b id="ledgerPendingCount">0 รายการ</b></div></div></div>
-        <div class="action-row three"><button class="soft-green" id="addOtherIncomeBtn">＋ รายรับอื่น</button><button class="soft-purple" id="addDebtBtn">＋ เพิ่มภาระ</button><button class="soft-red" id="addExpenseBtn">＋ เพิ่มรายจ่าย</button></div>
-        <div class="card content-card"><h3>ภาระล่าสุด</h3><div id="debtList"></div><button class="secondary-btn wide history-more" id="allDebtsBtn">ดูทั้งหมด</button></div>
-        <div class="card content-card"><h3>เงินเข้า–ออกล่าสุด</h3><div id="txList"></div><button class="secondary-btn wide history-more" id="allTransactionsBtn">ดูทั้งหมด</button></div>
-      </section>
-
-      <section class="page" id="calendarPage">
-        <div class="hero calendar"><h2>ปฏิทินและคิวงาน</h2><p>Action Hub ตามเวลา ไม่ใช่เจ้าของเงินจริง</p><div class="hero-grid r53-three-stats"><div class="mini"><small>รอรับเงิน</small><b id="calWaitIn">0</b></div><div class="mini"><small>รอจ่าย</small><b id="calWaitOut">0</b></div><div class="mini"><small>ต้องตรวจสอบ</small><b id="calVerify">0</b></div></div></div>
-        <div class="card month-card"><div class="month-head"><button class="month-nav" id="prevMonth">‹</button><h3 id="monthLabel"></h3><button class="month-nav" id="nextMonth">›</button></div><div class="month-grid" id="monthGrid"></div></div>
-        <div class="selected-day"><div><b id="selectedDayTitle">รายการทั้งหมด</b><small id="selectedDayMeta">กดวันที่เพื่อดูเฉพาะวัน</small></div><button id="clearDateFilter">ดูทุกวัน</button></div>
-        <div class="queue-toolbar"><button class="filter-btn active" data-filter="ALL">ทั้งหมด</button><button class="filter-btn" data-filter="IN">รอรับเงิน</button><button class="filter-btn" data-filter="OUT">รอจ่าย</button><button class="filter-btn" data-filter="VERIFY">ต้องตรวจสอบ</button></div>
-        <div class="card content-card"><h3>รายการของวันที่เลือก</h3><div id="queueList"></div></div>
-      </section>
-<section class="page" id="reportPage">
-        <div class="hero report"><h2>ดึงรายงานทั้งระบบ</h2><p id="reportRangeLabel">เลือกวันที่เริ่มต้นและวันที่สิ้นสุด</p><div class="hero-value"><span id="reportBalance">0</span> บาท</div><div class="hero-grid"><div class="mini"><small>ขายสินค้า</small><b id="reportStoreSales">0</b></div><div class="mini"><small>รายได้งานวิ่ง</small><b id="reportRideGross">0</b></div><div class="mini"><small>เงินจริงเข้า</small><b id="reportIn">0</b></div><div class="mini"><small>เงินจริงออก</small><b id="reportOut">0</b></div></div></div>
-        <div class="card content-card"><h3>ช่วงวันที่</h3><div class="report-controls"><div class="field"><label>วันที่เริ่มต้น</label><input id="reportStart" type="date"></div><div class="field"><label>วันที่สิ้นสุด</label><input id="reportEnd" type="date"></div></div><button class="primary-btn wide" id="buildReportBtn">ดึงรายงานทั้งระบบ</button></div>
-        <div id="reportResult" class="hidden">
-          <div class="card content-card"><h3>ร้านค้า</h3><div id="storeReport"></div></div>
-          <div class="card content-card"><h3>วิ่งงาน</h3><div id="rideReport"></div></div>
-          <div class="card content-card"><h3>การเงินจริง</h3><div id="ledgerReport"></div></div>
-          <div class="card content-card"><h3>ปฏิทินและคิว</h3><div id="queueReport"></div></div>
-          <div class="card content-card"><h3>ประวัติระบบล่าสุดในช่วง</h3><div id="auditList"></div><button class="secondary-btn wide history-more" id="allAuditBtn">ดูทั้งหมด</button></div>
-          <button class="secondary-btn wide report-download" id="downloadReportBtn">ดาวน์โหลดรายงาน JSON</button>
-        </div>
-      </section>
-<section class="page" id="syncPage">
-        <div class="hero report"><h2>รับ–ส่งข้อมูลตามเส้นทาง</h2><p>Event Envelope + Route Gate + Idempotency + Review Center</p><div class="hero-value">FLOW EXCHANGE v3</div><div class="hero-grid"><div class="mini"><small>ส่งล่าสุด</small><b id="syncLastExport">—</b></div><div class="mini"><small>รับล่าสุด</small><b id="syncLastImport">—</b></div><div class="mini"><small>รอยืนยัน</small><b id="syncPendingCount">0 รายการ</b></div><div class="mini"><small>รุ่นข้อมูล</small><b id="syncRevision">0</b></div></div></div>
-        <div class="card content-card"><div class="exchange-grid"><button class="exchange-action" id="exportJsonBtn"><span>⬆️</span><b>ส่งไฟล์ให้โกตรวจ</b><small>ข้อมูลต้นทาง + Route + ผลอนุญาต/ห้าม</small></button><button class="exchange-action" id="importProposalBtn"><span>⬇️</span><b>รับผลตรวจกลับเข้าแอป</b><small>ตรวจ Schema, Route และกันข้อมูลซ้ำ</small></button></div><input id="importProposalInput" type="file" accept="application/json,.json" hidden></div>
-        <div class="card content-card"><h3>Review Center</h3><div id="importPreview"><div class="sync-result-row"><b>สถานะ</b><span class="warn">ยังไม่ได้เลือกไฟล์</span></div></div><div class="import-actions"><button class="secondary-btn" id="cancelImportBtn" disabled>ยกเลิก</button><button class="primary-btn" id="applyImportBtn" disabled>ตกลง นำเข้าข้อมูล</button></div></div>
-      </section>
-
-      <section class="page" id="settingsPage">
-        <div class="hero report"><h2>ตั้งค่าและเครื่องมือ</h2><p>การแสดงผล ข้อมูล สำรอง ความปลอดภัย และตรวจสอบระบบ</p><div class="hero-value" id="settingsProductVersion">METROPOLIS</div></div>
-        <div class="card content-card"><h3>ตรวจยอดเงินปัจจุบัน</h3><div class="flow-note" id="balanceStatusNote"></div><button class="primary-btn wide" id="verifyBalanceBtn">กระทบยอดจากเงินจริง</button></div>
-        <div class="card content-card"><h3>การใช้งาน</h3><form id="settingsForm"><div class="form-grid"><div class="field"><label>ราคาขายตั้งต้น</label><input id="defaultPrice" type="number" min="0" step="0.01"></div><div class="field"><label>เตือนสต็อกต่ำกว่า</label><input id="lowStockThreshold" type="number" min="0" step="1"></div><div class="field"><label>ล็อกอัตโนมัติ</label><select id="lockMinutes"><option value="1">1 นาที</option><option value="5">5 นาที</option><option value="15">15 นาที</option><option value="30">30 นาที</option></select></div><div class="field"><label>สีหลัก</label><select id="themeColor"><option value="navy">น้ำเงินเข้ม</option><option value="green">เขียว</option><option value="orange">ส้ม</option><option value="purple">ม่วง</option></select></div><div class="field full"><button class="primary-btn wide" type="submit">บันทึกการตั้งค่า</button></div></div></form></div>
-        <section class="card content-card storage-capacity-card storage-capacity-unknown" id="storageCapacityCard" data-level="UNKNOWN" aria-labelledby="storageCapacityTitle"><div class="storage-capacity-head"><div><h3 id="storageCapacityTitle">พื้นที่ข้อมูลและการเติบโต</h3><small>ระบบเก็บหลักฐานเดิมไว้และจะไม่ลบข้อมูลอัตโนมัติ</small></div><span id="storageCapacityLevel">UNKNOWN</span></div><div class="flow-note" id="storageCapacityStatus" role="status">กำลังตรวจพื้นที่จัดเก็บ</div><div class="storage-capacity-grid"><div><small>Vault เข้ารหัส</small><b id="storageVaultBytes">—</b></div><div><small>เบราว์เซอร์ใช้แล้ว</small><b id="storageBrowserUsage">—</b></div><div><small>โควตาเบราว์เซอร์</small><b id="storageBrowserQuota">—</b></div><div><small>Ledger</small><b id="storageTransactionCount">0</b></div><div><small>Calendar</small><b id="storageCalendarCount">0</b></div><div><small>Audit</small><b id="storageAuditCount">0</b></div><div><small>Events</small><b id="storageEventCount">0</b></div></div><div class="storage-capacity-actions"><button type="button" class="secondary-btn" id="storageRefreshBtn">ตรวจใหม่</button><button type="button" class="secondary-btn" id="storagePersistBtn">ขอเก็บข้อมูลถาวร</button><button type="button" class="primary-btn" id="storageBackupBtn">ส่งออกไฟล์สำรอง</button></div></section>
-        <div class="card content-card"><h3>สำรองและกู้คืน</h3><div class="action-row inner"><button class="primary" id="exportBackupBtn">ส่งออกไฟล์สำรอง</button><button class="soft-blue" id="restoreBackupBtn">กู้คืนจากไฟล์</button></div><input id="restoreBackupInput" type="file" accept="application/json,.json" hidden><div class="flow-note">ไฟล์สำรองถูกเข้ารหัสและบันทึกลงโทรศัพท์หรือ SD Card ได้ ไม่ต้องเชื่อม Cloud กรุณาเก็บรหัสและไฟล์แยกกัน</div></div>
-        <div class="card content-card"><h3>ความปลอดภัยและการติดตั้ง</h3><button class="secondary-btn wide" id="changePassBtn">เปลี่ยนรหัสปลดล็อก</button><button class="secondary-btn wide spaced" id="persistBtn">ขอพื้นที่จัดเก็บถาวร</button><button class="secondary-btn wide spaced" id="installBtn" disabled>ติดตั้งแอปบนมือถือ</button><small id="installHint" class="subtle">เปิดผ่านเบราว์เซอร์ที่รองรับเพื่อดูตัวเลือกติดตั้ง</small></div>
-        <div class="card content-card"><h3>อัปเดตและย้อนกลับ</h3><div class="flow-note" id="swUpdateStatus">กำลังตรวจรุ่นแอป</div><div class="action-row inner"><button class="secondary-btn" id="checkUpdateBtn">ตรวจอัปเดต</button><button class="primary-btn" id="activateUpdateBtn" disabled>ใช้รุ่นใหม่</button></div><div class="action-row inner"><button class="secondary-btn" id="rollbackUpdateBtn" disabled>ย้อนกลับรุ่นก่อน</button><button class="secondary-btn" id="activateCurrentVersionBtn" disabled>กลับมาใช้รุ่นล่าสุด</button></div></div>
-        <details class="tech-details card content-card"><summary>ข้อมูลสำหรับช่างและระบบหลังบ้าน</summary><div class="tech-body" id="technicalStatus"></div></details>
-      </section>
-    </main>
-
-    <nav class="bottom-nav" aria-label="เมนูหลัก"><button class="nav-btn active" data-page="home"><i aria-hidden="true"></i><span>Home</span></button><button class="nav-btn" data-page="store"><i aria-hidden="true"></i><span>Store</span></button><button class="nav-btn" data-page="ride"><i aria-hidden="true"></i><span>Ride</span></button><button class="nav-btn" data-page="ledger"><i aria-hidden="true"></i><span>Ledger</span></button><button class="nav-btn" data-page="calendar"><i aria-hidden="true"></i><span>Calendar</span></button></nav>
-  </div>
-
-  <div class="modal hidden" id="modal"><div class="modal-card"><h3 id="modalTitle"></h3><p id="modalText"></p><div id="modalBody"></div><div class="modal-actions"><button class="secondary-btn" id="modalCancel">ปิด</button><button class="primary-btn" id="modalConfirm">ยืนยัน</button></div></div></div>
-  <div class="toast" id="toast"></div>
-  <div id="privacyCover" class="privacy-cover hidden">🔒</div>
-  <script src="sw-bootstrap.js"></script>
-  <script src="highway-gate.js"></script>
-  <script src="app.js"></script>
-  <script src="metropolis-domain-commands.js"></script>
-  <script src="flow-era.js"></script>
-  <script src="flow-era-3.5.js"></script>
-  <script src="metropolis-v4.js"></script>
-</body>
-</html>
+  <header class="appbar"><div><strong>YGPH METROPOLIS</strong><small>Greenfield RC 5.0.0 · STORE / LEDGER / CALENDAR</small></div><span id="runtimeBadge" class="badge">LOCKED</span></header>
+  <main class="layout">
+    <section id="gate" class="panel gate"><h1>เปิดฐาน Greenfield</h1><p>ฐานใหม่นี้แยกจากระบบเดิมโดยสมบูรณ์ ข้อมูลเริ่มต้นต้องมาจาก Evidence ที่ตรวจผ่าน หรือไฟล์สำรอง Greenfield เท่านั้น</p><label>รหัสปลดล็อก <input id="passphrase" type="password" minlength="12" autocomplete="current-password"></label><div class="row"><button id="unlockBtn">ปลดล็อกฐานที่มีอยู่</button><button id="showImportBtn" class="secondary">นำเข้า Evidence ครั้งแรก</button></div><div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">สร้างฐานจาก Evidence</button></div><div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">กู้จาก Greenfield Backup</button></div><p id="gateStatus" class="status" aria-live="polite"></p></section>
+    <section id="workspace" class="hidden"><nav class="tabs" aria-label="เมนูหลัก"><button data-tab="home" class="active">HOME</button><button data-tab="store">STORE</button><button data-tab="ledger">LEDGER</button><button data-tab="calendar">CALENDAR</button><button data-tab="recovery">RECOVERY</button></nav>
+      <section data-page="home" class="page active"><div class="hero"><small>เงินปัจจุบัน</small><strong id="homeBalance">0</strong><span>บาท</span></div><div class="metrics"><article><small>State revision</small><b id="homeRevision">—</b></article><article><small>Store records</small><b id="homeStoreCount">—</b></article><article><small>Calendar OPEN</small><b id="homeCalendarOpen">—</b></article></div><pre id="diagnostics" class="diagnostics"></pre></section>
+      <section data-page="store" class="page"><h2>STORE</h2><div class="grid two">
+        <form id="saleForm" class="card"><h3>ขายสินค้า</h3><label>รายการ <input name="title" required value="ขายสินค้า"></label><label>ยอดรวม (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>รับแล้ว (บาท) <input name="received" inputmode="decimal" value="0"></label><label>วันครบกำหนด <input name="dueDate" type="date"></label><button>บันทึกการขาย</button></form>
+        <form id="purchaseForm" class="card"><h3>รับสินค้าเข้า</h3><label>รายการ <input name="title" required value="รับสินค้าเข้า"></label><label>ยอดซื้อ (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>วันสิ้นสุดคืนสินค้า <input name="returnDueDate" type="date"></label><button>บันทึกรับสินค้า</button></form>
+        <form id="withdrawForm" class="card"><h3>เบิกสินค้า</h3><label>รายการ <input name="title" required value="เบิกสินค้า"></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><button>บันทึกการเบิก</button></form>
+        <form id="adjustForm" class="card"><h3>ปรับสต็อก</h3><label>หัวข้อ <input name="title" required value="ปรับสต็อก"></label><label>ผลต่างจำนวน <input name="delta" type="number" required></label><label>เหตุผล <input name="reason" required></label><button>บันทึกหลักฐานปรับสต็อก</button></form>
+      </div><div id="storeList" class="list"></div></section>
+      <section data-page="ledger" class="page"><h2>LEDGER</h2><div class="grid two"><form id="incomeForm" class="card"><h3>รายรับอื่น</h3><label>รายการ <input name="title" required></label><label>จำนวน (บาท) <input name="amount" required inputmode="decimal"></label><button>บันทึกรายรับ</button></form><form id="expenseForm" class="card"><h3>รายจ่าย</h3><label>รายการ <input name="title" required></label><label>จำนวน (บาท) <input name="amount" required inputmode="decimal"></label><button>บันทึกรายจ่าย</button></form><form id="obligationForm" class="card wide"><h3>เพิ่มภาระ</h3><label>ชื่อภาระ <input name="title" required></label><label>ยอดรวม (บาท) <input name="total" required inputmode="decimal"></label><label>งวด — 1 บรรทัดต่อ 1 งวด <textarea name="installments" required placeholder="2026-08-15=300.00&#10;2026-09-15=600.00"></textarea></label><button>สร้างภาระและคิว</button></form></div><div id="ledgerList" class="list"></div></section>
+      <section data-page="calendar" class="page"><h2>CALENDAR</h2><p>Action Hub ตามเวลา — ไม่ใช่เจ้าของเงินจริง</p><div id="calendarList" class="list"></div></section>
+      <section data-page="recovery" class="page"><h2>RECOVERY</h2><div class="card"><p>สร้างไฟล์สำรองเข้ารหัสจาก Vault Greenfield ปัจจุบัน</p><button id="backupBtn">ส่งออก Encrypted Backup</button></div></section><p id="appStatus" class="status" aria-live="polite"></p>
+    </section>
+  </main><script type="module" src="app.mjs"></script>
+</body></html>
