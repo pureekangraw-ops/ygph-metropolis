@@ -15,26 +15,26 @@ test('app shell exposes five icon-only right-thumb destinations and removes flat
   assert.doesNotMatch(html, /data-tab="store"/);
   assert.doesNotMatch(html, /data-tab="ledger"/);
   assert.doesNotMatch(html, /data-tab="recovery"/);
-  for (const label of ['หน้าหลัก','สร้างเงิน','ปฏิทิน','การเงิน','ระบบ']) assert.match(html, new RegExp(`aria-label="${label}"`));
+  for (const label of ['หน้าหลัก','สร้างเงิน','ปฏิทิน','การเงิน','ตั้งค่า']) assert.match(html, new RegExp(`aria-label="${label}"`));
   for (const icon of ['house-simple','trend-up','calendar-dots','wallet','gear-six']) assert.match(html, new RegExp(`data-icon="${icon}"`));
 });
 
-test('locked gate keeps local PIN as the only primary task and long Vault passphrase inside recovery', () => {
+test('locked gate is user-facing while recovery and technician tools are deeper', () => {
   const html = text('index.html');
   const gate = html.match(/<section id="gate"[\s\S]*?<\/section>/)?.[0] || '';
-  assert.match(gate, /id="devicePin"[^>]*minlength="6"/);
-  assert.doesNotMatch(gate, /id="passphrase"/);
-  assert.match(gate, /id="unlockBtn"[^>]*class="primary-action"/);
-  assert.equal((gate.match(/class="primary-action"/g) || []).length, 1);
-  assert.match(gate, /<details[^>]*id="recoveryAccess"[^>]*>/);
-  assert.match(gate, /<summary>กู้คืนการเข้าถึง<\/summary>/);
-  assert.match(gate, /id="recoveryPassphrase"[^>]*minlength="12"/);
-  assert.match(gate, /id="enrollDeviceBtn"/);
-  assert.match(gate, /id="evidenceFile"/);
-  assert.match(gate, /id="importEvidenceBtn"/);
-  assert.match(gate, /id="restoreFile"/);
-  assert.match(gate, /id="restoreBtn"/);
-  assert.doesNotMatch(gate, /เริ่มต้นหรือกู้คืนฐาน/);
+  assert.match(gate, /<label>รหัสผ่าน\s*<input id="devicePin"[^>]*minlength="6"/);
+  assert.match(gate, /id="unlockBtn"[^>]*class="primary-action"[^>]*>เข้าสู่ระบบ<\/button>/);
+  assert.match(gate, /id="forgotPasswordBtn"[^>]*>ลืมรหัสผ่าน\?<\/button>/);
+  assert.equal((gate.match(/<input\b/g) || []).length, 1);
+  assert.equal((gate.match(/<button\b/g) || []).length, 2);
+  assert.doesNotMatch(gate, /Vault|Device PIN|Evidence|Backup|Recovery|crypto|<details/);
+
+  const recovery = html.match(/<section id="recoveryPanel"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(recovery, /id="recoveryPassphrase"[^>]*minlength="12"/);
+  assert.match(recovery, /id="recoveryNewPassword"[^>]*minlength="6"/);
+  assert.match(recovery, /id="lockedAdvancedRecovery"/);
+  assert.match(recovery, /id="evidenceFile"/);
+  assert.match(recovery, /id="restoreFile"/);
 });
 
 test('right-thumb rail puts frequent work lower and System furthest from the sweet spot', () => {

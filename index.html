@@ -12,30 +12,35 @@
 </head>
 <body>
   <header class="appbar">
-    <div><strong>YGPH METROPOLIS</strong><small>Functional Shell</small></div>
-    <span id="runtimeBadge" class="badge">LOCKED</span>
+    <div><strong>YGPH METROPOLIS</strong></div>
   </header>
 
   <main class="layout">
     <section id="gate" class="panel gate">
-      <h1>เปิด METROPOLIS</h1>
-      <p class="muted">ใส่รหัสเข้าแอปของเครื่องนี้</p>
-      <label>รหัสเข้าแอป <input id="devicePin" type="password" minlength="6" autocomplete="current-password"></label>
-      <button id="unlockBtn" class="primary-action">ปลดล็อก</button>
-      <details id="recoveryAccess" class="gate-tools">
-        <summary>กู้คืนการเข้าถึง</summary>
-        <p class="muted">ใช้รหัสกู้คืน Vault เดิมเพื่อตั้งรหัสเข้าแอปบนเครื่องนี้ หรือใช้ Evidence / Backup เมื่อจำเป็น</p>
-        <label>รหัสกู้คืน Vault <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="current-password"></label>
-        <button id="enrollDeviceBtn" class="secondary">ตั้งรหัสเข้าแอปบนเครื่องนี้</button>
-        <div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">สร้างฐานจาก Evidence</button></div>
-        <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">กู้จาก Encrypted Backup</button></div>
-      </details>
-      <p id="gateStatus" class="status" aria-live="polite"></p>
+      <label>รหัสผ่าน <input id="devicePin" type="password" minlength="6" autocomplete="current-password"></label>
+      <button id="unlockBtn" class="primary-action">เข้าสู่ระบบ</button>
+      <button id="forgotPasswordBtn" class="secondary">ลืมรหัสผ่าน?</button>
     </section>
+
+    <section id="recoveryPanel" class="panel gate hidden">
+      <button id="recoveryBackBtn" class="secondary">กลับ</button>
+      <h1>ตั้งรหัสผ่านใหม่</h1>
+      <label>รหัสกู้คืน <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="current-password"></label>
+      <label>รหัสผ่านใหม่ <input id="recoveryNewPassword" type="password" minlength="6" autocomplete="new-password"></label>
+      <button id="resetPasswordBtn" class="primary-action">ตั้งรหัสผ่านใหม่</button>
+      <details id="lockedAdvancedRecovery" class="gate-tools">
+        <summary>ตัวเลือกขั้นสูง</summary>
+        <p class="muted">เครื่องมือสำหรับนำเข้าหรือกู้คืนข้อมูลเมื่อจำเป็น</p>
+        <button id="enrollDeviceBtn" class="hidden" type="button">ตั้งรหัสบนเครื่อง</button>
+        <div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">นำเข้า Evidence</button></div>
+        <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">Restore Backup</button></div>
+      </details>
+    </section>
+    <p id="gateStatus" class="status" aria-live="polite"></p>
 
     <div id="workspace" class="hidden">
       <nav id="thumbRail" class="thumb-rail" aria-label="เมนูหลัก">
-        <button class="rail-btn" data-area="system" aria-label="ระบบ"><svg data-icon="gear-six"></svg></button>
+        <button class="rail-btn" data-area="system" aria-label="ตั้งค่า"><svg data-icon="gear-six"></svg></button>
         <button class="rail-btn active" data-area="home" aria-label="หน้าหลัก" aria-current="page"><svg data-icon="house-simple"></svg></button>
         <button class="rail-btn" data-area="finance" aria-label="การเงิน"><svg data-icon="wallet"></svg></button>
         <button class="rail-btn" data-area="calendar" aria-label="ปฏิทิน"><svg data-icon="calendar-dots"></svg></button>
@@ -130,12 +135,31 @@
         </section>
 
         <section class="area-page" data-area-page="system">
-          <div class="page-head"><div><small>SYSTEM</small><h1>โต๊ะทำงานของแอป</h1></div></div>
-          <div class="metrics three"><article><small>ฐาน</small><b id="systemDbState">พร้อมใช้</b></article><article><small>State revision</small><b id="systemRevision">—</b></article><article><small>Schema</small><b id="systemSchema">—</b></article></div>
-          <details class="task-panel" open><summary>รับ–ส่งและสำรองข้อมูล</summary><p class="muted">Backup เป็นไฟล์เข้ารหัสของฐานปัจจุบัน การกู้คืนใช้ได้กับฐานว่างเพื่อป้องกันการเขียนทับข้อมูลโดยไม่ตั้งใจ</p><button id="backupBtn">ส่งออก Encrypted Backup</button></details>
-          <details class="task-panel"><summary>เวอร์ชันและสถานะระบบ</summary><div class="kv"><span>แอป</span><b id="systemVersion">Functional Shell v1</b><span>ฐานข้อมูล</span><b id="systemDatabase">—</b><span>การประสานการเขียน</span><b id="systemCoordination">—</b></div></details>
-          <details id="advancedDiagnostics" class="task-panel"><summary>Advanced diagnostics</summary><pre id="diagnostics" class="diagnostics"></pre></details>
-          <details class="task-panel danger-zone"><summary>การเข้าถึง</summary><button id="systemLockBtn">ล็อกแอป</button></details>
+          <div class="page-head"><div><small>SETTINGS</small><h1>ตั้งค่า</h1></div></div>
+          <details class="task-panel">
+            <summary>ความปลอดภัย</summary>
+            <div>
+              <details id="accessSettings" class="task-panel">
+                <summary>การเข้าถึง</summary>
+                <div>
+                  <div class="action-row"><button id="changePasswordBtn">เปลี่ยนรหัสผ่าน</button><button id="systemLockBtn">ล็อกแอป</button></div>
+                  <details id="advancedAccessSettings" class="task-panel">
+                    <summary>ขั้นสูง</summary>
+                    <div>
+                      <div class="action-row"><button id="backupBtn">Backup</button><button id="openRestoreRouteBtn">Restore</button></div>
+                      <details id="advancedDiagnostics" class="task-panel">
+                        <summary>Vault / Recovery ขั้นสูง</summary>
+                        <span id="runtimeBadge" class="badge">LOCKED</span>
+                        <div class="metrics three"><article><small>ฐาน</small><b id="systemDbState">พร้อมใช้</b></article><article><small>State revision</small><b id="systemRevision">—</b></article><article><small>Schema</small><b id="systemSchema">—</b></article></div>
+                        <div class="kv"><span>แอป</span><b id="systemVersion">Functional Shell v1</b><span>ฐานข้อมูล</span><b id="systemDatabase">—</b><span>การประสานการเขียน</span><b id="systemCoordination">—</b></div>
+                        <pre id="diagnostics" class="diagnostics"></pre>
+                      </details>
+                    </div>
+                  </details>
+                </div>
+              </details>
+            </div>
+          </details>
         </section>
       </div>
       <p id="appStatus" class="status app-status" aria-live="polite"></p>
