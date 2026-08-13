@@ -1,9 +1,10 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { signEvidence } = require('./flow-evidence-fixture.cjs');
 
 function evidence({ snapshotBalance = 10000 } = {}) {
-  return {
+  return signEvidence({
     format: 'YGPH_FLOW_EVENT_EXCHANGE', formatVersion: 3, evidenceSchemaVersion: '3.1',
     packageId: 'FLOW-1786527289637', packageMode: 'SNAPSHOT_AND_DELTA', snapshotAsOf: '2026-08-12T09:34:21.231Z', sourceRevision: 28,
     reconciliation: { status: 'PASS', blockingIssues: [] },
@@ -14,7 +15,7 @@ function evidence({ snapshotBalance = 10000 } = {}) {
       { eventId: 'C1', source: 'CALENDAR', owner: 'STORE', payload: { record: { recordId: 'Q-1', type: 'RECEIVE_CUSTOMER_PAYMENT', status: 'OPEN' } }, validation: { ownerConfirmation: 'UNCONFIRMED' } },
       { eventId: 'R1', source: 'RIDE', owner: 'RIDE', payload: { record: { recordId: 'RIDE-1', type: 'CREDIT_BALANCE', amountSatang: 0 } }, validation: { ownerConfirmation: 'UNCONFIRMED' } }
     ]
-  };
+  });
 }
 
 test('cutover validates evidence and ledger projection before one encrypted durable write', async () => {
@@ -40,6 +41,19 @@ test('cutover refuses ledger mismatch and leaves greenfield store empty', async 
   const store = createMemoryVaultStore();
   await assert.rejects(initializeGreenfieldFromEvidence({ store, passphrase: 'correct horse battery staple', evidence: evidence({ snapshotBalance: 9999 }), expectedPackageId: 'FLOW-1786527289637', expectedRevision: 28 }), /GREENFIELD_LEDGER_RECONCILIATION_FAILED/);
   assert.equal(await readEncryptedState({ store, passphrase: 'correct horse battery staple' }), null);
+});
+
+test('tampered Evidence fails before cutover writes any encrypted state', async () => {
+  const { createMemoryVaultStore, readEncryptedState } = await import('../greenfield/persistence.mjs');
+  const { initializeGreenfieldFromEvidence } = await import('../greenfield/cutover.mjs');
+  const store = createMemoryVaultStore();
+  const tampered = evidence();
+  tampered.events[0].payload.record.amountSatang = 777777;
+  await assert.rejects(
+    initializeGreenfieldFromEvidence({ store, passphrase:'correct horse battery staple', evidence:tampered, expectedPackageId:'FLOW-1786527289637', expectedRevision:28 }),
+    /EVIDENCE_(PACKAGE|EVENT)_CHECKSUM_MISMATCH/,
+  );
+  assert.equal(await readEncryptedState({ store, passphrase:'correct horse battery staple' }), null);
 });
 
 test('repeat initialization uses stored import verification after live Ledger changes instead of rechecking stale snapshot', async () => {

@@ -1,6 +1,6 @@
 import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
 import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
-import { recordsForDomain, dateKey, deriveTimeState, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
+import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { hydrateIcons } from './icons.mjs';
 
 const $ = id => document.getElementById(id);
@@ -295,7 +295,7 @@ function calendarActionItem(record) {
   meta.className = 'muted';
   meta.textContent = timeState === 'OVERDUE' ? 'เลยกำหนด' : timeState === 'TODAY' ? 'วันนี้' : timeState === 'NEAR' ? 'ใกล้ถึง' : '';
   if (meta.textContent) item.append(meta);
-  if (record.status !== 'OPEN') return item;
+  if (!isCalendarActionableStatus(record.status)) return item;
   const actions = document.createElement('div');
   actions.className = 'item-actions';
   if (['RECEIVE_CUSTOMER_PAYMENT','PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT'].includes(record.type)) {

@@ -1,14 +1,15 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { signEvidence } = require('./flow-evidence-fixture.cjs');
 
 function evidence() {
-  return {
+  return signEvidence({
     format:'YGPH_FLOW_EVENT_EXCHANGE', formatVersion:3, evidenceSchemaVersion:'3.1', packageId:'FLOW-1786527289637',
     packageMode:'SNAPSHOT_AND_DELTA', snapshotAsOf:'2026-08-12T09:34:21.231Z', sourceRevision:28,
     reconciliation:{status:'PASS',blockingIssues:[]},
     events:[{eventId:'L0',source:'LEDGER',owner:'LEDGER',payload:{record:{recordId:'LEDGER-CURRENT',type:'CURRENT_BALANCE',amountSatang:0,calculation:{openingBalanceSatang:0}}},validation:{ownerConfirmation:'UNCONFIRMED'}}],
-  };
+  });
 }
 
 test('daily goal is created once per day and later automatic suggestions cannot move it', async () => {

@@ -7,13 +7,11 @@
 !/icon-192.png
 !/icon-512.png
 !/ui/
-!/ui/**
 !/ui/app.mjs
 !/ui/ui-model.mjs
 !/ui/product-model.mjs
 !/ui/icons.mjs
 !/greenfield/
-!/greenfield/**
 !/greenfield/backup.mjs
 !/greenfield/browser-store.mjs
 !/greenfield/business-workflows.mjs
@@ -22,6 +20,7 @@
 !/greenfield/cutover.mjs
 !/greenfield/device-unlock.mjs
 !/greenfield/domain-operations.mjs
+!/greenfield/evidence-integrity.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/persistence.mjs
@@ -29,4 +28,5 @@
 !/greenfield/ride-domain.mjs
 !/greenfield/ride-workflows.mjs
 !/greenfield/runtime.mjs
+!/greenfield/workflow-invariants.mjs
 !/greenfield/workflow-runtime.mjs

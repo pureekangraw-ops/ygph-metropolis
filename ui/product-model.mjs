@@ -29,6 +29,10 @@ function lifecycleClosed(status) {
   return status === 'COMPLETED' || status === 'CANCELLED';
 }
 
+export function isCalendarActionableStatus(status) {
+  return status === 'OPEN' || status === 'PARTIAL';
+}
+
 export function deriveTimeState(record, today, nearDays = 7) {
   if (record?.status === 'COMPLETED') return 'COMPLETED';
   if (record?.status === 'CANCELLED') return 'CANCELLED';
