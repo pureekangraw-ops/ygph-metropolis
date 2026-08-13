@@ -45,3 +45,14 @@ test('compact navigation is fixed on the right and content reserves rail space',
   assert.match(css, /\.rail-btn\s*\{[^}]*min-width\s*:\s*48px[^}]*min-height\s*:\s*48px/s);
   assert.match(css, /@media\s*\(max-width:\s*700px\)[\s\S]*padding-right/s);
 });
+
+test('every static UI id referenced by app code exists in index exactly once', () => {
+  const html = text('index.html');
+  const app = text('ui/app.mjs');
+  const ids = [...new Set([...app.matchAll(/\$\('([^']+)'\)/g)].map(match => match[1]))];
+  assert.ok(ids.length > 30, 'expected broad shell wiring coverage');
+  for (const id of ids) {
+    const matches = html.match(new RegExp(`id="${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g')) || [];
+    assert.equal(matches.length, 1, `UI id ${id} must exist exactly once`);
+  }
+});
