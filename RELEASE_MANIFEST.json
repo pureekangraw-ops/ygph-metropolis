@@ -14,7 +14,7 @@
   "ride": {"policy":"LIVE_SCHEMA2_ONLY","cashOwner":"LEDGER","operationalOwner":"RIDE","historicalEvidenceImport":"EXCLUDED"},
   "functionalShell": {"areas":["HOME","MAKE_MONEY","CALENDAR","FINANCE","SYSTEM"],"homeAttentionLimit":3,"nearTermDays":7,"navigation":"RIGHT_THUMB_RAIL","iconFamily":"PHOSPHOR","visualPolish":"DEFERRED"},
   "rollback": {"legacyDatabase":"stock-pocket-secure","policy":"DO_NOT_OPEN_OR_MUTATE_FROM_GREENFIELD","greenfieldBackup":"ygph-metropolis-greenfield-backup/v1"},
-  "serviceWorker": {"releaseId":"v5.1.0-functional-rc1-r1","legacyCacheCleanup":true},
+  "serviceWorker": {"releaseId":"v5.1.0-functional-rc1-r3","legacyCacheCleanup":true},
   "safety": [
     "STORE owns store truth",
     "LEDGER owns real cash truth and obligations",
@@ -33,6 +33,6 @@
   "productionFiles": [
     {"path":"index.html"},{"path":"app.mjs"},{"path":"styles.css"},{"path":"manifest.webmanifest"},{"path":"sw.js"},{"path":"icon-192.png"},{"path":"icon-512.png"},
     {"path":"ui/app.mjs"},{"path":"ui/ui-model.mjs"},{"path":"ui/product-model.mjs"},{"path":"ui/icons.mjs"},
-    {"path":"greenfield/backup.mjs"},{"path":"greenfield/browser-store.mjs"},{"path":"greenfield/business-workflows.mjs"},{"path":"greenfield/command-runtime.mjs"},{"path":"greenfield/core.mjs"},{"path":"greenfield/cutover.mjs"},{"path":"greenfield/domain-operations.mjs"},{"path":"greenfield/import-evidence.mjs"},{"path":"greenfield/mutation-coordinator.mjs"},{"path":"greenfield/persistence.mjs"},{"path":"greenfield/projections.mjs"},{"path":"greenfield/ride-domain.mjs"},{"path":"greenfield/ride-workflows.mjs"},{"path":"greenfield/runtime.mjs"},{"path":"greenfield/workflow-runtime.mjs"}
+    {"path":"greenfield/backup.mjs"},{"path":"greenfield/browser-store.mjs"},{"path":"greenfield/business-workflows.mjs"},{"path":"greenfield/command-runtime.mjs"},{"path":"greenfield/core.mjs"},{"path":"greenfield/cutover.mjs"},{"path":"greenfield/device-unlock.mjs"},{"path":"greenfield/domain-operations.mjs"},{"path":"greenfield/import-evidence.mjs"},{"path":"greenfield/mutation-coordinator.mjs"},{"path":"greenfield/persistence.mjs"},{"path":"greenfield/projections.mjs"},{"path":"greenfield/ride-domain.mjs"},{"path":"greenfield/ride-workflows.mjs"},{"path":"greenfield/runtime.mjs"},{"path":"greenfield/workflow-runtime.mjs"}
   ]
 }
