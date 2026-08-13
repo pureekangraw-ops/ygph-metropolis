@@ -25,8 +25,19 @@ function plannedStoreDelta(commands) {
   return delta;
 }
 
-function calendarQueue(state, queueId) {
-  return state?.domains?.CALENDAR?.records?.[queueId]?.record ?? null;
+function plannedCalendarQueues(commands) {
+  const queues = new Map();
+  for (const command of commands) {
+    if (command?.domain !== 'CALENDAR' || command?.type !== 'CALENDAR_CREATE_RECORD') continue;
+    const record = command?.payload?.record;
+    const id = String(record?.recordId ?? record?.id ?? '');
+    if (id) queues.set(id, record);
+  }
+  return queues;
+}
+
+function calendarQueue(state, plannedQueues, queueId) {
+  return state?.domains?.CALENDAR?.records?.[queueId]?.record ?? plannedQueues.get(queueId) ?? null;
 }
 
 function paymentSourceCommands(commands) {
@@ -56,17 +67,16 @@ function validatePaymentRelations(state, commands) {
   if (calendarPayments.length === 0) return;
 
   const sources = paymentSourceCommands(commands);
-  if (sources.length !== calendarPayments.length) throw new Error('WORKFLOW_PAYMENT_RELATION_AMBIGUOUS');
+  if (calendarPayments.length !== 1 || sources.length !== 1) throw new Error('WORKFLOW_PAYMENT_RELATION_AMBIGUOUS');
 
-  for (let index = 0; index < calendarPayments.length; index += 1) {
-    const source = expectedQueueRelation(sources[index]);
-    const queueId = String(calendarPayments[index]?.payload?.recordId || '');
-    const queue = calendarQueue(state, queueId);
-    if (!queue) continue;
-    const expectedDetail = `${source.owner}/${source.recordId}`;
-    if (!source.types.has(queue.type) || String(queue.detail || '') !== expectedDetail) {
-      throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
-    }
+  const plannedQueues = plannedCalendarQueues(commands);
+  const source = expectedQueueRelation(sources[0]);
+  const queueId = String(calendarPayments[0]?.payload?.recordId || '');
+  const queue = calendarQueue(state, plannedQueues, queueId);
+  if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
+  const expectedDetail = `${source.owner}/${source.recordId}`;
+  if (!source.types.has(queue.type) || String(queue.detail || '') !== expectedDetail) {
+    throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
   }
 }
 
