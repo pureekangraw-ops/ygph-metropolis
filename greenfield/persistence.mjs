@@ -1,4 +1,4 @@
-import { canonicalStringify, assertGreenfieldState } from './core.mjs';
+import { canonicalStringify, assertGreenfieldState, migrateGreenfieldState } from './core.mjs';
 
 export const LEGACY_DB_NAME = 'stock-pocket-secure';
 export const DB_NAME = 'ygph-metropolis-greenfield-secure';
@@ -60,9 +60,9 @@ async function decryptState(vault, passphrase) {
   const key = await deriveKey(passphrase, base64ToBytes(vault.kdf.salt), PBKDF2_ITERATIONS);
   try {
     const plaintext = await globalThis.crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(vault.cipher.iv), additionalData: AAD, tagLength: 128 }, key, base64ToBytes(vault.ciphertext));
-    return assertGreenfieldState(JSON.parse(decoder.decode(plaintext)));
+    return migrateGreenfieldState(JSON.parse(decoder.decode(plaintext)));
   } catch (error) {
-    if (String(error?.message || '').includes('INVALID_')) throw error;
+    if (String(error?.message || '').includes('INVALID_') || String(error?.message || '').includes('UNEXPECTED_DOMAIN')) throw error;
     throw new Error('GREENFIELD_VAULT_DECRYPT_FAILED');
   }
 }

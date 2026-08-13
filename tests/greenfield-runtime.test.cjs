@@ -21,7 +21,7 @@ test('runtime facade initializes, executes owner-safe business workflows, and ex
   const initial = await runtime.initializeFromEvidence(minimalEvidence(), { expectedPackageId:'FLOW-1786527289637', expectedRevision:28 });
   assert.equal(initial.status, 'IMPORTED_VERIFIED');
   assert.deepEqual(runtime.diagnostics(), {
-    architecture:'GREENFIELD', schema:1, database:'ygph-metropolis-greenfield-secure', vault:'ygph-metropolis-greenfield-vault', coordination:{mode:'LOCAL_QUEUE',crossContextSafety:'LIMITED'}
+    architecture:'GREENFIELD', schema:2, database:'ygph-metropolis-greenfield-secure', vault:'ygph-metropolis-greenfield-vault', coordination:{mode:'LOCAL_QUEUE',crossContextSafety:'LIMITED'}
   });
   const result = await runtime.sale({ workflowId:'SALE-WF', saleId:'SALE1', ledgerTransactionId:'TX1', title:'ขายเงินสด', amountSatang:10000, quantity:1, receivedSatang:10000 });
   assert.equal(result.status, 'VERIFIED');

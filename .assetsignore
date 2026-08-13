@@ -10,6 +10,8 @@
 !/ui/**
 !/ui/app.mjs
 !/ui/ui-model.mjs
+!/ui/product-model.mjs
+!/ui/icons.mjs
 !/greenfield/
 !/greenfield/**
 !/greenfield/backup.mjs
@@ -23,5 +25,7 @@
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/persistence.mjs
 !/greenfield/projections.mjs
+!/greenfield/ride-domain.mjs
+!/greenfield/ride-workflows.mjs
 !/greenfield/runtime.mjs
 !/greenfield/workflow-runtime.mjs
