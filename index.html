@@ -12,8 +12,7 @@
 </head>
 <body>
   <header class="appbar">
-    <div><strong>YGPH METROPOLIS</strong><small>Functional Shell</small></div>
-    <span id="runtimeBadge" class="badge">LOCKED</span>
+    <div><strong>YGPH METROPOLIS</strong></div>
   </header>
 
   <main class="layout">
@@ -41,7 +40,7 @@
 
     <div id="workspace" class="hidden">
       <nav id="thumbRail" class="thumb-rail" aria-label="เมนูหลัก">
-        <button class="rail-btn" data-area="system" aria-label="ระบบ"><svg data-icon="gear-six"></svg></button>
+        <button class="rail-btn" data-area="system" aria-label="ตั้งค่า"><svg data-icon="gear-six"></svg></button>
         <button class="rail-btn active" data-area="home" aria-label="หน้าหลัก" aria-current="page"><svg data-icon="house-simple"></svg></button>
         <button class="rail-btn" data-area="finance" aria-label="การเงิน"><svg data-icon="wallet"></svg></button>
         <button class="rail-btn" data-area="calendar" aria-label="ปฏิทิน"><svg data-icon="calendar-dots"></svg></button>
@@ -150,6 +149,7 @@
                       <div class="action-row"><button id="backupBtn">Backup</button><button id="openRestoreRouteBtn">Restore</button></div>
                       <details id="advancedDiagnostics" class="task-panel">
                         <summary>Vault / Recovery ขั้นสูง</summary>
+                        <span id="runtimeBadge" class="badge">LOCKED</span>
                         <div class="metrics three"><article><small>ฐาน</small><b id="systemDbState">พร้อมใช้</b></article><article><small>State revision</small><b id="systemRevision">—</b></article><article><small>Schema</small><b id="systemSchema">—</b></article></div>
                         <div class="kv"><span>แอป</span><b id="systemVersion">Functional Shell v1</b><span>ฐานข้อมูล</span><b id="systemDatabase">—</b><span>การประสานการเขียน</span><b id="systemCoordination">—</b></div>
                         <pre id="diagnostics" class="diagnostics"></pre>
