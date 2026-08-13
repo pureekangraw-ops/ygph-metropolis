@@ -3,7 +3,7 @@ name: Greenfield Feature Gate
 on:
   push:
     branches:
-      - feature/production-app-structure-v2-green
+      - 'feature/production-app-structure-v2-green*'
 
 permissions:
   contents: read
