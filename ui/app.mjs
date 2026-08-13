@@ -1,4 +1,4 @@
-import { openGreenfieldRuntime } from '../greenfield/runtime.mjs';
+import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
 import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
 import { recordsForDomain, dateKey, deriveTimeState, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { hydrateIcons } from './icons.mjs';
@@ -17,9 +17,15 @@ function status(message, error = false, gate = false) {
   node.classList.toggle('error', error);
 }
 
-function passphrase() {
-  const value = $('passphrase').value;
-  if (value.length < 12) throw new Error('รหัสต้องมีอย่างน้อย 12 ตัวอักษร');
+function devicePin() {
+  const value = $('devicePin').value;
+  if (value.length < 6) throw new Error('รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร');
+  return value;
+}
+
+function recoveryPassphrase() {
+  const value = $('recoveryPassphrase').value;
+  if (value.length < 12) throw new Error('รหัสกู้คืนต้องมีอย่างน้อย 12 ตัวอักษร');
   return value;
 }
 
@@ -29,9 +35,9 @@ async function jsonFile(input) {
   return JSON.parse(await file.text());
 }
 
-async function ensureRuntime() {
+async function ensureRecoveryRuntime() {
   runtime?.close();
-  runtime = await openGreenfieldRuntime({ passphrase:passphrase() });
+  runtime = await openGreenfieldRuntime({ passphrase:recoveryPassphrase() });
   return runtime;
 }
 
@@ -407,17 +413,37 @@ function render() {
 
 $('unlockBtn').addEventListener('click', async () => {
   try {
-    await ensureRuntime();
+    runtime?.close();
+    runtime = await openGreenfieldRuntimeWithDevicePin({ pin:devicePin() });
     state = await runtime.readState();
-    if (!state) throw new Error('ยังไม่พบฐาน — ใช้ Evidence หรือ Backup ในส่วนเริ่มต้น/กู้คืน');
+    if (!state) throw new Error('ยังไม่พบฐาน METROPOLIS');
     await openWorkspace();
+  } catch (error) {
+    const message = error.message === 'DEVICE_UNLOCK_NOT_ENROLLED'
+      ? 'เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป — เปิด “กู้คืนการเข้าถึง” เพื่อตั้งครั้งแรก'
+      : error.message;
+    status(message, true, true);
+  }
+});
+
+$('enrollDeviceBtn').addEventListener('click', async () => {
+  try {
+    runtime?.close();
+    runtime = null;
+    await enrollGreenfieldDeviceUnlock({ vaultPassphrase:recoveryPassphrase(), pin:devicePin() });
+    runtime = await openGreenfieldRuntimeWithDevicePin({ pin:devicePin() });
+    state = await runtime.readState();
+    if (!state) throw new Error('ยังไม่พบฐาน METROPOLIS');
+    $('recoveryPassphrase').value = '';
+    await openWorkspace();
+    status('ตั้งรหัสเข้าแอปบนเครื่องนี้แล้ว');
   } catch (error) { status(error.message, true, true); }
 });
 
 $('importEvidenceBtn').addEventListener('click', async () => {
   try {
     const evidence = await jsonFile($('evidenceFile'));
-    await ensureRuntime();
+    await ensureRecoveryRuntime();
     const result = await runtime.initializeFromEvidence(evidence, { expectedPackageId:'FLOW-1786527289637', expectedRevision:28 });
     state = result.state;
     await openWorkspace();
@@ -428,7 +454,7 @@ $('importEvidenceBtn').addEventListener('click', async () => {
 $('restoreBtn').addEventListener('click', async () => {
   try {
     const backup = await jsonFile($('restoreFile'));
-    await ensureRuntime();
+    await ensureRecoveryRuntime();
     const result = await runtime.restoreBackup(backup);
     state = result.state;
     await openWorkspace();
@@ -521,7 +547,8 @@ $('systemLockBtn').addEventListener('click', () => {
   $('workspace').classList.add('hidden');
   $('gate').classList.remove('hidden');
   $('runtimeBadge').textContent = 'LOCKED';
-  $('passphrase').value = '';
+  $('devicePin').value = '';
+  $('recoveryPassphrase').value = '';
   status('', false, true);
 });
 
