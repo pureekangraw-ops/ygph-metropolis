@@ -133,7 +133,7 @@ test('invalid Recovery Code performs zero durable writes and preserves existing 
     resetGreenfieldDevicePassword,
     openGreenfieldRuntimeWithDevicePin,
   } = await import('../greenfield/runtime.mjs');
-  const { fake, vaultBefore } = await initializedFixture();
+  const { fake, expectedRevision, vaultBefore } = await initializedFixture();
   const writesBefore = fake.writes();
 
   await assert.rejects(
@@ -144,6 +144,8 @@ test('invalid Recovery Code performs zero durable writes and preserves existing 
   assert.equal(fake.writes(), writesBefore);
   assert.deepEqual(fake.raw('current'), vaultBefore);
   const reopened = await openGreenfieldRuntimeWithDevicePin({ pin:OLD_PASSWORD, indexedDBImpl:fake.indexedDBImpl, lockManager:null });
+  const state = await reopened.readState();
+  assert.equal(state.revision, expectedRevision);
   assert.equal(reopened.project().ledgerBalanceSatang, 2500);
   reopened.close();
 });
