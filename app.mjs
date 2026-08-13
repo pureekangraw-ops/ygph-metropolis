@@ -1,5 +1,6 @@
 import {
   openGreenfieldRuntime,
+  openGreenfieldRuntimeWithDevicePin,
   verifyGreenfieldRecoveryCode,
   resetGreenfieldDevicePassword,
 } from './greenfield/runtime.mjs';
@@ -21,6 +22,17 @@ function clearRecoverySecrets() {
   $('recoveryConfirmPassword').value = '';
 }
 
+function clearChangePasswordFields() {
+  $('changeCurrentPassword').value = '';
+  $('changeNewPassword').value = '';
+  $('changeConfirmPassword').value = '';
+}
+
+function closeChangePasswordPanel() {
+  $('changePasswordPanel').classList.add('hidden');
+  clearChangePasswordFields();
+}
+
 function resetRecoverySteps() {
   $('recoveryVerifyStep').classList.remove('hidden');
   $('recoveryResetStep').classList.add('hidden');
@@ -31,6 +43,7 @@ function showLogin() {
   $('gate').classList.remove('hidden');
   $('lockedAdvancedRecovery').open = false;
   clearRecoverySecrets();
+  closeChangePasswordPanel();
   resetRecoverySteps();
   clearAuthStatus();
 }
@@ -138,8 +151,51 @@ $('resetPasswordBtn').addEventListener('click', async () => {
 });
 
 $('changePasswordBtn').addEventListener('click', () => {
-  $('systemLockBtn').click();
-  showRecovery();
+  $('appStatus').textContent = '';
+  clearChangePasswordFields();
+  $('changePasswordPanel').classList.remove('hidden');
+  $('changeCurrentPassword').focus();
+});
+
+$('cancelChangePasswordBtn').addEventListener('click', () => {
+  closeChangePasswordPanel();
+  $('appStatus').textContent = '';
+});
+
+$('submitChangePasswordBtn').addEventListener('click', async () => {
+  const currentPassword = $('changeCurrentPassword').value;
+  const nextPassword = $('changeNewPassword').value;
+  const confirmPassword = $('changeConfirmPassword').value;
+  const status = $('appStatus');
+  const button = $('submitChangePasswordBtn');
+  status.textContent = '';
+  status.classList.remove('error');
+
+  if (nextPassword.length < 6) {
+    status.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+    status.classList.add('error');
+    return;
+  }
+  if (nextPassword !== confirmPassword) {
+    status.textContent = 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+    status.classList.add('error');
+    return;
+  }
+
+  let runtime = null;
+  button.disabled = true;
+  try {
+    runtime = await openGreenfieldRuntimeWithDevicePin({ pin:currentPassword });
+    await runtime.changeDevicePassword({ nextPassword });
+    closeChangePasswordPanel();
+    status.textContent = 'เปลี่ยนรหัสผ่านแล้ว';
+  } catch (error) {
+    status.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถเปลี่ยนรหัสผ่านได้'));
+    status.classList.add('error');
+  } finally {
+    runtime?.close();
+    button.disabled = false;
+  }
 });
 
 $('openRestoreRouteBtn').addEventListener('click', () => {
@@ -147,4 +203,7 @@ $('openRestoreRouteBtn').addEventListener('click', () => {
   showRecovery({ advanced:true });
 });
 
-$('systemLockBtn').addEventListener('click', () => showLogin());
+$('systemLockBtn').addEventListener('click', () => {
+  closeChangePasswordPanel();
+  showLogin();
+});
