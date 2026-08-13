@@ -1,5 +1,5 @@
 import { GREENFIELD_SCHEMA } from './core.mjs';
-import { DB_NAME, VAULT_FORMAT, readEncryptedState } from './persistence.mjs';
+import { DB_NAME, VAULT_FORMAT, readEncryptedState, commitEncryptedState } from './persistence.mjs';
 import { openGreenfieldVaultStore } from './browser-store.mjs';
 import { initializeGreenfieldFromEvidence } from './cutover.mjs';
 import { createCommandRuntime } from './command-runtime.mjs';
@@ -28,6 +28,21 @@ import {
   buildRideExpenseWorkflow,
   buildRideWithdrawCreditWorkflow,
 } from './ride-workflows.mjs';
+
+function goalDate(value) {
+  const date = String(value || '');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error('INVALID_GOAL_DATE');
+  const probe = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (probe.getUTCFullYear() !== Number(match[1]) || probe.getUTCMonth() !== Number(match[2]) - 1 || probe.getUTCDate() !== Number(match[3])) throw new Error('INVALID_GOAL_DATE');
+  return date;
+}
+
+function goalAmount(value) {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('INVALID_DAILY_GOAL');
+  return amount;
+}
 
 export function createGreenfieldRuntime({ store, passphrase, lockManager = globalThis.navigator?.locks ?? null, now = () => new Date().toISOString(), closeStore = null } = {}) {
   if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
@@ -65,6 +80,56 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
       const result = await executeAtomicWorkflow({ store, passphrase, runtime: commandRuntime, commands: plan.commands });
       lastState = result.state;
       return result;
+    });
+  }
+
+  async function ensureDailyGoal({ date, suggestedSatang }) {
+    const key = goalDate(date);
+    const suggested = goalAmount(suggestedSatang);
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const existing = current.meta?.dailyGoals?.[key];
+      if (existing) {
+        lastState = current;
+        return { status:'EXISTING', goal:structuredClone(existing), state:current };
+      }
+      const at = now();
+      const next = structuredClone(current);
+      next.meta = next.meta && typeof next.meta === 'object' ? next.meta : {};
+      next.meta.dailyGoals = next.meta.dailyGoals && typeof next.meta.dailyGoals === 'object' ? next.meta.dailyGoals : {};
+      next.meta.dailyGoals[key] = { date:key, goalSatang:suggested, autoSuggestedSatang:suggested, source:'AUTO', createdAt:at, updatedAt:at };
+      next.revision += 1;
+      next.updatedAt = at;
+      await commitEncryptedState({ store, passphrase, state:next, expectedDurableRevision:current.revision });
+      lastState = await readEncryptedState({ store, passphrase });
+      return { status:'CREATED', goal:structuredClone(lastState.meta.dailyGoals[key]), state:lastState };
+    });
+  }
+
+  async function overrideDailyGoal({ date, goalSatang }) {
+    const key = goalDate(date);
+    const amount = goalAmount(goalSatang);
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const existing = current.meta?.dailyGoals?.[key];
+      if (!existing) throw new Error(`DAILY_GOAL_NOT_INITIALIZED:${key}`);
+      const at = now();
+      const next = structuredClone(current);
+      next.meta.dailyGoals[key] = {
+        ...existing,
+        date:key,
+        goalSatang:amount,
+        autoSuggestedSatang:Number(existing.autoSuggestedSatang ?? existing.goalSatang ?? 0),
+        source:'MANUAL',
+        updatedAt:at,
+      };
+      next.revision += 1;
+      next.updatedAt = at;
+      await commitEncryptedState({ store, passphrase, state:next, expectedDurableRevision:current.revision });
+      lastState = await readEncryptedState({ store, passphrase });
+      return { status:'UPDATED', goal:structuredClone(lastState.meta.dailyGoals[key]), state:lastState };
     });
   }
 
@@ -111,6 +176,8 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     project,
     exportBackup,
     restoreBackup,
+    ensureDailyGoal,
+    overrideDailyGoal,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executePlan(buildReceiveCustomerPaymentWorkflow(input)),
     obligation: input => executePlan(buildObligationWorkflow(input)),
