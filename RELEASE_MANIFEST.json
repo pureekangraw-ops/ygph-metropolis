@@ -1,21 +1,38 @@
 {
-  "release": "5.0.0-greenfield-rc1",
+  "release": "5.1.0-functional-rc1",
   "product": "YGPH METROPOLIS",
   "architecture": "GREENFIELD",
   "status": "RELEASE_CANDIDATE_BRANCH_ONLY",
-  "releaseDate": "2026-08-12",
-  "domains": ["STORE", "LEDGER", "CALENDAR"],
-  "stateSchema": 1,
+  "releaseDate": "2026-08-13",
+  "domains": ["STORE", "LEDGER", "CALENDAR", "RIDE"],
+  "stateSchema": 2,
+  "schemaMigration": {"from":1,"to":2,"policy":"ADD_EMPTY_RIDE_DOMAIN_PRESERVE_EXISTING_TRUTH"},
   "database": {"name":"ygph-metropolis-greenfield-secure","version":1,"store":"vault","key":"current"},
   "vault": {"format":"ygph-metropolis-greenfield-vault","version":1,"cipher":"AES-GCM-256","kdf":"PBKDF2-SHA256","iterations":600000},
   "commandRuntime": {"idempotency":true,"expectedRevision":true,"domainIsolation":true,"atomicWorkflow":true,"crossContextLock":"WEB_LOCKS_WHEN_AVAILABLE","fallback":"LOCAL_QUEUE_LIMITED"},
   "cutoverEvidence": {"format":"YGPH_FLOW_EVENT_EXCHANGE","formatVersion":3,"evidenceSchemaVersion":"3.1","packageId":"FLOW-1786527289637","sourceRevision":28,"expectedReconciliation":"PASS","ridePolicy":"EXCLUDE"},
-  "rollback": {"legacyDatabase":"stock-pocket-secure","policy":"DO_NOT_OPEN_OR_MUTATE_FROM_GREENFIELD_RC","greenfieldBackup":"ygph-metropolis-greenfield-backup/v1"},
-  "serviceWorker": {"releaseId":"v5.0.0-greenfield-rc1-r1","legacyCacheCleanup":true},
-  "safety": ["STORE owns store truth","LEDGER owns real cash truth","CALENDAR is Action Hub and never manufactures cash truth","protected corrections use linked reversal","Evidence owner confirmation is preserved","cutover Ledger mismatch blocks durable write","encrypted commit requires durable revision check and decrypt/readback equality","legacy database remains rollback-only"],
+  "ride": {"policy":"LIVE_SCHEMA2_ONLY","cashOwner":"LEDGER","operationalOwner":"RIDE","historicalEvidenceImport":"EXCLUDED"},
+  "functionalShell": {"areas":["HOME","MAKE_MONEY","CALENDAR","FINANCE","SYSTEM"],"homeAttentionLimit":3,"nearTermDays":7,"navigation":"RIGHT_THUMB_RAIL","iconFamily":"PHOSPHOR","visualPolish":"DEFERRED"},
+  "rollback": {"legacyDatabase":"stock-pocket-secure","policy":"DO_NOT_OPEN_OR_MUTATE_FROM_GREENFIELD","greenfieldBackup":"ygph-metropolis-greenfield-backup/v1"},
+  "serviceWorker": {"releaseId":"v5.1.0-functional-rc1-r1","legacyCacheCleanup":true},
+  "safety": [
+    "STORE owns store truth",
+    "LEDGER owns real cash truth and obligations",
+    "CALENDAR is time/action projection and never manufactures cash truth",
+    "RIDE owns ride operational truth; only LEDGER records ride cash movements",
+    "MAKE MONEY generated income is not spendable balance",
+    "daily goal metadata never mutates Ledger truth",
+    "protected corrections use linked reversal",
+    "Evidence owner confirmation is preserved",
+    "cutover Evidence RIDE remains excluded",
+    "schema 1 migrates to schema 2 without re-importing Evidence",
+    "encrypted commit requires durable revision check and decrypt/readback equality",
+    "legacy database remains rollback-only"
+  ],
   "validation": {"command":"npm run deploy:gate","publication":"OWNER_FINAL_GATE_AFTER_PR_GATE_PASS"},
   "productionFiles": [
-    {"path":"index.html"},{"path":"app.mjs"},{"path":"styles.css"},{"path":"manifest.webmanifest"},{"path":"sw.js"},{"path":"icon-192.png"},{"path":"icon-512.png"},{"path":"ui/app.mjs"},{"path":"ui/ui-model.mjs"},
-    {"path":"greenfield/backup.mjs"},{"path":"greenfield/browser-store.mjs"},{"path":"greenfield/business-workflows.mjs"},{"path":"greenfield/command-runtime.mjs"},{"path":"greenfield/core.mjs"},{"path":"greenfield/cutover.mjs"},{"path":"greenfield/domain-operations.mjs"},{"path":"greenfield/import-evidence.mjs"},{"path":"greenfield/mutation-coordinator.mjs"},{"path":"greenfield/persistence.mjs"},{"path":"greenfield/projections.mjs"},{"path":"greenfield/runtime.mjs"},{"path":"greenfield/workflow-runtime.mjs"}
+    {"path":"index.html"},{"path":"app.mjs"},{"path":"styles.css"},{"path":"manifest.webmanifest"},{"path":"sw.js"},{"path":"icon-192.png"},{"path":"icon-512.png"},
+    {"path":"ui/app.mjs"},{"path":"ui/ui-model.mjs"},{"path":"ui/product-model.mjs"},{"path":"ui/icons.mjs"},
+    {"path":"greenfield/backup.mjs"},{"path":"greenfield/browser-store.mjs"},{"path":"greenfield/business-workflows.mjs"},{"path":"greenfield/command-runtime.mjs"},{"path":"greenfield/core.mjs"},{"path":"greenfield/cutover.mjs"},{"path":"greenfield/domain-operations.mjs"},{"path":"greenfield/import-evidence.mjs"},{"path":"greenfield/mutation-coordinator.mjs"},{"path":"greenfield/persistence.mjs"},{"path":"greenfield/projections.mjs"},{"path":"greenfield/ride-domain.mjs"},{"path":"greenfield/ride-workflows.mjs"},{"path":"greenfield/runtime.mjs"},{"path":"greenfield/workflow-runtime.mjs"}
   ]
 }
