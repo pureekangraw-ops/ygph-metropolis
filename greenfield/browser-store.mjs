@@ -7,6 +7,14 @@ function requestResult(request, fallbackMessage) {
   });
 }
 
+function transactionResult(transaction, fallbackMessage) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error(fallbackMessage));
+    transaction.onabort = () => reject(transaction.error || new Error(fallbackMessage));
+  });
+}
+
 export async function openGreenfieldVaultStore({ indexedDBImpl = globalThis.indexedDB } = {}) {
   if (!indexedDBImpl || typeof indexedDBImpl.open !== 'function') throw new Error('INDEXEDDB_UNAVAILABLE');
   const openRequest = indexedDBImpl.open(DB_NAME, DB_VERSION);
@@ -26,6 +34,20 @@ export async function openGreenfieldVaultStore({ indexedDBImpl = globalThis.inde
   return {
     get(key) { return requestResult(objectStore('readonly').get(key), 'GREENFIELD_DB_READ_FAILED'); },
     put(key, value) { return requestResult(objectStore('readwrite').put(value, key), 'GREENFIELD_DB_WRITE_FAILED'); },
+    putMany(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) return Promise.reject(new TypeError('INVALID_GREENFIELD_STORE_ENTRIES'));
+      const transaction = db.transaction(DB_STORE, 'readwrite');
+      const store = transaction.objectStore(DB_STORE);
+      for (const entry of entries) {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+          transaction.abort();
+          return Promise.reject(new TypeError('INVALID_GREENFIELD_STORE_ENTRY'));
+        }
+        const [key, value] = entry;
+        store.put(value, key);
+      }
+      return transactionResult(transaction, 'GREENFIELD_DB_WRITE_FAILED');
+    },
     close() { db.close(); },
   };
 }
