@@ -1,4 +1,5 @@
 import { assertGreenfieldState } from './core.mjs';
+import { validateEvidenceIntegrity } from './evidence-integrity.mjs';
 
 const CUTOVER_IMPORT_DOMAINS = Object.freeze(['STORE', 'LEDGER', 'CALENDAR']);
 
@@ -18,10 +19,10 @@ export function importEvidenceSnapshot(state, evidence, {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) throw new Error('INVALID_EVIDENCE');
   if (evidence.format !== 'YGPH_FLOW_EVENT_EXCHANGE' || Number(evidence.formatVersion) !== 3) throw new Error('UNSUPPORTED_EVIDENCE_FORMAT');
   if (evidence.packageMode !== 'SNAPSHOT_AND_DELTA') throw new Error('UNSUPPORTED_EVIDENCE_MODE');
+  validateEvidenceIntegrity(evidence);
   if (expectedPackageId && evidence.packageId !== expectedPackageId) throw new Error('UNEXPECTED_EVIDENCE_PACKAGE');
   if (expectedRevision != null && Number(evidence.sourceRevision) !== Number(expectedRevision)) throw new Error('UNEXPECTED_EVIDENCE_REVISION');
   if (evidence.reconciliation?.status !== 'PASS' || (evidence.reconciliation?.blockingIssues?.length ?? 0) > 0) throw new Error('EVIDENCE_RECONCILIATION_NOT_PASS');
-  if (!Array.isArray(evidence.events)) throw new Error('INVALID_EVIDENCE_EVENTS');
 
   const next = structuredClone(state);
   const counts = { STORE: 0, LEDGER: 0, CALENDAR: 0 };
