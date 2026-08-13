@@ -122,7 +122,7 @@ export async function inspectDeviceUnlock({ store } = {}) {
 }
 
 export async function enrollDeviceUnlock({ store, vaultPassphrase, pin } = {}) {
-  if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
+  if (!store || typeof store.get !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
   pinValue(pin);
 
   const state = await readEncryptedState({ store, passphrase:vaultPassphrase });
@@ -132,8 +132,11 @@ export async function enrollDeviceUnlock({ store, vaultPassphrase, pin } = {}) {
   const key = existingKey ? validateDeviceKey(existingKey) : await generateDeviceKey();
   const credential = await sealCredential({ key, vaultPassphrase, pin });
 
-  await store.put(DEVICE_UNLOCK_KEY, key);
-  await store.put(DEVICE_UNLOCK_CREDENTIAL, credential);
+  if (typeof store.putMany !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
+  await store.putMany([
+    [DEVICE_UNLOCK_KEY, key],
+    [DEVICE_UNLOCK_CREDENTIAL, credential],
+  ]);
   return { status:'ENROLLED' };
 }
 

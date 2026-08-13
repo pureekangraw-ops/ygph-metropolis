@@ -24,10 +24,17 @@ function createFakeIndexedDB() {
     close(){},
     transaction(name){
       const map=stores.get(name);
-      return {objectStore(){return {
-        get(key){const req={};queueMicrotask(()=>{req.result=structuredClone(map.get(key)??null);req.onsuccess?.();});return req;},
-        put(value,key){const req={};queueMicrotask(()=>{map.set(key,structuredClone(value));req.result=key;req.onsuccess?.();});return req;}
-      };}};
+      let pending=0;
+      let aborted=false;
+      const transaction={
+        error:null,
+        objectStore(){return {
+          get(key){const req={};queueMicrotask(()=>{if(aborted)return;req.result=structuredClone(map.get(key)??null);req.onsuccess?.();});return req;},
+          put(value,key){const req={};pending+=1;queueMicrotask(()=>{if(aborted)return;map.set(key,structuredClone(value));req.result=key;req.onsuccess?.();pending-=1;if(pending===0)queueMicrotask(()=>transaction.oncomplete?.());});return req;}
+        };},
+        abort(){aborted=true;queueMicrotask(()=>transaction.onabort?.());}
+      };
+      return transaction;
     }
   };
   const indexedDBImpl={open(name){

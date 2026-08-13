@@ -134,6 +134,15 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function changeDevicePassword({ nextPassword } = {}) {
+    return coordinator.run(async () => {
+      await enrollDeviceUnlock({ store, vaultPassphrase:passphrase, pin:nextPassword });
+      const readback = await unlockVaultPassphrase({ store, pin:nextPassword });
+      if (readback !== passphrase) throw new Error('DEVICE_UNLOCK_READBACK_MISMATCH');
+      return { status:'RESET' };
+    });
+  }
+
   function project() {
     if (!lastState) throw new Error('GREENFIELD_STATE_NOT_LOADED');
     const rideRecords = Object.values(lastState.domains.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
@@ -179,6 +188,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     restoreBackup,
     ensureDailyGoal,
     overrideDailyGoal,
+    changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executePlan(buildReceiveCustomerPaymentWorkflow(input)),
     obligation: input => executePlan(buildObligationWorkflow(input)),
@@ -216,6 +226,31 @@ export async function enrollGreenfieldDeviceUnlock({ vaultPassphrase, pin, index
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
   try {
     return await enrollDeviceUnlock({ store, vaultPassphrase, pin });
+  } finally {
+    store.close();
+  }
+}
+
+export async function verifyGreenfieldRecoveryCode({ recoveryCode, indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    const state = await readEncryptedState({ store, passphrase:recoveryCode });
+    if (!state) throw new Error('GREENFIELD_NOT_INITIALIZED');
+    return { status:'VERIFIED' };
+  } finally {
+    store.close();
+  }
+}
+
+export async function resetGreenfieldDevicePassword({ recoveryCode, nextPassword, indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    const state = await readEncryptedState({ store, passphrase:recoveryCode });
+    if (!state) throw new Error('GREENFIELD_NOT_INITIALIZED');
+    await enrollDeviceUnlock({ store, vaultPassphrase:recoveryCode, pin:nextPassword });
+    const readback = await unlockVaultPassphrase({ store, pin:nextPassword });
+    if (readback !== recoveryCode) throw new Error('DEVICE_UNLOCK_READBACK_MISMATCH');
+    return { status:'RESET' };
   } finally {
     store.close();
   }

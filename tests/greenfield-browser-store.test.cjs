@@ -11,10 +11,40 @@ function fakeIndexedDb() {
     transaction(name) {
       const map = stores.get(name);
       if (!map) throw new Error(`missing store ${name}`);
-      return { objectStore() { return {
-        get(key) { const request = {}; queueMicrotask(() => { request.result = structuredClone(map.get(key) ?? null); request.onsuccess?.(); }); return request; },
-        put(value, key) { const request = {}; queueMicrotask(() => { map.set(key, structuredClone(value)); request.result = key; request.onsuccess?.(); }); return request; }
-      }; } };
+      let pending = 0;
+      let aborted = false;
+      const transaction = {
+        error:null,
+        objectStore() { return {
+          get(key) {
+            const request = {};
+            queueMicrotask(() => {
+              if (aborted) return;
+              request.result = structuredClone(map.get(key) ?? null);
+              request.onsuccess?.();
+            });
+            return request;
+          },
+          put(value, key) {
+            const request = {};
+            pending += 1;
+            queueMicrotask(() => {
+              if (aborted) return;
+              map.set(key, structuredClone(value));
+              request.result = key;
+              request.onsuccess?.();
+              pending -= 1;
+              if (pending === 0) queueMicrotask(() => transaction.oncomplete?.());
+            });
+            return request;
+          }
+        }; },
+        abort() {
+          aborted = true;
+          queueMicrotask(() => transaction.onabort?.());
+        },
+      };
+      return transaction;
     },
     close() {}
   };
@@ -37,6 +67,18 @@ test('browser store opens only the new greenfield DB and supports durable get/pu
   await store.put('current', { hello: 'world' });
   assert.deepEqual(await store.get('current'), { hello: 'world' });
   assert.equal(DB_STORE, 'vault');
+  store.close();
+});
+
+test('browser store commits multiple credential entries through one transaction', async () => {
+  const { openGreenfieldVaultStore } = await import('../greenfield/browser-store.mjs');
+  const store = await openGreenfieldVaultStore({ indexedDBImpl:fakeIndexedDb() });
+  await store.putMany([
+    ['device-unlock:key:v1', { key:'value' }],
+    ['device-unlock:credential:v1', { credential:'value' }],
+  ]);
+  assert.deepEqual(await store.get('device-unlock:key:v1'), { key:'value' });
+  assert.deepEqual(await store.get('device-unlock:credential:v1'), { credential:'value' });
   store.close();
 });
 

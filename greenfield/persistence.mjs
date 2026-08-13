@@ -72,6 +72,17 @@ export function createMemoryVaultStore() {
   return {
     async get(key) { return structuredClone(map.get(key) ?? null); },
     async put(key, value) { map.set(key, structuredClone(value)); },
+    async putMany(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) throw new TypeError('INVALID_GREENFIELD_STORE_ENTRIES');
+      const next = new Map(map);
+      for (const entry of entries) {
+        if (!Array.isArray(entry) || entry.length !== 2) throw new TypeError('INVALID_GREENFIELD_STORE_ENTRY');
+        const [key, value] = entry;
+        next.set(key, structuredClone(value));
+      }
+      map.clear();
+      for (const [key, value] of next) map.set(key, value);
+    },
   };
 }
 
