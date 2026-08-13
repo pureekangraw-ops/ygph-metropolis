@@ -16,8 +16,11 @@ function between(source, startMarker, endMarker) {
 }
 
 test('locked login surface exposes only password, sign in, and forgot password actions', () => {
+  const header = between(html, '<header class="appbar">', '</header>');
   const loginSurface = between(html, '<section id="gate"', '<section id="recoveryPanel"');
 
+  assert.match(header, /YGPH METROPOLIS/);
+  assert.doesNotMatch(header, /Functional Shell|LOCKED|Vault|Recovery|crypto/);
   assert.match(loginSurface, /<label>รหัสผ่าน\s*<input id="devicePin"[^>]*autocomplete="current-password"/);
   assert.match(loginSurface, /<button id="unlockBtn"[^>]*>เข้าสู่ระบบ<\/button>/);
   assert.match(loginSurface, /<button id="forgotPasswordBtn"[^>]*>ลืมรหัสผ่าน\?<\/button>/);
@@ -51,6 +54,7 @@ test('forgot password opens a simple recovery surface and keeps technician tools
 test('system routes security access tools under settings then advanced', () => {
   const system = between(html, '<section class="area-page" data-area-page="system">', '</section>\n      </div>');
 
+  assert.match(html, /data-area="system" aria-label="ตั้งค่า"/);
   assert.match(system, /<details[^>]*>\s*<summary>ความปลอดภัย<\/summary>/);
   assert.match(system, /<details id="accessSettings"[^>]*>\s*<summary>การเข้าถึง<\/summary>/);
   assert.match(system, /<details id="advancedAccessSettings"[^>]*>\s*<summary>ขั้นสูง<\/summary>/);
@@ -58,6 +62,7 @@ test('system routes security access tools under settings then advanced', () => {
   assert.match(system, /id="backupBtn"/);
   assert.match(system, /id="openRestoreRouteBtn"/);
   assert.match(system, /id="advancedDiagnostics"/);
+  assert.match(system, /id="runtimeBadge"/);
 });
 
 test('login errors are translated to user-facing language', () => {
