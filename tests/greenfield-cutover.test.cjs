@@ -27,7 +27,8 @@ test('cutover validates evidence and ledger projection before one encrypted dura
   assert.deepEqual(first.counts, { STORE: 1, LEDGER: 2, CALENDAR: 1 });
   const durable = await readEncryptedState({ store, passphrase: 'correct horse battery staple' });
   assert.equal(durable.revision, 2);
-  assert.equal('RIDE' in durable.domains, false);
+  assert.deepEqual(durable.domains.RIDE, { records: {} });
+  assert.equal(durable.importReport.excludedByPolicy.RIDE, 1);
   const second = await initializeGreenfieldFromEvidence({ store, passphrase: 'correct horse battery staple', evidence: evidence(), expectedPackageId: 'FLOW-1786527289637', expectedRevision: 28 });
   assert.equal(second.status, 'ALREADY_INITIALIZED');
   assert.equal(second.state.revision, 2);
