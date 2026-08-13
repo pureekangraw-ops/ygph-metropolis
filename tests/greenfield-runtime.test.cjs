@@ -8,6 +8,7 @@ function minimalEvidence() {
     packageMode:'SNAPSHOT_AND_DELTA', snapshotAsOf:'2026-08-12T09:34:21.231Z', sourceRevision:28,
     reconciliation:{status:'PASS',blockingIssues:[]},
     events:[
+      {eventId:'S0',source:'STORE',owner:'STORE',payload:{record:{recordId:'PURCHASE-BASE',type:'PURCHASE',title:'stock baseline',amountSatang:10000,quantity:1,status:'ACTIVE'}},validation:{ownerConfirmation:'UNCONFIRMED'}},
       {eventId:'L0',source:'LEDGER',owner:'LEDGER',payload:{record:{recordId:'LEDGER-CURRENT',type:'CURRENT_BALANCE',amountSatang:0,calculation:{openingBalanceSatang:0}}},validation:{ownerConfirmation:'UNCONFIRMED'}}
     ]
   };
