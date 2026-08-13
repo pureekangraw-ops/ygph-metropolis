@@ -221,6 +221,31 @@ export async function enrollGreenfieldDeviceUnlock({ vaultPassphrase, pin, index
   }
 }
 
+export async function verifyGreenfieldRecoveryCode({ recoveryCode, indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    const state = await readEncryptedState({ store, passphrase:recoveryCode });
+    if (!state) throw new Error('GREENFIELD_NOT_INITIALIZED');
+    return { status:'VERIFIED' };
+  } finally {
+    store.close();
+  }
+}
+
+export async function resetGreenfieldDevicePassword({ recoveryCode, nextPassword, indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    const state = await readEncryptedState({ store, passphrase:recoveryCode });
+    if (!state) throw new Error('GREENFIELD_NOT_INITIALIZED');
+    await enrollDeviceUnlock({ store, vaultPassphrase:recoveryCode, pin:nextPassword });
+    const readback = await unlockVaultPassphrase({ store, pin:nextPassword });
+    if (readback !== recoveryCode) throw new Error('DEVICE_UNLOCK_READBACK_MISMATCH');
+    return { status:'RESET' };
+  } finally {
+    store.close();
+  }
+}
+
 export async function openGreenfieldRuntimeWithDevicePin({ pin, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
   try {
