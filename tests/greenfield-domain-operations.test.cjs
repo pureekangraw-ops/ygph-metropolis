@@ -60,3 +60,31 @@ test('calendar status update preserves the previous imported snapshot in history
   assert.equal(next.domains.CALENDAR.records.Q1.history[0].provenance.origin, 'EVIDENCE_IMPORT');
   assert.deepEqual(next.domains.LEDGER, ledgerBefore);
 });
+
+test('Calendar money queue stays PARTIAL after a partial payment and remains payable again', async () => {
+  const { createGreenfieldState } = await import('../greenfield/core.mjs');
+  const { createCommandRuntime } = await import('../greenfield/command-runtime.mjs');
+  const { registerGreenfieldDomainCommands } = await import('../greenfield/domain-operations.mjs');
+  const runtime = createCommandRuntime();
+  registerGreenfieldDomainCommands(runtime, { now: () => '2026-08-12T10:30:00.000Z' });
+  const state = createGreenfieldState();
+  state.domains.CALENDAR.records.Q1 = { record:{ recordId:'Q1', source:'CALENDAR', type:'RECEIVE_CUSTOMER_PAYMENT', title:'รับเงิน', detail:'STORE/S1', amountSatang:5000, paidSatang:0, status:'OPEN' }, provenance:{ origin:'EVIDENCE_IMPORT' }, history:[] };
+  const once = await runtime.execute(state, { commandId:'C1', idempotencyKey:'K1', domain:'CALENDAR', type:'CALENDAR_APPLY_PAYMENT', expectedRevision:1, payload:{ recordId:'Q1', amountSatang:2000 } });
+  assert.equal(once.domains.CALENDAR.records.Q1.record.amountSatang, 3000);
+  assert.equal(once.domains.CALENDAR.records.Q1.record.paidSatang, 2000);
+  assert.equal(once.domains.CALENDAR.records.Q1.record.status, 'PARTIAL');
+  const twice = await runtime.execute(once, { commandId:'C2', idempotencyKey:'K2', domain:'CALENDAR', type:'CALENDAR_APPLY_PAYMENT', expectedRevision:2, payload:{ recordId:'Q1', amountSatang:1000 } });
+  assert.equal(twice.domains.CALENDAR.records.Q1.record.status, 'PARTIAL');
+  assert.equal(twice.domains.CALENDAR.records.Q1.record.amountSatang, 2000);
+});
+
+test('Calendar create/status vocabulary accepts PARTIAL without treating it as closed', async () => {
+  const { createGreenfieldState } = await import('../greenfield/core.mjs');
+  const { createCommandRuntime } = await import('../greenfield/command-runtime.mjs');
+  const { registerGreenfieldDomainCommands } = await import('../greenfield/domain-operations.mjs');
+  const runtime = createCommandRuntime();
+  registerGreenfieldDomainCommands(runtime);
+  const state = createGreenfieldState();
+  const next = await runtime.execute(state, { commandId:'C1', idempotencyKey:'K1', domain:'CALENDAR', type:'CALENDAR_CREATE_RECORD', expectedRevision:1, payload:{ record:{ recordId:'Q-P', type:'PAY_OBLIGATION', title:'จ่ายต่อ', detail:'LEDGER/O1', amountSatang:3000, paidSatang:2000, status:'PARTIAL' } } });
+  assert.equal(next.domains.CALENDAR.records['Q-P'].record.status, 'PARTIAL');
+});
