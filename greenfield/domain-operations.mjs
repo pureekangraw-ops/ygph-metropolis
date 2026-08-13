@@ -1,5 +1,5 @@
 const STORE_TYPES = new Set(['SALE', 'PURCHASE', 'STOCK_WITHDRAWAL', 'STOCK_ADJUSTMENT']);
-const CALENDAR_STATUSES = new Set(['OPEN', 'COMPLETED', 'CANCELLED']);
+const CALENDAR_STATUSES = new Set(['OPEN', 'PARTIAL', 'COMPLETED', 'CANCELLED']);
 
 function requiredText(value, code) {
   const output = String(value ?? '').trim();
@@ -192,7 +192,7 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     updateEntry(domainState, id, command, at, record => {
       record.paidSatang = paid + amount;
       record.amountSatang = remaining - amount;
-      record.status = record.amountSatang === 0 ? 'COMPLETED' : 'OPEN';
+      record.status = record.amountSatang === 0 ? 'COMPLETED' : 'PARTIAL';
       record.updatedAt = at;
     });
   });
