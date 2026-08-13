@@ -1,4 +1,6 @@
-import { GREENFIELD_DOMAINS, assertGreenfieldState } from './core.mjs';
+import { assertGreenfieldState } from './core.mjs';
+
+const CUTOVER_IMPORT_DOMAINS = Object.freeze(['STORE', 'LEDGER', 'CALENDAR']);
 
 function text(value, code) {
   const output = String(value ?? '').trim();
@@ -27,7 +29,7 @@ export function importEvidenceSnapshot(state, evidence, {
 
   for (const event of evidence.events) {
     const source = text(event?.source, 'INVALID_EVIDENCE_SOURCE');
-    if (!GREENFIELD_DOMAINS.includes(source)) {
+    if (!CUTOVER_IMPORT_DOMAINS.includes(source)) {
       excludedByPolicy[source] = Number(excludedByPolicy[source] || 0) + 1;
       continue;
     }
