@@ -15,7 +15,7 @@
   "ride": {"policy":"LIVE_SCHEMA2_ONLY","cashOwner":"LEDGER","operationalOwner":"RIDE","historicalEvidenceImport":"EXCLUDED"},
   "functionalShell": {"areas":["HOME","MAKE_MONEY","CALENDAR","FINANCE","SYSTEM"],"homeAttentionLimit":3,"nearTermDays":7,"navigation":"RIGHT_THUMB_RAIL","iconFamily":"PHOSPHOR","visualPolish":"DEFERRED"},
   "rollback": {"legacyDatabase":"stock-pocket-secure","policy":"DO_NOT_OPEN_OR_MUTATE_FROM_GREENFIELD","greenfieldBackup":"ygph-metropolis-greenfield-backup/v1"},
-  "serviceWorker": {"assetRevision":"sha256-a96e22bbeb8b1b11","cacheIdentity":"RELEASE_PLUS_ASSET_REVISION","legacyCacheCleanup":true},
+  "serviceWorker": {"assetRevision":"sha256-42343e2356c5166f","cacheIdentity":"RELEASE_PLUS_ASSET_REVISION","legacyCacheCleanup":true},
   "safety": [
     "STORE owns store truth and rejects committed negative projected stock",
     "LEDGER owns real cash truth and obligations",
