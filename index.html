@@ -149,6 +149,12 @@
                 <summary>การเข้าถึง</summary>
                 <div>
                   <div class="action-row"><button id="changePasswordBtn">เปลี่ยนรหัสผ่าน</button><button id="systemLockBtn">ล็อกแอป</button></div>
+                  <div id="changePasswordPanel" class="task-panel hidden">
+                    <label>รหัสผ่านปัจจุบัน <input id="changeCurrentPassword" type="password" minlength="6" autocomplete="current-password"></label>
+                    <label>รหัสผ่านใหม่ <input id="changeNewPassword" type="password" minlength="6" autocomplete="new-password"></label>
+                    <label>ยืนยันรหัสผ่าน <input id="changeConfirmPassword" type="password" minlength="6" autocomplete="new-password"></label>
+                    <div class="action-row"><button id="submitChangePasswordBtn" class="primary-action">บันทึกรหัสผ่านใหม่</button><button id="cancelChangePasswordBtn" class="secondary">ยกเลิก</button></div>
+                  </div>
                   <details id="advancedAccessSettings" class="task-panel">
                     <summary>ขั้นสูง</summary>
                     <div>
