@@ -19,13 +19,17 @@ test('app shell exposes five icon-only right-thumb destinations and removes flat
   for (const icon of ['house-simple','trend-up','calendar-dots','wallet','gear-six']) assert.match(html, new RegExp(`data-icon="${icon}"`));
 });
 
-test('locked gate keeps unlock as the only primary task and hides recovery behind a secondary disclosure', () => {
+test('locked gate keeps local PIN as the only primary task and long Vault passphrase inside recovery', () => {
   const html = text('index.html');
   const gate = html.match(/<section id="gate"[\s\S]*?<\/section>/)?.[0] || '';
-  assert.match(gate, /id="passphrase"/);
+  assert.match(gate, /id="devicePin"[^>]*minlength="6"/);
+  assert.doesNotMatch(gate, /id="passphrase"/);
   assert.match(gate, /id="unlockBtn"[^>]*class="primary-action"/);
+  assert.equal((gate.match(/class="primary-action"/g) || []).length, 1);
   assert.match(gate, /<details[^>]*id="recoveryAccess"[^>]*>/);
   assert.match(gate, /<summary>กู้คืนการเข้าถึง<\/summary>/);
+  assert.match(gate, /id="recoveryPassphrase"[^>]*minlength="12"/);
+  assert.match(gate, /id="enrollDeviceBtn"/);
   assert.match(gate, /id="evidenceFile"/);
   assert.match(gate, /id="importEvidenceBtn"/);
   assert.match(gate, /id="restoreFile"/);
