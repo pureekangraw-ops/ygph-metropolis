@@ -149,3 +149,25 @@ test('invalid Recovery Code performs zero durable writes and preserves existing 
   assert.equal(reopened.project().ledgerBalanceSatang, 2500);
   reopened.close();
 });
+
+test('authenticated runtime changes the everyday password without Recovery Code and preserves durable data', async () => {
+  const { openGreenfieldRuntimeWithDevicePin } = await import('../greenfield/runtime.mjs');
+  const { fake, expectedRevision, vaultBefore } = await initializedFixture();
+  const changedPassword = 'changed-password';
+
+  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin:OLD_PASSWORD, indexedDBImpl:fake.indexedDBImpl, lockManager:null });
+  await runtime.readState();
+  assert.deepEqual(await runtime.changeDevicePassword({ nextPassword:changedPassword }), { status:'RESET' });
+  runtime.close();
+
+  await assert.rejects(
+    () => openGreenfieldRuntimeWithDevicePin({ pin:OLD_PASSWORD, indexedDBImpl:fake.indexedDBImpl, lockManager:null }),
+    /DEVICE_PIN_INVALID/,
+  );
+  const reopened = await openGreenfieldRuntimeWithDevicePin({ pin:changedPassword, indexedDBImpl:fake.indexedDBImpl, lockManager:null });
+  const state = await reopened.readState();
+  assert.equal(state.revision, expectedRevision);
+  assert.equal(reopened.project().ledgerBalanceSatang, 2500);
+  reopened.close();
+  assert.deepEqual(fake.raw('current'), vaultBefore);
+});
