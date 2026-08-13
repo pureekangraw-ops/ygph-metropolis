@@ -44,6 +44,7 @@ new MutationObserver(() => {
 
 new MutationObserver(() => {
   if (!$('workspace').classList.contains('hidden')) {
+    $('devicePin').value = '';
     $('recoveryPanel').classList.add('hidden');
     $('recoveryPassphrase').value = '';
     $('recoveryNewPassword').value = '';
