@@ -65,8 +65,15 @@ test('system routes security access tools under settings then advanced', () => {
   assert.match(system, /id="runtimeBadge"/);
 });
 
-test('login errors are translated to user-facing language', () => {
+test('authentication and recovery errors stay user-facing', () => {
   assert.match(entry, /DEVICE_PIN_INVALID[\s\S]*รหัสผ่านไม่ถูกต้อง/);
   assert.match(entry, /เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป[\s\S]*ลืมรหัสผ่าน\?/);
   assert.match(entry, /DEVICE_UNLOCK_INCOMPLETE[\s\S]*ลืมรหัสผ่าน\?/);
+  assert.match(entry, /GREENFIELD_VAULT_DECRYPT_FAILED[\s\S]*รหัสกู้คืนไม่ถูกต้อง/);
+  assert.match(entry, /PASSPHRASE_TOO_SHORT[\s\S]*รหัสกู้คืนไม่ถูกต้อง/);
+  assert.match(entry, /INVALID_GREENFIELD_[\s\S]*ไม่สามารถกู้คืนการเข้าถึงได้/);
+});
+
+test('secrets are cleared after workspace opens', () => {
+  assert.match(entry, /if \(!\$\('workspace'\)\.classList\.contains\('hidden'\)\)[\s\S]*\$\('devicePin'\)\.value = ''[\s\S]*\$\('recoveryPassphrase'\)\.value = ''[\s\S]*\$\('recoveryNewPassword'\)\.value = ''/);
 });
