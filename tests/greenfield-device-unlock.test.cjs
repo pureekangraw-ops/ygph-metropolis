@@ -106,3 +106,34 @@ test('failed enrollment verifies the existing Vault first and writes no device c
   assert.equal(await store.get(DEVICE_UNLOCK_KEY), null);
   assert.equal(await store.get(DEVICE_UNLOCK_CREDENTIAL), null);
 });
+
+test('re-enrollment changes only the everyday password and preserves the Vault', async () => {
+  const { enrollDeviceUnlock, unlockVaultPassphrase } = await import('../greenfield/device-unlock.mjs');
+  const { store } = await initializedStore();
+  await enrollDeviceUnlock({ store, vaultPassphrase:VAULT_PASSPHRASE, pin:'old-password' });
+  const vaultBefore = await store.get('current');
+
+  await enrollDeviceUnlock({ store, vaultPassphrase:VAULT_PASSPHRASE, pin:'new-password' });
+
+  assert.deepEqual(await store.get('current'), vaultBefore);
+  await assert.rejects(() => unlockVaultPassphrase({ store, pin:'old-password' }), /DEVICE_PIN_INVALID/);
+  assert.equal(await unlockVaultPassphrase({ store, pin:'new-password' }), VAULT_PASSPHRASE);
+});
+
+test('device credential replacement uses one atomic multi-key write', async () => {
+  const { enrollDeviceUnlock } = await import('../greenfield/device-unlock.mjs');
+  const { store } = await initializedStore();
+  const atomicWrites = [];
+  const spy = {
+    get:key => store.get(key),
+    put() { throw new Error('SEQUENTIAL_DEVICE_WRITE_FORBIDDEN'); },
+    async putMany(entries) {
+      atomicWrites.push(entries.map(([key]) => key));
+      return store.putMany(entries);
+    },
+  };
+
+  await enrollDeviceUnlock({ store:spy, vaultPassphrase:VAULT_PASSPHRASE, pin:'new-password' });
+  assert.equal(atomicWrites.length, 1);
+  assert.deepEqual(atomicWrites[0].sort(), ['device-unlock:credential:v1','device-unlock:key:v1']);
+});
