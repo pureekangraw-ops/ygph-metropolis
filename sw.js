@@ -1,7 +1,42 @@
 "use strict";
 const RELEASE='5.1.0-functional-rc1';
-const CACHE=`ygph-metropolis-${RELEASE}-r1`;
+const CACHE=`ygph-metropolis-${RELEASE}-r2`;
 const SHELL=['./index.html','./app.mjs','./styles.css','./manifest.webmanifest','./icon-192.png','./icon-512.png','./ui/app.mjs','./ui/ui-model.mjs','./ui/product-model.mjs','./ui/icons.mjs','./greenfield/runtime.mjs','./greenfield/core.mjs','./greenfield/persistence.mjs','./greenfield/browser-store.mjs','./greenfield/cutover.mjs','./greenfield/import-evidence.mjs','./greenfield/projections.mjs','./greenfield/command-runtime.mjs','./greenfield/domain-operations.mjs','./greenfield/ride-domain.mjs','./greenfield/ride-workflows.mjs','./greenfield/workflow-runtime.mjs','./greenfield/mutation-coordinator.mjs','./greenfield/business-workflows.mjs','./greenfield/backup.mjs'];
+
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('ygph-metropolis-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request).then(response=>{if(!response||response.status!==200||response.type==='opaque')return response;const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response;})));});
+
+async function navigationNetworkFirst(request){
+  try{
+    const response=await fetch(request,{cache:'no-store'});
+    if(response&&response.status===200&&response.type!=='opaque'){
+      const copy=response.clone();
+      caches.open(CACHE).then(cache=>cache.put('./index.html',copy));
+    }
+    return response;
+  }catch(error){
+    const cached=await caches.match('./index.html');
+    if(cached)return cached;
+    throw error;
+  }
+}
+
+async function assetCacheFirst(request){
+  const cached=await caches.match(request);
+  if(cached)return cached;
+  const response=await fetch(request);
+  if(response&&response.status===200&&response.type!=='opaque'){
+    const copy=response.clone();
+    caches.open(CACHE).then(cache=>cache.put(request,copy));
+  }
+  return response;
+}
+
+self.addEventListener('fetch',event=>{
+  if(event.request.method!=='GET')return;
+  if(event.request.mode==='navigate'){
+    event.respondWith(navigationNetworkFirst(event.request));
+    return;
+  }
+  event.respondWith(assetCacheFirst(event.request));
+});
