@@ -1,0 +1,25 @@
+name: Greenfield Feature Gate
+
+on:
+  push:
+    branches:
+      - feature/production-app-structure-v2-green
+
+permissions:
+  contents: read
+
+jobs:
+  safety-gate:
+    name: Greenfield feature safety gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature commit
+        uses: actions/checkout@v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run full deploy gate without deploy
+        run: npm run deploy:gate
