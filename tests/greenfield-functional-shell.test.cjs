@@ -19,6 +19,13 @@ test('app shell exposes five icon-only right-thumb destinations and removes flat
   for (const icon of ['house-simple','trend-up','calendar-dots','wallet','gear-six']) assert.match(html, new RegExp(`data-icon="${icon}"`));
 });
 
+test('right-thumb rail puts frequent work lower and System furthest from the sweet spot', () => {
+  const html = text('index.html');
+  const rail = html.match(/<nav id="thumbRail"[\s\S]*?<\/nav>/)?.[0] || '';
+  const order = [...rail.matchAll(/data-area="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(order, ['system','home','finance','calendar','money']);
+});
+
 test('each main area exists once and Make Money uses collapsed child navigation', () => {
   const html = text('index.html');
   for (const area of ['home','money','calendar','finance','system']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1);
