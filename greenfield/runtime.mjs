@@ -134,6 +134,15 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function changeDevicePassword({ nextPassword } = {}) {
+    return coordinator.run(async () => {
+      await enrollDeviceUnlock({ store, vaultPassphrase:passphrase, pin:nextPassword });
+      const readback = await unlockVaultPassphrase({ store, pin:nextPassword });
+      if (readback !== passphrase) throw new Error('DEVICE_UNLOCK_READBACK_MISMATCH');
+      return { status:'RESET' };
+    });
+  }
+
   function project() {
     if (!lastState) throw new Error('GREENFIELD_STATE_NOT_LOADED');
     const rideRecords = Object.values(lastState.domains.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
@@ -179,6 +188,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     restoreBackup,
     ensureDailyGoal,
     overrideDailyGoal,
+    changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executePlan(buildReceiveCustomerPaymentWorkflow(input)),
     obligation: input => executePlan(buildObligationWorkflow(input)),
