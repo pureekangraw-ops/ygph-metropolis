@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const ui = fs.readFileSync(path.join(root, 'ui', 'app.mjs'), 'utf8');
+const entry = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 
 function between(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -41,10 +41,11 @@ test('forgot password opens a simple recovery surface and keeps technician tools
   assert.match(recoverySurface, /id="evidenceFile"/);
   assert.match(recoverySurface, /id="restoreFile"/);
 
-  assert.match(ui, /\$\('forgotPasswordBtn'\)\.addEventListener\('click'/);
-  assert.match(ui, /\$\('recoveryBackBtn'\)\.addEventListener\('click'/);
-  assert.match(ui, /\$\('resetPasswordBtn'\)\.addEventListener\('click'/);
-  assert.match(ui, /enrollGreenfieldDeviceUnlock\(\{ vaultPassphrase:recoveryPassphrase\(\), pin:recoveryNewPassword\(\) \}\)/);
+  assert.match(entry, /\$\('forgotPasswordBtn'\)\.addEventListener\('click'/);
+  assert.match(entry, /\$\('recoveryBackBtn'\)\.addEventListener\('click'/);
+  assert.match(entry, /\$\('resetPasswordBtn'\)\.addEventListener\('click'/);
+  assert.match(entry, /\$\('devicePin'\)\.value\s*=\s*nextPassword/);
+  assert.match(entry, /\$\('enrollDeviceBtn'\)\.click\(\)/);
 });
 
 test('system routes security access tools under settings then advanced', () => {
@@ -59,7 +60,8 @@ test('system routes security access tools under settings then advanced', () => {
   assert.match(system, /id="advancedDiagnostics"/);
 });
 
-test('login errors stay user-facing instead of leaking device unlock internals', () => {
-  assert.match(ui, /DEVICE_UNLOCK_NOT_ENROLLED[\s\S]*ลืมรหัสผ่าน\?/);
-  assert.equal(ui.includes('เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป — เปิด “กู้คืนการเข้าถึง”'), false);
+test('login errors are translated to user-facing language', () => {
+  assert.match(entry, /DEVICE_PIN_INVALID[\s\S]*รหัสผ่านไม่ถูกต้อง/);
+  assert.match(entry, /เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป[\s\S]*ลืมรหัสผ่าน\?/);
+  assert.match(entry, /DEVICE_UNLOCK_INCOMPLETE[\s\S]*ลืมรหัสผ่าน\?/);
 });
