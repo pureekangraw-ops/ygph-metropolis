@@ -96,3 +96,17 @@ test('home attention ranks hard problems first, limits to three, and deep-links 
   assert.ok(attention.every(item => item.target && item.target.area));
   assert.ok(attention.every(item => !('edit' in item)));
 });
+
+test('home attention surfaces payable-now threshold without auto-paying', async () => {
+  const { projectAttention } = await import('../ui/product-model.mjs');
+  const finance = {
+    spendableBalanceSatang:70000,
+    shortfallSatang:0,
+    nextDue:{recordId:'Q-PAY',dueDate:'2026-08-17',amountSatang:50000,daysRemaining:4,canPayNow:true},
+  };
+  const attention = projectAttention({ calendarRecords:[], finance, goal:{goalSatang:0,generatedSatang:0}, today:'2026-08-13' });
+  assert.equal(attention[0].kind, 'PAYABLE_NOW');
+  assert.equal(attention[0].amountSatang, 50000);
+  assert.deepEqual(attention[0].target, {area:'FINANCE',focus:'near-term-pressure'});
+  assert.equal('autoPay' in attention[0], false);
+});
