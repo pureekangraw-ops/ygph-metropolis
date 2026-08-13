@@ -1,24 +1,43 @@
-import { openGreenfieldRuntime } from './greenfield/runtime.mjs';
+import {
+  openGreenfieldRuntime,
+  verifyGreenfieldRecoveryCode,
+  resetGreenfieldDevicePassword,
+} from './greenfield/runtime.mjs';
 import './ui/app.mjs';
 void openGreenfieldRuntime;
 
 const $ = id => document.getElementById(id);
+let verifiedRecoveryCode = '';
 
 function clearAuthStatus() {
   $('gateStatus').textContent = '';
   $('gateStatus').classList.remove('error');
 }
 
+function clearRecoverySecrets() {
+  verifiedRecoveryCode = '';
+  $('recoveryPassphrase').value = '';
+  $('recoveryNewPassword').value = '';
+  $('recoveryConfirmPassword').value = '';
+}
+
+function resetRecoverySteps() {
+  $('recoveryVerifyStep').classList.remove('hidden');
+  $('recoveryResetStep').classList.add('hidden');
+}
+
 function showLogin() {
   $('recoveryPanel').classList.add('hidden');
   $('gate').classList.remove('hidden');
   $('lockedAdvancedRecovery').open = false;
-  $('recoveryPassphrase').value = '';
-  $('recoveryNewPassword').value = '';
+  clearRecoverySecrets();
+  resetRecoverySteps();
   clearAuthStatus();
 }
 
 function showRecovery({ advanced = false } = {}) {
+  clearRecoverySecrets();
+  resetRecoverySteps();
   $('gate').classList.add('hidden');
   $('recoveryPanel').classList.remove('hidden');
   $('lockedAdvancedRecovery').open = advanced;
@@ -34,11 +53,16 @@ function userFacingAuthMessage(message) {
   if (message.startsWith('INVALID_DEVICE_UNLOCK_')) return 'ไม่สามารถเข้าสู่ระบบได้ กรุณาใช้ “ลืมรหัสผ่าน?”';
   if (message === 'GREENFIELD_VAULT_DECRYPT_FAILED') return 'รหัสกู้คืนไม่ถูกต้อง';
   if (message === 'PASSPHRASE_TOO_SHORT') return 'รหัสกู้คืนไม่ถูกต้อง';
-  if (message.startsWith('INVALID_GREENFIELD_')) return 'ไม่สามารถกู้คืนการเข้าถึงได้ กรุณาเปิด “ตัวเลือกขั้นสูง”';
-  if (message === 'GREENFIELD_NOT_INITIALIZED') return 'ยังไม่พบข้อมูลสำหรับกู้คืนการเข้าถึง';
+  if (message === 'GREENFIELD_NOT_INITIALIZED') return 'ไม่พบข้อมูลเดิมในเครื่องนี้ หากต้องการกู้ข้อมูลให้เปิด “กู้คืนข้อมูลขั้นสูง”';
+  if (message.startsWith('INVALID_GREENFIELD_')) return 'ไม่สามารถกู้คืนการเข้าถึงได้ กรุณาเปิด “กู้คืนข้อมูลขั้นสูง”';
   if (message === 'รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร') return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
   if (message.startsWith('เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป')) return 'ยังไม่ได้ตั้งรหัสผ่านสำหรับเครื่องนี้ กรุณาเลือก “ลืมรหัสผ่าน?”';
   return message;
+}
+
+function showAuthError(error) {
+  gateStatus.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถดำเนินการได้'));
+  gateStatus.classList.add('error');
 }
 
 const gateStatus = $('gateStatus');
@@ -52,23 +76,65 @@ new MutationObserver(() => {
   if (!$('workspace').classList.contains('hidden')) {
     $('devicePin').value = '';
     $('recoveryPanel').classList.add('hidden');
-    $('recoveryPassphrase').value = '';
-    $('recoveryNewPassword').value = '';
+    clearRecoverySecrets();
+    resetRecoverySteps();
   }
 }).observe($('workspace'), { attributes:true, attributeFilter:['class'] });
 
 $('forgotPasswordBtn').addEventListener('click', () => showRecovery());
 $('recoveryBackBtn').addEventListener('click', () => showLogin());
 
-$('resetPasswordBtn').addEventListener('click', () => {
-  const nextPassword = $('recoveryNewPassword').value;
-  if (nextPassword.length < 6) {
-    gateStatus.textContent = 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร';
+$('verifyRecoveryBtn').addEventListener('click', async () => {
+  clearAuthStatus();
+  const recoveryCode = $('recoveryPassphrase').value;
+  const button = $('verifyRecoveryBtn');
+  button.disabled = true;
+  try {
+    await verifyGreenfieldRecoveryCode({ recoveryCode });
+    verifiedRecoveryCode = recoveryCode;
+    $('recoveryPassphrase').value = '';
+    $('recoveryVerifyStep').classList.add('hidden');
+    $('recoveryResetStep').classList.remove('hidden');
+    gateStatus.textContent = 'รหัสกู้คืนถูกต้อง ตั้งรหัสผ่านใหม่ได้';
+    $('recoveryNewPassword').focus();
+  } catch (error) {
+    verifiedRecoveryCode = '';
+    showAuthError(error);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('resetPasswordBtn').addEventListener('click', async () => {
+  clearAuthStatus();
+  if (!verifiedRecoveryCode) {
+    gateStatus.textContent = 'กรุณาตรวจสอบรหัสกู้คืนก่อน';
     gateStatus.classList.add('error');
     return;
   }
-  $('devicePin').value = nextPassword;
-  $('enrollDeviceBtn').click();
+  const nextPassword = $('recoveryNewPassword').value;
+  const confirmPassword = $('recoveryConfirmPassword').value;
+  if (nextPassword.length < 6) {
+    gateStatus.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+    gateStatus.classList.add('error');
+    return;
+  }
+  if (nextPassword !== confirmPassword) {
+    gateStatus.textContent = 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+    gateStatus.classList.add('error');
+    return;
+  }
+  const button = $('resetPasswordBtn');
+  button.disabled = true;
+  try {
+    await resetGreenfieldDevicePassword({ recoveryCode:verifiedRecoveryCode, nextPassword });
+    showLogin();
+    gateStatus.textContent = 'ตั้งรหัสผ่านใหม่แล้ว';
+  } catch (error) {
+    showAuthError(error);
+  } finally {
+    button.disabled = false;
+  }
 });
 
 $('changePasswordBtn').addEventListener('click', () => {
