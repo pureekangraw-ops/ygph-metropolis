@@ -9,7 +9,9 @@ const read=rel=>fs.readFileSync(path.join(root,rel),'utf8');
 test('hard-cut root contains only Greenfield production entrypoints while allowing Greenfield-native Ride UI',()=>{
   const html=read('index.html');
   assert.match(html,/app\.mjs/);
-  assert.match(html,/data-money-view="ride"/);
+  assert.match(html,/data-area-page="ride"/);
+  assert.match(html,/data-destination="ride"/);
+  assert.doesNotMatch(html,/data-money-view="ride"|data-area-page="money"/);
   for(const forbidden of ['flow-era','metropolis-r5','metropolis-v4','metropolis-maintenance','metropolis-remaster','highway-gate','app.js','ridePage','stock-pocket-secure']) assert.equal(html.includes(forbidden),false,forbidden);
   for(const legacy of ['app.js','flow-era.js','flow-era-3.5.js','metropolis-v4.js','metropolis-r5.js','metropolis-maintenance.js','metropolis-remaster.js','metropolis-command-gate.js','highway-gate.js','vault.js','core.js']) assert.equal(fs.existsSync(path.join(root,legacy)),false,legacy);
 });
