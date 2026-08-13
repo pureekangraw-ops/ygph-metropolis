@@ -22,8 +22,8 @@
       <p class="muted">ใส่รหัสของฐานบนเครื่องนี้เพื่อกลับเข้าใช้งาน</p>
       <label>รหัสปลดล็อก <input id="passphrase" type="password" minlength="12" autocomplete="current-password"></label>
       <button id="unlockBtn" class="primary-action">ปลดล็อก</button>
-      <details class="task-panel gate-tools">
-        <summary>เริ่มต้นหรือกู้คืนฐาน</summary>
+      <details id="recoveryAccess" class="gate-tools">
+        <summary>กู้คืนการเข้าถึง</summary>
         <div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">สร้างฐานจาก Evidence</button></div>
         <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">กู้จาก Encrypted Backup</button></div>
       </details>
