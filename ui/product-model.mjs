@@ -51,16 +51,37 @@ export function projectMakeMoney(state, today) {
   let storeSatang = 0;
   let rideSatang = 0;
   for (const record of recordsForDomain(state, 'STORE')) {
-    if (record.type !== 'SALE' || activityDate(record) !== day) continue;
+    if (record.type !== 'SALE' || record.status === 'CANCELLED' || activityDate(record) !== day) continue;
     const amount = Number(record.totalSatang ?? record.amountSatang ?? 0);
     if (Number.isSafeInteger(amount) && amount > 0) storeSatang += amount;
   }
   for (const record of recordsForDomain(state, 'RIDE')) {
-    if (record.type !== 'JOB' || activityDate(record) !== day) continue;
+    if (record.type !== 'JOB' || record.status === 'CANCELLED' || activityDate(record) !== day) continue;
     const amount = Number(record.amountSatang || 0);
     if (Number.isSafeInteger(amount) && amount > 0) rideSatang += amount;
   }
   return { storeSatang, rideSatang, combinedSatang:storeSatang + rideSatang };
+}
+
+export function projectStore(state, today) {
+  const storeRecords = recordsForDomain(state, 'STORE');
+  let stockQuantity = 0;
+  for (const record of storeRecords) {
+    if (record.status === 'CANCELLED') continue;
+    const quantity = Number(record.quantity || 0);
+    if (!Number.isSafeInteger(quantity)) continue;
+    if (record.type === 'PURCHASE') stockQuantity += quantity;
+    if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') stockQuantity -= quantity;
+    if (record.type === 'STOCK_ADJUSTMENT') stockQuantity += quantity;
+  }
+  let receivableSatang = 0;
+  for (const record of recordsForDomain(state, 'CALENDAR')) {
+    if (record.type !== 'RECEIVE_CUSTOMER_PAYMENT' || lifecycleClosed(record.status)) continue;
+    const amount = Number(record.amountSatang || 0);
+    if (Number.isSafeInteger(amount) && amount > 0) receivableSatang += amount;
+  }
+  const money = projectMakeMoney(state, today);
+  return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang };
 }
 
 function median(values) {
