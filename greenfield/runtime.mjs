@@ -4,6 +4,7 @@ import { openGreenfieldVaultStore } from './browser-store.mjs';
 import { initializeGreenfieldFromEvidence } from './cutover.mjs';
 import { createCommandRuntime } from './command-runtime.mjs';
 import { registerGreenfieldDomainCommands } from './domain-operations.mjs';
+import { registerRideDomainCommands, projectRideCredit } from './ride-domain.mjs';
 import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
@@ -20,6 +21,13 @@ import {
   buildExpenseWorkflow,
   buildCalendarStatusWorkflow,
 } from './business-workflows.mjs';
+import {
+  buildRideStartRoundWorkflow,
+  buildRideEndRoundWorkflow,
+  buildRideJobWorkflow,
+  buildRideExpenseWorkflow,
+  buildRideWithdrawCreditWorkflow,
+} from './ride-workflows.mjs';
 
 export function createGreenfieldRuntime({ store, passphrase, lockManager = globalThis.navigator?.locks ?? null, now = () => new Date().toISOString(), closeStore = null } = {}) {
   if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
@@ -27,6 +35,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   const commandRuntime = createCommandRuntime();
   registerGreenfieldDomainCommands(commandRuntime, { now });
+  registerRideDomainCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
   let lastState = null;
 
@@ -61,10 +70,15 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   function project() {
     if (!lastState) throw new Error('GREENFIELD_STATE_NOT_LOADED');
+    const rideRecords = Object.values(lastState.domains.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
     return {
       revision: lastState.revision,
       ledgerBalanceSatang: projectLedgerBalance(lastState),
       calendar: projectCalendarSummary(lastState),
+      ride: {
+        pendingCreditSatang: projectRideCredit(lastState.domains.RIDE),
+        activeRound: rideRecords.find(record => record.type === 'ROUND' && record.status === 'ACTIVE') ?? null,
+      },
     };
   }
 
@@ -107,6 +121,11 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     otherIncome: input => executePlan(buildOtherIncomeWorkflow(input)),
     expense: input => executePlan(buildExpenseWorkflow(input)),
     calendarStatus: input => executePlan(buildCalendarStatusWorkflow(input)),
+    rideStartRound: input => executePlan(buildRideStartRoundWorkflow(input)),
+    rideEndRound: input => executePlan(buildRideEndRoundWorkflow(input)),
+    rideJob: input => executePlan(buildRideJobWorkflow(input)),
+    rideExpense: input => executePlan(buildRideExpenseWorkflow(input)),
+    rideWithdrawCredit: input => executePlan(buildRideWithdrawCreditWorkflow(input)),
     close() { if (typeof closeStore === 'function') closeStore(); else store.close?.(); },
   });
 }
