@@ -19,11 +19,14 @@
   <main class="layout">
     <section id="gate" class="panel gate">
       <h1>เปิด METROPOLIS</h1>
-      <p class="muted">ใส่รหัสของฐานบนเครื่องนี้เพื่อกลับเข้าใช้งาน</p>
-      <label>รหัสปลดล็อก <input id="passphrase" type="password" minlength="12" autocomplete="current-password"></label>
+      <p class="muted">ใส่รหัสเข้าแอปของเครื่องนี้</p>
+      <label>รหัสเข้าแอป <input id="devicePin" type="password" minlength="6" autocomplete="current-password"></label>
       <button id="unlockBtn" class="primary-action">ปลดล็อก</button>
       <details id="recoveryAccess" class="gate-tools">
         <summary>กู้คืนการเข้าถึง</summary>
+        <p class="muted">ใช้รหัสกู้คืน Vault เดิมเพื่อตั้งรหัสเข้าแอปบนเครื่องนี้ หรือใช้ Evidence / Backup เมื่อจำเป็น</p>
+        <label>รหัสกู้คืน Vault <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="current-password"></label>
+        <button id="enrollDeviceBtn" class="secondary">ตั้งรหัสเข้าแอปบนเครื่องนี้</button>
         <div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">สร้างฐานจาก Evidence</button></div>
         <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">กู้จาก Encrypted Backup</button></div>
       </details>

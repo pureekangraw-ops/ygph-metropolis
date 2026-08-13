@@ -20,6 +20,7 @@
 !/greenfield/command-runtime.mjs
 !/greenfield/core.mjs
 !/greenfield/cutover.mjs
+!/greenfield/device-unlock.mjs
 !/greenfield/domain-operations.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/mutation-coordinator.mjs

@@ -1,6 +1,7 @@
 import { GREENFIELD_SCHEMA } from './core.mjs';
 import { DB_NAME, VAULT_FORMAT, readEncryptedState, commitEncryptedState } from './persistence.mjs';
 import { openGreenfieldVaultStore } from './browser-store.mjs';
+import { inspectDeviceUnlock, enrollDeviceUnlock, unlockVaultPassphrase } from './device-unlock.mjs';
 import { initializeGreenfieldFromEvidence } from './cutover.mjs';
 import { createCommandRuntime } from './command-runtime.mjs';
 import { registerGreenfieldDomainCommands } from './domain-operations.mjs';
@@ -200,4 +201,33 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 export async function openGreenfieldRuntime({ passphrase, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
   return createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+}
+
+export async function inspectGreenfieldDeviceUnlock({ indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    return await inspectDeviceUnlock({ store });
+  } finally {
+    store.close();
+  }
+}
+
+export async function enrollGreenfieldDeviceUnlock({ vaultPassphrase, pin, indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    return await enrollDeviceUnlock({ store, vaultPassphrase, pin });
+  } finally {
+    store.close();
+  }
+}
+
+export async function openGreenfieldRuntimeWithDevicePin({ pin, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try {
+    const passphrase = await unlockVaultPassphrase({ store, pin });
+    return createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+  } catch (error) {
+    store.close();
+    throw error;
+  }
 }
