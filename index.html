@@ -24,13 +24,19 @@
 
     <section id="recoveryPanel" class="panel gate hidden">
       <button id="recoveryBackBtn" class="secondary">กลับ</button>
-      <h1>ตั้งรหัสผ่านใหม่</h1>
-      <label>รหัสกู้คืน <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="current-password"></label>
-      <label>รหัสผ่านใหม่ <input id="recoveryNewPassword" type="password" minlength="6" autocomplete="new-password"></label>
-      <button id="resetPasswordBtn" class="primary-action">ตั้งรหัสผ่านใหม่</button>
+      <h1>กู้คืนการเข้าถึง</h1>
+      <div id="recoveryVerifyStep">
+        <label>รหัสกู้คืน <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="off"></label>
+        <button id="verifyRecoveryBtn" class="primary-action">ตรวจสอบรหัสกู้คืน</button>
+      </div>
+      <div id="recoveryResetStep" class="hidden">
+        <label>รหัสผ่านใหม่ <input id="recoveryNewPassword" type="password" minlength="6" autocomplete="new-password"></label>
+        <label>ยืนยันรหัสผ่าน <input id="recoveryConfirmPassword" type="password" minlength="6" autocomplete="new-password"></label>
+        <button id="resetPasswordBtn" class="primary-action">ตั้งรหัสผ่านใหม่</button>
+      </div>
       <details id="lockedAdvancedRecovery" class="gate-tools">
-        <summary>ตัวเลือกขั้นสูง</summary>
-        <p class="muted">เครื่องมือสำหรับนำเข้าหรือกู้คืนข้อมูลเมื่อจำเป็น</p>
+        <summary>กู้คืนข้อมูลขั้นสูง</summary>
+        <p class="muted">ใช้เฉพาะเมื่อต้องกู้ข้อมูลจากไฟล์</p>
         <button id="enrollDeviceBtn" class="hidden" type="button">ตั้งรหัสบนเครื่อง</button>
         <div class="file-row"><input id="evidenceFile" type="file" accept="application/json,.json"><button id="importEvidenceBtn" class="secondary">นำเข้า Evidence</button></div>
         <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="restoreBtn" class="secondary">Restore Backup</button></div>
