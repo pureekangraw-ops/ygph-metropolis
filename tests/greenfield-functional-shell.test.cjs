@@ -15,7 +15,7 @@ test('app shell exposes five icon-only right-thumb destinations and removes flat
   assert.doesNotMatch(html, /data-tab="store"/);
   assert.doesNotMatch(html, /data-tab="ledger"/);
   assert.doesNotMatch(html, /data-tab="recovery"/);
-  for (const label of ['หน้าหลัก','สร้างเงิน','ปฏิทิน','การเงิน','ระบบ']) assert.match(html, new RegExp(`aria-label="${label}"`));
+  for (const label of ['หน้าหลัก','สร้างเงิน','ปฏิทิน','การเงิน','ตั้งค่า']) assert.match(html, new RegExp(`aria-label="${label}"`));
   for (const icon of ['house-simple','trend-up','calendar-dots','wallet','gear-six']) assert.match(html, new RegExp(`data-icon="${icon}"`));
 });
 
