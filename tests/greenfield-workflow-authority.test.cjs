@@ -24,10 +24,15 @@ function sale(id) {
   return entry({ recordId:id, source:'STORE', type:'SALE', title:id, amountSatang:5000, totalSatang:5000, receivedSatang:0, outstandingSatang:5000, quantity:1, status:'OPEN' });
 }
 
+function stock(quantity = 2) {
+  return entry({ recordId:'P-BASE', source:'STORE', type:'PURCHASE', title:'stock baseline', amountSatang:10000, quantity, status:'ACTIVE' });
+}
+
 test('workflow authority validates a Calendar queue created inside the same plan before any mutation', async () => {
   const { executeAtomicWorkflow } = await import('../greenfield/workflow-runtime.mjs');
   const { readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { store, runtime } = await setup(state => {
+    state.domains.STORE.records.P_BASE = stock(2);
     state.domains.STORE.records.SALE_A = sale('SALE_A');
     state.domains.STORE.records.SALE_B = sale('SALE_B');
   });
@@ -45,6 +50,7 @@ test('workflow authority fails closed on multiple payment relations until an exp
   const { executeAtomicWorkflow } = await import('../greenfield/workflow-runtime.mjs');
   const { readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { store, runtime } = await setup(state => {
+    state.domains.STORE.records.P_BASE = stock(2);
     state.domains.STORE.records.SALE_A = sale('SALE_A');
     state.domains.STORE.records.SALE_B = sale('SALE_B');
     state.domains.CALENDAR.records.Q_A = entry({ recordId:'Q_A', source:'CALENDAR', type:'RECEIVE_CUSTOMER_PAYMENT', title:'รับ A', detail:'STORE/SALE_A', amountSatang:5000, paidSatang:0, status:'OPEN' });
