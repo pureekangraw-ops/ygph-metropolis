@@ -1,6 +1,6 @@
 import { openGreenfieldRuntime } from '../greenfield/runtime.mjs';
 import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
-import { recordsForDomain, dateKey, deriveTimeState, projectMakeMoney, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
+import { recordsForDomain, dateKey, deriveTimeState, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { hydrateIcons } from './icons.mjs';
 
 const $ = id => document.getElementById(id);
@@ -105,6 +105,17 @@ async function run(method, input, message = 'บันทึกและอ่�
   }
 }
 
+function bindForm(id, handler) {
+  $(id).addEventListener('submit', async event => {
+    event.preventDefault();
+    try {
+      await handler(new FormData(event.currentTarget), event.currentTarget);
+    } catch (error) {
+      status(error.message, true);
+    }
+  });
+}
+
 function activateArea(area) {
   activeArea = area;
   document.querySelectorAll('.rail-btn[data-area]').forEach(button => {
@@ -200,18 +211,6 @@ function renderHome(context) {
   }
 }
 
-function calculateStock(storeRecords) {
-  let stock = 0;
-  for (const record of storeRecords) {
-    const quantity = Number(record.quantity || 0);
-    if (!Number.isFinite(quantity)) continue;
-    if (record.type === 'PURCHASE') stock += quantity;
-    if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') stock -= quantity;
-    if (record.type === 'STOCK_ADJUSTMENT') stock += quantity;
-  }
-  return stock;
-}
-
 function renderMoney(context) {
   $('moneyGenerated').textContent = numberText(context.money.combinedSatang);
   $('moneyGoal').textContent = numberText(context.goal.goalSatang);
@@ -223,18 +222,16 @@ function renderMoney(context) {
   $('moneyRide').textContent = bahtText(context.money.rideSatang);
   $('goalForm').elements.goal.value = formatSatang(context.goal.goalSatang);
 
-  const sales = context.storeRecords.filter(record => record.type === 'SALE');
-  $('storeToday').textContent = bahtText(context.money.storeSatang);
-  $('storeStock').textContent = `${calculateStock(context.storeRecords)} ชิ้น`;
-  const receivable = sales.reduce((sum, record) => sum + Math.max(0, Number(record.outstandingSatang || 0)), 0);
-  $('storeReceivable').textContent = bahtText(receivable);
+  $('storeToday').textContent = bahtText(context.store.todaySalesSatang);
+  $('storeStock').textContent = `${context.store.stockQuantity} ชิ้น`;
+  $('storeReceivable').textContent = bahtText(context.store.receivableSatang);
   const storeList = $('storeList');
   storeList.textContent = '';
   const sortedStore = [...context.storeRecords].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))).slice(0,30);
   for (const record of sortedStore) storeList.append(simpleItem(record));
   if (!sortedStore.length) storeList.textContent = 'ยังไม่มีรายการร้านค้า';
 
-  const rideProjection = runtime.project().ride;
+  const rideProjection = context.projection.ride;
   $('rideGenerated').textContent = bahtText(context.money.rideSatang);
   $('ridePendingCredit').textContent = bahtText(rideProjection.pendingCreditSatang);
   $('rideRoundStatus').textContent = rideProjection.activeRound ? 'กำลังวิ่ง' : 'ยังไม่เริ่ม';
@@ -271,7 +268,7 @@ function renderFinance(context) {
 
   const obligationList = $('obligationList');
   obligationList.textContent = '';
-  const obligations = context.ledgerRecords.filter(record => record.type === 'OBLIGATION').sort((a,b) => Number(b.remainingSatang || 0) - Number(a.remainingSatang || 0));
+  const obligations = context.ledgerRecords.filter(record => record.type === 'OBLIGATION').sort((a,b) => Number(b.remainingSatang ?? b.amountSatang ?? 0) - Number(a.remainingSatang ?? a.amountSatang ?? 0));
   for (const record of obligations) {
     const display = { ...record, amountSatang:Number(record.remainingSatang ?? record.amountSatang ?? 0), title:record.title || 'ภาระ' };
     obligationList.append(simpleItem(display));
@@ -392,9 +389,10 @@ function buildContext() {
   const calendarRecords = recordsForDomain(state, 'CALENDAR');
   const rideRecords = recordsForDomain(state, 'RIDE');
   const money = projectMakeMoney(state, today);
+  const store = projectStore(state, today);
   const finance = projectFinance(state, projection.ledgerBalanceSatang, today);
   const goal = state.meta?.dailyGoals?.[today] || { date:today, goalSatang:0, source:'AUTO' };
-  return { today, projection, storeRecords, ledgerRecords, calendarRecords, rideRecords, money, finance, goal };
+  return { today, projection, storeRecords, ledgerRecords, calendarRecords, rideRecords, money, store, finance, goal };
 }
 
 function render() {
@@ -448,37 +446,27 @@ document.querySelectorAll('.back-to-money').forEach(button => button.addEventLis
 $('openStoreSource').addEventListener('click', () => { activateArea('money'); activateMoneyView('store'); });
 $('openRideSource').addEventListener('click', () => { activateArea('money'); activateMoneyView('ride'); });
 
-$('goalForm').addEventListener('submit', async event => {
-  event.preventDefault();
-  try {
-    const data = new FormData(event.currentTarget);
-    const result = await runtime.overrideDailyGoal({ date:todayKey(), goalSatang:parseBahtToSatang(data.get('goal')) });
-    state = result.state;
-    render();
-    status('ปรับเป้าวันนี้แล้ว');
-  } catch (error) { status(error.message, true); }
+bindForm('goalForm', async data => {
+  const result = await runtime.overrideDailyGoal({ date:todayKey(), goalSatang:parseBahtToSatang(data.get('goal')) });
+  state = result.state;
+  render();
+  status('ปรับเป้าวันนี้แล้ว');
 });
 
-$('saleForm').addEventListener('submit', event => {
-  event.preventDefault();
-  try {
-    const data = new FormData(event.currentTarget);
-    const amount = parseBahtToSatang(data.get('amount'));
-    const received = parseBahtToSatang(data.get('received') || '0');
-    const dueDate = data.get('dueDate') || undefined;
-    if (received < amount && !dueDate) throw new Error('ยอดยังรับไม่ครบ — ใส่วันครบกำหนดเพื่อสร้างคิวรับเงิน');
-    run('sale', { workflowId:makeId('WF-SALE'), saleId:makeId('SALE'), ledgerTransactionId:received>0?makeId('TX'):undefined, calendarQueueId:received<amount?makeId('Q'):undefined, title:data.get('title'), amountSatang:amount, quantity:Number(data.get('quantity')), receivedSatang:received, dueDate });
-  } catch (error) { status(error.message, true); }
+bindForm('saleForm', data => {
+  const amount = parseBahtToSatang(data.get('amount'));
+  const received = parseBahtToSatang(data.get('received') || '0');
+  const dueDate = data.get('dueDate') || undefined;
+  if (received < amount && !dueDate) throw new Error('ยอดยังรับไม่ครบ — ใส่วันครบกำหนดเพื่อสร้างคิวรับเงิน');
+  return run('sale', { workflowId:makeId('WF-SALE'), saleId:makeId('SALE'), ledgerTransactionId:received>0?makeId('TX'):undefined, calendarQueueId:received<amount?makeId('Q'):undefined, title:data.get('title'), amountSatang:amount, quantity:Number(data.get('quantity')), receivedSatang:received, dueDate });
 });
 
-$('purchaseForm').addEventListener('submit', event => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
+bindForm('purchaseForm', data => {
   const due = data.get('returnDueDate') || null;
-  run('purchase', { workflowId:makeId('WF-BUY'), purchaseId:makeId('BUY'), ledgerTransactionId:makeId('TX'), returnQueueId:due?makeId('Q'):null, title:data.get('title'), amountSatang:parseBahtToSatang(data.get('amount')), quantity:Number(data.get('quantity')), returnDueDate:due });
+  return run('purchase', { workflowId:makeId('WF-BUY'), purchaseId:makeId('BUY'), ledgerTransactionId:makeId('TX'), returnQueueId:due?makeId('Q'):null, title:data.get('title'), amountSatang:parseBahtToSatang(data.get('amount')), quantity:Number(data.get('quantity')), returnDueDate:due });
 });
-$('withdrawForm').addEventListener('submit', event => { event.preventDefault(); const data=new FormData(event.currentTarget); run('stockWithdrawal',{workflowId:makeId('WF-WD'),recordId:makeId('WD'),title:data.get('title'),quantity:Number(data.get('quantity'))}); });
-$('adjustForm').addEventListener('submit', event => { event.preventDefault(); const data=new FormData(event.currentTarget); run('stockAdjustment',{workflowId:makeId('WF-ADJ'),recordId:makeId('ADJ'),title:data.get('title'),deltaQuantity:Number(data.get('delta')),reason:data.get('reason')}); });
+bindForm('withdrawForm', data => run('stockWithdrawal',{workflowId:makeId('WF-WD'),recordId:makeId('WD'),title:data.get('title'),quantity:Number(data.get('quantity'))}));
+bindForm('adjustForm', data => run('stockAdjustment',{workflowId:makeId('WF-ADJ'),recordId:makeId('ADJ'),title:data.get('title'),deltaQuantity:Number(data.get('delta')),reason:data.get('reason')}));
 
 function activeRideRound() { return runtime.project().ride.activeRound; }
 $('rideStartBtn').addEventListener('click', () => run('rideStartRound', { workflowId:makeId('WF-RIDE-START'), roundId:makeId('ROUND') }, 'เริ่มรอบวิ่งแล้ว'));
@@ -487,36 +475,24 @@ $('rideEndBtn').addEventListener('click', () => {
   if (!round) return status('ยังไม่มีรอบที่กำลังวิ่ง', true);
   run('rideEndRound', { workflowId:makeId('WF-RIDE-END'), roundId:round.recordId }, 'จบรอบวิ่งแล้ว');
 });
-$('rideJobForm').addEventListener('submit', event => {
-  event.preventDefault();
+bindForm('rideJobForm', data => {
   const round = activeRideRound();
-  if (!round) return status('เริ่มรอบก่อนบันทึกงาน', true);
-  const data = new FormData(event.currentTarget);
+  if (!round) throw new Error('เริ่มรอบก่อนบันทึกงาน');
   const paymentMode = data.get('paymentMode');
-  run('rideJob', { workflowId:makeId('WF-RIDE-JOB'), roundId:round.recordId, jobId:makeId('RIDE-JOB'), ledgerTransactionId:paymentMode==='CASH'?makeId('TX'):undefined, amountSatang:parseBahtToSatang(data.get('amount')), paymentMode, note:data.get('note') || '' }, 'บันทึกงานวิ่งแล้ว');
+  return run('rideJob', { workflowId:makeId('WF-RIDE-JOB'), roundId:round.recordId, jobId:makeId('RIDE-JOB'), ledgerTransactionId:paymentMode==='CASH'?makeId('TX'):undefined, amountSatang:parseBahtToSatang(data.get('amount')), paymentMode, note:data.get('note') || '' }, 'บันทึกงานวิ่งแล้ว');
 });
-$('rideExpenseForm').addEventListener('submit', event => {
-  event.preventDefault();
+bindForm('rideExpenseForm', data => {
   const round = activeRideRound();
-  if (!round) return status('เริ่มรอบก่อนบันทึกค่าใช้จ่าย', true);
-  const data = new FormData(event.currentTarget);
-  run('rideExpense', { workflowId:makeId('WF-RIDE-EXP'), roundId:round.recordId, expenseId:makeId('RIDE-EXP'), ledgerTransactionId:makeId('TX'), title:data.get('title'), amountSatang:parseBahtToSatang(data.get('amount')) }, 'บันทึกค่าใช้จ่ายรอบแล้ว');
+  if (!round) throw new Error('เริ่มรอบก่อนบันทึกค่าใช้จ่าย');
+  return run('rideExpense', { workflowId:makeId('WF-RIDE-EXP'), roundId:round.recordId, expenseId:makeId('RIDE-EXP'), ledgerTransactionId:makeId('TX'), title:data.get('title'), amountSatang:parseBahtToSatang(data.get('amount')) }, 'บันทึกค่าใช้จ่ายรอบแล้ว');
 });
-$('rideWithdrawForm').addEventListener('submit', event => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  run('rideWithdrawCredit', { workflowId:makeId('WF-RIDE-WD'), withdrawalId:makeId('RIDE-WD'), ledgerTransactionId:makeId('TX'), amountSatang:parseBahtToSatang(data.get('amount')) }, 'บันทึกการเบิกเครดิตแล้ว');
-});
+bindForm('rideWithdrawForm', data => run('rideWithdrawCredit', { workflowId:makeId('WF-RIDE-WD'), withdrawalId:makeId('RIDE-WD'), ledgerTransactionId:makeId('TX'), amountSatang:parseBahtToSatang(data.get('amount')) }, 'บันทึกการเบิกเครดิตแล้ว'));
 
-$('incomeForm').addEventListener('submit', event => { event.preventDefault(); const data=new FormData(event.currentTarget); run('otherIncome',{workflowId:makeId('WF-IN'),ledgerTransactionId:makeId('TX'),title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount'))}); });
-$('expenseForm').addEventListener('submit', event => { event.preventDefault(); const data=new FormData(event.currentTarget); run('expense',{workflowId:makeId('WF-OUT'),ledgerTransactionId:makeId('TX'),title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount'))}); });
-$('obligationForm').addEventListener('submit', event => {
-  event.preventDefault();
-  const data = new FormData(event.currentTarget);
-  try {
-    const installments = parseInstallments(data.get('installments')).map(item => ({ ...item, queueId:makeId('Q') }));
-    run('obligation', { workflowId:makeId('WF-OBL'), obligationId:makeId('OBL'), title:data.get('title'), totalSatang:parseBahtToSatang(data.get('total')), installments });
-  } catch (error) { status(error.message, true); }
+bindForm('incomeForm', data => run('otherIncome',{workflowId:makeId('WF-IN'),ledgerTransactionId:makeId('TX'),title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount'))}));
+bindForm('expenseForm', data => run('expense',{workflowId:makeId('WF-OUT'),ledgerTransactionId:makeId('TX'),title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount'))}));
+bindForm('obligationForm', data => {
+  const installments = parseInstallments(data.get('installments')).map(item => ({ ...item, queueId:makeId('Q') }));
+  return run('obligation', { workflowId:makeId('WF-OBL'), obligationId:makeId('OBL'), title:data.get('title'), totalSatang:parseBahtToSatang(data.get('total')), installments });
 });
 
 $('prevMonth').addEventListener('click', () => { const date=new Date(Date.UTC(monthCursor.year,monthCursor.monthIndex-1,1)); monthCursor={year:date.getUTCFullYear(),monthIndex:date.getUTCMonth()}; selectedCalendarDate=`${monthCursor.year}-${String(monthCursor.monthIndex+1).padStart(2,'0')}-01`; renderCalendar(); });
