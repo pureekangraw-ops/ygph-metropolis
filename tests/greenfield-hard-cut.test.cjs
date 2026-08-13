@@ -35,15 +35,18 @@ test('release manifest declares functional Greenfield schema 2 while cutover Evi
 test('root UI imports only Greenfield runtime facade and production service worker is legacy-free',()=>{
   const app=read('app.mjs');
   assert.match(app,/\.\/greenfield\/runtime\.mjs/);
-  for(const forbidden of ['persistence.mjs','command-runtime.mjs','business-workflows.mjs','domain-operations.mjs','flow-era','stock-pocket-secure']) assert.equal(app.includes(forbidden),false,forbidden);
+  for(const forbidden of ['persistence.mjs','device-unlock.mjs','command-runtime.mjs','business-workflows.mjs','domain-operations.mjs','flow-era','stock-pocket-secure']) assert.equal(app.includes(forbidden),false,forbidden);
+  const runtime=read('greenfield/runtime.mjs');
+  assert.match(runtime,/\.\/device-unlock\.mjs/);
   const sw=read('sw.js');
   assert.match(sw,/5\.1\.0-functional-rc1/);
   assert.match(sw,/greenfield\/ride-domain\.mjs/);
   assert.match(sw,/greenfield\/ride-workflows\.mjs/);
+  assert.match(sw,/greenfield\/device-unlock\.mjs/);
   for(const forbidden of ['flow-era','metropolis-r5','metropolis-v4','maintenance','remaster','stock-pocket-secure']) assert.equal(sw.includes(forbidden),false,forbidden);
 });
 
-test('publication allowlist exactly matches release production files',()=>{
+test('publication allowlist exactly matches release production files including device unlock',()=>{
   const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
   const ignore=read('.assetsignore').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const allowed=ignore.filter(line=>line.startsWith('!/')).map(line=>line.slice(2)).filter(line=>!line.endsWith('/**')&&!line.endsWith('/'));
@@ -51,12 +54,14 @@ test('publication allowlist exactly matches release production files',()=>{
   assert.deepEqual(allowed.sort(),expected);
   assert.ok(ignore.includes('!/greenfield/**'));
   assert.ok(ignore.includes('!/ui/**'));
+  assert.ok(ignore.includes('!/greenfield/device-unlock.mjs'));
+  assert.ok(manifest.productionFiles.some(item=>item.path==='greenfield/device-unlock.mjs'));
 });
 
 test('repository gate runs only Greenfield tests and checks every new functional production module syntax',()=>{
   const pkg=JSON.parse(read('package.json'));
   assert.equal(pkg.version,'5.1.0-functional-rc1');
   assert.match(pkg.scripts.test,/greenfield-\*\.test\.cjs/);
-  for(const required of ['ui/product-model.mjs','ui/icons.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs']) assert.equal(pkg.scripts['check:syntax'].includes(required),true,required);
+  for(const required of ['ui/product-model.mjs','ui/icons.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs']) assert.equal(pkg.scripts['check:syntax'].includes(required),true,required);
   for(const legacy of ['flow-era','metropolis-r5','metropolis-v4','metropolis-maintenance','metropolis-remaster','highway-gate','app.js']) assert.equal(pkg.scripts['check:syntax'].includes(legacy),false,legacy);
 });
