@@ -56,3 +56,13 @@ test('every static UI id referenced by app code exists in index exactly once', (
     assert.equal(matches.length, 1, `UI id ${id} must exist exactly once`);
   }
 });
+
+test('Store screen uses the shared Store projection instead of duplicating stock and receivable logic', () => {
+  const app = text('ui/app.mjs');
+  assert.match(app, /projectStore/);
+  assert.match(app, /const store = projectStore\(state, today\)/);
+  assert.match(app, /context\.store\.stockQuantity/);
+  assert.match(app, /context\.store\.receivableSatang/);
+  assert.doesNotMatch(app, /function calculateStock\(/);
+  assert.doesNotMatch(app, /outstandingSatang \|\| 0/);
+});
