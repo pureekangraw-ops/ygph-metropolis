@@ -1,0 +1,47 @@
+"use strict";
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+
+function text(file) { return fs.readFileSync(path.join(root, file), 'utf8'); }
+
+test('app shell exposes five icon-only right-thumb destinations and removes flat engineering tabs', () => {
+  const html = text('index.html');
+  assert.match(html, /id="thumbRail"/);
+  for (const area of ['home','money','calendar','finance','system']) assert.match(html, new RegExp(`data-area="${area}"`));
+  assert.equal((html.match(/class="rail-btn/g) || []).length, 5);
+  assert.doesNotMatch(html, /data-tab="store"/);
+  assert.doesNotMatch(html, /data-tab="ledger"/);
+  assert.doesNotMatch(html, /data-tab="recovery"/);
+  for (const label of ['หน้าหลัก','สร้างเงิน','ปฏิทิน','การเงิน','ระบบ']) assert.match(html, new RegExp(`aria-label="${label}"`));
+  for (const icon of ['house-simple','trend-up','calendar-dots','wallet','gear-six']) assert.match(html, new RegExp(`data-icon="${icon}"`));
+});
+
+test('each main area exists once and Make Money uses collapsed child navigation', () => {
+  const html = text('index.html');
+  for (const area of ['home','money','calendar','finance','system']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1);
+  for (const view of ['dashboard','store','ride']) assert.match(html, new RegExp(`data-money-view="${view}"`));
+  assert.match(html, /id="moneyChildren"/);
+  assert.match(html, /id="moneyChildToggle"/);
+});
+
+test('Calendar has a month grid and System owns collapsed raw diagnostics', () => {
+  const html = text('index.html');
+  assert.match(html, /id="monthGrid"/);
+  assert.match(html, /id="prevMonth"/);
+  assert.match(html, /id="todayMonth"/);
+  assert.match(html, /id="nextMonth"/);
+  const home = html.match(/<section[^>]*data-area-page="home"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.doesNotMatch(home, /id="diagnostics"/);
+  assert.match(html, /<details[^>]*id="advancedDiagnostics"/);
+  assert.match(html, /id="diagnostics"/);
+});
+
+test('compact navigation is fixed on the right and content reserves rail space', () => {
+  const css = text('styles.css');
+  assert.match(css, /\.thumb-rail\s*\{[^}]*position\s*:\s*fixed[^}]*right\s*:/s);
+  assert.match(css, /\.rail-btn\s*\{[^}]*min-width\s*:\s*48px[^}]*min-height\s*:\s*48px/s);
+  assert.match(css, /@media\s*\(max-width:\s*700px\)[\s\S]*padding-right/s);
+});
