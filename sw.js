@@ -1,6 +1,6 @@
 "use strict";
 const RELEASE='5.1.0-functional-rc1';
-const ASSET_REVISION='PENDING';
+const ASSET_REVISION='sha256-2846b1788380abce';
 const CACHE=`ygph-metropolis-${RELEASE}-${ASSET_REVISION}`;
 const SHELL=['./index.html','./app.mjs','./styles.css','./manifest.webmanifest','./icon-192.png','./icon-512.png','./ui/app.mjs','./ui/ui-model.mjs','./ui/product-model.mjs','./ui/icons.mjs','./greenfield/runtime.mjs','./greenfield/device-unlock.mjs','./greenfield/core.mjs','./greenfield/persistence.mjs','./greenfield/browser-store.mjs','./greenfield/cutover.mjs','./greenfield/evidence-integrity.mjs','./greenfield/import-evidence.mjs','./greenfield/projections.mjs','./greenfield/command-runtime.mjs','./greenfield/domain-operations.mjs','./greenfield/ride-domain.mjs','./greenfield/ride-workflows.mjs','./greenfield/workflow-runtime.mjs','./greenfield/workflow-invariants.mjs','./greenfield/mutation-coordinator.mjs','./greenfield/business-workflows.mjs','./greenfield/backup.mjs'];
 
