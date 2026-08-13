@@ -72,6 +72,25 @@ test('system routes security access tools under settings then advanced', () => {
   assert.match(system, /id="runtimeBadge"/);
 });
 
+test('authenticated password change stays inside settings and never asks for Recovery Code', () => {
+  const system = between(html, '<section class="area-page" data-area-page="system">', '</section>\n      </div>');
+  const changePanel = between(system, '<div id="changePasswordPanel"', '</div>\n                  <details id="advancedAccessSettings"');
+
+  assert.match(changePanel, /class="[^"]*hidden/);
+  assert.match(changePanel, /<label>รหัสผ่านปัจจุบัน\s*<input id="changeCurrentPassword"/);
+  assert.match(changePanel, /<label>รหัสผ่านใหม่\s*<input id="changeNewPassword"/);
+  assert.match(changePanel, /<label>ยืนยันรหัสผ่าน\s*<input id="changeConfirmPassword"/);
+  assert.match(changePanel, /id="submitChangePasswordBtn"/);
+  assert.match(changePanel, /id="cancelChangePasswordBtn"/);
+  assert.doesNotMatch(changePanel, /รหัสกู้คืน|recoveryPassphrase|Evidence|Backup/);
+
+  assert.match(entry, /openGreenfieldRuntimeWithDevicePin/);
+  assert.match(entry, /changeDevicePassword/);
+  assert.match(entry, /\$\('changePasswordBtn'\)\.addEventListener\('click'/);
+  assert.match(entry, /\$\('submitChangePasswordBtn'\)\.addEventListener\('click'/);
+  assert.doesNotMatch(entry, /\$\('changePasswordBtn'\)\.addEventListener\('click',[\s\S]{0,180}showRecovery\(/);
+});
+
 test('authentication and recovery errors stay user-facing', () => {
   assert.match(entry, /DEVICE_PIN_INVALID[\s\S]*รหัสผ่านไม่ถูกต้อง/);
   assert.match(entry, /DEVICE_PIN_TOO_SHORT[\s\S]*รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร/);
