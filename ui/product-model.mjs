@@ -165,7 +165,7 @@ export function projectFinance(state, ledgerBalanceSatang, today, nearDays = 7) 
   };
 }
 
-const ATTENTION_RANK = Object.freeze({ OVERDUE:100, TODAY:90, INSUFFICIENT_FUNDS:80, COLLISION:70, VERIFY:65, NEAR:60, GOAL_RISK:40 });
+const ATTENTION_RANK = Object.freeze({ OVERDUE:100, TODAY:90, INSUFFICIENT_FUNDS:85, PAYABLE_NOW:80, COLLISION:70, VERIFY:65, NEAR:60, GOAL_RISK:40 });
 
 export function projectAttention({ calendarRecords = [], finance = {}, goal = null, today, limit = 3 } = {}) {
   const candidates = [];
@@ -185,6 +185,10 @@ export function projectAttention({ calendarRecords = [], finance = {}, goal = nu
   }
   if (Number(finance.shortfallSatang || 0) > 0) {
     candidates.push({ kind:'INSUFFICIENT_FUNDS', rank:ATTENTION_RANK.INSUFFICIENT_FUNDS, title:'เงินอาจไม่พอกับภาระใกล้ถึง', amountSatang:Number(finance.shortfallSatang), target:{area:'FINANCE', focus:'near-term-pressure'} });
+  }
+  const nextDue = finance.nextDue;
+  if (nextDue?.canPayNow === true && Number(nextDue.daysRemaining) >= 0) {
+    candidates.push({ kind:'PAYABLE_NOW', rank:ATTENTION_RANK.PAYABLE_NOW, title:'เงินถึงยอดรายการถัดไปแล้ว — พิจารณาจ่ายได้', amountSatang:Number(nextDue.amountSatang || 0), target:{area:'FINANCE', focus:'near-term-pressure'} });
   }
   for (const [date, items] of openByDate.entries()) {
     if (items.filter(item => MONEY_QUEUE_TYPES.has(item.type)).length > 1) candidates.push({ kind:'COLLISION', rank:ATTENTION_RANK.COLLISION, title:'มีหลายภาระชนวันเดียวกัน', count:items.length, target:{area:'CALENDAR', date} });
