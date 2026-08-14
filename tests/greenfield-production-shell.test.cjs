@@ -27,9 +27,11 @@ test('Home orders attention before summary before city doors', () => {
   assert.doesNotMatch(home.slice(0, cities), /<form\b/);
 });
 
-test('Store and Ride are direct areas and Settings is a utility', () => {
+test('Store and Ride are direct areas while Settings is a dialog utility', () => {
   const html = read('index.html');
-  for (const area of ['home','store','ride','finance','calendar','system']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1, area);
+  for (const area of ['home','store','ride','finance','calendar']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1, area);
+  assert.equal((html.match(/data-area-page="system"/g) || []).length, 0, 'system page');
+  assert.match(html, /<dialog[^>]*id="settingsDialog"/);
   assert.doesNotMatch(html, /data-area-page="money"|data-money-page=|id="moneyChildToggle"|id="moneyChildren"/);
   assert.match(html, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
   const nav = html.match(/<nav id="bottomNav"[\s\S]*?<\/nav>/)?.[0] || '';
