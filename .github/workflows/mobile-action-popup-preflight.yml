@@ -11,4 +11,6 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
+      - run: node --check app.mjs && node --check ui/action-popups.mjs
       - run: node --test tests/greenfield-mobile-action-popups.test.cjs
+      - run: node --test tests/greenfield-service-worker.test.cjs
