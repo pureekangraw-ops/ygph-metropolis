@@ -70,27 +70,57 @@ export function projectMakeMoney(state, today) {
 }
 
 export function projectStoreReceivables(state) {
-  const sales = recordsForDomain(state, 'STORE').filter(record => {
-    const outstanding = Number(record?.outstandingSatang);
-    return record?.type === 'SALE' && record.status !== 'CANCELLED' && Number.isSafeInteger(outstanding) && outstanding > 0;
-  });
-  const queues = recordsForDomain(state, 'CALENDAR').filter(record =>
-    record?.type === 'RECEIVE_CUSTOMER_PAYMENT' && isCalendarActionableStatus(record.status)
-  );
+  const sales = recordsForDomain(state, 'STORE').filter(record => record?.type === 'SALE' && record.status !== 'CANCELLED');
+  const queues = recordsForDomain(state, 'CALENDAR').filter(record => record?.type === 'RECEIVE_CUSTOMER_PAYMENT');
+  const items = [];
 
-  const items = sales.map(sale => {
+  for (const sale of sales) {
     const related = queues.filter(queue => String(queue.detail || '') === `STORE/${sale.recordId}`);
-    return {
+    const actionable = related.filter(queue => isCalendarActionableStatus(queue.status));
+    const explicitOutstanding = sale.outstandingSatang;
+
+    if (Number.isSafeInteger(explicitOutstanding)) {
+      if (explicitOutstanding <= 0) continue;
+      items.push({
+        saleId:sale.recordId,
+        title:sale.title || 'ลูกหนี้จากการขาย',
+        outstandingSatang:explicitOutstanding,
+        queueState:actionable.length === 0 ? 'UNSCHEDULED' : actionable.length === 1 ? 'SCHEDULED' : 'VERIFY_DUPLICATE',
+        queueId:actionable.length === 1 ? actionable[0].recordId : null,
+        truthSource:'SALE',
+      });
+      continue;
+    }
+
+    if (related.length === 0) continue;
+    if (related.length > 1) {
+      items.push({
+        saleId:sale.recordId,
+        title:sale.title || 'ลูกหนี้จากการขาย',
+        outstandingSatang:null,
+        queueState:'VERIFY_DUPLICATE',
+        queueId:null,
+        truthSource:'LEGACY_QUEUE_AMBIGUOUS',
+      });
+      continue;
+    }
+
+    const fallback = related[0];
+    const fallbackOutstanding = Number(fallback.amountSatang);
+    if (!Number.isSafeInteger(fallbackOutstanding) || fallbackOutstanding <= 0) continue;
+    const fallbackActionable = isCalendarActionableStatus(fallback.status);
+    items.push({
       saleId:sale.recordId,
       title:sale.title || 'ลูกหนี้จากการขาย',
-      outstandingSatang:Number(sale.outstandingSatang),
-      queueState:related.length === 0 ? 'UNSCHEDULED' : related.length === 1 ? 'SCHEDULED' : 'VERIFY_DUPLICATE',
-      queueId:related.length === 1 ? related[0].recordId : null,
-    };
-  });
+      outstandingSatang:fallbackOutstanding,
+      queueState:fallbackActionable ? 'SCHEDULED' : 'UNSCHEDULED',
+      queueId:fallbackActionable ? fallback.recordId : null,
+      truthSource:'LEGACY_QUEUE_FALLBACK',
+    });
+  }
 
   return {
-    totalOutstandingSatang:items.reduce((sum, item) => sum + item.outstandingSatang, 0),
+    totalOutstandingSatang:items.reduce((sum, item) => Number.isSafeInteger(item.outstandingSatang) && item.outstandingSatang > 0 ? sum + item.outstandingSatang : sum, 0),
     items,
   };
 }
