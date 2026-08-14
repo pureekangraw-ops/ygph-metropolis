@@ -46,3 +46,13 @@ test('Settings is a flat centered utility dialog instead of a system page', () =
   assert.doesNotMatch(dialog, /<details\b/);
   assert.match(app, /settingsDialog.*showModal|showModal\(\).*settingsDialog/s);
 });
+
+test('production stylesheet keeps balanced rules and valid mobile grid tokens', () => {
+  const css = read('styles.css');
+  const opens = (css.match(/\{/g) || []).length;
+  const closes = (css.match(/\}/g) || []).length;
+  assert.equal(opens, closes, `unbalanced CSS braces: ${opens} open vs ${closes} close`);
+  assert.doesNotMatch(css, /\b1fp\b/);
+  assert.doesNotMatch(css, /background\s*:\s*344844\b/);
+  assert.match(css, /\.hidden\s*\{\s*display\s*:\s*none!important\s*\}/);
+});
