@@ -67,6 +67,32 @@ export function projectMakeMoney(state, today) {
   return { storeSatang, rideSatang, combinedSatang:storeSatang + rideSatang };
 }
 
+export function projectStoreReceivables(state) {
+  const sales = recordsForDomain(state, 'STORE').filter(record => {
+    const outstanding = Number(record?.outstandingSatang);
+    return record?.type === 'SALE' && record.status !== 'CANCELLED' && Number.isSafeInteger(outstanding) && outstanding > 0;
+  });
+  const queues = recordsForDomain(state, 'CALENDAR').filter(record =>
+    record?.type === 'RECEIVE_CUSTOMER_PAYMENT' && isCalendarActionableStatus(record.status)
+  );
+
+  const items = sales.map(sale => {
+    const related = queues.filter(queue => String(queue.detail || '') === `STORE/${sale.recordId}`);
+    return {
+      saleId:sale.recordId,
+      title:sale.title || 'ลูกหนี้จากการขาย',
+      outstandingSatang:Number(sale.outstandingSatang),
+      queueState:related.length === 0 ? 'UNSCHEDULED' : related.length === 1 ? 'SCHEDULED' : 'VERIFY_DUPLICATE',
+      queueId:related.length === 1 ? related[0].recordId : null,
+    };
+  });
+
+  return {
+    totalOutstandingSatang:items.reduce((sum, item) => sum + item.outstandingSatang, 0),
+    items,
+  };
+}
+
 export function projectStore(state, today) {
   const storeRecords = recordsForDomain(state, 'STORE');
   let stockQuantity = 0;
@@ -78,14 +104,9 @@ export function projectStore(state, today) {
     if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') stockQuantity -= quantity;
     if (record.type === 'STOCK_ADJUSTMENT') stockQuantity += quantity;
   }
-  let receivableSatang = 0;
-  for (const record of recordsForDomain(state, 'CALENDAR')) {
-    if (record.type !== 'RECEIVE_CUSTOMER_PAYMENT' || lifecycleClosed(record.status)) continue;
-    const amount = Number(record.amountSatang || 0);
-    if (Number.isSafeInteger(amount) && amount > 0) receivableSatang += amount;
-  }
+  const receivables = projectStoreReceivables(state);
   const money = projectMakeMoney(state, today);
-  return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang };
+  return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang:receivables.totalOutstandingSatang };
 }
 
 function median(values) {
