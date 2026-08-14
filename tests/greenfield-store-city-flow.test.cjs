@@ -26,3 +26,9 @@ test('Store UI renders receivable relation states without guessing duplicate que
   assert.match(app, /VERIFY_DUPLICATE/);
   assert.match(app, /data-store-open/);
 });
+
+test('Store UI never renders an unknown legacy receivable amount as zero baht', () => {
+  const app = fs.readFileSync(path.join(root, 'ui/app.mjs'), 'utf8');
+  assert.match(app, /outstandingSatang\s*==\s*null/);
+  assert.match(app, /ยอดต้องตรวจสอบ/);
+});
