@@ -176,6 +176,13 @@ export function buildExpenseWorkflow({ workflowId, ledgerTransactionId, title, a
   }, `LEDGER:${ledgerTransactionId}`)] };
 }
 
+export function buildCalendarRescheduleWorkflow({ workflowId, queueId, dueDate }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  queueId = text(queueId, 'INVALID_QUEUE_ID');
+  const due = isoDate(dueDate);
+  return { workflowId, commands: [command(workflowId, 1, 'CALENDAR', 'CALENDAR_RESCHEDULE', { recordId: queueId, dueDate: due }, `CALENDAR:${queueId}:RESCHEDULE:${due}`)] };
+}
+
 export function buildCalendarStatusWorkflow({ workflowId, queueId, status }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   queueId = text(queueId, 'INVALID_QUEUE_ID');

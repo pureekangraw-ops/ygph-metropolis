@@ -20,6 +20,15 @@ function safeQuantity(value, { signed = false, code = 'INVALID_QUANTITY' } = {})
   return quantity;
 }
 
+function safeIsoDate(value) {
+  const input = requiredText(value, 'INVALID_DUE_DATE');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!match) throw new Error('INVALID_DUE_DATE');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3])) throw new Error('INVALID_DUE_DATE');
+  return input;
+}
+
 function provenance(command, at) {
   return { origin: 'LIVE_COMMAND', commandId: command.commandId, idempotencyKey: command.idempotencyKey, domain: command.domain, at };
 }
@@ -193,6 +202,20 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
       record.paidSatang = paid + amount;
       record.amountSatang = remaining - amount;
       record.status = record.amountSatang === 0 ? 'COMPLETED' : 'PARTIAL';
+      record.updatedAt = at;
+    });
+  });
+
+  runtime.register('CALENDAR', 'CALENDAR_RESCHEDULE', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    if (!entry) throw new Error(`DOMAIN_RECORD_NOT_FOUND:${id}`);
+    if (entry.record.status === 'COMPLETED' || entry.record.status === 'CANCELLED') throw new Error(`CALENDAR_RECORD_CLOSED:${id}/${entry.record.status}`);
+    const dueDate = safeIsoDate(payload.dueDate);
+    if (entry.record.dueDate === dueDate) throw new Error(`CALENDAR_DUE_DATE_UNCHANGED:${id}/${dueDate}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => {
+      record.dueDate = dueDate;
       record.updatedAt = at;
     });
   });

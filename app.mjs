@@ -166,7 +166,7 @@ $('submitChangePasswordBtn').addEventListener('click', async () => {
   const currentPassword = $('changeCurrentPassword').value;
   const nextPassword = $('changeNewPassword').value;
   const confirmPassword = $('changeConfirmPassword').value;
-  const status = $('appStatus');
+  const status = $('settingsStatus');
   const button = $('submitChangePasswordBtn');
   status.textContent = '';
   status.classList.remove('error');
@@ -188,7 +188,8 @@ $('submitChangePasswordBtn').addEventListener('click', async () => {
     runtime = await openGreenfieldRuntimeWithDevicePin({ pin:currentPassword });
     await runtime.changeDevicePassword({ nextPassword });
     closeChangePasswordPanel();
-    status.textContent = 'เปลี่ยนรหัสผ่านแล้ว';
+    $('settingsDialog').close();
+    $('appStatus').textContent = 'เปลี่ยนรหัสผ่านแล้ว';
   } catch (error) {
     status.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถเปลี่ยนรหัสผ่านได้'));
     status.classList.add('error');

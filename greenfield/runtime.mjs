@@ -20,6 +20,7 @@ import {
   buildStockAdjustmentWorkflow,
   buildOtherIncomeWorkflow,
   buildExpenseWorkflow,
+  buildCalendarRescheduleWorkflow,
   buildCalendarStatusWorkflow,
 } from './business-workflows.mjs';
 import {
@@ -198,6 +199,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     stockAdjustment: input => executePlan(buildStockAdjustmentWorkflow(input)),
     otherIncome: input => executePlan(buildOtherIncomeWorkflow(input)),
     expense: input => executePlan(buildExpenseWorkflow(input)),
+    calendarReschedule: input => executePlan(buildCalendarRescheduleWorkflow(input)),
     calendarStatus: input => executePlan(buildCalendarStatusWorkflow(input)),
     rideStartRound: input => executePlan(buildRideStartRoundWorkflow(input)),
     rideEndRound: input => executePlan(buildRideEndRoundWorkflow(input)),

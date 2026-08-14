@@ -110,12 +110,48 @@
           <div id="calendarList" class="list"></div>
         </section>
 
-        <section class="area-page" data-area-page="system">
-          <div class="page-head"><div><small>UTILITY</small><h1>ตั้งค่า</h1></div></div>
-          <details class="task-panel"><summary>ความปลอดภัย</summary><div><details id="accessSettings" class="task-panel"><summary>การเข้าถึง</summary><div><div class="action-row"><button id="changePasswordBtn">เปลี่ยนรหัสผ่าน</button><button id="systemLockBtn">ล็อกแอป</button></div><div id="changePasswordPanel" class="task-panel hidden"><label>รหัสผ่านปัจจุบัน <input id="changeCurrentPassword" type="password" minlength="6" autocomplete="current-password"></label><label>รหัสผ่านใหม่ <input id="changeNewPassword" type="password" minlength="6" autocomplete="new-password"></label><label>ยืนยันรหัสผ่าน <input id="changeConfirmPassword" type="password" minlength="6" autocomplete="new-password"></label><div class="action-row"><button id="submitChangePasswordBtn" class="primary-action">บันทึกรหัสผ่านใหม่</button><button id="cancelChangePasswordBtn" class="secondary">ยกเลิก</button></div></div><details id="advancedAccessSettings" class="task-panel"><summary>ขั้นสูง</summary><div><div class="action-row"><button id="backupBtn">Backup</button><button id="openRestoreRouteBtn">Restore</button></div><details id="advancedDiagnostics" class="task-panel"><summary>Vault / Recovery ขั้นสูง</summary><span id="runtimeBadge" class="badge">LOCKED</span><div class="metrics three"><article><small>ฐาน</small><b id="systemDbState">พร้อมใช้</b></article><article><small>State revision</small><b id="systemRevision">—</b></article><article><small>Schema</small><b id="systemSchema">—</b></article></div><div class="kv"><span>แอป</span><b id="systemVersion">Production Shell v2</b><span>ฐานข้อมูล</span><b id="systemDatabase">—</b><span>การประสานการเขียน</span><b id="systemCoordination">—</b></div><pre id="diagnostics" class="diagnostics"></pre></details></div></details></div></details></div></details>
-        </section>
       </div>
 
+
+      <dialog id="calendarEditDialog" class="modal-dialog" aria-labelledby="calendarEditTitle">
+        <div class="dialog-body">
+          <div class="dialog-head"><h2 id="calendarEditTitle">แก้ไขรายการ</h2><button id="calendarEditCloseBtn" type="button" class="secondary" aria-label="ปิด">ปิด</button></div>
+          <p id="calendarEditLabel" class="muted"></p>
+          <label>วันครบกำหนด <input id="calendarEditDueDate" type="date" required></label>
+          <div class="dialog-actions"><button id="calendarCancelOpenBtn" type="button" class="danger-action">ยกเลิกรายการ</button><button id="calendarRescheduleBtn" type="button" class="primary-action">บันทึกวันใหม่</button></div>
+        </div>
+      </dialog>
+
+      <dialog id="calendarCancelDialog" class="modal-dialog" aria-labelledby="calendarCancelTitle">
+        <div class="dialog-body">
+          <div class="dialog-head"><h2 id="calendarCancelTitle">ยกเลิกรายการ?</h2></div>
+          <p id="calendarCancelCopy" class="confirm-copy">รายการจะถูกปิดในปฏิทิน โดยไม่สร้างหรือย้อนเงินจริง</p>
+          <div class="dialog-actions"><button id="calendarCancelBackBtn" type="button" autofocus>กลับ</button><button id="calendarCancelConfirmBtn" type="button" class="danger-action">ยืนยันยกเลิก</button></div>
+        </div>
+      </dialog>
+
+      <dialog id="settingsDialog" class="modal-dialog settings-dialog" aria-labelledby="settingsDialogTitle">
+        <div class="dialog-body">
+          <div class="dialog-head"><h2 id="settingsDialogTitle">ตั้งค่า</h2><button id="settingsCloseBtn" type="button" class="secondary" aria-label="ปิด">ปิด</button></div>
+          <p id="settingsStatus" class="status" aria-live="polite"></p>
+          <section class="settings-section">
+            <h3>ความปลอดภัย</h3>
+            <div class="action-row"><button id="changePasswordBtn" type="button">เปลี่ยนรหัสผ่าน</button><button id="systemLockBtn" type="button">ล็อกแอป</button></div>
+            <div id="changePasswordPanel" class="settings-inline hidden"><label>รหัสผ่านปัจจุบัน <input id="changeCurrentPassword" type="password" minlength="6" autocomplete="current-password"></label><label>รหัสผ่านใหม่ <input id="changeNewPassword" type="password" minlength="6" autocomplete="new-password"></label><label>ยืนยันรหัสผ่าน <input id="changeConfirmPassword" type="password" minlength="6" autocomplete="new-password"></label><div class="action-row"><button id="submitChangePasswordBtn" class="primary-action" type="button">บันทึกรหัสผ่านใหม่</button><button id="cancelChangePasswordBtn" class="secondary" type="button">ยกเลิก</button></div></div>
+          </section>
+          <section class="settings-section">
+            <h3>สำรองและกู้คืน</h3>
+            <div class="action-row"><button id="backupBtn" type="button">Backup</button><button id="openRestoreRouteBtn" type="button">Restore</button></div>
+          </section>
+          <section class="settings-section">
+            <h3>ระบบ</h3>
+            <span id="runtimeBadge" class="badge">LOCKED</span>
+            <div class="metrics three"><article><small>ฐาน</small><b id="systemDbState">พร้อมใช้</b></article><article><small>State revision</small><b id="systemRevision">—</b></article><article><small>Schema</small><b id="systemSchema">—</b></article></div>
+            <div class="kv"><span>แอป</span><b id="systemVersion">Production Shell v2</b><span>ฐานข้อมูล</span><b id="systemDatabase">—</b><span>การประสานการเขียน</span><b id="systemCoordination">—</b></div>
+            <pre id="diagnostics" class="diagnostics"></pre>
+          </section>
+        </div>
+      </dialog>
       <p id="appStatus" class="status app-status" aria-live="polite"></p>
       <nav id="bottomNav" class="bottom-nav" aria-label="เมนูหลัก">
         <button type="button" class="bottom-nav-btn active" data-destination="home" aria-label="หน้าหลัก" aria-current="page"><svg data-icon="house-simple"></svg><span>หน้าหลัก</span></button>

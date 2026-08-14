@@ -45,17 +45,13 @@ test('Home is attention first then useful summary then city doors', () => {
   assert.doesNotMatch(home.slice(0, cities), /<form\b/);
 });
 
-test('each working area exists once and Calendar/System keep focused responsibilities', () => {
+test('each working area exists once and Calendar keeps focused responsibilities while Settings is a utility dialog', () => {
   const html = text('index.html');
-  for (const area of ['home','store','ride','finance','calendar','system']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1, area);
-  assert.match(html, /id="monthGrid"/);
-  assert.match(html, /id="prevMonth"/);
-  assert.match(html, /id="todayMonth"/);
-  assert.match(html, /id="nextMonth"/);
-  const home = html.match(/<section[^>]*data-area-page="home"[\s\S]*?<\/section>/)?.[0] || '';
-  assert.doesNotMatch(home, /id="diagnostics"/);
-  assert.match(html, /<details[^>]*id="advancedDiagnostics"/);
-  assert.match(html, /id="diagnostics"/);
+  for (const area of ['home','store','ride','finance','calendar']) assert.equal((html.match(new RegExp(`data-area-page=\"${area}\"`, 'g')) || []).length, 1, area);
+  assert.doesNotMatch(html, /data-area-page=\"system\"/);
+  for (const id of ['monthGrid','prevMonth','todayMonth','nextMonth','settingsDialog','diagnostics']) assert.match(html, new RegExp(`id=\"${id}\"`));
+  const settings = html.match(/<dialog[^>]*id=\"settingsDialog\"[\s\S]*?<\/dialog>/)?.[0] || '';
+  assert.doesNotMatch(settings, /<details\b/);
 });
 
 test('mobile shell preserves content width and bottom navigation touch targets', () => {
