@@ -32,3 +32,9 @@ test('Store UI never renders an unknown legacy receivable amount as zero baht', 
   assert.match(app, /outstandingSatang\s*==\s*null/);
   assert.match(app, /ยอดต้องตรวจสอบ/);
 });
+
+test('Store overview marks receivable summary unknown when any source amount is ambiguous', () => {
+  const app = fs.readFileSync(path.join(root, 'ui/app.mjs'), 'utf8');
+  assert.match(app, /hasUnknownReceivable/);
+  assert.match(app, /storeReceivable[^\n]+hasUnknownReceivable[^\n]+ยอดต้องตรวจสอบ/);
+});
