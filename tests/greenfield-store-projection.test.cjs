@@ -38,6 +38,7 @@ test('cancelled receive queue does not erase Store receivable truth', async () =
   assert.equal(receivables.totalOutstandingSatang, 100000);
   assert.equal(receivables.items[0].queueState, 'UNSCHEDULED');
   assert.equal(receivables.items[0].queueId, null);
+  assert.equal(receivables.items[0].truthSource, 'SALE');
 });
 
 test('duplicate actionable receive queues are VERIFY_DUPLICATE instead of guessed', async () => {
@@ -52,6 +53,7 @@ test('duplicate actionable receive queues are VERIFY_DUPLICATE instead of guesse
   const item = projectStoreReceivables(state).items[0];
   assert.equal(item.queueState, 'VERIFY_DUPLICATE');
   assert.equal(item.queueId, null);
+  assert.equal(item.truthSource, 'SALE');
 });
 
 test('partial Sale outstanding is counted exactly once from Sale source truth', async () => {
@@ -65,4 +67,39 @@ test('partial Sale outstanding is counted exactly once from Sale source truth', 
   assert.equal(receivables.totalOutstandingSatang, 40000);
   assert.equal(receivables.items[0].queueState, 'SCHEDULED');
   assert.equal(receivables.items[0].queueId, 'Q-1');
+  assert.equal(receivables.items[0].truthSource, 'SALE');
+});
+
+test('legacy imported Sale without outstanding fields uses its single related active queue as compatibility evidence', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [{recordId:'Q-LEGACY',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,dueDate:'2026-08-15',status:'OPEN'}],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 35000);
+  assert.equal(receivables.totalOutstandingSatang, 35000);
+  assert.deepEqual(receivables.items[0], {
+    saleId:'SALE-LEGACY',
+    title:'ขายเก่า',
+    outstandingSatang:35000,
+    queueState:'SCHEDULED',
+    queueId:'Q-LEGACY',
+    truthSource:'LEGACY_QUEUE_FALLBACK',
+  });
+});
+
+test('cancelling the only legacy receive queue preserves its last known receivable amount but marks it UNSCHEDULED', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [{recordId:'Q-LEGACY',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,dueDate:'2026-08-15',status:'CANCELLED'}],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 35000);
+  assert.equal(receivables.totalOutstandingSatang, 35000);
+  assert.equal(receivables.items[0].outstandingSatang, 35000);
+  assert.equal(receivables.items[0].queueState, 'UNSCHEDULED');
+  assert.equal(receivables.items[0].queueId, null);
+  assert.equal(receivables.items[0].truthSource, 'LEGACY_QUEUE_FALLBACK');
 });
