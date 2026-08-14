@@ -1,3 +1,5 @@
+export { projectRideState, projectRideRound } from '../greenfield/ride-domain.mjs';
+
 const DAY_MS = 86400000;
 const MONEY_QUEUE_TYPES = new Set(['PAY_OBLIGATION', 'PAY_OBLIGATION_INSTALLMENT', 'RECEIVE_CUSTOMER_PAYMENT']);
 
@@ -107,82 +109,6 @@ export function projectStore(state, today) {
   const receivables = projectStoreReceivables(state);
   const money = projectMakeMoney(state, today);
   return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang:receivables.totalOutstandingSatang };
-}
-
-function rideRecordTime(record) {
-  return String(record?.endedAt || record?.updatedAt || record?.startedAt || record?.createdAt || '');
-}
-
-function rideAmount(record) {
-  const amount = Number(record?.amountSatang || 0);
-  return Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
-}
-
-export function projectRideRound(state, roundId) {
-  const records = recordsForDomain(state, 'RIDE');
-  const round = records.find(record => record.type === 'ROUND' && record.recordId === roundId);
-  if (!round) return null;
-  const jobs = records.filter(record => record.type === 'JOB' && record.roundId === roundId && record.status !== 'CANCELLED');
-  const expenses = records.filter(record => record.type === 'EXPENSE' && record.roundId === roundId && record.status !== 'CANCELLED');
-  let cashJobSatang = 0;
-  let creditJobSatang = 0;
-  for (const job of jobs) {
-    const amount = rideAmount(job);
-    if (job.paymentMode === 'CASH') cashJobSatang += amount;
-    if (job.paymentMode === 'CREDIT') creditJobSatang += amount;
-  }
-  return {
-    roundId:round.recordId,
-    status:round.status,
-    startedAt:round.startedAt || round.createdAt || null,
-    endedAt:round.endedAt || null,
-    generatedSatang:cashJobSatang + creditJobSatang,
-    cashJobSatang,
-    creditJobSatang,
-    expenseSatang:expenses.reduce((sum, record) => sum + rideAmount(record), 0),
-    jobCount:jobs.length,
-  };
-}
-
-export function projectRideState(state, today) {
-  const current = dateKey(today);
-  const records = recordsForDomain(state, 'RIDE');
-  const rounds = records.filter(record => record.type === 'ROUND').sort((a,b) => rideRecordTime(b).localeCompare(rideRecordTime(a)));
-  const activeRound = rounds.find(record => record.status === 'ACTIVE') || null;
-  const latestRound = rounds[0] || null;
-  const completedToday = rounds.find(record => record.status === 'CLOSED' && dateKey(record.endedAt || record.updatedAt || record.startedAt || record.createdAt) === current) || null;
-
-  let generatedSatang = 0;
-  let cashJobSatang = 0;
-  let creditJobSatang = 0;
-  let expenseSatang = 0;
-  let creditEarnedSatang = 0;
-  let creditWithdrawnSatang = 0;
-
-  for (const record of records) {
-    if (record.status === 'CANCELLED') continue;
-    const amount = rideAmount(record);
-    if (record.type === 'JOB' && record.paymentMode === 'CREDIT') creditEarnedSatang += amount;
-    if (record.type === 'CREDIT_WITHDRAWAL') creditWithdrawnSatang += amount;
-    if (activityDate(record) !== current) continue;
-    if (record.type === 'JOB') {
-      generatedSatang += amount;
-      if (record.paymentMode === 'CASH') cashJobSatang += amount;
-      if (record.paymentMode === 'CREDIT') creditJobSatang += amount;
-    }
-    if (record.type === 'EXPENSE') expenseSatang += amount;
-  }
-
-  return {
-    activeRound,
-    latestRound,
-    todayRoundState:activeRound ? 'ACTIVE' : completedToday ? 'COMPLETED' : 'NOT_STARTED',
-    generatedSatang,
-    cashJobSatang,
-    creditJobSatang,
-    expenseSatang,
-    pendingCreditSatang:creditEarnedSatang - creditWithdrawnSatang,
-  };
 }
 
 function median(values) {
