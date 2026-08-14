@@ -7,6 +7,7 @@
 !/icon-192.png
 !/icon-512.png
 !/ui/
+!/ui/action-popups.mjs
 !/ui/app.mjs
 !/ui/ui-model.mjs
 !/ui/product-model.mjs

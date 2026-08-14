@@ -18,12 +18,14 @@ test('OPEN and PARTIAL are actionable Calendar statuses while completed/cancelle
   assert.equal(isCalendarActionableStatus('CANCELLED'), false);
 });
 
-test('imported PARTIAL receivable stays in Store receivable projection', async () => {
-  const { projectStore } = await import('../ui/product-model.mjs');
-  const state = stateWith({ calendar:[
-    { recordId:'Q-RCV', type:'RECEIVE_CUSTOMER_PAYMENT', amountSatang:3500, paidSatang:1500, dueDate:'2026-08-15', status:'PARTIAL', detail:'STORE/S1' },
-  ] });
+test('imported PARTIAL receivable stays in Store receivable projection from Sale source truth', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith({
+    store:[{ recordId:'S1', type:'SALE', title:'ขายสินค้า', totalSatang:5000, receivedSatang:1500, outstandingSatang:3500, amountSatang:5000, quantity:1, status:'PARTIAL' }],
+    calendar:[{ recordId:'Q-RCV', type:'RECEIVE_CUSTOMER_PAYMENT', amountSatang:3500, paidSatang:1500, dueDate:'2026-08-15', status:'PARTIAL', detail:'STORE/S1' }],
+  });
   assert.equal(projectStore(state, '2026-08-13').receivableSatang, 3500);
+  assert.equal(projectStoreReceivables(state).items[0].queueState, 'SCHEDULED');
 });
 
 test('imported PARTIAL obligation stays in Finance pressure projection', async () => {

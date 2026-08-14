@@ -49,6 +49,99 @@ function pendingCredit(domainState) {
   return earned - withdrawn;
 }
 
+function rideDomainState(source) {
+  return source?.domains?.RIDE ?? source ?? { records:{} };
+}
+
+function rideRecords(source) {
+  return Object.values(rideDomainState(source)?.records || {}).map(entry => entry?.record).filter(Boolean);
+}
+
+function bangkokDateKey(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(date);
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function rideRecordTime(record) {
+  return String(record?.endedAt || record?.updatedAt || record?.startedAt || record?.createdAt || '');
+}
+
+function rideAmount(record) {
+  const amount = Number(record?.amountSatang || 0);
+  return Number.isSafeInteger(amount) && amount > 0 ? amount : 0;
+}
+
+function rideActivityDate(record) {
+  return bangkokDateKey(record?.createdAt || record?.occurredAt || record?.date || record?.updatedAt);
+}
+
+export function projectRideRound(source, roundId) {
+  const records = rideRecords(source);
+  const round = records.find(record => record.type === 'ROUND' && record.recordId === roundId);
+  if (!round) return null;
+  const jobs = records.filter(record => record.type === 'JOB' && record.roundId === roundId && record.status !== 'CANCELLED');
+  const expenses = records.filter(record => record.type === 'EXPENSE' && record.roundId === roundId && record.status !== 'CANCELLED');
+  let cashJobSatang = 0;
+  let creditJobSatang = 0;
+  for (const job of jobs) {
+    const amount = rideAmount(job);
+    if (job.paymentMode === 'CASH') cashJobSatang += amount;
+    if (job.paymentMode === 'CREDIT') creditJobSatang += amount;
+  }
+  return {
+    roundId:round.recordId,
+    status:round.status,
+    startedAt:round.startedAt || round.createdAt || null,
+    endedAt:round.endedAt || null,
+    generatedSatang:cashJobSatang + creditJobSatang,
+    cashJobSatang,
+    creditJobSatang,
+    expenseSatang:expenses.reduce((sum, record) => sum + rideAmount(record), 0),
+    jobCount:jobs.length,
+  };
+}
+
+export function projectRideState(source, today) {
+  const domainState = rideDomainState(source);
+  const current = bangkokDateKey(today);
+  const records = rideRecords(domainState);
+  const rounds = records.filter(record => record.type === 'ROUND').sort((a,b) => rideRecordTime(b).localeCompare(rideRecordTime(a)));
+  const active = rounds.find(record => record.status === 'ACTIVE') || null;
+  const latest = rounds[0] || null;
+  const completedToday = rounds.find(record => record.status === 'CLOSED' && bangkokDateKey(record.endedAt || record.updatedAt || record.startedAt || record.createdAt) === current) || null;
+
+  let generatedSatang = 0;
+  let cashJobSatang = 0;
+  let creditJobSatang = 0;
+  let expenseSatang = 0;
+  for (const record of records) {
+    if (record.status === 'CANCELLED' || rideActivityDate(record) !== current) continue;
+    const amount = rideAmount(record);
+    if (record.type === 'JOB') {
+      generatedSatang += amount;
+      if (record.paymentMode === 'CASH') cashJobSatang += amount;
+      if (record.paymentMode === 'CREDIT') creditJobSatang += amount;
+    }
+    if (record.type === 'EXPENSE') expenseSatang += amount;
+  }
+
+  return {
+    activeRound:active,
+    latestRound:latest,
+    todayRoundState:active ? 'ACTIVE' : completedToday ? 'COMPLETED' : 'NOT_STARTED',
+    generatedSatang,
+    cashJobSatang,
+    creditJobSatang,
+    expenseSatang,
+    pendingCreditSatang:pendingCredit(domainState),
+  };
+}
+
 export function registerRideDomainCommands(runtime, { now = () => new Date().toISOString() } = {}) {
   if (!runtime || typeof runtime.register !== 'function') throw new TypeError('INVALID_COMMAND_RUNTIME');
 

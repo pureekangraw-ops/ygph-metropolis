@@ -1,17 +1,22 @@
 import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
 import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
-import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
+import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, projectStoreReceivables, projectRideState, projectRideRound, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { hydrateIcons } from './icons.mjs';
 
 const $ = id => document.getElementById(id);
 let runtime = null;
 let state = null;
 let activeArea = 'home';
+let activeStoreView = 'overview';
+let activeRideView = 'overview';
+let selectedRideRoundId = null;
 let selectedCalendarDate = dateKey(new Date());
 let monthCursor = monthFromDate(selectedCalendarDate);
 let editingCalendarRecordId = null;
 
 const AREA_LABEL = Object.freeze({ home:'หน้าหลัก', store:'ร้านค้า', ride:'วิ่งงาน', finance:'การเงิน', calendar:'ปฏิทิน' });
+const STORE_VIEWS = new Set(['overview','receivables','stock-movements','history']);
+const RIDE_VIEWS = new Set(['overview','jobs','summary','history']);
 
 function status(message, error = false, gate = false) {
   const node = $(gate ? 'gateStatus' : 'appStatus');
@@ -33,12 +38,23 @@ async function refresh(message=''){state=await runtime.readState();if(!state)thr
 async function run(method,input,message='บันทึกและอ่านกลับแล้ว'){try{await runtime[method](input);await refresh(message);}catch(error){status(error.message,true);}}
 function bindForm(id,handler){$(id).addEventListener('submit',async event=>{event.preventDefault();try{await handler(new FormData(event.currentTarget),event.currentTarget);}catch(error){status(error.message,true);}});}
 
+function setStoreView(view='overview') {
+  activeStoreView = STORE_VIEWS.has(view) ? view : 'overview';
+  document.querySelectorAll('[data-store-view]').forEach(node=>node.classList.toggle('hidden',node.dataset.storeView!==activeStoreView));
+}
+function setRideView(view='overview') {
+  activeRideView = RIDE_VIEWS.has(view) ? view : 'overview';
+  document.querySelectorAll('[data-ride-view]').forEach(node=>node.classList.toggle('hidden',node.dataset.rideView!==activeRideView));
+}
+
 function activateArea(area){
   if(!AREA_LABEL[area]) area='home';
   activeArea=area;
   document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>{const active=button.dataset.destination===area;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
   document.querySelectorAll('[data-area-page]').forEach(page=>page.classList.toggle('active',page.dataset.areaPage===area));
   $('workspaceContext').textContent=AREA_LABEL[area];
+  if(area==='store')setStoreView('overview');
+  if(area==='ride')setRideView('overview');
   if(area==='calendar')renderCalendar();
 }
 function openSettings(){
@@ -57,6 +73,7 @@ function routeTo(target={}){
 function numberText(value){return `${formatSatang(Number(value||0))}`;}
 function bahtText(value){return `${numberText(value)} บาท`;}
 function recordDateLabel(record){const key=dateKey(record?.dueDate||record?.createdAt||record?.date||record?.updatedAt);if(!key)return '';return new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short',year:'numeric'}).format(new Date(`${key}T12:00:00+07:00`));}
+function rideDateTimeLabel(value){if(!value)return '';const date=new Date(value);if(Number.isNaN(date.getTime()))return '';return new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Bangkok'}).format(date);}
 const TYPE_LABEL=Object.freeze({SALE:'ขายสินค้า',PURCHASE:'รับสินค้าเข้า',STOCK_WITHDRAWAL:'เบิกสินค้า',STOCK_ADJUSTMENT:'ปรับสต็อก',TRANSACTION:'เงินเข้า–ออก',OBLIGATION:'ภาระ',ROUND:'รอบวิ่ง',JOB:'งานวิ่ง',EXPENSE:'ค่าใช้จ่ายวิ่ง',CREDIT_WITHDRAWAL:'เบิกเครดิต',RECEIVE_CUSTOMER_PAYMENT:'รับเงินลูกค้า',PAY_OBLIGATION:'จ่ายภาระ',PAY_OBLIGATION_INSTALLMENT:'จ่ายงวด',PURCHASE_RETURN_WINDOW:'กำหนดคืนสินค้า'});
 function simpleItem(record,{amountField='amountSatang'}={}){const item=document.createElement('article');item.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('b');title.textContent=record.title||TYPE_LABEL[record.type]||'รายการ';const statusNode=document.createElement('small');statusNode.textContent=record.status||'';head.append(title,statusNode);const meta=document.createElement('div');meta.className='muted';const amount=Number(record[amountField]);const pieces=[TYPE_LABEL[record.type]||record.type||''];if(Number.isSafeInteger(amount)&&amount!==0)pieces.push(bahtText(amount));const date=recordDateLabel(record);if(date)pieces.push(date);meta.textContent=pieces.filter(Boolean).join(' · ');item.append(head,meta);return item;}
 
@@ -74,8 +91,107 @@ function renderHome(context){
   const progress=context.goal.goalSatang>0?Math.round((context.money.combinedSatang/context.goal.goalSatang)*100):(context.money.combinedSatang>0?100:0);$('moneyProgress').textContent=`${progress}%`;
   $('goalForm').elements.goal.value=formatSatang(context.goal.goalSatang);
 }
-function renderStore(context){$('storeToday').textContent=bahtText(context.store.todaySalesSatang);$('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;$('storeReceivable').textContent=bahtText(context.store.receivableSatang);const list=$('storeList');list.textContent='';const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,30);for(const record of records)list.append(simpleItem(record));if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';}
-function renderRide(context){const rideProjection=context.projection.ride;$('rideGenerated').textContent=bahtText(context.money.rideSatang);$('ridePendingCredit').textContent=bahtText(rideProjection.pendingCreditSatang);$('rideRoundStatus').textContent=rideProjection.activeRound?'กำลังวิ่ง':'ยังไม่เริ่ม';$('rideStartBtn').disabled=Boolean(rideProjection.activeRound);$('rideEndBtn').disabled=!rideProjection.activeRound;const list=$('rideList');list.textContent='';const records=[...context.rideRecords].filter(record=>record.type!=='ROUND').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,30);for(const record of records)list.append(simpleItem(record));if(!records.length)list.textContent='ยังไม่มีงานวิ่งที่บันทึกในฐานใหม่นี้';}
+
+function receivableAmountText(item){return item.outstandingSatang == null?'ยอดต้องตรวจสอบ':bahtText(item.outstandingSatang);}
+
+function renderStore(context){
+  const receivables=projectStoreReceivables(state);
+  const hasUnknownReceivable=receivables.items.some(item=>item.outstandingSatang == null);
+  $('storeToday').textContent=bahtText(context.store.todaySalesSatang);
+  $('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
+  $('storeReceivable').textContent=hasUnknownReceivable?'ยอดต้องตรวจสอบ':bahtText(context.store.receivableSatang);
+
+  const attention=$('storeAttention');attention.textContent='';
+  for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){
+    const warning=document.createElement('article');warning.className='item truth-warning';
+    const title=document.createElement('b');title.textContent=item.queueState==='VERIFY_DUPLICATE'?'VERIFY · พบคิวรับเงินซ้ำ':'ลูกหนี้ยังไม่มีคิวรับเงินที่ใช้งานได้';
+    const meta=document.createElement('small');meta.textContent=`${item.title} · ${receivableAmountText(item)}`;
+    warning.append(title,meta);attention.append(warning);
+  }
+
+  const receivableList=$('storeReceivableList');receivableList.textContent='';
+  for(const item of receivables.items){
+    const article=document.createElement('article');article.className='item';
+    const head=document.createElement('div');head.className='item-head';
+    const title=document.createElement('b');title.textContent=item.title;
+    const amount=document.createElement('b');amount.textContent=receivableAmountText(item);
+    head.append(title,amount);
+    const meta=document.createElement('small');meta.className=item.queueState==='SCHEDULED'?'muted':'truth-warning-text';
+    meta.textContent=item.queueState==='SCHEDULED'?'มีคิวรับเงินที่ใช้งานได้':item.queueState==='UNSCHEDULED'?'UNSCHEDULED · ยังมีลูกหนี้ แต่ไม่มีคิวรับเงินที่ใช้งานได้':'VERIFY_DUPLICATE · พบคิวรับเงินที่ใช้งานได้มากกว่า 1 คิว';
+    article.append(head,meta);receivableList.append(article);
+  }
+  if(!receivables.items.length)receivableList.textContent='ไม่มีลูกหนี้ค้างรับ';
+
+  const movementList=$('storeStockMovementList');movementList.textContent='';
+  const movementTypes=new Set(['PURCHASE','SALE','STOCK_WITHDRAWAL','STOCK_ADJUSTMENT']);
+  const movements=[...context.storeRecords].filter(record=>movementTypes.has(record.type)&&record.status!=='CANCELLED').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  for(const record of movements){
+    const article=simpleItem(record);
+    const quantity=Number(record.quantity||0);
+    const delta=record.type==='PURCHASE'?quantity:record.type==='SALE'||record.type==='STOCK_WITHDRAWAL'?-quantity:quantity;
+    const stockMeta=document.createElement('small');stockMeta.className='muted';stockMeta.textContent=`ผลต่อสต็อก ${delta>0?'+':''}${delta} ชิ้น`;
+    article.append(stockMeta);movementList.append(article);
+  }
+  if(!movements.length)movementList.textContent='ยังไม่มีความเคลื่อนไหวสต็อก';
+
+  const list=$('storeList');list.textContent='';
+  const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);
+  for(const record of records)list.append(simpleItem(record));
+  if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';
+  setStoreView(activeStoreView);
+}
+
+function renderRide(context){
+  const ride=projectRideState(state,context.today);
+  $('rideGenerated').textContent=bahtText(ride.generatedSatang);
+  $('ridePendingCredit').textContent=bahtText(ride.pendingCreditSatang);
+  $('rideCreditBalance').textContent=bahtText(ride.pendingCreditSatang);
+  const stateLabel=ride.todayRoundState==='ACTIVE'?'กำลังวิ่ง':ride.todayRoundState==='COMPLETED'?'จบรอบแล้ว':'ยังไม่เริ่ม';
+  $('rideRoundStatus').textContent=stateLabel;
+  $('rideStartBtn').textContent=ride.todayRoundState==='COMPLETED'?'เริ่มรอบใหม่':'เริ่มรอบ';
+  $('rideStartRegion').classList.toggle('hidden',ride.todayRoundState==='ACTIVE');
+  $('rideActiveActions').classList.toggle('hidden',ride.todayRoundState!=='ACTIVE');
+  $('rideEndBtn').disabled=ride.todayRoundState!=='ACTIVE';
+  $('rideCurrentRoundTitle').textContent=ride.todayRoundState==='ACTIVE'?'กำลังวิ่ง':ride.todayRoundState==='COMPLETED'?'รอบล่าสุดจบแล้ว':'ยังไม่มีรอบวันนี้';
+  const currentRound=ride.activeRound||ride.latestRound;
+  $('rideRoundMeta').textContent=currentRound?`${rideDateTimeLabel(currentRound.startedAt||currentRound.createdAt)}${currentRound.endedAt?` → ${rideDateTimeLabel(currentRound.endedAt)}`:''}`:'';
+
+  const hasCredit=ride.pendingCreditSatang>0;
+  $('rideCreditActions').classList.toggle('hidden',!hasCredit);
+  $('rideCreditQuiet').classList.toggle('hidden',hasCredit);
+
+  const rounds=[...context.rideRecords].filter(record=>record.type==='ROUND').sort((a,b)=>String(b.endedAt||b.updatedAt||b.startedAt||b.createdAt||'').localeCompare(String(a.endedAt||a.updatedAt||a.startedAt||a.createdAt||'')));
+  if(selectedRideRoundId&&!rounds.some(round=>round.recordId===selectedRideRoundId))selectedRideRoundId=null;
+  if(!selectedRideRoundId)selectedRideRoundId=ride.activeRound?.recordId||ride.latestRound?.recordId||null;
+  const summary=selectedRideRoundId?projectRideRound(state,selectedRideRoundId):null;
+
+  const jobList=$('rideRoundJobList');jobList.textContent='';
+  const jobs=selectedRideRoundId?context.rideRecords.filter(record=>record.type==='JOB'&&record.roundId===selectedRideRoundId&&record.status!=='CANCELLED').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))):[];
+  for(const record of jobs){const item=simpleItem(record);const mode=document.createElement('small');mode.className='muted';mode.textContent=record.paymentMode==='CASH'?'เงินสด':'เครดิต';item.append(mode);jobList.append(item);}
+  if(!jobs.length)jobList.textContent=selectedRideRoundId?'ยังไม่มีงานในรอบนี้':'ยังไม่มีรอบให้ดู';
+  $('rideJobsMeta').textContent=summary?`${summary.status==='ACTIVE'?'กำลังวิ่ง':'จบรอบ'} · เริ่ม ${rideDateTimeLabel(summary.startedAt)}`:'ยังไม่มีรอบ';
+
+  $('rideSummaryGenerated').textContent=bahtText(summary?.generatedSatang||0);
+  $('rideSummaryCash').textContent=bahtText(summary?.cashJobSatang||0);
+  $('rideSummaryCredit').textContent=bahtText(summary?.creditJobSatang||0);
+  $('rideSummaryExpense').textContent=bahtText(summary?.expenseSatang||0);
+  $('rideSummaryJobs').textContent=summary?`${summary.jobCount} งาน · ${summary.status==='ACTIVE'?'กำลังวิ่ง':'จบรอบแล้ว'}`:'ยังไม่มีรอบ';
+  $('rideSummaryMeta').textContent=summary?`${rideDateTimeLabel(summary.startedAt)}${summary.endedAt?` → ${rideDateTimeLabel(summary.endedAt)}`:''}`:'';
+
+  const history=$('rideRoundHistory');history.textContent='';
+  for(const round of rounds){
+    const roundSummary=projectRideRound(state,round.recordId);
+    const button=document.createElement('button');button.type='button';button.className='ride-history-button';
+    const title=document.createElement('strong');title.textContent=round.status==='ACTIVE'?'กำลังวิ่ง':'จบรอบ';
+    const amount=document.createElement('b');amount.textContent=bahtText(roundSummary?.generatedSatang||0);
+    const meta=document.createElement('small');meta.textContent=`${rideDateTimeLabel(round.startedAt||round.createdAt)} · ${roundSummary?.jobCount||0} งาน`;
+    button.append(title,amount,meta);
+    button.addEventListener('click',()=>{selectedRideRoundId=round.recordId;renderRide(context);setRideView('summary');});
+    history.append(button);
+  }
+  if(!rounds.length)history.textContent='ยังไม่มีประวัติรอบ';
+  setRideView(activeRideView);
+}
 function renderFinance(context){const view=context.finance;$('financeBalance').textContent=numberText(view.spendableBalanceSatang);$('financeIn').textContent=bahtText(view.todayInSatang);$('financeOut').textContent=bahtText(view.todayOutSatang);$('financeMonthDue').textContent=bahtText(view.monthDueSatang);const openNext=$('financeOpenNextDue');if(!view.nextDue){$('financePressureText').textContent='ไม่มีภาระที่รอจ่าย';$('financePressureMeta').textContent='';openNext.classList.add('hidden');}else{if(view.shortfallSatang>0)$('financePressureText').textContent=`ยังขาด ${bahtText(view.shortfallSatang)}`;else if(view.nextDue.canPayNow)$('financePressureText').textContent='เงินถึงยอดของรายการถัดไปแล้ว — พิจารณาจ่ายได้';else $('financePressureText').textContent='ภาระใกล้ถึงอยู่ในระยะเฝ้าดู';const days=view.nextDue.daysRemaining;$('financePressureMeta').textContent=`${days<0?`เลยกำหนด ${Math.abs(days)} วัน`:days===0?'ครบกำหนดวันนี้':`อีก ${days} วัน`} · ${bahtText(view.nextDue.amountSatang)}`;openNext.classList.remove('hidden');openNext.onclick=()=>routeTo({area:'CALENDAR',date:view.nextDue.dueDate,recordId:view.nextDue.recordId});}const obligationList=$('obligationList');obligationList.textContent='';const obligations=context.ledgerRecords.filter(record=>record.type==='OBLIGATION').sort((a,b)=>Number(b.remainingSatang??b.amountSatang??0)-Number(a.remainingSatang??a.amountSatang??0));for(const record of obligations){const display={...record,amountSatang:Number(record.remainingSatang??record.amountSatang??0),title:record.title||'ภาระ'};obligationList.append(simpleItem(display));}if(!obligations.length)obligationList.textContent='ยังไม่มีภาระ';const ledgerList=$('ledgerList');ledgerList.textContent='';const transactions=context.ledgerRecords.filter(record=>record.type==='TRANSACTION').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);for(const record of transactions)ledgerList.append(simpleItem(record));if(!transactions.length)ledgerList.textContent='ยังไม่มีประวัติเงินจริง';}
 
 function calendarRecordById(recordId){return recordsForDomain(state,'CALENDAR').find(record=>record.recordId===recordId)||null;}
@@ -92,6 +208,8 @@ $('importEvidenceBtn').addEventListener('click',async()=>{try{const evidence=awa
 $('restoreBtn').addEventListener('click',async()=>{try{const backup=await jsonFile($('restoreFile'));await ensureRecoveryRuntime();const result=await runtime.restoreBackup(backup);state=result.state;await openWorkspace();status('กู้คืน Backup และตรวจอ่านกลับแล้ว');}catch(error){status(error.message,true,true);}});
 document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>button.addEventListener('click',()=>activateArea(button.dataset.destination)));
 document.querySelectorAll('[data-city-entry]').forEach(button=>button.addEventListener('click',()=>activateArea(button.dataset.cityEntry)));
+document.querySelectorAll('[data-store-open]').forEach(button=>button.addEventListener('click',()=>setStoreView(button.dataset.storeOpen)));
+document.querySelectorAll('[data-ride-open]').forEach(button=>button.addEventListener('click',()=>setRideView(button.dataset.rideOpen)));
 $('settingsBtn').addEventListener('click',openSettings);
 $('settingsCloseBtn').addEventListener('click',()=>{$('settingsDialog').close();});
 $('calendarEditCloseBtn').addEventListener('click',()=>{$('calendarEditDialog').close();editingCalendarRecordId=null;});
@@ -106,8 +224,8 @@ bindForm('purchaseForm',data=>{const due=data.get('returnDueDate')||null;return 
 bindForm('withdrawForm',data=>run('stockWithdrawal',{workflowId:makeId('WF-WD'),recordId:makeId('WD'),title:data.get('title'),quantity:Number(data.get('quantity'))}));
 bindForm('adjustForm',data=>run('stockAdjustment',{workflowId:makeId('WF-ADJ'),recordId:makeId('ADJ'),title:data.get('title'),deltaQuantity:Number(data.get('delta')),reason:data.get('reason')}));
 function activeRideRound(){return runtime.project().ride.activeRound;}
-$('rideStartBtn').addEventListener('click',()=>run('rideStartRound',{workflowId:makeId('WF-RIDE-START'),roundId:makeId('ROUND')},'เริ่มรอบวิ่งแล้ว'));
-$('rideEndBtn').addEventListener('click',()=>{const round=activeRideRound();if(!round)return status('ยังไม่มีรอบที่กำลังวิ่ง',true);run('rideEndRound',{workflowId:makeId('WF-RIDE-END'),roundId:round.recordId},'จบรอบวิ่งแล้ว');});
+$('rideStartBtn').addEventListener('click',()=>{selectedRideRoundId=null;run('rideStartRound',{workflowId:makeId('WF-RIDE-START'),roundId:makeId('ROUND')},'เริ่มรอบวิ่งแล้ว');});
+$('rideEndBtn').addEventListener('click',()=>{const round=activeRideRound();if(!round)return status('ยังไม่มีรอบที่กำลังวิ่ง',true);selectedRideRoundId=round.recordId;run('rideEndRound',{workflowId:makeId('WF-RIDE-END'),roundId:round.recordId},'จบรอบวิ่งแล้ว');});
 bindForm('rideJobForm',data=>{const round=activeRideRound();if(!round)throw new Error('เริ่มรอบก่อนบันทึกงาน');const paymentMode=data.get('paymentMode');return run('rideJob',{workflowId:makeId('WF-RIDE-JOB'),roundId:round.recordId,jobId:makeId('RIDE-JOB'),ledgerTransactionId:paymentMode==='CASH'?makeId('TX'):undefined,amountSatang:parseBahtToSatang(data.get('amount')),paymentMode,note:data.get('note')||''},'บันทึกงานวิ่งแล้ว');});
 bindForm('rideExpenseForm',data=>{const round=activeRideRound();if(!round)throw new Error('เริ่มรอบก่อนบันทึกค่าใช้จ่าย');return run('rideExpense',{workflowId:makeId('WF-RIDE-EXP'),roundId:round.recordId,expenseId:makeId('RIDE-EXP'),ledgerTransactionId:makeId('TX'),title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount'))},'บันทึกค่าใช้จ่ายรอบแล้ว');});
 bindForm('rideWithdrawForm',data=>run('rideWithdrawCredit',{workflowId:makeId('WF-RIDE-WD'),withdrawalId:makeId('RIDE-WD'),ledgerTransactionId:makeId('TX'),amountSatang:parseBahtToSatang(data.get('amount'))},'บันทึกการเบิกเครดิตแล้ว'));

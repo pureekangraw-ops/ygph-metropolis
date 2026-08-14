@@ -5,6 +5,7 @@ import {
   resetGreenfieldDevicePassword,
 } from './greenfield/runtime.mjs';
 import './ui/app.mjs';
+import './ui/action-popups.mjs';
 void openGreenfieldRuntime;
 
 const $ = id => document.getElementById(id);
