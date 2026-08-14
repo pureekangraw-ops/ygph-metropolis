@@ -1,0 +1,14 @@
+name: Mobile Action Popup Preflight
+on:
+  push:
+    branches:
+      - feature/mobile-action-popups-v1
+jobs:
+  popup-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+      - run: node --test tests/greenfield-mobile-action-popups.test.cjs
