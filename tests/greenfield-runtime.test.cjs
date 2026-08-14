@@ -67,6 +67,32 @@ test('runtime facade initializes, executes owner-safe business workflows, and ex
   assert.equal(runtime.project().calendar.total, 0);
 });
 
+test('runtime Ride projection shares active completed and credit truth', async () => {
+  const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
+  const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
+  const store = createMemoryVaultStore();
+  const runtime = createGreenfieldRuntime({ store, passphrase:'correct horse battery staple', lockManager:null, now:()=>'2026-08-12T11:40:00.000Z' });
+  await runtime.initializeFromEvidence(minimalEvidence(), { expectedPackageId:'FLOW-1786527289637', expectedRevision:28 });
+  await runtime.rideStartRound({ workflowId:'RIDE-START', roundId:'ROUND-1' });
+  await runtime.rideJob({ workflowId:'RIDE-CREDIT', roundId:'ROUND-1', jobId:'JOB-1', amountSatang:18000, paymentMode:'CREDIT' });
+
+  const active = runtime.project().ride;
+  assert.equal(active.todayRoundState, 'ACTIVE');
+  assert.equal(active.activeRound.recordId, 'ROUND-1');
+  assert.equal(active.latestRound.recordId, 'ROUND-1');
+  assert.equal(active.generatedSatang, 18000);
+  assert.equal(active.cashJobSatang, 0);
+  assert.equal(active.creditJobSatang, 18000);
+  assert.equal(active.pendingCreditSatang, 18000);
+
+  await runtime.rideEndRound({ workflowId:'RIDE-END', roundId:'ROUND-1' });
+  const completed = runtime.project().ride;
+  assert.equal(completed.todayRoundState, 'COMPLETED');
+  assert.equal(completed.activeRound, null);
+  assert.equal(completed.latestRound.recordId, 'ROUND-1');
+  assert.equal(completed.pendingCreditSatang, 18000);
+});
+
 test('runtime facade backup round-trip restores into a fresh runtime without exposing legacy DB', async () => {
   const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
   const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
