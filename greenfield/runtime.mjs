@@ -5,7 +5,7 @@ import { inspectDeviceUnlock, enrollDeviceUnlock, unlockVaultPassphrase } from '
 import { initializeGreenfieldFromEvidence } from './cutover.mjs';
 import { createCommandRuntime } from './command-runtime.mjs';
 import { registerGreenfieldDomainCommands } from './domain-operations.mjs';
-import { registerRideDomainCommands, projectRideCredit } from './ride-domain.mjs';
+import { registerRideDomainCommands, projectRideState } from './ride-domain.mjs';
 import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
@@ -146,15 +146,11 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   function project() {
     if (!lastState) throw new Error('GREENFIELD_STATE_NOT_LOADED');
-    const rideRecords = Object.values(lastState.domains.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
     return {
       revision: lastState.revision,
       ledgerBalanceSatang: projectLedgerBalance(lastState),
       calendar: projectCalendarSummary(lastState),
-      ride: {
-        pendingCreditSatang: projectRideCredit(lastState.domains.RIDE),
-        activeRound: rideRecords.find(record => record.type === 'ROUND' && record.status === 'ACTIVE') ?? null,
-      },
+      ride: projectRideState(lastState, now()),
     };
   }
 
