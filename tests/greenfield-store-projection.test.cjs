@@ -27,14 +27,100 @@ test('Store projection ignores cancelled sales and reproduces delta-based stock 
   assert.equal(projectMakeMoney(state, '2026-08-11').storeSatang, 340000);
 });
 
-test('Store receivable projection comes from open Calendar receive queues, not optional Sale fields', async () => {
-  const { projectStore } = await import('../ui/product-model.mjs');
+test('cancelled receive queue does not erase Store receivable truth', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
   const state = stateWith(
-    [{recordId:'SALE-OLD',type:'SALE',amountSatang:350000,quantity:5,status:'OPEN',createdAt:'2026-08-11T10:00:00Z'}],
+    [{recordId:'SALE-1',type:'SALE',title:'ขายสินค้า',totalSatang:100000,receivedSatang:0,outstandingSatang:100000,amountSatang:100000,quantity:1,status:'OPEN'}],
+    [{recordId:'Q-1',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-1',amountSatang:100000,dueDate:'2026-08-15',status:'CANCELLED'}],
+  );
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 100000);
+  const receivables = projectStoreReceivables(state);
+  assert.equal(receivables.totalOutstandingSatang, 100000);
+  assert.equal(receivables.items[0].queueState, 'UNSCHEDULED');
+  assert.equal(receivables.items[0].queueId, null);
+  assert.equal(receivables.items[0].truthSource, 'SALE');
+});
+
+test('duplicate actionable receive queues are VERIFY_DUPLICATE instead of guessed', async () => {
+  const { projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-1',type:'SALE',title:'ขายสินค้า',totalSatang:100000,receivedSatang:50000,outstandingSatang:50000,amountSatang:100000,quantity:1,status:'PARTIAL'}],
     [
-      {recordId:'Q-OPEN',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-OLD',amountSatang:10000,dueDate:'2026-08-14',status:'OPEN'},
-      {recordId:'Q-CANCEL',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-X',amountSatang:50000,dueDate:'2026-08-14',status:'CANCELLED'},
+      {recordId:'Q-A',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-1',amountSatang:50000,status:'OPEN',dueDate:'2026-08-15'},
+      {recordId:'Q-B',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-1',amountSatang:50000,status:'PARTIAL',dueDate:'2026-08-16'},
     ],
   );
-  assert.equal(projectStore(state, '2026-08-13').receivableSatang, 10000);
+  const item = projectStoreReceivables(state).items[0];
+  assert.equal(item.queueState, 'VERIFY_DUPLICATE');
+  assert.equal(item.queueId, null);
+  assert.equal(item.truthSource, 'SALE');
+});
+
+test('partial Sale outstanding is counted exactly once from Sale source truth', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-1',type:'SALE',title:'ขายสินค้า',totalSatang:100000,receivedSatang:60000,outstandingSatang:40000,amountSatang:100000,quantity:1,status:'PARTIAL'}],
+    [{recordId:'Q-1',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-1',amountSatang:40000,status:'PARTIAL',dueDate:'2026-08-15'}],
+  );
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 40000);
+  const receivables = projectStoreReceivables(state);
+  assert.equal(receivables.totalOutstandingSatang, 40000);
+  assert.equal(receivables.items[0].queueState, 'SCHEDULED');
+  assert.equal(receivables.items[0].queueId, 'Q-1');
+  assert.equal(receivables.items[0].truthSource, 'SALE');
+});
+
+test('legacy imported Sale without outstanding fields uses its single related active queue as compatibility evidence', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [{recordId:'Q-LEGACY',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,dueDate:'2026-08-15',status:'OPEN'}],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 35000);
+  assert.equal(receivables.totalOutstandingSatang, 35000);
+  assert.deepEqual(receivables.items[0], {
+    saleId:'SALE-LEGACY',
+    title:'ขายเก่า',
+    outstandingSatang:35000,
+    queueState:'SCHEDULED',
+    queueId:'Q-LEGACY',
+    truthSource:'LEGACY_QUEUE_FALLBACK',
+  });
+});
+
+test('cancelling the only legacy receive queue preserves its last known receivable amount but marks it UNSCHEDULED', async () => {
+  const { projectStore, projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [{recordId:'Q-LEGACY',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,dueDate:'2026-08-15',status:'CANCELLED'}],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(projectStore(state, '2026-08-14').receivableSatang, 35000);
+  assert.equal(receivables.totalOutstandingSatang, 35000);
+  assert.equal(receivables.items[0].outstandingSatang, 35000);
+  assert.equal(receivables.items[0].queueState, 'UNSCHEDULED');
+  assert.equal(receivables.items[0].queueId, null);
+  assert.equal(receivables.items[0].truthSource, 'LEGACY_QUEUE_FALLBACK');
+});
+
+test('legacy Sale with multiple related queues surfaces VERIFY without guessing an amount', async () => {
+  const { projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [
+      {recordId:'Q-A',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,status:'OPEN',dueDate:'2026-08-15'},
+      {recordId:'Q-B',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:25000,status:'CANCELLED',dueDate:'2026-08-16'},
+    ],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(receivables.totalOutstandingSatang, 0);
+  assert.deepEqual(receivables.items[0], {
+    saleId:'SALE-LEGACY',
+    title:'ขายเก่า',
+    outstandingSatang:null,
+    queueState:'VERIFY_DUPLICATE',
+    queueId:null,
+    truthSource:'LEGACY_QUEUE_AMBIGUOUS',
+  });
 });

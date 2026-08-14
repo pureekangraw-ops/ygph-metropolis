@@ -1,3 +1,5 @@
+export { projectRideState, projectRideRound } from '../greenfield/ride-domain.mjs';
+
 const DAY_MS = 86400000;
 const MONEY_QUEUE_TYPES = new Set(['PAY_OBLIGATION', 'PAY_OBLIGATION_INSTALLMENT', 'RECEIVE_CUSTOMER_PAYMENT']);
 
@@ -67,6 +69,62 @@ export function projectMakeMoney(state, today) {
   return { storeSatang, rideSatang, combinedSatang:storeSatang + rideSatang };
 }
 
+export function projectStoreReceivables(state) {
+  const sales = recordsForDomain(state, 'STORE').filter(record => record?.type === 'SALE' && record.status !== 'CANCELLED');
+  const queues = recordsForDomain(state, 'CALENDAR').filter(record => record?.type === 'RECEIVE_CUSTOMER_PAYMENT');
+  const items = [];
+
+  for (const sale of sales) {
+    const related = queues.filter(queue => String(queue.detail || '') === `STORE/${sale.recordId}`);
+    const actionable = related.filter(queue => isCalendarActionableStatus(queue.status));
+    const explicitOutstanding = sale.outstandingSatang;
+
+    if (Number.isSafeInteger(explicitOutstanding)) {
+      if (explicitOutstanding <= 0) continue;
+      items.push({
+        saleId:sale.recordId,
+        title:sale.title || 'ลูกหนี้จากการขาย',
+        outstandingSatang:explicitOutstanding,
+        queueState:actionable.length === 0 ? 'UNSCHEDULED' : actionable.length === 1 ? 'SCHEDULED' : 'VERIFY_DUPLICATE',
+        queueId:actionable.length === 1 ? actionable[0].recordId : null,
+        truthSource:'SALE',
+      });
+      continue;
+    }
+
+    if (related.length === 0) continue;
+    if (related.length > 1) {
+      items.push({
+        saleId:sale.recordId,
+        title:sale.title || 'ลูกหนี้จากการขาย',
+        outstandingSatang:null,
+        queueState:'VERIFY_DUPLICATE',
+        queueId:null,
+        truthSource:'LEGACY_QUEUE_AMBIGUOUS',
+      });
+      continue;
+    }
+
+    const fallback = related[0];
+    const fallbackOutstanding = Number(fallback.amountSatang);
+    if (!Number.isSafeInteger(fallbackOutstanding) || fallbackOutstanding <= 0) continue;
+    const fallbackActionable = isCalendarActionableStatus(fallback.status);
+    items.push({
+      saleId:sale.recordId,
+      title:sale.title || 'ลูกหนี้จากการขาย',
+      outstandingSatang:fallbackOutstanding,
+      queueState:fallbackActionable ? 'SCHEDULED' : 'UNSCHEDULED',
+      queueId:fallbackActionable ? fallback.recordId : null,
+      truthSource:'LEGACY_QUEUE_FALLBACK',
+    });
+  }
+
+  return {
+    totalOutstandingSatang:items.reduce((sum, item) => Number.isSafeInteger(item.outstandingSatang) && item.outstandingSatang > 0 ? sum + item.outstandingSatang : sum, 0),
+    items,
+  };
+}
+
 export function projectStore(state, today) {
   const storeRecords = recordsForDomain(state, 'STORE');
   let stockQuantity = 0;
@@ -78,14 +136,9 @@ export function projectStore(state, today) {
     if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') stockQuantity -= quantity;
     if (record.type === 'STOCK_ADJUSTMENT') stockQuantity += quantity;
   }
-  let receivableSatang = 0;
-  for (const record of recordsForDomain(state, 'CALENDAR')) {
-    if (record.type !== 'RECEIVE_CUSTOMER_PAYMENT' || lifecycleClosed(record.status)) continue;
-    const amount = Number(record.amountSatang || 0);
-    if (Number.isSafeInteger(amount) && amount > 0) receivableSatang += amount;
-  }
+  const receivables = projectStoreReceivables(state);
   const money = projectMakeMoney(state, today);
-  return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang };
+  return { todaySalesSatang:money.storeSatang, stockQuantity, receivableSatang:receivables.totalOutstandingSatang };
 }
 
 function median(values) {

@@ -74,21 +74,73 @@
 
         <section class="area-page" data-area-page="store">
           <div class="page-head"><div><small>STORE</small><h1>ร้านค้า</h1></div></div>
-          <div class="metrics three"><article><small>ยอดขายวันนี้</small><b id="storeToday">0</b></article><article><small>สต็อกคำนวณ</small><b id="storeStock">0</b></article><article><small>ลูกค้าค้างรับ</small><b id="storeReceivable">0</b></article></div>
-          <details class="task-panel primary-task"><summary>ขายสินค้า</summary><form id="saleForm"><label>รายการ <input name="title" required value="ขายสินค้า"></label><label>ยอดรวม (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>รับแล้ว (บาท) <input name="received" inputmode="decimal" value="0"></label><label>วันครบกำหนด <input name="dueDate" type="date"></label><button class="primary-action">บันทึกการขาย</button></form></details>
-          <details class="task-panel"><summary>รับสินค้าเข้า</summary><form id="purchaseForm"><label>รายการ <input name="title" required value="รับสินค้าเข้า"></label><label>ยอดซื้อ (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>วันสิ้นสุดคืนสินค้า <input name="returnDueDate" type="date"></label><button>บันทึกรับสินค้า</button></form></details>
-          <details class="task-panel"><summary>จัดการสต็อก</summary><div class="grid two"><form id="withdrawForm" class="card"><h3>เบิกสินค้า</h3><label>รายการ <input name="title" required value="เบิกสินค้า"></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><button>บันทึกการเบิก</button></form><form id="adjustForm" class="card"><h3>ปรับสต็อก</h3><label>หัวข้อ <input name="title" required value="ปรับสต็อก"></label><label>ผลต่างจำนวน <input name="delta" type="number" required></label><label>เหตุผล <input name="reason" required></label><button>บันทึกการปรับ</button></form></div></details>
-          <details class="task-panel"><summary>ประวัติร้านล่าสุด</summary><div id="storeList" class="list"></div></details>
+          <div data-store-view="overview">
+            <div class="metrics three"><article><small>ยอดขายวันนี้</small><b id="storeToday">0</b></article><article><small>สต็อกคำนวณ</small><b id="storeStock">0</b></article><article><small>ลูกค้าค้างรับ</small><b id="storeReceivable">0</b></article></div>
+            <div id="storeAttention" class="attention-list"></div>
+            <details class="task-panel primary-task"><summary>ขายสินค้า</summary><form id="saleForm"><label>รายการ <input name="title" required value="ขายสินค้า"></label><label>ยอดรวม (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>รับแล้ว (บาท) <input name="received" inputmode="decimal" value="0"></label><label>วันครบกำหนด <input name="dueDate" type="date"></label><button class="primary-action">บันทึกการขาย</button></form></details>
+            <details class="task-panel"><summary>รับสินค้าเข้า</summary><form id="purchaseForm"><label>รายการ <input name="title" required value="รับสินค้าเข้า"></label><label>ยอดซื้อ (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>วันสิ้นสุดคืนสินค้า <input name="returnDueDate" type="date"></label><button>บันทึกรับสินค้า</button></form></details>
+            <details class="task-panel"><summary>จัดการสต็อก</summary><div class="grid two"><form id="withdrawForm" class="card"><h3>เบิกสินค้า</h3><label>รายการ <input name="title" required value="เบิกสินค้า"></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><button>บันทึกการเบิก</button></form><form id="adjustForm" class="card"><h3>ปรับสต็อก</h3><label>หัวข้อ <input name="title" required value="ปรับสต็อก"></label><label>ผลต่างจำนวน <input name="delta" type="number" required></label><label>เหตุผล <input name="reason" required></label><button>บันทึกการปรับ</button></form></div></details>
+            <div class="city-inspection-links" aria-label="ดูรายละเอียดร้านค้า">
+              <button type="button" data-store-open="receivables"><strong>ลูกหนี้</strong><small>ยอดค้างจากการขายและสถานะคิวรับเงิน</small></button>
+              <button type="button" data-store-open="stock-movements"><strong>ความเคลื่อนไหวสต็อก</strong><small>ซื้อ ขาย เบิก และปรับจำนวน</small></button>
+              <button type="button" data-store-open="history"><strong>ประวัติร้าน</strong><small>รายการร้านค้าตามลำดับล่าสุด</small></button>
+            </div>
+          </div>
+          <section data-store-view="receivables" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ลูกหนี้</h2></div></div>
+            <div id="storeReceivableList" class="list"></div>
+          </section>
+          <section data-store-view="stock-movements" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ความเคลื่อนไหวสต็อก</h2></div></div>
+            <div id="storeStockMovementList" class="list"></div>
+          </section>
+          <section data-store-view="history" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ประวัติร้าน</h2></div></div>
+            <div id="storeList" class="list"></div>
+          </section>
         </section>
 
         <section class="area-page" data-area-page="ride">
           <div class="page-head"><div><small>RIDE</small><h1>วิ่งงาน</h1></div></div>
-          <div class="metrics three"><article><small>รายได้วันนี้</small><b id="rideGenerated">0</b></article><article><small>เครดิตรอเบิก</small><b id="ridePendingCredit">0</b></article><article><small>รอบ</small><b id="rideRoundStatus">ยังไม่เริ่ม</b></article></div>
-          <div class="action-row"><button id="rideStartBtn" class="primary-action">เริ่มรอบ</button><button id="rideEndBtn">จบรอบ</button></div>
-          <details class="task-panel primary-task"><summary>บันทึกงาน</summary><form id="rideJobForm"><label>รายได้งาน (บาท) <input name="amount" inputmode="decimal" required></label><label>รูปแบบ <select name="paymentMode"><option value="CASH">เงินสด</option><option value="CREDIT">เครดิต</option></select></label><label>หมายเหตุ <input name="note"></label><button class="primary-action">บันทึกงาน</button></form></details>
-          <details class="task-panel"><summary>ค่าใช้จ่ายรอบ</summary><form id="rideExpenseForm"><label>รายการ <input name="title" required value="ค่าใช้จ่ายวิ่งงาน"></label><label>จำนวน (บาท) <input name="amount" inputmode="decimal" required></label><button>บันทึกค่าใช้จ่าย</button></form></details>
-          <details class="task-panel"><summary>เบิกเครดิต</summary><form id="rideWithdrawForm"><label>จำนวน (บาท) <input name="amount" inputmode="decimal" required></label><button>บันทึกการเบิก</button></form></details>
-          <details class="task-panel"><summary>งานล่าสุด</summary><div id="rideList" class="list"></div></details>
+          <div data-ride-view="overview">
+            <div class="metrics three"><article><small>สร้างได้วันนี้</small><b id="rideGenerated">0</b></article><article><small>เครดิตรอเบิก</small><b id="ridePendingCredit">0</b></article><article><small>สถานะรอบ</small><b id="rideRoundStatus">ยังไม่เริ่ม</b></article></div>
+            <section id="rideCurrentRoundCard" class="card city-flow-card">
+              <div class="subhead"><div><small>รอบปัจจุบัน</small><h2 id="rideCurrentRoundTitle">ยังไม่มีรอบที่กำลังวิ่ง</h2></div><small id="rideRoundMeta"></small></div>
+              <div id="rideStartRegion"><button id="rideStartBtn" class="primary-action" type="button">เริ่มรอบ</button></div>
+              <div id="rideActiveActions" class="action-row hidden">
+                <details class="task-panel primary-task flex-one"><summary>บันทึกงาน</summary><form id="rideJobForm"><label>รายได้งาน (บาท) <input name="amount" inputmode="decimal" required></label><label>รูปแบบ <select name="paymentMode"><option value="CASH">เงินสด</option><option value="CREDIT">เครดิต</option></select></label><label>หมายเหตุ <input name="note"></label><button class="primary-action">บันทึกงาน</button></form></details>
+                <details class="task-panel flex-one"><summary>ค่าใช้จ่ายรอบ</summary><form id="rideExpenseForm"><label>รายการ <input name="title" required value="ค่าใช้จ่ายวิ่งงาน"></label><label>จำนวน (บาท) <input name="amount" inputmode="decimal" required></label><button>บันทึกค่าใช้จ่าย</button></form></details>
+                <button id="rideEndBtn" type="button">จบรอบ</button>
+              </div>
+            </section>
+            <section id="rideCreditCard" class="card city-flow-card">
+              <div class="subhead"><div><small>เครดิต</small><h2>เครดิตงานวิ่ง</h2></div><b id="rideCreditBalance">0 บาท</b></div>
+              <div id="rideCreditActions" class="action-row hidden">
+                <details class="task-panel flex-one"><summary>เบิกเครดิต</summary><form id="rideWithdrawForm"><label>จำนวน (บาท) <input name="amount" inputmode="decimal" required></label><button>บันทึกการเบิก</button></form></details>
+              </div>
+              <p id="rideCreditQuiet" class="quiet">ยังไม่มีเครดิตรอเบิก</p>
+            </section>
+            <div class="city-inspection-links" aria-label="ดูรายละเอียดวิ่งงาน">
+              <button type="button" data-ride-open="jobs"><strong>งานรอบนี้</strong><small>งานของรอบปัจจุบันหรือรอบล่าสุด</small></button>
+              <button type="button" data-ride-open="summary"><strong>สรุปรอบ</strong><small>แยกสร้างได้ เงินสด เครดิต และค่าใช้จ่าย</small></button>
+              <button type="button" data-ride-open="history"><strong>ประวัติรอบ</strong><small>ดูรอบวิ่งย้อนหลัง</small></button>
+            </div>
+          </div>
+          <section data-ride-view="jobs" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-ride-open="overview">‹ กลับ</button><div><small>RIDE</small><h2>งานรอบนี้</h2></div></div>
+            <p id="rideJobsMeta" class="muted"></p>
+            <div id="rideRoundJobList" class="list"></div>
+          </section>
+          <section data-ride-view="summary" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-ride-open="overview">‹ กลับ</button><div><small>RIDE</small><h2>สรุปรอบ</h2></div></div>
+            <p id="rideSummaryMeta" class="muted"></p>
+            <div class="metrics two"><article><small>สร้างได้ในรอบ</small><b id="rideSummaryGenerated">0 บาท</b></article><article><small>เงินสดจากงาน</small><b id="rideSummaryCash">0 บาท</b></article><article><small>เครดิตจากงาน</small><b id="rideSummaryCredit">0 บาท</b></article><article><small>ค่าใช้จ่ายรอบ</small><b id="rideSummaryExpense">0 บาท</b></article></div>
+            <p id="rideSummaryJobs" class="muted"></p>
+          </section>
+          <section data-ride-view="history" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-ride-open="overview">‹ กลับ</button><div><small>RIDE</small><h2>ประวัติรอบ</h2></div></div>
+            <div id="rideRoundHistory" class="list"></div>
+          </section>
         </section>
 
         <section class="area-page" data-area-page="finance">
@@ -111,7 +163,6 @@
         </section>
 
       </div>
-
 
       <dialog id="calendarEditDialog" class="modal-dialog" aria-labelledby="calendarEditTitle">
         <div class="dialog-body">
