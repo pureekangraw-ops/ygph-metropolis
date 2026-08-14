@@ -92,6 +92,8 @@ function renderHome(context){
   $('goalForm').elements.goal.value=formatSatang(context.goal.goalSatang);
 }
 
+function receivableAmountText(item){return item.outstandingSatang == null?'ยอดต้องตรวจสอบ':bahtText(item.outstandingSatang);}
+
 function renderStore(context){
   $('storeToday').textContent=bahtText(context.store.todaySalesSatang);
   $('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
@@ -102,7 +104,7 @@ function renderStore(context){
   for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){
     const warning=document.createElement('article');warning.className='item truth-warning';
     const title=document.createElement('b');title.textContent=item.queueState==='VERIFY_DUPLICATE'?'VERIFY · พบคิวรับเงินซ้ำ':'ลูกหนี้ยังไม่มีคิวรับเงินที่ใช้งานได้';
-    const meta=document.createElement('small');meta.textContent=`${item.title} · ${bahtText(item.outstandingSatang)}`;
+    const meta=document.createElement('small');meta.textContent=`${item.title} · ${receivableAmountText(item)}`;
     warning.append(title,meta);attention.append(warning);
   }
 
@@ -111,7 +113,7 @@ function renderStore(context){
     const article=document.createElement('article');article.className='item';
     const head=document.createElement('div');head.className='item-head';
     const title=document.createElement('b');title.textContent=item.title;
-    const amount=document.createElement('b');amount.textContent=bahtText(item.outstandingSatang);
+    const amount=document.createElement('b');amount.textContent=receivableAmountText(item);
     head.append(title,amount);
     const meta=document.createElement('small');meta.className=item.queueState==='SCHEDULED'?'muted':'truth-warning-text';
     meta.textContent=item.queueState==='SCHEDULED'?'มีคิวรับเงินที่ใช้งานได้':item.queueState==='UNSCHEDULED'?'UNSCHEDULED · ยังมีลูกหนี้ แต่ไม่มีคิวรับเงินที่ใช้งานได้':'VERIFY_DUPLICATE · พบคิวรับเงินที่ใช้งานได้มากกว่า 1 คิว';
