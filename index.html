@@ -74,11 +74,30 @@
 
         <section class="area-page" data-area-page="store">
           <div class="page-head"><div><small>STORE</small><h1>ร้านค้า</h1></div></div>
-          <div class="metrics three"><article><small>ยอดขายวันนี้</small><b id="storeToday">0</b></article><article><small>สต็อกคำนวณ</small><b id="storeStock">0</b></article><article><small>ลูกค้าค้างรับ</small><b id="storeReceivable">0</b></article></div>
-          <details class="task-panel primary-task"><summary>ขายสินค้า</summary><form id="saleForm"><label>รายการ <input name="title" required value="ขายสินค้า"></label><label>ยอดรวม (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>รับแล้ว (บาท) <input name="received" inputmode="decimal" value="0"></label><label>วันครบกำหนด <input name="dueDate" type="date"></label><button class="primary-action">บันทึกการขาย</button></form></details>
-          <details class="task-panel"><summary>รับสินค้าเข้า</summary><form id="purchaseForm"><label>รายการ <input name="title" required value="รับสินค้าเข้า"></label><label>ยอดซื้อ (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>วันสิ้นสุดคืนสินค้า <input name="returnDueDate" type="date"></label><button>บันทึกรับสินค้า</button></form></details>
-          <details class="task-panel"><summary>จัดการสต็อก</summary><div class="grid two"><form id="withdrawForm" class="card"><h3>เบิกสินค้า</h3><label>รายการ <input name="title" required value="เบิกสินค้า"></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><button>บันทึกการเบิก</button></form><form id="adjustForm" class="card"><h3>ปรับสต็อก</h3><label>หัวข้อ <input name="title" required value="ปรับสต็อก"></label><label>ผลต่างจำนวน <input name="delta" type="number" required></label><label>เหตุผล <input name="reason" required></label><button>บันทึกการปรับ</button></form></div></details>
-          <details class="task-panel"><summary>ประวัติร้านล่าสุด</summary><div id="storeList" class="list"></div></details>
+          <div data-store-view="overview">
+            <div class="metrics three"><article><small>ยอดขายวันนี้</small><b id="storeToday">0</b></article><article><small>สต็อกคำนวณ</small><b id="storeStock">0</b></article><article><small>ลูกค้าค้างรับ</small><b id="storeReceivable">0</b></article></div>
+            <div id="storeAttention" class="attention-list"></div>
+            <details class="task-panel primary-task"><summary>ขายสินค้า</summary><form id="saleForm"><label>รายการ <input name="title" required value="ขายสินค้า"></label><label>ยอดรวม (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>รับแล้ว (บาท) <input name="received" inputmode="decimal" value="0"></label><label>วันครบกำหนด <input name="dueDate" type="date"></label><button class="primary-action">บันทึกการขาย</button></form></details>
+            <details class="task-panel"><summary>รับสินค้าเข้า</summary><form id="purchaseForm"><label>รายการ <input name="title" required value="รับสินค้าเข้า"></label><label>ยอดซื้อ (บาท) <input name="amount" inputmode="decimal" required></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><label>วันสิ้นสุดคืนสินค้า <input name="returnDueDate" type="date"></label><button>บันทึกรับสินค้า</button></form></details>
+            <details class="task-panel"><summary>จัดการสต็อก</summary><div class="grid two"><form id="withdrawForm" class="card"><h3>เบิกสินค้า</h3><label>รายการ <input name="title" required value="เบิกสินค้า"></label><label>จำนวน <input name="quantity" type="number" min="1" required value="1"></label><button>บันทึกการเบิก</button></form><form id="adjustForm" class="card"><h3>ปรับสต็อก</h3><label>หัวข้อ <input name="title" required value="ปรับสต็อก"></label><label>ผลต่างจำนวน <input name="delta" type="number" required></label><label>เหตุผล <input name="reason" required></label><button>บันทึกการปรับ</button></form></div></details>
+            <div class="city-inspection-links" aria-label="ดูรายละเอียดร้านค้า">
+              <button type="button" data-store-open="receivables"><strong>ลูกหนี้</strong><small>ยอดค้างจากการขายและสถานะคิวรับเงิน</small></button>
+              <button type="button" data-store-open="stock-movements"><strong>ความเคลื่อนไหวสต็อก</strong><small>ซื้อ ขาย เบิก และปรับจำนวน</small></button>
+              <button type="button" data-store-open="history"><strong>ประวัติร้าน</strong><small>รายการร้านค้าตามลำดับล่าสุด</small></button>
+            </div>
+          </div>
+          <section data-store-view="receivables" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ลูกหนี้</h2></div></div>
+            <div id="storeReceivableList" class="list"></div>
+          </section>
+          <section data-store-view="stock-movements" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ความเคลื่อนไหวสต็อก</h2></div></div>
+            <div id="storeStockMovementList" class="list"></div>
+          </section>
+          <section data-store-view="history" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-store-open="overview">‹ กลับ</button><div><small>STORE</small><h2>ประวัติร้าน</h2></div></div>
+            <div id="storeList" class="list"></div>
+          </section>
         </section>
 
         <section class="area-page" data-area-page="ride">
@@ -111,7 +130,6 @@
         </section>
 
       </div>
-
 
       <dialog id="calendarEditDialog" class="modal-dialog" aria-labelledby="calendarEditTitle">
         <div class="dialog-body">
