@@ -103,3 +103,24 @@ test('cancelling the only legacy receive queue preserves its last known receivab
   assert.equal(receivables.items[0].queueId, null);
   assert.equal(receivables.items[0].truthSource, 'LEGACY_QUEUE_FALLBACK');
 });
+
+test('legacy Sale with multiple related queues surfaces VERIFY without guessing an amount', async () => {
+  const { projectStoreReceivables } = await import('../ui/product-model.mjs');
+  const state = stateWith(
+    [{recordId:'SALE-LEGACY',type:'SALE',title:'ขายเก่า',amountSatang:100000,quantity:1,status:'OPEN'}],
+    [
+      {recordId:'Q-A',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:35000,status:'OPEN',dueDate:'2026-08-15'},
+      {recordId:'Q-B',type:'RECEIVE_CUSTOMER_PAYMENT',detail:'STORE/SALE-LEGACY',amountSatang:25000,status:'CANCELLED',dueDate:'2026-08-16'},
+    ],
+  );
+  const receivables = projectStoreReceivables(state);
+  assert.equal(receivables.totalOutstandingSatang, 0);
+  assert.deepEqual(receivables.items[0], {
+    saleId:'SALE-LEGACY',
+    title:'ขายเก่า',
+    outstandingSatang:null,
+    queueState:'VERIFY_DUPLICATE',
+    queueId:null,
+    truthSource:'LEGACY_QUEUE_AMBIGUOUS',
+  });
+});
