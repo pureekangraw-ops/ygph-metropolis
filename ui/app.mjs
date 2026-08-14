@@ -1,17 +1,19 @@
 import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
 import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
-import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
+import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, projectStoreReceivables, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { hydrateIcons } from './icons.mjs';
 
 const $ = id => document.getElementById(id);
 let runtime = null;
 let state = null;
 let activeArea = 'home';
+let activeStoreView = 'overview';
 let selectedCalendarDate = dateKey(new Date());
 let monthCursor = monthFromDate(selectedCalendarDate);
 let editingCalendarRecordId = null;
 
 const AREA_LABEL = Object.freeze({ home:'หน้าหลัก', store:'ร้านค้า', ride:'วิ่งงาน', finance:'การเงิน', calendar:'ปฏิทิน' });
+const STORE_VIEWS = new Set(['overview','receivables','stock-movements','history']);
 
 function status(message, error = false, gate = false) {
   const node = $(gate ? 'gateStatus' : 'appStatus');
@@ -33,12 +35,18 @@ async function refresh(message=''){state=await runtime.readState();if(!state)thr
 async function run(method,input,message='บันทึกและอ่านกลับแล้ว'){try{await runtime[method](input);await refresh(message);}catch(error){status(error.message,true);}}
 function bindForm(id,handler){$(id).addEventListener('submit',async event=>{event.preventDefault();try{await handler(new FormData(event.currentTarget),event.currentTarget);}catch(error){status(error.message,true);}});}
 
+function setStoreView(view='overview') {
+  activeStoreView = STORE_VIEWS.has(view) ? view : 'overview';
+  document.querySelectorAll('[data-store-view]').forEach(node=>node.classList.toggle('hidden',node.dataset.storeView!==activeStoreView));
+}
+
 function activateArea(area){
   if(!AREA_LABEL[area]) area='home';
   activeArea=area;
   document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>{const active=button.dataset.destination===area;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
   document.querySelectorAll('[data-area-page]').forEach(page=>page.classList.toggle('active',page.dataset.areaPage===area));
   $('workspaceContext').textContent=AREA_LABEL[area];
+  if(area==='store')setStoreView('overview');
   if(area==='calendar')renderCalendar();
 }
 function openSettings(){
@@ -74,7 +82,53 @@ function renderHome(context){
   const progress=context.goal.goalSatang>0?Math.round((context.money.combinedSatang/context.goal.goalSatang)*100):(context.money.combinedSatang>0?100:0);$('moneyProgress').textContent=`${progress}%`;
   $('goalForm').elements.goal.value=formatSatang(context.goal.goalSatang);
 }
-function renderStore(context){$('storeToday').textContent=bahtText(context.store.todaySalesSatang);$('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;$('storeReceivable').textContent=bahtText(context.store.receivableSatang);const list=$('storeList');list.textContent='';const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,30);for(const record of records)list.append(simpleItem(record));if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';}
+
+function renderStore(context){
+  $('storeToday').textContent=bahtText(context.store.todaySalesSatang);
+  $('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
+  $('storeReceivable').textContent=bahtText(context.store.receivableSatang);
+
+  const receivables=projectStoreReceivables(state);
+  const attention=$('storeAttention');attention.textContent='';
+  for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){
+    const warning=document.createElement('article');warning.className='item truth-warning';
+    const title=document.createElement('b');title.textContent=item.queueState==='VERIFY_DUPLICATE'?'VERIFY · พบคิวรับเงินซ้ำ':'ลูกหนี้ยังไม่มีคิวรับเงินที่ใช้งานได้';
+    const meta=document.createElement('small');meta.textContent=`${item.title} · ${bahtText(item.outstandingSatang)}`;
+    warning.append(title,meta);attention.append(warning);
+  }
+
+  const receivableList=$('storeReceivableList');receivableList.textContent='';
+  for(const item of receivables.items){
+    const article=document.createElement('article');article.className='item';
+    const head=document.createElement('div');head.className='item-head';
+    const title=document.createElement('b');title.textContent=item.title;
+    const amount=document.createElement('b');amount.textContent=bahtText(item.outstandingSatang);
+    head.append(title,amount);
+    const meta=document.createElement('small');meta.className=item.queueState==='SCHEDULED'?'muted':'truth-warning-text';
+    meta.textContent=item.queueState==='SCHEDULED'?'มีคิวรับเงินที่ใช้งานได้':item.queueState==='UNSCHEDULED'?'UNSCHEDULED · ยังมีลูกหนี้ แต่ไม่มีคิวรับเงินที่ใช้งานได้':'VERIFY_DUPLICATE · พบคิวรับเงินที่ใช้งานได้มากกว่า 1 คิว';
+    article.append(head,meta);receivableList.append(article);
+  }
+  if(!receivables.items.length)receivableList.textContent='ไม่มีลูกหนี้ค้างรับ';
+
+  const movementList=$('storeStockMovementList');movementList.textContent='';
+  const movementTypes=new Set(['PURCHASE','SALE','STOCK_WITHDRAWAL','STOCK_ADJUSTMENT']);
+  const movements=[...context.storeRecords].filter(record=>movementTypes.has(record.type)&&record.status!=='CANCELLED').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  for(const record of movements){
+    const article=simpleItem(record);
+    const quantity=Number(record.quantity||0);
+    const delta=record.type==='PURCHASE'?quantity:record.type==='SALE'||record.type==='STOCK_WITHDRAWAL'?-quantity:quantity;
+    const stockMeta=document.createElement('small');stockMeta.className='muted';stockMeta.textContent=`ผลต่อสต็อก ${delta>0?'+':''}${delta} ชิ้น`;
+    article.append(stockMeta);movementList.append(article);
+  }
+  if(!movements.length)movementList.textContent='ยังไม่มีความเคลื่อนไหวสต็อก';
+
+  const list=$('storeList');list.textContent='';
+  const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);
+  for(const record of records)list.append(simpleItem(record));
+  if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';
+  setStoreView(activeStoreView);
+}
+
 function renderRide(context){const rideProjection=context.projection.ride;$('rideGenerated').textContent=bahtText(context.money.rideSatang);$('ridePendingCredit').textContent=bahtText(rideProjection.pendingCreditSatang);$('rideRoundStatus').textContent=rideProjection.activeRound?'กำลังวิ่ง':'ยังไม่เริ่ม';$('rideStartBtn').disabled=Boolean(rideProjection.activeRound);$('rideEndBtn').disabled=!rideProjection.activeRound;const list=$('rideList');list.textContent='';const records=[...context.rideRecords].filter(record=>record.type!=='ROUND').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,30);for(const record of records)list.append(simpleItem(record));if(!records.length)list.textContent='ยังไม่มีงานวิ่งที่บันทึกในฐานใหม่นี้';}
 function renderFinance(context){const view=context.finance;$('financeBalance').textContent=numberText(view.spendableBalanceSatang);$('financeIn').textContent=bahtText(view.todayInSatang);$('financeOut').textContent=bahtText(view.todayOutSatang);$('financeMonthDue').textContent=bahtText(view.monthDueSatang);const openNext=$('financeOpenNextDue');if(!view.nextDue){$('financePressureText').textContent='ไม่มีภาระที่รอจ่าย';$('financePressureMeta').textContent='';openNext.classList.add('hidden');}else{if(view.shortfallSatang>0)$('financePressureText').textContent=`ยังขาด ${bahtText(view.shortfallSatang)}`;else if(view.nextDue.canPayNow)$('financePressureText').textContent='เงินถึงยอดของรายการถัดไปแล้ว — พิจารณาจ่ายได้';else $('financePressureText').textContent='ภาระใกล้ถึงอยู่ในระยะเฝ้าดู';const days=view.nextDue.daysRemaining;$('financePressureMeta').textContent=`${days<0?`เลยกำหนด ${Math.abs(days)} วัน`:days===0?'ครบกำหนดวันนี้':`อีก ${days} วัน`} · ${bahtText(view.nextDue.amountSatang)}`;openNext.classList.remove('hidden');openNext.onclick=()=>routeTo({area:'CALENDAR',date:view.nextDue.dueDate,recordId:view.nextDue.recordId});}const obligationList=$('obligationList');obligationList.textContent='';const obligations=context.ledgerRecords.filter(record=>record.type==='OBLIGATION').sort((a,b)=>Number(b.remainingSatang??b.amountSatang??0)-Number(a.remainingSatang??a.amountSatang??0));for(const record of obligations){const display={...record,amountSatang:Number(record.remainingSatang??record.amountSatang??0),title:record.title||'ภาระ'};obligationList.append(simpleItem(display));}if(!obligations.length)obligationList.textContent='ยังไม่มีภาระ';const ledgerList=$('ledgerList');ledgerList.textContent='';const transactions=context.ledgerRecords.filter(record=>record.type==='TRANSACTION').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);for(const record of transactions)ledgerList.append(simpleItem(record));if(!transactions.length)ledgerList.textContent='ยังไม่มีประวัติเงินจริง';}
 
@@ -92,6 +146,7 @@ $('importEvidenceBtn').addEventListener('click',async()=>{try{const evidence=awa
 $('restoreBtn').addEventListener('click',async()=>{try{const backup=await jsonFile($('restoreFile'));await ensureRecoveryRuntime();const result=await runtime.restoreBackup(backup);state=result.state;await openWorkspace();status('กู้คืน Backup และตรวจอ่านกลับแล้ว');}catch(error){status(error.message,true,true);}});
 document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>button.addEventListener('click',()=>activateArea(button.dataset.destination)));
 document.querySelectorAll('[data-city-entry]').forEach(button=>button.addEventListener('click',()=>activateArea(button.dataset.cityEntry)));
+document.querySelectorAll('[data-store-open]').forEach(button=>button.addEventListener('click',()=>setStoreView(button.dataset.storeOpen)));
 $('settingsBtn').addEventListener('click',openSettings);
 $('settingsCloseBtn').addEventListener('click',()=>{$('settingsDialog').close();});
 $('calendarEditCloseBtn').addEventListener('click',()=>{$('calendarEditDialog').close();editingCalendarRecordId=null;});
