@@ -1,0 +1,29 @@
+name: Store Ride Preflight
+
+on:
+  push:
+    branches:
+      - feature/store-ride-truth-flow-v1
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Store Ride preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run project tests
+        run: npm test
+      - name: Check syntax
+        run: npm run check:syntax
+      - name: Check UTF-8
+        run: npm run check:utf8
