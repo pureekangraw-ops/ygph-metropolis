@@ -95,11 +95,12 @@ function renderHome(context){
 function receivableAmountText(item){return item.outstandingSatang == null?'ยอดต้องตรวจสอบ':bahtText(item.outstandingSatang);}
 
 function renderStore(context){
+  const receivables=projectStoreReceivables(state);
+  const hasUnknownReceivable=receivables.items.some(item=>item.outstandingSatang == null);
   $('storeToday').textContent=bahtText(context.store.todaySalesSatang);
   $('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
-  $('storeReceivable').textContent=bahtText(context.store.receivableSatang);
+  $('storeReceivable').textContent=hasUnknownReceivable?'ยอดต้องตรวจสอบ':bahtText(context.store.receivableSatang);
 
-  const receivables=projectStoreReceivables(state);
   const attention=$('storeAttention');attention.textContent='';
   for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){
     const warning=document.createElement('article');warning.className='item truth-warning';
