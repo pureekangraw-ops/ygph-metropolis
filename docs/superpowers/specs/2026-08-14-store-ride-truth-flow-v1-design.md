@@ -24,6 +24,7 @@ Design direction:
 - Calendar queues remain scheduling/action surfaces and must retain `detail=STORE/<saleId>` relation.
 - Cancelling a Calendar queue closes only the scheduled action. It does not mutate Sale outstanding balance.
 - UI must surface a receivable whose queue is cancelled/missing as needing scheduling/attention rather than hiding the debt.
+- If more than one actionable receive queue points at the same Sale, classify the relation as `VERIFY_DUPLICATE` and do not silently choose one.
 
 ### 2. No fake per-product stock identity
 
@@ -60,7 +61,12 @@ Add a projection that exposes at least:
 - `latestRound`
 - `todayRoundState`: `NOT_STARTED | ACTIVE | COMPLETED`
 
-This projection is read-only and derived from Ride records; do not create a new durable status record solely for UI.
+State semantics:
+- `ACTIVE`: any active round exists.
+- `COMPLETED`: no active round exists and at least one round closed today; `latestRound` is the most recently closed/started round.
+- `NOT_STARTED`: no active round and no round closed today, even if older historical rounds exist.
+
+This projection is read-only and derived from Ride records; do not create a new durable status record solely for UI. Multiple rounds per day remain allowed because the current domain only forbids simultaneous active rounds.
 
 ### 5. Ride generated income must not be confused with spendable cash
 
@@ -82,7 +88,7 @@ Do not label total generated income as cash balance or money available.
    - sales generated today
    - total calculated stock quantity
    - receivable source truth
-   - attention item when receivable exists without an actionable Calendar queue
+   - attention item when receivable exists without one unambiguous actionable Calendar queue
 
 2. Short actions
    - Sell
@@ -104,10 +110,12 @@ These are list/detail inspection views, not form accordions.
 Each open/partial Sale with `outstandingSatang > 0` is a receivable source record.
 
 For each receivable derive queue relation state:
-- `SCHEDULED`: actionable RECEIVE_CUSTOMER_PAYMENT queue exists
-- `UNSCHEDULED`: no actionable queue exists (including cancelled queue)
+- `SCHEDULED`: exactly one actionable `RECEIVE_CUSTOMER_PAYMENT` queue exists and its `detail` points to this Sale.
+- `UNSCHEDULED`: no actionable queue exists (including when only cancelled/completed queues remain).
+- `VERIFY_DUPLICATE`: more than one actionable queue points to the same Sale.
+- `VERIFY_RELATION`: a candidate queue has missing/malformed/mismatched source relation.
 
-V1 must not silently recreate a queue. It may provide a route/action to Calendar scheduling only if an explicit safe workflow is added and tested. Otherwise display `UNSCHEDULED` as attention/VERIFY.
+V1 must not silently recreate, merge, cancel, or select among ambiguous queues. It may provide a route/action to Calendar scheduling only if an explicit safe workflow is added and tested. Otherwise display non-SCHEDULED states as attention/VERIFY.
 
 ## Ride city design
 
@@ -116,14 +124,14 @@ V1 must not silently recreate a queue. It may provide a route/action to Calendar
 1. Current ride state
    - `NOT_STARTED`: no active round and no completed round today
    - `ACTIVE`: active round exists
-   - `COMPLETED`: no active round but latest completed round is today
+   - `COMPLETED`: no active round but at least one round completed today
    - generated income today
    - pending credit
 
 2. Current Round actions
    - NOT_STARTED: Start round
    - ACTIVE: Record job, Round expense, End round
-   - COMPLETED: Start new round only if domain policy allows multiple rounds per day (current domain allows it after closing the prior round)
+   - COMPLETED: Start new round (current domain permits another round after the prior one is closed)
 
 3. Credit surface
    - pending credit amount
@@ -174,7 +182,7 @@ After any Calendar status mutation, Store receivable source truth remains derive
 - Credit overdraw: block atomically; no Ride or Ledger partial record.
 - Store stock underflow: preserve existing workflow invariant.
 - Receivable queue cancelled/missing: do not hide debt; show source receivable with unscheduled state.
-- Missing or malformed source relation: surface VERIFY/attention rather than inventing owner linkage.
+- Duplicate/malformed receivable queue relation: show VERIFY and do not guess which queue is authoritative.
 
 ## Testing requirements
 
@@ -182,15 +190,16 @@ Add regression coverage for:
 
 1. Cancelled receive queue does not reduce Store receivable source total.
 2. Partial Sale payment decreases Sale outstanding and Store receivable exactly once.
-3. Receivable with cancelled/missing queue is projected as UNSCHEDULED/attention.
-4. Store v1 does not claim per-product stock identity.
-5. Ride NOT_STARTED / ACTIVE / COMPLETED projection across round lifecycle.
-6. Ride job and expense remain blocked without active round.
-7. Credit withdrawal remains available/valid without active round when pending credit exists.
-8. Round summary separates generated, cash, credit, and expenses.
-9. CASH job produces Ride truth + Ledger IN; CREDIT job does not create Ledger until withdrawal.
-10. Existing popup layer remains the single short-action form host; no cloned handlers/forms.
-11. Shell/Home/Bottom Nav regression tests remain unchanged and passing.
+3. Receivable with cancelled/missing queue is projected as `UNSCHEDULED`/attention.
+4. Duplicate actionable queues for one Sale project `VERIFY_DUPLICATE` and are never silently selected.
+5. Store v1 does not claim per-product stock identity.
+6. Ride NOT_STARTED / ACTIVE / COMPLETED projection across round lifecycle, including older historical rounds.
+7. Ride job and expense remain blocked without active round.
+8. Credit withdrawal remains available/valid without active round when pending credit exists.
+9. Round summary separates generated, cash, credit, and expenses.
+10. CASH job produces Ride truth + Ledger IN; CREDIT job does not create Ledger until withdrawal.
+11. Existing popup layer remains the single short-action form host; no cloned handlers/forms.
+12. Shell/Home/Bottom Nav regression tests remain unchanged and passing.
 
 ## Non-goals
 
@@ -199,6 +208,7 @@ Add regression coverage for:
 - Editing historical Sale/Job money values
 - Rewriting Ledger ownership
 - Making Calendar cancellation cancel Store/Ledger source truth
+- Automatically repairing ambiguous Calendar queue relations
 - Changing Gate/Login, Home, Finance, Settings, or global navigation except where a traced Store/Ride defect requires an explicit follow-up spec
 
 ## Integration sequence
