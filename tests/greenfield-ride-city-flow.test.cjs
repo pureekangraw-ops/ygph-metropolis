@@ -31,9 +31,9 @@ test('Ride UI is driven by derived round state and never ties credit visibility 
   assert.match(app, /projectRideState/);
   assert.match(app, /projectRideRound/);
   assert.match(app, /todayRoundState/);
-  assert.match(app, /NOT_STARTED/);
   assert.match(app, /ACTIVE/);
   assert.match(app, /COMPLETED/);
+  assert.match(app, /ยังไม่เริ่ม/);
   assert.match(app, /pendingCreditSatang/);
   assert.doesNotMatch(app, /rideCreditActions[^\n]+activeRound/);
 });
