@@ -7,53 +7,49 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-function area(html, name, nextName) {
-  const start = html.indexOf(`data-area-page="${name}"`);
-  const end = nextName ? html.indexOf(`data-area-page="${nextName}"`, start) : html.indexOf('<dialog', start);
-  return html.slice(start, end > start ? end : undefined);
-}
-
-test('Store Ride and Finance expose short work as action buttons instead of expanded task forms', () => {
-  const html = read('index.html');
-  const store = area(html, 'store', 'ride');
-  const ride = area(html, 'ride', 'finance');
-  const finance = area(html, 'finance', 'calendar');
-
-  for (const task of ['sale','purchase','withdraw','adjust']) assert.match(store, new RegExp(`data-task-open="${task}"`));
-  for (const task of ['ride-job','ride-expense','ride-withdraw']) assert.match(ride, new RegExp(`data-task-open="${task}"`));
-  for (const task of ['income','expense','obligation']) assert.match(finance, new RegExp(`data-task-open="${task}"`));
-
-  for (const formId of ['saleForm','purchaseForm','withdrawForm','adjustForm']) assert.doesNotMatch(store, new RegExp(`id="${formId}"`));
-  for (const formId of ['rideJobForm','rideExpenseForm','rideWithdrawForm']) assert.doesNotMatch(ride, new RegExp(`id="${formId}"`));
-  for (const formId of ['incomeForm','expenseForm','obligationForm']) assert.doesNotMatch(finance, new RegExp(`id="${formId}"`));
+test('mobile popup layer covers every short Store Ride and Finance action', () => {
+  const popups = read('ui/action-popups.mjs');
+  for (const [task, formId] of [
+    ['sale','saleForm'],['purchase','purchaseForm'],['withdraw','withdrawForm'],['adjust','adjustForm'],
+    ['ride-job','rideJobForm'],['ride-expense','rideExpenseForm'],['ride-withdraw','rideWithdrawForm'],
+    ['income','incomeForm'],['expense','expenseForm'],['obligation','obligationForm'],
+  ]) {
+    assert.match(popups, new RegExp(`['\"]${task}['\"]\\s*:\\s*\\{[^}]*formId\\s*:\\s*['\"]${formId}['\"]`, 's'));
+  }
 });
 
-test('short work forms live in one centered modal task surface', () => {
-  const html = read('index.html');
-  const dialog = html.match(/<dialog[^>]*id="taskDialog"[\s\S]*?<\/dialog>/)?.[0] || '';
-  assert.ok(dialog, 'taskDialog must exist');
-  for (const formId of ['saleForm','purchaseForm','withdrawForm','adjustForm','rideJobForm','rideExpenseForm','rideWithdrawForm','incomeForm','expenseForm','obligationForm']) {
-    assert.match(dialog, new RegExp(`id="${formId}"`));
-  }
-  assert.doesNotMatch(dialog, /<details\b/);
+test('popup layer moves the existing forms instead of cloning business forms', () => {
+  const popups = read('ui/action-popups.mjs');
+  assert.match(popups, /append\(form\)|appendChild\(form\)/);
+  assert.doesNotMatch(popups, /cloneNode\(/);
+  assert.match(popups, /closest\(['\"]details['\"]\)/);
+  assert.match(popups, /replaceWith\(/);
+});
 
+test('short work uses one centered native dialog with one visible task pane', () => {
+  const popups = read('ui/action-popups.mjs');
   const css = read('styles.css');
+  assert.match(popups, /createElement\(['\"]dialog['\"]\)/);
+  assert.match(popups, /id\s*=\s*['\"]taskDialog['\"]/);
+  assert.match(popups, /showModal\(\)/);
+  assert.match(popups, /data-task-open|dataset\.taskOpen/);
+  assert.match(popups, /data-task-pane|dataset\.taskPane/);
   const modalRule = css.match(/\.modal-dialog\s*\{[^}]*\}/s)?.[0] || '';
   assert.match(modalRule, /margin\s*:\s*auto/);
 });
 
-test('task launcher opens one pane and successful dialog form submission returns to city context', () => {
-  const app = read('ui/app.mjs');
-  assert.match(app, /function openTaskDialog\(/);
-  assert.match(app, /document\.querySelectorAll\('\[data-task-open\]'\)/);
-  assert.match(app, /taskDialogTitle/);
-  assert.match(app, /closest\(['"]#taskDialog['"]\)/);
-  assert.match(app, /taskDialog.*close\(\)|closeTaskDialog\(\)/s);
+test('successful task returns to its city while business validation errors keep popup open', () => {
+  const popups = read('ui/action-popups.mjs');
+  assert.match(popups, /MutationObserver/);
+  assert.match(popups, /classList\.contains\(['\"]error['\"]\)/);
+  assert.match(popups, /closeTaskDialog\(\)/);
+  assert.match(popups, /reset\(\)/);
 });
 
-test('history and city summaries remain on their owner pages rather than moving into task modal', () => {
-  const html = read('index.html');
-  const dialog = html.match(/<dialog[^>]*id="taskDialog"[\s\S]*?<\/dialog>/)?.[0] || '';
-  for (const id of ['storeList','rideList','obligationList','ledgerList']) assert.doesNotMatch(dialog, new RegExp(`id="${id}"`));
-  for (const id of ['storeToday','rideGenerated','financeBalance']) assert.doesNotMatch(dialog, new RegExp(`id="${id}"`));
+test('popup layer is loaded after the existing UI bindings so moved forms keep their handlers', () => {
+  const rootApp = read('app.mjs');
+  const uiImport = rootApp.indexOf("import './ui/app.mjs';");
+  const popupImport = rootApp.indexOf("import './ui/action-popups.mjs';");
+  assert.ok(uiImport >= 0, 'existing UI module import must remain');
+  assert.ok(popupImport > uiImport, 'popup layer must evaluate after existing UI bindings');
 });
