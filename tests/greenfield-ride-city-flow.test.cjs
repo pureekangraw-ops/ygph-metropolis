@@ -27,15 +27,15 @@ test('Ride current-round actions and global credit action live in separate surfa
 });
 
 test('Ride UI is driven by derived round state and never ties credit visibility to active round', () => {
-  const app = source('ui/app.mjs');
-  assert.match(app, /projectRideState/);
-  assert.match(app, /projectRideRound/);
-  assert.match(app, /todayRoundState/);
-  assert.match(app, /ACTIVE/);
-  assert.match(app, /COMPLETED/);
-  assert.match(app, /ยังไม่เริ่ม/);
-  assert.match(app, /pendingCreditSatang/);
-  assert.doesNotMatch(app, /rideCreditActions[^\n]+activeRound/);
+  const rideUi = source('ui/ride-ui.mjs');
+  assert.match(rideUi, /projectRideState/);
+  assert.match(rideUi, /projectRideRound/);
+  assert.match(rideUi, /todayRoundState/);
+  assert.match(rideUi, /ACTIVE/);
+  assert.match(rideUi, /COMPLETED/);
+  assert.match(rideUi, /ยังไม่เริ่ม/);
+  assert.match(rideUi, /pendingCreditSatang/);
+  assert.doesNotMatch(rideUi, /rideCreditActions[^\n]+activeRound/);
 });
 
 test('Ride summary labels generated cash credit and expense as distinct truths', () => {
@@ -51,9 +51,9 @@ test('Ride summary labels generated cash credit and expense as distinct truths',
 });
 
 test('Ride job and expense handlers still fail closed without an active round', () => {
-  const app = source('ui/app.mjs');
-  assert.match(app, /rideJobForm[\s\S]*if\(!round\)throw new Error\('เริ่มรอบก่อนบันทึกงาน'\)/);
-  assert.match(app, /rideExpenseForm[\s\S]*if\(!round\)throw new Error\('เริ่มรอบก่อนบันทึกค่าใช้จ่าย'\)/);
+  const rideUi = source('ui/ride-ui.mjs');
+  assert.match(rideUi, /rideJobForm[\s\S]*if\s*\(!round\)\s*throw new Error\('เริ่มรอบก่อนบันทึกงาน'\)/);
+  assert.match(rideUi, /rideExpenseForm[\s\S]*if\s*\(!round\)\s*throw new Error\('เริ่มรอบก่อนบันทึกค่าใช้จ่าย'\)/);
 });
 
 test('Ride UI boundary is isolated behind its own module', () => {
@@ -62,6 +62,12 @@ test('Ride UI boundary is isolated behind its own module', () => {
   const app = source('ui/app.mjs');
   const rideUi = source('ui/ride-ui.mjs');
   assert.match(app, /from ['"]\.\/ride-ui\.mjs['"]/);
+  assert.match(app, /createRideUi/);
+  assert.match(app, /rideUi\.renderRide/);
+  assert.match(app, /rideUi\.bindRide/);
   assert.match(rideUi, /renderRide/);
   assert.match(rideUi, /bindRide/);
+  assert.doesNotMatch(app, /function renderRide/);
+  assert.doesNotMatch(app, /rideJobForm/);
+  assert.doesNotMatch(app, /rideExpenseForm/);
 });
