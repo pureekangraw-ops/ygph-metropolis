@@ -53,3 +53,16 @@ test('popup layer is loaded after the existing UI bindings so moved forms keep t
   assert.ok(uiImport >= 0, 'existing UI module import must remain');
   assert.ok(popupImport > uiImport, 'popup layer must evaluate after existing UI bindings');
 });
+
+test('workspace menu entries use popup panels instead of collapsible dropdown details', () => {
+  const popups = read('ui/action-popups.mjs');
+  for (const [menu, targetId] of [
+    ['daily-goal','goalForm'],
+    ['finance-obligations','obligationList'],
+    ['finance-ledger','ledgerList'],
+  ]) {
+    assert.match(popups, new RegExp(`['\"]${menu}['\"]\\s*:\\s*\\{[^}]*targetId\\s*:\\s*['\"]${targetId}['\"]`, 's'));
+  }
+  assert.match(popups, /data-menu-open|dataset\.menuOpen/);
+  assert.match(popups, /data-menu-pane|dataset\.menuPane/);
+});
