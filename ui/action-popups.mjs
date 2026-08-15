@@ -17,6 +17,28 @@ const MENUS = Object.freeze({
   'finance-ledger': { targetId:'ledgerList', label:'ประวัติเงินจริง' },
 });
 
+const CITY_ACTIONS = Object.freeze({
+  'store-actions': {
+    label:'จัดการร้านค้า',
+    actions:[
+      { kind:'task', key:'sale', label:'ขายสินค้า', primary:true },
+      { kind:'task', key:'purchase', label:'รับสินค้าเข้า' },
+      { kind:'task', key:'withdraw', label:'เบิกสินค้า' },
+      { kind:'task', key:'adjust', label:'ปรับสต็อก' },
+    ],
+  },
+  'finance-actions': {
+    label:'จัดการการเงิน',
+    actions:[
+      { kind:'task', key:'income', label:'บันทึกรายรับอื่น' },
+      { kind:'task', key:'expense', label:'เพิ่มรายจ่าย' },
+      { kind:'task', key:'obligation', label:'เพิ่มภาระ' },
+      { kind:'menu', key:'finance-obligations', label:'ภาระคงเหลือ' },
+      { kind:'menu', key:'finance-ledger', label:'ประวัติเงินจริง' },
+    ],
+  },
+});
+
 const forms = new Map();
 const originalGroups = new Map();
 let pendingForm = null;
@@ -224,6 +246,101 @@ for (const pane of menuPanes.querySelectorAll('[data-menu-pane]')) {
     menuStatus.classList.remove('error');
   }, { capture:true });
 }
+
+const cityActionDialog = document.createElement('dialog');
+cityActionDialog.id = 'cityActionDialog';
+cityActionDialog.className = 'modal-dialog city-action-dialog';
+cityActionDialog.setAttribute('aria-labelledby', 'cityActionDialogTitle');
+const cityActionBody = document.createElement('div');
+cityActionBody.className = 'dialog-body';
+const cityActionHead = document.createElement('div');
+cityActionHead.className = 'dialog-head';
+const cityActionTitle = document.createElement('h2');
+cityActionTitle.id = 'cityActionDialogTitle';
+const cityActionCloseButton = document.createElement('button');
+cityActionCloseButton.type = 'button';
+cityActionCloseButton.className = 'secondary';
+cityActionCloseButton.textContent = 'ปิด';
+cityActionCloseButton.setAttribute('aria-label', 'ปิด');
+cityActionHead.append(cityActionTitle, cityActionCloseButton);
+const cityActionChoices = document.createElement('div');
+cityActionChoices.className = 'city-action-choices';
+cityActionBody.append(cityActionHead, cityActionChoices);
+cityActionDialog.append(cityActionBody);
+if (workspace) workspace.append(cityActionDialog);
+
+function closeCityActionDialog() {
+  if (cityActionDialog.open) cityActionDialog.close();
+  cityActionChoices.replaceChildren();
+}
+
+function runCityAction(action) {
+  closeCityActionDialog();
+  if (action.kind === 'task') openTaskDialog(action.key);
+  if (action.kind === 'menu') openMenuDialog(action.key);
+}
+
+function openCityActionDialog(city) {
+  const config = CITY_ACTIONS[city];
+  if (!config) return;
+  cityActionTitle.textContent = config.label;
+  cityActionChoices.replaceChildren();
+  for (const action of config.actions) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.cityActionChoice = action.key;
+    button.textContent = action.label;
+    if (action.primary) button.classList.add('primary-action');
+    button.addEventListener('click', () => runCityAction(action));
+    cityActionChoices.append(button);
+  }
+  if (!cityActionDialog.open) cityActionDialog.showModal();
+  cityActionChoices.querySelector('button')?.focus();
+}
+
+function makeCityActionLauncher(city, label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.cityActionOpen = city;
+  button.className = 'primary-action city-action-launcher';
+  button.textContent = label;
+  button.setAttribute('aria-controls', 'cityActionDialog');
+  return button;
+}
+
+function collapseCityLaunchers(pageSelector, city, taskKeys, menuKeys = []) {
+  const page = document.querySelector(pageSelector);
+  if (!page) return;
+  const taskSet = new Set(taskKeys);
+  const menuSet = new Set(menuKeys);
+  const targets = [...page.querySelectorAll('[data-task-open],[data-menu-open]')].filter(button =>
+    taskSet.has(button.dataset.taskOpen) || menuSet.has(button.dataset.menuOpen)
+  );
+  if (!targets.length) return;
+  const first = targets[0];
+  const anchor = first.closest('.action-row') || first;
+  anchor.before(makeCityActionLauncher(city, CITY_ACTIONS[city].label));
+  const parents = new Set();
+  for (const target of targets) {
+    if (target.parentElement) parents.add(target.parentElement);
+    target.remove();
+  }
+  for (const parent of parents) {
+    if (parent.children.length === 0 && (parent.classList.contains('action-row') || parent.classList.contains('task-launchers'))) parent.remove();
+  }
+}
+
+collapseCityLaunchers('[data-area-page="store"]', 'store-actions', ['sale','purchase','withdraw','adjust']);
+collapseCityLaunchers('[data-area-page="finance"]', 'finance-actions', ['income','expense','obligation'], ['finance-obligations','finance-ledger']);
+
+document.querySelectorAll('[data-city-action-open]').forEach(button => {
+  button.addEventListener('click', () => openCityActionDialog(button.dataset.cityActionOpen));
+});
+cityActionCloseButton.addEventListener('click', closeCityActionDialog);
+cityActionDialog.addEventListener('cancel', event => {
+  event.preventDefault();
+  closeCityActionDialog();
+});
 
 const appStatus = document.getElementById('appStatus');
 if (appStatus) {
