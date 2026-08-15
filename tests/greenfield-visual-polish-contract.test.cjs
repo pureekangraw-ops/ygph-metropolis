@@ -13,3 +13,8 @@ test('visual polish contract is present without changing interaction architectur
   assert.match(css, /\.bottom-nav-btn\.active[^}]*font-weight:/);
   assert.match(css, /@media\(max-width:700px\)[\s\S]*\.workspace-content/);
 });
+
+test('mobile workspace clears the sticky app header when restoring a scrolled city view', () => {
+  assert.match(css, /@media\(max-width:700px\)[\s\S]*\.workspace-content\{[^}]*scroll-margin-top:/);
+  assert.match(css, /@media\(max-width:700px\)[\s\S]*\.area-page\{[^}]*scroll-margin-top:/);
+});
