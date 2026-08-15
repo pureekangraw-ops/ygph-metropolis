@@ -55,3 +55,13 @@ test('Ride job and expense handlers still fail closed without an active round', 
   assert.match(app, /rideJobForm[\s\S]*if\(!round\)throw new Error\('เริ่มรอบก่อนบันทึกงาน'\)/);
   assert.match(app, /rideExpenseForm[\s\S]*if\(!round\)throw new Error\('เริ่มรอบก่อนบันทึกค่าใช้จ่าย'\)/);
 });
+
+test('Ride UI boundary is isolated behind its own module', () => {
+  const boundaryPath = path.join(root, 'ui', 'ride-ui.mjs');
+  assert.equal(fs.existsSync(boundaryPath), true, 'ui/ride-ui.mjs must exist');
+  const app = source('ui/app.mjs');
+  const rideUi = source('ui/ride-ui.mjs');
+  assert.match(app, /from ['"]\.\/ride-ui\.mjs['"]/);
+  assert.match(rideUi, /renderRide/);
+  assert.match(rideUi, /bindRide/);
+});
