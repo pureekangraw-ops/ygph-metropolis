@@ -1,32 +1,22 @@
 import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
-import { parseBahtToSatang, formatSatang, makeId, paymentIntentForQueue, parseInstallments } from './ui-model.mjs';
+import { resolveCalendarAction } from '../greenfield/action-contract.mjs';
+import { parseBahtToSatang, formatSatang, makeId, parseInstallments } from './ui-model.mjs';
 import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, projectStoreReceivables, suggestDailyGoal, projectFinance, projectAttention, buildMonthGrid } from './product-model.mjs';
 import { createRideUi } from './ride-ui.mjs';
 import { hydrateIcons } from './icons.mjs';
 
-const $ = id => document.getElementById(id);
-let runtime = null;
-let state = null;
-let activeArea = 'home';
-let activeStoreView = 'overview';
-let selectedCalendarDate = dateKey(new Date());
-let monthCursor = monthFromDate(selectedCalendarDate);
-let editingCalendarRecordId = null;
-
-const AREA_LABEL = Object.freeze({ home:'หน้าหลัก', store:'ร้านค้า', ride:'วิ่งงาน', finance:'การเงิน', calendar:'ปฏิทิน' });
-const STORE_VIEWS = new Set(['overview','receivables','stock-movements','history']);
-
-function status(message, error = false, gate = false) {
-  const node = $(gate ? 'gateStatus' : 'appStatus');
-  node.textContent = message || '';
-  node.classList.toggle('error', error);
-}
-function devicePin() { const value=$('devicePin').value; if(value.length<6) throw new Error('รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร'); return value; }
-function recoveryPassphrase() { const value=$('recoveryPassphrase').value; if(value.length<12) throw new Error('รหัสกู้คืนต้องมีอย่างน้อย 12 ตัวอักษร'); return value; }
-async function jsonFile(input) { const file=input.files?.[0]; if(!file) throw new Error('เลือกไฟล์ก่อน'); return JSON.parse(await file.text()); }
-async function ensureRecoveryRuntime() { runtime?.close(); runtime=await openGreenfieldRuntime({passphrase:recoveryPassphrase()}); return runtime; }
-function monthFromDate(key) { const match=/^(\d{4})-(\d{2})/.exec(String(key||'')); const now=new Date(); return match?{year:Number(match[1]),monthIndex:Number(match[2])-1}:{year:now.getFullYear(),monthIndex:now.getMonth()}; }
-function shiftDate(key,days){const [year,month,day]=key.split('-').map(Number);const date=new Date(Date.UTC(year,month-1,day+days));return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;}
+const $=id=>document.getElementById(id);
+let runtime=null,state=null,activeArea='home',activeStoreView='overview';
+let selectedCalendarDate=dateKey(new Date()),monthCursor=monthFromDate(selectedCalendarDate),editingCalendarRecordId=null;
+const AREA_LABEL=Object.freeze({home:'หน้าหลัก',store:'ร้านค้า',ride:'วิ่งงาน',finance:'การเงิน',calendar:'ปฏิทิน'});
+const STORE_VIEWS=new Set(['overview','receivables','stock-movements','history']);
+function status(message,error=false,gate=false){const node=$(gate?'gateStatus':'appStatus');node.textContent=message||'';node.classList.toggle('error',error);}
+function devicePin(){const value=$('devicePin').value;if(value.length<6)throw new Error('รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร');return value;}
+function recoveryPassphrase(){const value=$('recoveryPassphrase').value;if(value.length<12)throw new Error('รหัสกู้คืนต้องมีอย่างน้อย 12 ตัวอักษร');return value;}
+async function jsonFile(input){const file=input.files?.[0];if(!file)throw new Error('เลือกไฟล์ก่อน');return JSON.parse(await file.text());}
+async function ensureRecoveryRuntime(){runtime?.close();runtime=await openGreenfieldRuntime({passphrase:recoveryPassphrase()});return runtime;}
+function monthFromDate(key){const match=/^(\d{4})-(\d{2})/.exec(String(key||''));const now=new Date();return match?{year:Number(match[1]),monthIndex:Number(match[2])-1}:{year:now.getFullYear(),monthIndex:now.getMonth()};}
+function shiftDate(key,days){const [y,m,d]=key.split('-').map(Number);const date=new Date(Date.UTC(y,m-1,d+days));return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;}
 function todayKey(){return dateKey(new Date());}
 function dailyIncomeHistory(currentState,today,days=7){const result=[];for(let offset=days;offset>=1;offset-=1){const date=shiftDate(today,-offset);result.push({date,amountSatang:projectMakeMoney(currentState,date).combinedSatang});}return result;}
 function openObligationQueues(currentState){return recordsForDomain(currentState,'CALENDAR').filter(record=>['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT'].includes(record.type)&&!['COMPLETED','CANCELLED'].includes(record.status));}
@@ -35,111 +25,25 @@ async function openWorkspace(){if(!state)throw new Error('ยังไม่ม�
 async function refresh(message=''){state=await runtime.readState();if(!state)throw new Error('ยังไม่มีฐาน METROPOLIS');render();if(message)status(message);}
 async function run(method,input,message='บันทึกและอ่านกลับแล้ว'){try{await runtime[method](input);await refresh(message);}catch(error){status(error.message,true);}}
 function bindForm(id,handler){$(id).addEventListener('submit',async event=>{event.preventDefault();try{await handler(new FormData(event.currentTarget),event.currentTarget);}catch(error){status(error.message,true);}});}
-
-function setStoreView(view='overview') {
-  activeStoreView = STORE_VIEWS.has(view) ? view : 'overview';
-  document.querySelectorAll('[data-store-view]').forEach(node=>node.classList.toggle('hidden',node.dataset.storeView!==activeStoreView));
-}
-
-function activateArea(area){
-  if(!AREA_LABEL[area]) area='home';
-  activeArea=area;
-  document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>{const active=button.dataset.destination===area;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});
-  document.querySelectorAll('[data-area-page]').forEach(page=>page.classList.toggle('active',page.dataset.areaPage===area));
-  $('workspaceContext').textContent=AREA_LABEL[area];
-  if(area==='store')setStoreView('overview');
-  if(area==='ride')rideUi.setRideView('overview');
-  if(area==='calendar')renderCalendar();
-}
-function openSettings(){
-  if(runtime&&state)renderSystem(buildContext());
-  const dialog=$('settingsDialog');
-  if(!dialog.open)dialog.showModal();
-}
-function routeTo(target={}){
-  if(target.area==='SYSTEM'){openSettings();return;}
-  let area;
-  if(target.area==='MAKE_MONEY') area=target.focus==='ride'?'ride':target.focus==='store'?'store':'home';
-  else area=({HOME:'home',STORE:'store',RIDE:'ride',CALENDAR:'calendar',FINANCE:'finance'})[target.area]||String(target.area||'').toLowerCase();
-  if(target.date){selectedCalendarDate=target.date;monthCursor=monthFromDate(target.date);}
-  activateArea(area||'home');render();
-}
+function setStoreView(view='overview'){activeStoreView=STORE_VIEWS.has(view)?view:'overview';document.querySelectorAll('[data-store-view]').forEach(node=>node.classList.toggle('hidden',node.dataset.storeView!==activeStoreView));}
+function activateArea(area){if(!AREA_LABEL[area])area='home';activeArea=area;document.querySelectorAll('.bottom-nav-btn[data-destination]').forEach(button=>{const active=button.dataset.destination===area;button.classList.toggle('active',active);if(active)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');});document.querySelectorAll('[data-area-page]').forEach(page=>page.classList.toggle('active',page.dataset.areaPage===area));$('workspaceContext').textContent=AREA_LABEL[area];if(area==='store')setStoreView('overview');if(area==='ride')rideUi.setRideView('overview');if(area==='calendar')renderCalendar();}
+function openSettings(){if(runtime&&state)renderSystem(buildContext());const dialog=$('settingsDialog');if(!dialog.open)dialog.showModal();}
+function routeTo(target={}){if(target.area==='SYSTEM'){openSettings();return;}let area;if(target.area==='MAKE_MONEY')area=target.focus==='ride'?'ride':target.focus==='store'?'store':'home';else area=({HOME:'home',STORE:'store',RIDE:'ride',CALENDAR:'calendar',FINANCE:'finance'})[target.area]||String(target.area||'').toLowerCase();if(target.date){selectedCalendarDate=target.date;monthCursor=monthFromDate(target.date);}activateArea(area||'home');render();}
 function numberText(value){return `${formatSatang(Number(value||0))}`;}
 function bahtText(value){return `${numberText(value)} บาท`;}
 function recordDateLabel(record){const key=dateKey(record?.dueDate||record?.createdAt||record?.date||record?.updatedAt);if(!key)return '';return new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short',year:'numeric'}).format(new Date(`${key}T12:00:00+07:00`));}
 const TYPE_LABEL=Object.freeze({SALE:'ขายสินค้า',PURCHASE:'รับสินค้าเข้า',STOCK_WITHDRAWAL:'เบิกสินค้า',STOCK_ADJUSTMENT:'ปรับสต็อก',TRANSACTION:'เงินเข้า–ออก',OBLIGATION:'ภาระ',ROUND:'รอบวิ่ง',JOB:'งานวิ่ง',EXPENSE:'ค่าใช้จ่ายวิ่ง',CREDIT_WITHDRAWAL:'เบิกเครดิต',RECEIVE_CUSTOMER_PAYMENT:'รับเงินลูกค้า',PAY_OBLIGATION:'จ่ายภาระ',PAY_OBLIGATION_INSTALLMENT:'จ่ายงวด',PURCHASE_RETURN_WINDOW:'กำหนดคืนสินค้า'});
 function simpleItem(record,{amountField='amountSatang'}={}){const item=document.createElement('article');item.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('b');title.textContent=record.title||TYPE_LABEL[record.type]||'รายการ';const statusNode=document.createElement('small');statusNode.textContent=record.status||'';head.append(title,statusNode);const meta=document.createElement('div');meta.className='muted';const amount=Number(record[amountField]);const pieces=[TYPE_LABEL[record.type]||record.type||''];if(Number.isSafeInteger(amount)&&amount!==0)pieces.push(bahtText(amount));const date=recordDateLabel(record);if(date)pieces.push(date);meta.textContent=pieces.filter(Boolean).join(' · ');item.append(head,meta);return item;}
-
 const rideUi=createRideUi({getRuntime:()=>runtime,getState:()=>state,run,status,bindForm,bahtText,simpleItem});
 
-function renderHome(context){
-  const node=$('attentionList');node.textContent='';
-  const attention=projectAttention({calendarRecords:context.calendarRecords,finance:context.finance,goal:{goalSatang:context.goal.goalSatang,generatedSatang:context.money.combinedSatang},today:context.today});
-  $('homeQuiet').classList.toggle('hidden',attention.length!==0);
-  for(const entry of attention){const button=document.createElement('button');button.className='attention-item';button.dataset.kind=entry.kind;const title=document.createElement('strong');title.textContent=entry.title;const amount=document.createElement('b');amount.textContent=Number(entry.amountSatang||0)>0?bahtText(entry.amountSatang):entry.count?`${entry.count} รายการ`:'';const meta=document.createElement('small');meta.textContent=entry.kind==='OVERDUE'?'เลยกำหนดแล้ว':entry.kind==='TODAY'?'ต้องจัดการวันนี้':'แตะเพื่อไปยังเจ้าของงาน';button.append(title,amount,meta);button.addEventListener('click',()=>routeTo(entry.target));node.append(button);}
-  $('homeBalance').textContent=bahtText(context.finance.spendableBalanceSatang);
-  $('homeGenerated').textContent=bahtText(context.money.combinedSatang);
-  $('homeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
-  $('homeDue').textContent=bahtText(context.finance.nearTermDueSatang);
-  $('moneyGoal').textContent=numberText(context.goal.goalSatang);
-  const remaining=Math.max(0,context.goal.goalSatang-context.money.combinedSatang);$('moneyRemaining').textContent=numberText(remaining);
-  const progress=context.goal.goalSatang>0?Math.round((context.money.combinedSatang/context.goal.goalSatang)*100):(context.money.combinedSatang>0?100:0);$('moneyProgress').textContent=`${progress}%`;
-  $('goalForm').elements.goal.value=formatSatang(context.goal.goalSatang);
-}
-
-function receivableAmountText(item){return item.outstandingSatang == null?'ยอดต้องตรวจสอบ':bahtText(item.outstandingSatang);}
-
-function renderStore(context){
-  const receivables=projectStoreReceivables(state);
-  const hasUnknownReceivable=receivables.items.some(item=>item.outstandingSatang == null);
-  $('storeToday').textContent=bahtText(context.store.todaySalesSatang);
-  $('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;
-  $('storeReceivable').textContent=hasUnknownReceivable?'ยอดต้องตรวจสอบ':bahtText(context.store.receivableSatang);
-
-  const attention=$('storeAttention');attention.textContent='';
-  for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){
-    const warning=document.createElement('article');warning.className='item truth-warning';
-    const title=document.createElement('b');title.textContent=item.queueState==='VERIFY_DUPLICATE'?'VERIFY · พบคิวรับเงินซ้ำ':'ลูกหนี้ยังไม่มีคิวรับเงินที่ใช้งานได้';
-    const meta=document.createElement('small');meta.textContent=`${item.title} · ${receivableAmountText(item)}`;
-    warning.append(title,meta);attention.append(warning);
-  }
-
-  const receivableList=$('storeReceivableList');receivableList.textContent='';
-  for(const item of receivables.items){
-    const article=document.createElement('article');article.className='item';
-    const head=document.createElement('div');head.className='item-head';
-    const title=document.createElement('b');title.textContent=item.title;
-    const amount=document.createElement('b');amount.textContent=receivableAmountText(item);
-    head.append(title,amount);
-    const meta=document.createElement('small');meta.className=item.queueState==='SCHEDULED'?'muted':'truth-warning-text';
-    meta.textContent=item.queueState==='SCHEDULED'?'มีคิวรับเงินที่ใช้งานได้':item.queueState==='UNSCHEDULED'?'UNSCHEDULED · ยังมีลูกหนี้ แต่ไม่มีคิวรับเงินที่ใช้งานได้':'VERIFY_DUPLICATE · พบคิวรับเงินที่ใช้งานได้มากกว่า 1 คิว';
-    article.append(head,meta);receivableList.append(article);
-  }
-  if(!receivables.items.length)receivableList.textContent='ไม่มีลูกหนี้ค้างรับ';
-
-  const movementList=$('storeStockMovementList');movementList.textContent='';
-  const movementTypes=new Set(['PURCHASE','SALE','STOCK_WITHDRAWAL','STOCK_ADJUSTMENT']);
-  const movements=[...context.storeRecords].filter(record=>movementTypes.has(record.type)&&record.status!=='CANCELLED').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
-  for(const record of movements){
-    const article=simpleItem(record);
-    const quantity=Number(record.quantity||0);
-    const delta=record.type==='PURCHASE'?quantity:record.type==='SALE'||record.type==='STOCK_WITHDRAWAL'?-quantity:quantity;
-    const stockMeta=document.createElement('small');stockMeta.className='muted';stockMeta.textContent=`ผลต่อสต็อก ${delta>0?'+':''}${delta} ชิ้น`;
-    article.append(stockMeta);movementList.append(article);
-  }
-  if(!movements.length)movementList.textContent='ยังไม่มีความเคลื่อนไหวสต็อก';
-
-  const list=$('storeList');list.textContent='';
-  const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);
-  for(const record of records)list.append(simpleItem(record));
-  if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';
-  setStoreView(activeStoreView);
-}
-function renderFinance(context){const view=context.finance;$('financeBalance').textContent=numberText(view.spendableBalanceSatang);$('financeIn').textContent=bahtText(view.todayInSatang);$('financeOut').textContent=bahtText(view.todayOutSatang);$('financeMonthDue').textContent=bahtText(view.monthDueSatang);const openNext=$('financeOpenNextDue');if(!view.nextDue){$('financePressureText').textContent='ไม่มีภาระที่รอจ่าย';$('financePressureMeta').textContent='';openNext.classList.add('hidden');}else{if(view.shortfallSatang>0)$('financePressureText').textContent=`ยังขาด ${bahtText(view.shortfallSatang)}`;else if(view.nextDue.canPayNow)$('financePressureText').textContent='เงินถึงยอดของรายการถัดไปแล้ว — พิจารณาจ่ายได้';else $('financePressureText').textContent='ภาระใกล้ถึงอยู่ในระยะเฝ้าดู';const days=view.nextDue.daysRemaining;$('financePressureMeta').textContent=`${days<0?`เลยกำหนด ${Math.abs(days)} วัน`:days===0?'ครบกำหนดวันนี้':`อีก ${days} วัน`} · ${bahtText(view.nextDue.amountSatang)}`;openNext.classList.remove('hidden');openNext.onclick=()=>routeTo({area:'CALENDAR',date:view.nextDue.dueDate,recordId:view.nextDue.recordId});}const obligationList=$('obligationList');obligationList.textContent='';const obligations=context.ledgerRecords.filter(record=>record.type==='OBLIGATION').sort((a,b)=>Number(b.remainingSatang??b.amountSatang??0)-Number(a.remainingSatang??a.amountSatang??0));for(const record of obligations){const display={...record,amountSatang:Number(record.remainingSatang??record.amountSatang??0),title:record.title||'ภาระ'};obligationList.append(simpleItem(display));}if(!obligations.length)obligationList.textContent='ยังไม่มีภาระ';const ledgerList=$('ledgerList');ledgerList.textContent='';const transactions=context.ledgerRecords.filter(record=>record.type==='TRANSACTION').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);for(const record of transactions)ledgerList.append(simpleItem(record));if(!transactions.length)ledgerList.textContent='ยังไม่มีประวัติเงินจริง';}
-
+function renderHome(context){const node=$('attentionList');node.textContent='';const attention=projectAttention({calendarRecords:context.calendarRecords,finance:context.finance,goal:{goalSatang:context.goal.goalSatang,generatedSatang:context.money.combinedSatang},today:context.today});$('homeQuiet').classList.toggle('hidden',attention.length!==0);for(const entry of attention){const button=document.createElement('button');button.className='attention-item';button.dataset.kind=entry.kind;const title=document.createElement('strong');title.textContent=entry.title;const amount=document.createElement('b');amount.textContent=Number(entry.amountSatang||0)>0?bahtText(entry.amountSatang):entry.count?`${entry.count} รายการ`:'';const meta=document.createElement('small');meta.textContent=entry.kind==='OVERDUE'?'เลยกำหนดแล้ว':entry.kind==='TODAY'?'ต้องจัดการวันนี้':'แตะเพื่อไปยังเจ้าของงาน';button.append(title,amount,meta);button.addEventListener('click',()=>routeTo(entry.target));node.append(button);}$('homeBalance').textContent=bahtText(context.finance.cashBalanceSatang);$('homeGenerated').textContent=bahtText(context.money.combinedSatang);$('homeStock').textContent=`${context.store.stockQuantity} ชิ้น`;$('homeDue').textContent=bahtText(context.finance.nearTermDueSatang);$('moneyGoal').textContent=numberText(context.goal.goalSatang);const remaining=Math.max(0,context.goal.goalSatang-context.money.combinedSatang);$('moneyRemaining').textContent=numberText(remaining);const progress=context.goal.goalSatang>0?Math.round((context.money.combinedSatang/context.goal.goalSatang)*100):(context.money.combinedSatang>0?100:0);$('moneyProgress').textContent=`${progress}%`;$('goalForm').elements.goal.value=formatSatang(context.goal.goalSatang);}
+function receivableAmountText(item){return item.outstandingSatang==null?'ยอดต้องตรวจสอบ':bahtText(item.outstandingSatang);}
+function renderStore(context){const receivables=projectStoreReceivables(state);const hasUnknownReceivable=receivables.items.some(item=>item.outstandingSatang==null);$('storeToday').textContent=bahtText(context.store.todaySalesSatang);$('storeStock').textContent=`${context.store.stockQuantity} ชิ้น`;$('storeReceivable').textContent=hasUnknownReceivable?'ยอดต้องตรวจสอบ':bahtText(context.store.receivableSatang);const attention=$('storeAttention');attention.textContent='';for(const item of receivables.items.filter(item=>item.queueState!=='SCHEDULED')){const warning=document.createElement('article');warning.className='item truth-warning';const title=document.createElement('b');title.textContent=item.queueState==='VERIFY_DUPLICATE'?'VERIFY · พบคิวรับเงินซ้ำ':'ลูกหนี้ยังไม่มีคิวรับเงินที่ใช้งานได้';const meta=document.createElement('small');meta.textContent=`${item.title} · ${receivableAmountText(item)}`;warning.append(title,meta);attention.append(warning);}const receivableList=$('storeReceivableList');receivableList.textContent='';for(const item of receivables.items){const article=document.createElement('article');article.className='item';const head=document.createElement('div');head.className='item-head';const title=document.createElement('b');title.textContent=item.title;const amount=document.createElement('b');amount.textContent=receivableAmountText(item);head.append(title,amount);const meta=document.createElement('small');meta.className=item.queueState==='SCHEDULED'?'muted':'truth-warning-text';meta.textContent=item.queueState==='SCHEDULED'?'มีคิวรับเงินที่ใช้งานได้':item.queueState==='UNSCHEDULED'?'ต้องตรวจสอบ · ยังมีลูกหนี้ แต่ไม่มีคิวรับเงินที่ใช้งานได้':'ต้องตรวจสอบ · พบคิวรับเงินมากกว่า 1 คิว';article.append(head,meta);receivableList.append(article);}if(!receivables.items.length)receivableList.textContent='ไม่มีลูกหนี้ค้างรับ';const movementList=$('storeStockMovementList');movementList.textContent='';const movementTypes=new Set(['PURCHASE','SALE','STOCK_WITHDRAWAL','STOCK_ADJUSTMENT']);const movements=[...context.storeRecords].filter(record=>movementTypes.has(record.type)&&record.status!=='CANCELLED').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));for(const record of movements){const article=simpleItem(record);const quantity=Number(record.quantity||0);const delta=record.type==='PURCHASE'?quantity:record.type==='SALE'||record.type==='STOCK_WITHDRAWAL'?-quantity:quantity;const stockMeta=document.createElement('small');stockMeta.className='muted';stockMeta.textContent=`ผลต่อสต็อก ${delta>0?'+':''}${delta} ชิ้น`;article.append(stockMeta);movementList.append(article);}if(!movements.length)movementList.textContent='ยังไม่มีความเคลื่อนไหวสต็อก';const list=$('storeList');list.textContent='';const records=[...context.storeRecords].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);for(const record of records)list.append(simpleItem(record));if(!records.length)list.textContent='ยังไม่มีรายการร้านค้า';setStoreView(activeStoreView);}
+function renderFinance(context){const view=context.finance;$('financeBalance').textContent=numberText(view.cashBalanceSatang);$('financeIn').textContent=bahtText(view.todayInSatang);$('financeOut').textContent=bahtText(view.todayOutSatang);$('financeMonthDue').textContent=bahtText(view.monthDueSatang);const openNext=$('financeOpenNextDue');if(!view.nextDue){$('financePressureText').textContent='ไม่มีคิวภาระที่รอจ่าย';$('financePressureMeta').textContent='';openNext.classList.add('hidden');}else{if(view.shortfallSatang>0)$('financePressureText').textContent=`เงินสดยังต่ำกว่ายอดคิวใกล้ถึง ${bahtText(view.shortfallSatang)}`;else if(view.nextDue.canPayNow)$('financePressureText').textContent='เงินสดถึงยอดคิวถัดไปแล้ว — พิจารณาจ่ายได้';else $('financePressureText').textContent='คิวภาระใกล้ถึงอยู่ในระยะเฝ้าดู';const days=view.nextDue.daysRemaining;$('financePressureMeta').textContent=`${days<0?`เลยกำหนด ${Math.abs(days)} วัน`:days===0?'ครบกำหนดวันนี้':`อีก ${days} วัน`} · ${bahtText(view.nextDue.amountSatang)}`;openNext.classList.remove('hidden');openNext.onclick=()=>routeTo({area:'CALENDAR',date:view.nextDue.dueDate,recordId:view.nextDue.recordId});}const obligationList=$('obligationList');obligationList.textContent='';const obligations=context.ledgerRecords.filter(record=>record.type==='OBLIGATION').sort((a,b)=>Number(b.remainingSatang??b.amountSatang??0)-Number(a.remainingSatang??a.amountSatang??0));for(const record of obligations){const display={...record,amountSatang:Number(record.remainingSatang??record.amountSatang??0),title:record.title||'ภาระ'};obligationList.append(simpleItem(display));}if(!obligations.length)obligationList.textContent='ยังไม่มีภาระ';const ledgerList=$('ledgerList');ledgerList.textContent='';const transactions=context.ledgerRecords.filter(record=>record.type==='TRANSACTION').sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,50);for(const record of transactions)ledgerList.append(simpleItem(record));if(!transactions.length)ledgerList.textContent='ยังไม่มีประวัติเงินจริง';}
 function calendarRecordById(recordId){return recordsForDomain(state,'CALENDAR').find(record=>record.recordId===recordId)||null;}
 function openCalendarEdit(record){editingCalendarRecordId=record.recordId;$('calendarEditLabel').textContent=record.title||TYPE_LABEL[record.type]||'รายการ';$('calendarEditDueDate').value=dateKey(record.dueDate||record.date||record.scheduledDate);const dialog=$('calendarEditDialog');if(!dialog.open)dialog.showModal();}
-function calendarActionItem(record){const item=simpleItem(record);const timeState=deriveTimeState(record,todayKey());const meta=document.createElement('small');meta.className='muted';meta.textContent=timeState==='OVERDUE'?'เลยกำหนด':timeState==='TODAY'?'วันนี้':timeState==='NEAR'?'ใกล้ถึง':'';if(meta.textContent)item.append(meta);if(!isCalendarActionableStatus(record.status))return item;const actions=document.createElement('div');actions.className='item-actions';if(['RECEIVE_CUSTOMER_PAYMENT','PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT'].includes(record.type)){const input=document.createElement('input');input.inputMode='decimal';input.value=formatSatang(Number(record.amountSatang||0));input.setAttribute('aria-label','จำนวนเงิน');const pay=document.createElement('button');pay.textContent=record.type==='RECEIVE_CUSTOMER_PAYMENT'?'รับเงิน':'ชำระ';pay.addEventListener('click',async()=>{try{const amountSatang=parseBahtToSatang(input.value);const intent=paymentIntentForQueue(record,amountSatang,{workflowId:makeId('WF-PAY'),transactionId:makeId('TX')});await runtime[intent.method](intent.input);await refresh('บันทึกเงินจริงและอัปเดตคิวแล้ว');}catch(error){status(error.message,true);}});actions.append(input,pay);}else{const complete=document.createElement('button');complete.textContent='เสร็จ';complete.addEventListener('click',()=>run('calendarStatus',{workflowId:makeId('WF-CAL'),queueId:record.recordId,status:'COMPLETED'},'อัปเดตสถานะแล้ว'));actions.append(complete);}const edit=document.createElement('button');edit.className='secondary';edit.textContent='แก้ไข';edit.addEventListener('click',()=>openCalendarEdit(record));actions.append(edit);item.append(actions);return item;}
+function actionReasonText(reason){return ({SOURCE_NOT_FOUND:'ต้องตรวจสอบแหล่งต้นทางก่อน',SOURCE_AMBIGUOUS:'ต้องตรวจสอบ · พบแหล่งต้นทางมากกว่า 1 รายการ',SOURCE_OWNER_CONFLICT:'ต้องตรวจสอบเจ้าของข้อมูล',SOURCE_RELATION_CONFLICT:'ต้องตรวจสอบความสัมพันธ์ของรายการ',SOURCE_AMOUNT_INVALID:'ต้องตรวจสอบยอดคงเหลือ',ACTION_NOT_OPEN:'รายการนี้ยังทำ action ไม่ได้'})[reason]||'ต้องตรวจสอบรายการก่อนดำเนินการ';}
+function calendarActionItem(record){const item=simpleItem(record);const timeState=deriveTimeState(record,todayKey());const meta=document.createElement('small');meta.className='muted';meta.textContent=timeState==='OVERDUE'?'เลยกำหนด':timeState==='TODAY'?'วันนี้':timeState==='NEAR'?'ใกล้ถึง':'';if(meta.textContent)item.append(meta);if(!isCalendarActionableStatus(record.status))return item;const actions=document.createElement('div');actions.className='item-actions';const action=resolveCalendarAction(state,record);if(action.available&&['PAY_OBLIGATION','RECEIVE_CUSTOMER_PAYMENT'].includes(action.kind)){const input=document.createElement('input');input.inputMode='decimal';input.value=formatSatang(Number(action.maxAmountSatang||0));input.setAttribute('aria-label','จำนวนเงิน');const pay=document.createElement('button');pay.textContent=action.kind==='RECEIVE_CUSTOMER_PAYMENT'?'รับเงิน':'ชำระ';pay.addEventListener('click',async()=>{try{const amountSatang=parseBahtToSatang(input.value);if(amountSatang>action.maxAmountSatang)throw new Error('จำนวนเงินเกินยอดคงเหลือ');await runtime[action.method]({workflowId:makeId('WF-PAY'),queueId:action.queueId,ledgerTransactionId:makeId('TX'),amountSatang});await refresh('บันทึกเงินจริงและอัปเดตคิวแล้ว');}catch(error){status(error.message,true);}});actions.append(input,pay);}else if(action.available&&action.kind==='COMPLETE_CALENDAR'){const complete=document.createElement('button');complete.textContent='เสร็จ';complete.addEventListener('click',()=>run('calendarStatus',{workflowId:makeId('WF-CAL'),queueId:record.recordId,status:'COMPLETED'},'อัปเดตสถานะแล้ว'));actions.append(complete);}else if(!action.available){const verify=document.createElement('small');verify.className='truth-warning-text';verify.textContent=actionReasonText(action.reason);actions.append(verify);}const edit=document.createElement('button');edit.className='secondary';edit.textContent='แก้ไขวัน/คิว';edit.addEventListener('click',()=>openCalendarEdit(record));actions.append(edit);item.append(actions);return item;}
 function renderCalendar(){if(!state||!runtime)return;const records=recordsForDomain(state,'CALENDAR');const today=todayKey();const statuses=records.map(record=>deriveTimeState(record,today));$('calOverdue').textContent=statuses.filter(value=>value==='OVERDUE').length;$('calNear').textContent=statuses.filter(value=>value==='TODAY'||value==='NEAR').length;const finance=projectFinance(state,runtime.project().ledgerBalanceSatang,today);$('calCollision').textContent=finance.collisionDates.length;const grid=buildMonthGrid({year:monthCursor.year,monthIndex:monthCursor.monthIndex,calendarRecords:records,today});const labelDate=new Date(Date.UTC(monthCursor.year,monthCursor.monthIndex,15));$('monthLabel').textContent=new Intl.DateTimeFormat('th-TH',{month:'long',year:'numeric',timeZone:'UTC'}).format(labelDate);const node=$('monthGrid');node.textContent='';for(const cell of grid.cells){const button=document.createElement('button');button.className='day-cell';if(!cell.inMonth)button.classList.add('outside');if(cell.isToday)button.classList.add('today');if(cell.date===selectedCalendarDate)button.classList.add('selected');if(cell.state)button.classList.add(`state-${cell.state.toLowerCase()}`);if(cell.collision)button.classList.add('collision');button.setAttribute('aria-label',cell.date);const day=document.createElement('span');day.textContent=cell.day;button.append(day);if(cell.count){const count=document.createElement('span');count.className='day-count';count.textContent=cell.count;button.append(count);}button.addEventListener('click',()=>{selectedCalendarDate=cell.date;renderCalendar();});node.append(button);}const selected=selectedCalendarDate||today;$('selectedDayTitle').textContent=new Intl.DateTimeFormat('th-TH',{weekday:'short',day:'numeric',month:'long',year:'numeric'}).format(new Date(`${selected}T12:00:00+07:00`));const filter=$('calendarFilter').value;let selectedRecords=records.filter(record=>dateKey(record.dueDate||record.date||record.scheduledDate)===selected);if(filter==='ACTIVE')selectedRecords=selectedRecords.filter(record=>!['COMPLETED','CANCELLED'].includes(record.status));if(filter==='COMPLETED')selectedRecords=selectedRecords.filter(record=>record.status==='COMPLETED');if(filter==='CANCELLED')selectedRecords=selectedRecords.filter(record=>record.status==='CANCELLED');const list=$('calendarList');list.textContent='';selectedRecords.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),'th'));for(const record of selectedRecords)list.append(calendarActionItem(record));if(!selectedRecords.length)list.textContent='ไม่มีรายการในวันที่เลือก';}
 function renderSystem(context){const diagnostics=runtime.diagnostics();$('systemRevision').textContent=state.revision;$('systemSchema').textContent=diagnostics.schema;$('systemDatabase').textContent=diagnostics.database;$('systemCoordination').textContent=diagnostics.coordination.mode==='WEB_LOCKS'?'ล็อกข้ามบริบท':'คิวภายในหน้า';$('diagnostics').textContent=JSON.stringify(diagnostics,null,2);$('systemDbState').textContent=context.finance?'พร้อมใช้':'ตรวจสอบ';}
 function buildContext(){const today=todayKey();const projection=runtime.project();const storeRecords=recordsForDomain(state,'STORE');const ledgerRecords=recordsForDomain(state,'LEDGER');const calendarRecords=recordsForDomain(state,'CALENDAR');const rideRecords=recordsForDomain(state,'RIDE');const money=projectMakeMoney(state,today);const store=projectStore(state,today);const finance=projectFinance(state,projection.ledgerBalanceSatang,today);const goal=state.meta?.dailyGoals?.[today]||{date:today,goalSatang:0,source:'AUTO'};return{today,projection,storeRecords,ledgerRecords,calendarRecords,rideRecords,money,store,finance,goal};}
@@ -160,7 +64,6 @@ $('calendarRescheduleBtn').addEventListener('click',async()=>{const record=calen
 $('calendarCancelOpenBtn').addEventListener('click',()=>{const record=calendarRecordById(editingCalendarRecordId);if(!record)return status('ไม่พบรายการปฏิทิน',true);$('calendarCancelCopy').textContent=`ยืนยันยกเลิก “${record.title||TYPE_LABEL[record.type]||'รายการ'}” โดยไม่สร้างหรือย้อนเงินจริง`;$('calendarEditDialog').close();$('calendarCancelDialog').showModal();$('calendarCancelBackBtn').focus();});
 $('calendarCancelBackBtn').addEventListener('click',()=>{$('calendarCancelDialog').close();const record=calendarRecordById(editingCalendarRecordId);if(record&&isCalendarActionableStatus(record.status))openCalendarEdit(record);});
 $('calendarCancelConfirmBtn').addEventListener('click',async()=>{const record=calendarRecordById(editingCalendarRecordId);if(!record)return status('ไม่พบรายการปฏิทิน',true);try{await runtime.calendarStatus({workflowId:makeId('WF-CAL-CANCEL'),queueId:record.recordId,status:'CANCELLED'});$('calendarCancelDialog').close();editingCalendarRecordId=null;await refresh('ยกเลิกรายการแล้ว');}catch(error){status(error.message,true);}});
-
 bindForm('goalForm',async data=>{const result=await runtime.overrideDailyGoal({date:todayKey(),goalSatang:parseBahtToSatang(data.get('goal'))});state=result.state;render();status('ปรับเป้าวันนี้แล้ว');});
 bindForm('saleForm',data=>{const amount=parseBahtToSatang(data.get('amount'));const received=parseBahtToSatang(data.get('received')||'0');const dueDate=data.get('dueDate')||undefined;if(received<amount&&!dueDate)throw new Error('ยอดยังรับไม่ครบ — ใส่วันครบกำหนดเพื่อสร้างคิวรับเงิน');return run('sale',{workflowId:makeId('WF-SALE'),saleId:makeId('SALE'),ledgerTransactionId:received>0?makeId('TX'):undefined,calendarQueueId:received<amount?makeId('Q'):undefined,title:data.get('title'),amountSatang:amount,quantity:Number(data.get('quantity')),receivedSatang:received,dueDate});});
 bindForm('purchaseForm',data=>{const due=data.get('returnDueDate')||null;return run('purchase',{workflowId:makeId('WF-BUY'),purchaseId:makeId('BUY'),ledgerTransactionId:makeId('TX'),returnQueueId:due?makeId('Q'):null,title:data.get('title'),amountSatang:parseBahtToSatang(data.get('amount')),quantity:Number(data.get('quantity')),returnDueDate:due});});
