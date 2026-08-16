@@ -20,40 +20,35 @@ function state() {
       }},
       RIDE:{records:{
         J1:{record:{recordId:'J1',type:'JOB',paymentMode:'CASH',amountSatang:12000,status:'COMPLETED',createdAt:'2026-08-16T02:00:00.000Z'}},
-        J2:{record:{recordId:'J2',type:'JOB',paymentMode:'CREDIT',amountSatang:8000,status:'COMPLETED',createdAt:'2026-08-16T03:00:00.000Z'}},
-        W1:{record:{recordId:'W1',type:'CREDIT_WITHDRAWAL',amountSatang:3000,status:'COMPLETED',createdAt:'2026-08-16T04:00:00.000Z'}},
       }},
     }
   };
 }
 
-test('calculation authority separates generated activity from realized cash and future claims', async () => {
+test('calculation authority keeps Ledger cash separate from generated sale and receivable truth', async () => {
   const { projectCalculationAuthority } = await import('../greenfield/calculation-authority.mjs');
   const truth = projectCalculationAuthority(state(), { ledgerBalanceSatang:45000, today:'2026-08-16', nearDays:7 });
   assert.equal(truth.cash.balanceSatang, 45000);
   assert.equal(truth.cash.todayInSatang, 20000);
   assert.equal(truth.generated.storeSatang, 100000);
-  assert.equal(truth.generated.rideSatang, 20000);
-  assert.equal(truth.generated.totalSatang, 120000);
   assert.equal(truth.receivables.totalSatang, 80000);
-  assert.equal(truth.ride.pendingCreditSatang, 5000);
   assert.equal(truth.obligations.remainingSatang, 50000);
-  assert.equal(truth.planning.nearTermDueSatang, 20000);
-  assert.equal(truth.planning.reservedNearTermSatang, 20000);
-  assert.equal(truth.planning.safeToSpendSatang, 25000);
-  assert.equal(truth.planning.shortfallSatang, 0);
+  assert.equal(truth.calendar.nearTermDueSatang, 20000);
+  assert.equal(truth.calendar.shortfallSatang, 0);
+  assert.equal('safeToSpendSatang' in (truth.planning || {}), false);
 });
 
-test('safe-to-spend never becomes negative and shortfall is the uncovered near-term amount', async () => {
+test('shortfall is an informational comparison and does not mutate or redefine Ledger balance', async () => {
   const { projectCalculationAuthority } = await import('../greenfield/calculation-authority.mjs');
   const truth = projectCalculationAuthority(state(), { ledgerBalanceSatang:5000, today:'2026-08-16', nearDays:7 });
-  assert.equal(truth.planning.safeToSpendSatang, 0);
-  assert.equal(truth.planning.shortfallSatang, 15000);
+  assert.equal(truth.cash.balanceSatang, 5000);
+  assert.equal(truth.calendar.nearTermDueSatang, 20000);
+  assert.equal(truth.calendar.shortfallSatang, 15000);
 });
 
-test('generated credit is never silently counted as realized Ledger cash', async () => {
+test('Ride implementation presence is not promoted into current semantic cash ownership', async () => {
   const { projectCalculationAuthority } = await import('../greenfield/calculation-authority.mjs');
   const truth = projectCalculationAuthority(state(), { ledgerBalanceSatang:45000, today:'2026-08-16' });
-  assert.notEqual(truth.generated.totalSatang, truth.cash.todayInSatang);
-  assert.equal(truth.ride.pendingCreditSatang, 5000);
+  assert.equal(truth.semanticWarnings.includes('RIDE_OWNER_SCOPE_VERIFY'), true);
+  assert.equal(truth.cash.balanceSatang, 45000);
 });
