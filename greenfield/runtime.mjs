@@ -10,6 +10,7 @@ import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
 import { exportGreenfieldBackup, restoreGreenfieldBackup } from './backup.mjs';
+import { buildCalendarActionIntent } from './action-contract.mjs';
 import {
   buildSaleWorkflow,
   buildReceiveCustomerPaymentWorkflow,
@@ -80,6 +81,25 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     if (!plan || !Array.isArray(plan.commands) || plan.commands.length === 0) throw new Error('INVALID_WORKFLOW_PLAN');
     return coordinator.run(async () => {
       const result = await executeAtomicWorkflow({ store, passphrase, runtime: commandRuntime, commands: plan.commands });
+      lastState = result.state;
+      return result;
+    });
+  }
+
+  async function executeResolvedCalendarPayment(input, expectedMethod) {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const queueId = String(input?.queueId || '');
+      const queue = current?.domains?.CALENDAR?.records?.[queueId]?.record;
+      if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
+      const intent = buildCalendarActionIntent(current, queue, input?.amountSatang, {
+        workflowId:input?.workflowId,
+        transactionId:input?.ledgerTransactionId,
+      });
+      if (intent.method !== expectedMethod) throw new Error(`CALENDAR_ACTION_METHOD_MISMATCH:${expectedMethod}/${intent.method}`);
+      const plan = intent.method === 'payObligation' ? buildPayObligationWorkflow(intent.input) : buildReceiveCustomerPaymentWorkflow(intent.input);
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands:plan.commands });
       lastState = result.state;
       return result;
     });
@@ -187,9 +207,9 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     overrideDailyGoal,
     changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
-    receiveCustomerPayment: input => executePlan(buildReceiveCustomerPaymentWorkflow(input)),
+    receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
-    payObligation: input => executePlan(buildPayObligationWorkflow(input)),
+    payObligation: input => executeResolvedCalendarPayment(input, 'payObligation'),
     purchase: input => executePlan(buildPurchaseWorkflow(input)),
     stockWithdrawal: input => executePlan(buildStockWithdrawalWorkflow(input)),
     stockAdjustment: input => executePlan(buildStockAdjustmentWorkflow(input)),
