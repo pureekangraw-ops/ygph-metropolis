@@ -24,7 +24,7 @@ function minimalState() {
 }
 
 test('Calendar payment action resolves canonical Ledger owner from obligation installment plan even when queue detail is missing', async () => {
-  const { resolveCalendarAction } = await import('../ui/action-contract.mjs');
+  const { resolveCalendarAction } = await import('../greenfield/action-contract.mjs');
   const state = minimalState();
   const queue = state.domains.CALENDAR.records.Q1.record;
   const action = resolveCalendarAction(state, queue);
@@ -37,7 +37,7 @@ test('Calendar payment action resolves canonical Ledger owner from obligation in
 });
 
 test('Calendar action fails closed when no unique source owner can be proven', async () => {
-  const { resolveCalendarAction } = await import('../ui/action-contract.mjs');
+  const { resolveCalendarAction } = await import('../greenfield/action-contract.mjs');
   const state = minimalState();
   state.domains.LEDGER.records = {};
   const queue = state.domains.CALENDAR.records.Q1.record;
@@ -47,7 +47,7 @@ test('Calendar action fails closed when no unique source owner can be proven', a
 });
 
 test('Calendar action fails closed when two source records claim the same queue', async () => {
-  const { resolveCalendarAction } = await import('../ui/action-contract.mjs');
+  const { resolveCalendarAction } = await import('../greenfield/action-contract.mjs');
   const state = minimalState();
   state.domains.LEDGER.records.OBL2 = {record:{recordId:'OBL2',type:'OBLIGATION',remainingSatang:30000,status:'OPEN',installmentPlan:[{queueId:'Q1',amountSatang:30000,dueDate:'2026-08-15'}]}};
   const action = resolveCalendarAction(state, state.domains.CALENDAR.records.Q1.record);
@@ -56,7 +56,7 @@ test('Calendar action fails closed when two source records claim the same queue'
 });
 
 test('payment intent rejects zero and over-remaining amounts before runtime execution', async () => {
-  const { buildCalendarActionIntent } = await import('../ui/action-contract.mjs');
+  const { buildCalendarActionIntent } = await import('../greenfield/action-contract.mjs');
   const state = minimalState();
   const queue = state.domains.CALENDAR.records.Q1.record;
   assert.throws(() => buildCalendarActionIntent(state, queue, 0, {workflowId:'WF',transactionId:'TX'}), /INVALID_PAYMENT_AMOUNT/);
