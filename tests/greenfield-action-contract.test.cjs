@@ -68,6 +68,16 @@ test('payment intent rejects zero and over-remaining amounts before runtime exec
   assert.equal(intent.input.amountSatang, 15000);
 });
 
+test('UI payment intent identifies the queue but leaves source-owner resolution to the runtime contract', async () => {
+  const { paymentIntentForQueue } = await import('../ui/ui-model.mjs');
+  const queue = {recordId:'Q1',type:'PAY_OBLIGATION_INSTALLMENT',detail:'',amountSatang:30000,status:'OPEN'};
+  const intent = paymentIntentForQueue(queue, 15000, {workflowId:'WF',transactionId:'TX'});
+  assert.equal(intent.method, 'payObligation');
+  assert.equal(intent.input.queueId, 'Q1');
+  assert.equal(intent.input.amountSatang, 15000);
+  assert.equal('obligationId' in intent.input, false);
+});
+
 test('workflow invariant accepts a proven obligation-plan relation even when Calendar display detail is missing', async () => {
   const { buildPayObligationWorkflow } = await import('../greenfield/business-workflows.mjs');
   const { validateWorkflowInvariants } = await import('../greenfield/workflow-invariants.mjs');
