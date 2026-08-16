@@ -18,21 +18,16 @@ export function makeId(prefix = 'ID') {
   return `${prefix}-${random}`;
 }
 
-function sourceRef(queue, expectedOwner) {
-  const detail = String(queue?.detail || '');
-  const [owner, id] = detail.split('/', 2);
-  if (owner !== expectedOwner || !id) throw new Error(`QUEUE_SOURCE_MISMATCH:${expectedOwner}`);
-  return id;
-}
-
 export function paymentIntentForQueue(queue, amountSatang, { workflowId, transactionId }) {
   const amount = Number(amountSatang);
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('INVALID_PAYMENT_AMOUNT');
+  const queueId = String(queue?.recordId || '');
+  if (!queueId) throw new Error('INVALID_QUEUE_ID');
   if (queue?.type === 'RECEIVE_CUSTOMER_PAYMENT') {
-    return { method: 'receiveCustomerPayment', input: { workflowId, saleId: sourceRef(queue, 'STORE'), queueId: queue.recordId, ledgerTransactionId: transactionId, amountSatang: amount } };
+    return { method: 'receiveCustomerPayment', input: { workflowId, queueId, ledgerTransactionId: transactionId, amountSatang: amount } };
   }
   if (queue?.type === 'PAY_OBLIGATION' || queue?.type === 'PAY_OBLIGATION_INSTALLMENT') {
-    return { method: 'payObligation', input: { workflowId, obligationId: sourceRef(queue, 'LEDGER'), queueId: queue.recordId, ledgerTransactionId: transactionId, amountSatang: amount } };
+    return { method: 'payObligation', input: { workflowId, queueId, ledgerTransactionId: transactionId, amountSatang: amount } };
   }
   throw new Error('QUEUE_IS_NOT_MONEY_ACTION');
 }
