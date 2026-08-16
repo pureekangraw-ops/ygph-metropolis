@@ -8,7 +8,7 @@ function rootFile(name) { return fs.readFileSync(path.join(__dirname, '..', name
 
 function minimalState() {
   return {
-    schema:2, revision:7,
+    schema:2, revision:7, commandLog:{},
     domains:{
       STORE:{records:{}},
       LEDGER:{records:{
