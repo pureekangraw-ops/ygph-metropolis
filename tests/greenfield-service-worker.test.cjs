@@ -21,6 +21,14 @@ function expectedAssetRevision() {
   return `sha256-${hash.digest('hex').slice(0, 16)}`;
 }
 
+function relativeModuleImports(file) {
+  const source = fs.readFileSync(path.join(root, file), 'utf8');
+  const specs = [];
+  const pattern = /(?:\bfrom\s*|\bimport\s*)['"](\.{1,2}\/[^'"]+)['"]/g;
+  for (const match of source.matchAll(pattern)) specs.push(match[1]);
+  return specs.map(spec => path.posix.normalize(path.posix.join(path.posix.dirname(file), spec)));
+}
+
 test('service worker fetches navigations from network before offline shell fallback', () => {
   assert.match(sw, /request\.mode\s*===\s*['"]navigate['"]/);
   assert.match(sw, /navigationNetworkFirst\(event\.request\)/);
@@ -37,6 +45,18 @@ test('service worker fetches navigations from network before offline shell fallb
 
 test('service worker no longer uses generic cache-first handling for every GET', () => {
   assert.doesNotMatch(sw, /caches\.match\(event\.request\)\.then\(cached\s*=>\s*cached\s*\|\|\s*fetch\(event\.request\)/);
+});
+
+test('every relative production module import is included in the production manifest', () => {
+  const production = new Set(manifest.productionFiles.map(item => item.path));
+  const missing = [];
+  for (const file of production) {
+    if (!/\.(?:mjs|js)$/.test(file) || file === 'sw.js') continue;
+    for (const dependency of relativeModuleImports(file)) {
+      if (!production.has(dependency)) missing.push(`${file} -> ${dependency}`);
+    }
+  }
+  assert.deepEqual(missing, [], `production import closure missing: ${missing.join(', ')}`);
 });
 
 test('service-worker cache identity is coupled to the actual production asset revision', () => {
