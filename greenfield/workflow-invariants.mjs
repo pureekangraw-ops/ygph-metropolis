@@ -49,17 +49,23 @@ function paymentSourceCommands(commands) {
 
 function expectedQueueRelation(command) {
   if (command.domain === 'STORE') {
-    return {
-      owner:'STORE',
-      recordId:String(command?.payload?.recordId || ''),
-      types:new Set(['RECEIVE_CUSTOMER_PAYMENT']),
-    };
+    return { owner:'STORE', recordId:String(command?.payload?.recordId || ''), types:new Set(['RECEIVE_CUSTOMER_PAYMENT']) };
   }
-  return {
-    owner:'LEDGER',
-    recordId:String(command?.payload?.recordId || ''),
-    types:new Set(['PAY_OBLIGATION', 'PAY_OBLIGATION_INSTALLMENT']),
-  };
+  return { owner:'LEDGER', recordId:String(command?.payload?.recordId || ''), types:new Set(['PAY_OBLIGATION', 'PAY_OBLIGATION_INSTALLMENT']) };
+}
+
+function obligationPlanOwnsQueue(state, obligationId, queueId) {
+  const obligation = state?.domains?.LEDGER?.records?.[obligationId]?.record;
+  return obligation?.type === 'OBLIGATION' && Array.isArray(obligation.installmentPlan) && obligation.installmentPlan.some(item => String(item?.queueId || '') === queueId);
+}
+
+function relationMatches(state, queue, source, queueId) {
+  if (!source.types.has(queue.type)) return false;
+  const expectedDetail = `${source.owner}/${source.recordId}`;
+  const detail = String(queue.detail || '').trim();
+  if (detail) return detail === expectedDetail;
+  if (source.owner === 'LEDGER') return obligationPlanOwnsQueue(state, source.recordId, queueId);
+  return false;
 }
 
 function validatePaymentRelations(state, commands) {
@@ -75,9 +81,7 @@ function validatePaymentRelations(state, commands) {
   const queue = calendarQueue(state, plannedQueues, queueId);
   if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
   const expectedDetail = `${source.owner}/${source.recordId}`;
-  if (!source.types.has(queue.type) || String(queue.detail || '') !== expectedDetail) {
-    throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
-  }
+  if (!relationMatches(state, queue, source, queueId)) throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
 }
 
 function validateStockInvariant(state, commands) {
