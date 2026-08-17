@@ -9,6 +9,9 @@
 !/ui/
 !/ui/action-popups.mjs
 !/ui/app.mjs
+!/ui/home-ui.mjs
+!/ui/store-ui.mjs
+!/ui/finance-ui.mjs
 !/ui/ride-ui.mjs
 !/ui/ui-model.mjs
 !/ui/product-model.mjs

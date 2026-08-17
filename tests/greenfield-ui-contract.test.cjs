@@ -14,12 +14,13 @@ test('Calendar executable money buttons are gated by the state-aware action cont
 });
 
 test('Finance UI reads cash truth and does not present Ledger balance as spendable truth',()=>{
-  const ui=read('ui/app.mjs');
+  const app=read('ui/app.mjs');
+  const financeUi=read('ui/finance-ui.mjs');
   const shell=read('app.mjs');
-  assert.match(ui,/finance\.cashBalanceSatang/);
-  assert.match(ui,/view\.cashBalanceSatang/);
-  assert.doesNotMatch(ui,/finance\.spendableBalanceSatang/);
-  assert.doesNotMatch(ui,/view\.spendableBalanceSatang/);
+  assert.match(app,/financeUi\.renderFinance\(context\)/);
+  assert.match(financeUi,/view\.cashBalanceSatang/);
+  assert.doesNotMatch(`${app}\n${financeUi}`,/finance\.spendableBalanceSatang/);
+  assert.doesNotMatch(`${app}\n${financeUi}`,/view\.spendableBalanceSatang/);
   assert.match(shell,/เงินสดคงเหลือ/);
 });
 

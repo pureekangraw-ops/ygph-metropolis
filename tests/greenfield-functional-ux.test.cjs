@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-const uiApp = fs.readFileSync(path.join(root, 'ui', 'app.mjs'), 'utf8');
+const storeUi = fs.readFileSync(path.join(root, 'ui', 'store-ui.mjs'), 'utf8');
 
 test('functional UX keeps five labeled bottom destinations', () => {
   const matches = [...html.matchAll(/class="bottom-nav-btn[^\"]*"[^>]*data-destination="([^"]+)"/g)];
@@ -23,7 +23,7 @@ test('phone metrics remain compact rather than all becoming one column', () => {
 });
 
 test('warning states have a structural warning treatment at their UI owner', () => {
-  assert.match(uiApp, /truth-warning/);
+  assert.match(storeUi, /truth-warning/);
   assert.match(css, /\.truth-warning/);
-  assert.match(uiApp, /VERIFY_DUPLICATE|UNSCHEDULED/);
+  assert.match(storeUi, /VERIFY_DUPLICATE|UNSCHEDULED/);
 });
