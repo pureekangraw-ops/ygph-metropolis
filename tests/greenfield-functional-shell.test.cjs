@@ -62,10 +62,14 @@ test('mobile shell preserves content width and bottom navigation touch targets',
   assert.doesNotMatch(css, /padding-right\s*:\s*76px/);
 });
 
-test('every static UI id referenced by app code exists in index exactly once', () => {
+test('every static UI id referenced by production UI modules exists in index exactly once', () => {
   const html = text('index.html');
-  const app = text('ui/app.mjs');
-  const ids = [...new Set([...app.matchAll(/\$\('([^']+)'\)/g)].map(match => match[1]))];
+  const uiSource = ['ui/app.mjs','ui/home-ui.mjs','ui/store-ui.mjs','ui/finance-ui.mjs','ui/ride-ui.mjs']
+    .map(text).join('\n');
+  const ids = [...new Set([
+    ...uiSource.matchAll(/\$\('([^']+)'\)/g),
+    ...uiSource.matchAll(/getById\('([^']+)'\)/g),
+  ].map(match => match[1]))];
   assert.ok(ids.length > 30, 'expected broad shell wiring coverage');
   for (const id of ids) {
     const matches = html.match(new RegExp(`id="${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g')) || [];
@@ -75,9 +79,11 @@ test('every static UI id referenced by app code exists in index exactly once', (
 
 test('Store screen uses the shared Store projection instead of duplicating stock and receivable logic', () => {
   const app = text('ui/app.mjs');
+  const storeUi = text('ui/store-ui.mjs');
   assert.match(app, /projectStore/);
   assert.match(app, /const store=projectStore\(state,today\)/);
-  assert.match(app, /context\.store\.stockQuantity/);
-  assert.match(app, /context\.store\.receivableSatang/);
-  assert.doesNotMatch(app, /function calculateStock\(/);
+  assert.match(app, /storeUi\.renderStore\(context\)/);
+  assert.match(storeUi, /context\.store\.stockQuantity/);
+  assert.match(storeUi, /context\.store\.receivableSatang/);
+  assert.doesNotMatch(`${app}\n${storeUi}`, /function calculateStock\(/);
 });
