@@ -10,6 +10,7 @@
 !/ui/
 !/ui/action-popups.mjs
 !/ui/app.mjs
+!/ui/release-status.mjs
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs
