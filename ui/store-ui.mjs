@@ -1,6 +1,6 @@
 import { projectStoreReceivables } from './product-model.mjs';
 
-export function createStoreUi({ getById, getState, bahtText, simpleItem, setStoreView }) {
+export function createStoreUi({ getById, getState, getActiveStoreView, bahtText, simpleItem, setStoreView }) {
   const $ = getById;
   const receivableAmountText = item => item.outstandingSatang == null ? 'ยอดต้องตรวจสอบ' : bahtText(item.outstandingSatang);
 
@@ -73,7 +73,7 @@ export function createStoreUi({ getById, getState, bahtText, simpleItem, setStor
       .slice(0, 50);
     for (const record of records) list.append(simpleItem(record));
     if (!records.length) list.textContent = 'ยังไม่มีรายการร้านค้า';
-    setStoreView();
+    setStoreView(getActiveStoreView());
   }
 
   return Object.freeze({ renderStore });
