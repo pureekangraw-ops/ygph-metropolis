@@ -1,4 +1,5 @@
 *
+!/_headers
 !/index.html
 !/app.mjs
 !/styles.css
