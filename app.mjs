@@ -6,6 +6,7 @@ import {
 } from './greenfield/runtime.mjs';
 import './ui/app.mjs';
 import './ui/action-popups.mjs';
+import './ui/release-status.mjs';
 void openGreenfieldRuntime;
 
 const $ = id => document.getElementById(id);
