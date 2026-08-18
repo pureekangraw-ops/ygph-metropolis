@@ -32,6 +32,7 @@
 !/greenfield/device-unlock.mjs
 !/greenfield/domain-operations.mjs
 !/greenfield/evidence-integrity.mjs
+!/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/persistence.mjs
