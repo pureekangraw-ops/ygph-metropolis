@@ -36,6 +36,10 @@ function ledgerDirection(record) {
   return prefix === 'IN' || prefix === 'OUT' ? prefix : null;
 }
 
+function isBalanceAdjustment(record) {
+  return record?.subtype === 'BALANCE_ADJUSTMENT' || String(record?.detail || '').endsWith(':BALANCE_ADJUSTMENT');
+}
+
 function actionable(status) {
   return status === 'OPEN' || status === 'PARTIAL';
 }
@@ -109,7 +113,7 @@ export function projectFinancialTruth(state, ledgerBalanceSatang, today, nearDay
   let todayOutSatang = 0;
   let remainingObligationSatang = 0;
   for (const record of recordsFor(state, 'LEDGER')) {
-    if (record.type === 'TRANSACTION' && activityDate(record) === current) {
+    if (record.type === 'TRANSACTION' && activityDate(record) === current && !isBalanceAdjustment(record)) {
       const amount = Number(record.amountSatang || 0);
       if (Number.isSafeInteger(amount) && amount > 0) {
         const direction = ledgerDirection(record);
