@@ -1,3 +1,5 @@
+import './theme-shell.mjs';
+
 export const APP_RELEASE='5.1.0';
 
 const $=id=>document.getElementById(id);
