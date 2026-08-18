@@ -22,6 +22,106 @@ function setTruthCopy() {
 }
 setTruthCopy();
 
+function parseBalanceSatang(value) {
+  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error('กรอกยอดเงินจริงให้ถูกต้อง');
+  const [whole, fraction = ''] = normalized.split('.');
+  const amount = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('ยอดเงินจริงไม่ถูกต้อง');
+  return amount;
+}
+function localId(prefix) {
+  const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+function installBalanceAdjustmentUi() {
+  const launcher = document.querySelector('[data-city-action-open="finance-actions"]');
+  const cityDialog = $('cityActionDialog');
+  const workspace = $('workspace');
+  if (!launcher || !cityDialog || !workspace) return;
+
+  const dialog = document.createElement('dialog');
+  dialog.id = 'balanceAdjustmentDialog';
+  dialog.className = 'modal-dialog action-dialog';
+  dialog.innerHTML = `
+    <div class="dialog-body">
+      <div class="dialog-head"><h2>ปรับฐานเงิน</h2><button id="balanceAdjustmentClose" type="button" class="secondary">ปิด</button></div>
+      <p class="muted">ใช้เมื่อยอดในแอปไม่ตรงกับเงินจริง ระบบจะบันทึกเฉพาะส่วนต่าง ไม่ถือเป็นรายรับหรือรายจ่าย</p>
+      <p>ยอดในระบบตอนนี้ <strong id="balanceAdjustmentCurrent">0 บาท</strong></p>
+      <form id="balanceAdjustmentForm">
+        <label>เงินจริงปัจจุบัน (บาท) <input id="balanceAdjustmentTarget" name="target" inputmode="decimal" required></label>
+        <button id="balanceAdjustmentSubmit" class="primary-action" type="submit">ปรับฐานเงิน</button>
+      </form>
+      <p id="balanceAdjustmentStatus" class="status" aria-live="polite"></p>
+    </div>`;
+  workspace.append(dialog);
+
+  const close = () => { if (dialog.open) dialog.close(); };
+  $('balanceAdjustmentClose').addEventListener('click', close);
+  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+
+  function openAdjustment() {
+    const currentText = String($('financeBalance')?.textContent || '0').trim();
+    $('balanceAdjustmentCurrent').textContent = `${currentText} บาท`;
+    $('balanceAdjustmentTarget').value = currentText.replace(/,/g, '');
+    $('balanceAdjustmentStatus').textContent = '';
+    $('balanceAdjustmentStatus').classList.remove('error');
+    if (!dialog.open) dialog.showModal();
+    $('balanceAdjustmentTarget').focus();
+    $('balanceAdjustmentTarget').select();
+  }
+
+  launcher.addEventListener('click', () => {
+    queueMicrotask(() => {
+      const choices = cityDialog.querySelector('.city-action-choices');
+      if (!choices || choices.querySelector('[data-balance-adjustment-open]')) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.balanceAdjustmentOpen = 'true';
+      button.textContent = 'ปรับฐานเงิน';
+      button.addEventListener('click', () => {
+        if (cityDialog.open) cityDialog.close();
+        openAdjustment();
+      });
+      choices.prepend(button);
+    });
+  });
+
+  $('balanceAdjustmentForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const status = $('balanceAdjustmentStatus');
+    const submit = $('balanceAdjustmentSubmit');
+    status.textContent = '';
+    status.classList.remove('error');
+    let adjustmentRuntime = null;
+    submit.disabled = true;
+    try {
+      if (lastDevicePin.length < 6) throw new Error('กรุณาเข้าสู่ระบบใหม่ก่อนปรับฐานเงิน');
+      const targetBalanceSatang = parseBalanceSatang($('balanceAdjustmentTarget').value);
+      adjustmentRuntime = await openGreenfieldRuntimeWithDevicePin({ pin:lastDevicePin });
+      const result = await adjustmentRuntime.adjustBalance({
+        workflowId:localId('WF-BALANCE'),
+        ledgerTransactionId:localId('TX-BALANCE'),
+        targetBalanceSatang,
+        reason:'ปรับจากยอดเงินจริงที่ผู้ใช้ยืนยัน',
+      });
+      if (result.status === 'UNCHANGED') {
+        status.textContent = 'ยอดตรงกับเงินจริงอยู่แล้ว';
+        return;
+      }
+      sessionStorage.setItem('metro-auto-unlock-pin', lastDevicePin);
+      location.reload();
+    } catch (error) {
+      status.textContent = String(error?.message || error || 'ปรับฐานเงินไม่สำเร็จ');
+      status.classList.add('error');
+    } finally {
+      adjustmentRuntime?.close();
+      submit.disabled = false;
+    }
+  });
+}
+installBalanceAdjustmentUi();
+
 function clearAuthStatus() {
   $('gateStatus').textContent = '';
   $('gateStatus').classList.remove('error');
