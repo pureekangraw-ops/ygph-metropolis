@@ -11,6 +11,7 @@ import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
 import { exportGreenfieldBackup, restoreGreenfieldBackup, restorePortableGreenfieldBackup } from './backup.mjs';
 import { buildCalendarActionIntent } from './action-contract.mjs';
+import { applyDailyLifecycle, millisecondsUntilNextBangkokMidnight } from './daily-lifecycle.mjs';
 import {
   buildSaleWorkflow,
   buildReceiveCustomerPaymentWorkflow,
@@ -57,10 +58,66 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   registerRideDomainCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
   let lastState = null;
+  let dailyLifecycleTimer = null;
+
+  function clearDailyLifecycleBoundary() {
+    if (dailyLifecycleTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(dailyLifecycleTimer);
+    dailyLifecycleTimer = null;
+  }
+
+  function scheduleDailyLifecycleBoundary() {
+    if (typeof globalThis.window === 'undefined' || typeof globalThis.setTimeout !== 'function') return;
+    clearDailyLifecycleBoundary();
+    const delay = millisecondsUntilNextBangkokMidnight(now());
+    dailyLifecycleTimer = globalThis.setTimeout(async () => {
+      dailyLifecycleTimer = null;
+      try {
+        const result = await syncDailyLifecycle();
+        if (result.state && typeof globalThis.dispatchEvent === 'function') {
+          const detail = { activeDay:result.activeDay, closedDays:result.closedDays, status:result.status };
+          const event = typeof globalThis.CustomEvent === 'function'
+            ? new globalThis.CustomEvent('ygph:daily-lifecycle', { detail })
+            : new globalThis.Event('ygph:daily-lifecycle');
+          globalThis.dispatchEvent(event);
+        }
+      } catch (error) {
+        globalThis.console?.error?.('DAILY_LIFECYCLE_SYNC_FAILED', error);
+      } finally {
+        scheduleDailyLifecycleBoundary();
+      }
+    }, Math.max(1, delay + 25));
+  }
+
+  async function syncDailyLifecycle() {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) {
+        lastState = null;
+        clearDailyLifecycleBoundary();
+        return { status:'EMPTY', state:null, closedDays:[], activeDay:null };
+      }
+      const at = now();
+      const lifecycle = applyDailyLifecycle(current, { now:at });
+      if (!lifecycle.changed) {
+        lastState = current;
+        scheduleDailyLifecycleBoundary();
+        return { status:'UNCHANGED', state:current, closedDays:[], activeDay:lifecycle.activeDay };
+      }
+      const next = lifecycle.state;
+      next.revision = current.revision + 1;
+      next.updatedAt = at;
+      await commitEncryptedState({ store, passphrase, state:next, expectedDurableRevision:current.revision });
+      lastState = await readEncryptedState({ store, passphrase });
+      const readback = lastState?.meta?.dailyLifecycle;
+      if (!readback || readback.activeDay !== lifecycle.activeDay) throw new Error('DAILY_LIFECYCLE_READBACK_MISMATCH');
+      scheduleDailyLifecycleBoundary();
+      return { status:'UPDATED', state:lastState, closedDays:lifecycle.closedDays, activeDay:lifecycle.activeDay };
+    });
+  }
 
   async function readState() {
-    lastState = await readEncryptedState({ store, passphrase });
-    return lastState;
+    const result = await syncDailyLifecycle();
+    return result.state;
   }
 
   async function initializeFromEvidence(evidence, { expectedPackageId, expectedRevision } = {}) {
@@ -187,7 +244,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
+    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
@@ -204,7 +261,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     rideJob: input => executePlan(buildRideJobWorkflow(input)),
     rideExpense: input => executePlan(buildRideExpenseWorkflow(input)),
     rideWithdrawCredit: input => executePlan(buildRideWithdrawCreditWorkflow(input)),
-    close() { if (typeof closeStore === 'function') closeStore(); else store.close?.(); },
+    close() { clearDailyLifecycleBoundary(); if (typeof closeStore === 'function') closeStore(); else store.close?.(); },
   });
 }
 
