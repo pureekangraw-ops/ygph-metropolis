@@ -30,6 +30,8 @@ test('balance adjustment creates only the delta needed to reach the owner-observ
   const down = buildBalanceAdjustmentWorkflow({ workflowId:'WF-ADJ-DOWN', ledgerTransactionId:'TX-ADJ-DOWN', currentBalanceSatang:100000, targetBalanceSatang:75000, reason:'นับเงินจริง' });
   assert.equal(down.commands[0].payload.direction, 'OUT');
   assert.equal(down.commands[0].payload.amountSatang, 25000);
+  assert.equal(down.commands[0].payload.balanceBeforeSatang, 100000);
+  assert.equal(down.commands[0].payload.balanceAfterSatang, 75000);
   state = await apply(state, down.commands);
   assert.equal(projectLedgerBalance(state), 75000);
   assert.equal(state.domains.LEDGER.records['TX-ADJ-DOWN'].record.detail, 'OUT:BALANCE_ADJUSTMENT');
@@ -48,16 +50,27 @@ test('balance adjustment rejects invalid or unchanged target instead of fabricat
   assert.throws(() => buildBalanceAdjustmentWorkflow({ workflowId:'WF-BAD', ledgerTransactionId:'TX-BAD', currentBalanceSatang:50000, targetBalanceSatang:-1, reason:'ตรวจเงินจริง' }), /INVALID_TARGET_BALANCE/);
 });
 
-test('Finance management exposes one balance adjustment action inside the existing green manage flow', () => {
-  const html = fs.readFileSync('index.html', 'utf8');
-  const app = fs.readFileSync('ui/app.mjs', 'utf8');
-  const popup = fs.readFileSync('ui/action-popups.mjs', 'utf8');
+test('balance adjustment changes cash truth but is excluded from daily income and expense cards', async () => {
+  const { createGreenfieldState } = await import('../greenfield/core.mjs');
+  const { buildOtherIncomeWorkflow, buildBalanceAdjustmentWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const { projectLedgerBalance } = await import('../greenfield/projections.mjs');
+  const { projectFinancialTruth } = await import('../greenfield/calculation-authority.mjs');
+  let state = createGreenfieldState({ now:'2026-08-18T09:00:00.000Z' });
+  state = await apply(state, buildOtherIncomeWorkflow({ workflowId:'WF-IN', ledgerTransactionId:'TX-IN', title:'รายรับจริง', amountSatang:100000 }).commands);
+  state = await apply(state, buildBalanceAdjustmentWorkflow({ workflowId:'WF-ADJ', ledgerTransactionId:'TX-ADJ', currentBalanceSatang:100000, targetBalanceSatang:75000, reason:'นับเงินจริง' }).commands);
+  const finance = projectFinancialTruth(state, projectLedgerBalance(state), '2026-08-18');
+  assert.equal(finance.cashBalanceSatang, 75000);
+  assert.equal(finance.todayInSatang, 100000);
+  assert.equal(finance.todayOutSatang, 0);
+});
 
-  assert.equal((html.match(/id="balanceAdjustForm"/g) || []).length, 1);
-  assert.match(html, /ปรับฐานเงิน/);
-  assert.match(app, /bindForm\('balanceAdjustForm'/);
-  assert.match(app, /adjustBalance/);
-  assert.match(popup, /'balance-adjust':\s*\{\s*formId:'balanceAdjustForm',\s*label:'ปรับฐานเงิน'/s);
-  assert.match(popup, /\{ kind:'task', key:'balance-adjust', label:'ปรับฐานเงิน'/);
-  assert.match(popup, /collapseCityLaunchers\('\[data-area-page="finance"\]'[^\n]*'balance-adjust'/);
+test('Finance keeps one green manage launcher and injects balance adjustment inside that flow', () => {
+  const app = fs.readFileSync('app.mjs', 'utf8');
+  const popup = fs.readFileSync('ui/action-popups.mjs', 'utf8');
+  assert.match(popup, /label:'จัดการการเงิน'/);
+  assert.match(app, /data-city-action-open=\"finance-actions\"/);
+  assert.match(app, /button\.textContent = 'ปรับฐานเงิน'/);
+  assert.match(app, /id=\"balanceAdjustmentForm\"/);
+  assert.match(app, /adjustmentRuntime\.adjustBalance/);
+  assert.doesNotMatch(app, /makeCityActionLauncher\('balance-adjustment'/);
 });
