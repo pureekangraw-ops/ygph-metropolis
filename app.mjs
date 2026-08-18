@@ -2,8 +2,10 @@ import {
   openGreenfieldRuntime,
   openGreenfieldRuntimeWithDevicePin,
   openGreenfieldRuntimeFromBackup,
+  inspectGreenfieldDeviceUnlock,
   enrollGreenfieldDeviceUnlock,
 } from './greenfield/runtime.mjs';
+import { initializeFirstRun } from './greenfield/first-run.mjs';
 import './ui/app.mjs';
 import './ui/action-popups.mjs';
 import './ui/release-status.mjs';
@@ -38,12 +40,62 @@ function showLogin() {
   $('gate').classList.remove('hidden');
   closeChangePasswordPanel();
   clearAuthStatus();
+  $('devicePin')?.focus();
+}
+function firstRunErrorText(error) {
+  const message = String(error?.message || error || '');
+  if (message === 'DEVICE_PIN_TOO_SHORT') return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+  if (message === 'PASSPHRASE_TOO_SHORT') return 'รหัสกู้คืนต้องมีอย่างน้อย 12 ตัวอักษร';
+  if (message === 'GREENFIELD_VAULT_DECRYPT_FAILED') return 'รหัสกู้คืนไม่ตรงกับข้อมูลเดิมในเครื่อง';
+  if (message === 'DEVICE_UNLOCK_INCOMPLETE') return 'ข้อมูลการเข้าสู่ระบบเดิมไม่สมบูรณ์ กรุณากู้คืนข้อมูล';
+  if (message === 'FIRST_RUN_ALREADY_ENROLLED') return 'เครื่องนี้ตั้งค่าการเข้าสู่ระบบแล้ว';
+  return 'ตั้งค่าเริ่มต้นไม่สำเร็จ';
+}
+function showFirstSetup() {
+  $('gate').classList.add('hidden');
+  const panel = $('recoveryPanel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <h1>ตั้งค่าเริ่มต้น</h1>
+    <p class="muted">ตั้งสองอย่างนี้ก่อน แล้วเข้าใช้งานได้เลย</p>
+    <label>รหัสผ่าน <input id="firstPassword" type="password" minlength="6" autocomplete="new-password"></label>
+    <label>รหัสกู้คืน <input id="firstRecoveryCode" type="password" minlength="12" autocomplete="off"></label>
+    <button id="createFirstSetupBtn" class="primary-action" type="button">เริ่มใช้งาน</button>
+  `;
+  clearAuthStatus();
+  $('firstPassword').focus();
+  $('createFirstSetupBtn').addEventListener('click', async () => {
+    const button = $('createFirstSetupBtn');
+    const password = $('firstPassword').value;
+    const recoveryCode = $('firstRecoveryCode').value;
+    clearAuthStatus();
+    button.disabled = true;
+    try {
+      await initializeFirstRun({ recoveryCode, password });
+      sessionStorage.setItem('metro-auto-unlock-pin', password);
+      location.reload();
+    } catch (error) {
+      $('gateStatus').textContent = firstRunErrorText(error);
+      $('gateStatus').classList.add('error');
+      button.disabled = false;
+    }
+  });
 }
 function showRecovery() {
   $('gate').classList.add('hidden');
-  $('recoveryPanel').classList.remove('hidden');
+  const panel = $('recoveryPanel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <button id="recoveryBackBtn" class="secondary" type="button">กลับ</button>
+    <h1>กู้คืนข้อมูล</h1>
+    <p class="muted">เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน</p>
+    <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="directRestoreBtn" class="primary-action" type="button">กู้คืนข้อมูล</button></div>
+    <input id="recoveryPassphrase" class="hidden" aria-hidden="true" tabindex="-1">
+  `;
   clearAuthStatus();
-  $('restoreFile')?.focus();
+  $('recoveryBackBtn').addEventListener('click', showLogin);
+  $('directRestoreBtn').addEventListener('click', restoreSelectedBackup);
+  $('restoreFile').focus();
 }
 function userFacingAuthMessage(message) {
   if (message === 'DEVICE_PIN_INVALID') return 'รหัสผ่านไม่ถูกต้อง';
@@ -66,20 +118,6 @@ function showAuthError(error) {
   gateStatus.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถดำเนินการได้'));
   gateStatus.classList.add('error');
 }
-
-function installDirectRecoveryPanel() {
-  const panel = $('recoveryPanel');
-  panel.innerHTML = `
-    <button id="recoveryBackBtn" class="secondary" type="button">กลับ</button>
-    <h1>กู้คืนข้อมูล</h1>
-    <p class="muted">เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน</p>
-    <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="directRestoreBtn" class="primary-action" type="button">กู้คืนข้อมูล</button></div>
-    <input id="recoveryPassphrase" class="hidden" aria-hidden="true" tabindex="-1">
-  `;
-  $('recoveryBackBtn').addEventListener('click', showLogin);
-  $('directRestoreBtn').addEventListener('click', restoreSelectedBackup);
-}
-installDirectRecoveryPanel();
 
 async function selectedBackup() {
   const file = $('restoreFile').files?.[0];
@@ -173,10 +211,24 @@ $('openRestoreRouteBtn').addEventListener('click', () => {
 });
 $('systemLockBtn').addEventListener('click', () => { closeChangePasswordPanel(); showLogin(); });
 
+async function bootstrapEntry() {
+  try {
+    const unlock = await inspectGreenfieldDeviceUnlock();
+    if (unlock.status === 'UNENROLLED') { showFirstSetup(); return; }
+    if (unlock.status === 'INCOMPLETE') { showRecovery(); showAuthError(new Error('DEVICE_UNLOCK_INCOMPLETE')); return; }
+    showLogin();
+  } catch (error) {
+    showLogin();
+    showAuthError(error);
+  }
+}
+
 const autoPin = sessionStorage.getItem('metro-auto-unlock-pin');
 if (autoPin) {
   sessionStorage.removeItem('metro-auto-unlock-pin');
   lastDevicePin = autoPin;
   $('devicePin').value = autoPin;
   queueMicrotask(() => $('unlockBtn').click());
+} else {
+  void bootstrapEntry();
 }
