@@ -5,17 +5,24 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const app = fs.readFileSync(path.join(root, 'ui/app.mjs'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 
-test('recovery entry is a direct file restore path, not a user checkpoint', () => {
-  assert.match(html, /id="restoreFile"/);
-  assert.match(html, /กู้คืนข้อมูล/);
-  assert.doesNotMatch(html, /recoveryPassphrase|verifyRecoveryBtn|evidenceFile|importEvidenceBtn|กู้คืนข้อมูลขั้นสูง/);
-  assert.doesNotMatch(app, /recoveryPassphrase\(|importEvidenceBtn|evidenceFile|ensureRecoveryRuntime/);
+test('recovery entry is rebuilt as one direct file restore action', () => {
+  assert.match(app, /function installDirectRecoveryPanel\(\)/);
+  assert.match(app, /เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน/);
+  assert.match(app, /id="restoreFile"/);
+  assert.match(app, /id="directRestoreBtn"/);
+  assert.doesNotMatch(app, /verifyGreenfieldRecoveryCode|resetGreenfieldDevicePassword|importEvidenceBtn|evidenceFile/);
 });
 
-test('restore UX never exposes raw Greenfield internal error names', () => {
-  assert.doesNotMatch(html, /GREENFIELD_/);
-  assert.match(app, /restoreErrorText/);
+test('existing data asks once before replacement while file validation stays behind the scenes', () => {
+  assert.match(app, /GREENFIELD_RESTORE_CONFIRM_REQUIRED/);
+  assert.match(app, /กู้คืนไฟล์นี้แทนที่ข้อมูลปัจจุบันหรือไม่/);
+  assert.match(app, /openGreenfieldRuntimeFromBackup/);
+});
+
+test('restore UX maps internal failures to user-facing copy', () => {
+  assert.match(app, /function restoreErrorText/);
+  assert.match(app, /ไฟล์นี้ไม่ใช่ไฟล์สำรองที่ METRO ใช้ได้/);
+  assert.match(app, /กู้คืนไม่สำเร็จ ระบบหยุดก่อนใช้ข้อมูลที่ตรวจไม่ผ่าน/);
 });
