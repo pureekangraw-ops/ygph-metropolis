@@ -27,13 +27,14 @@ test('visible release authority agrees across package manifest service worker an
   const app = source('app.mjs');
   const uiRelease = /APP_RELEASE='([^']+)'/.exec(status)?.[1];
   const swRelease = /const RELEASE='([^']+)'/.exec(sw)?.[1];
-  assert.equal(manifest.release, '5.1.0');
+  assert.equal(manifest.release, '5.2.0');
   assert.equal(pkg.version, manifest.release);
   assert.equal(lock.version, manifest.release);
   assert.equal(lock.packages[''].version, manifest.release);
   assert.equal(uiRelease, manifest.release);
   assert.equal(swRelease, manifest.release);
   assert.match(app, /import ['"]\.\/ui\/release-status\.mjs['"]/);
+  assert.match(status, /import ['"]\.\/theme-shell\.mjs['"]/);
 });
 
 test('System reports service-worker lifecycle instead of leaving update state invisible', () => {

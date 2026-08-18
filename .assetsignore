@@ -3,6 +3,7 @@
 !/index.html
 !/app.mjs
 !/styles.css
+!/theme.css
 !/manifest.webmanifest
 !/sw.js
 !/icon-192.png
@@ -11,6 +12,7 @@
 !/ui/action-popups.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
+!/ui/theme-shell.mjs
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs

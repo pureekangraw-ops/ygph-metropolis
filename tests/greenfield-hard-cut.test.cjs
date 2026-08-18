@@ -19,7 +19,7 @@ test('hard-cut root contains only Greenfield production entrypoints while allowi
 test('release manifest declares current main artifact as Production Greenfield schema 2',()=>{
   const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
   assert.equal(manifest.product,'YGPH METROPOLIS');
-  assert.equal(manifest.release,'5.1.0');
+  assert.equal(manifest.release,'5.2.0');
   assert.equal(manifest.architecture,'GREENFIELD');
   assert.equal(manifest.status,'PRODUCTION');
   assert.equal(manifest.productionBranch,'main');
@@ -33,6 +33,7 @@ test('release manifest declares current main artifact as Production Greenfield s
   assert.equal(manifest.cutoverEvidence.ridePolicy,'EXCLUDE');
   assert.equal(manifest.ride.policy,'LIVE_SCHEMA2_ONLY');
   assert.equal(manifest.ride.cashOwner,'LEDGER');
+  assert.equal(manifest.functionalShell.visualPolish,'GRAPHITE_LIME_YGGDRASIL_GEM');
   assert.equal('compatibility' in manifest,false);
   const readme=read('README_TH.md');
   assert.doesNotMatch(readme,/BRANCH ONLY|NOT PRODUCTION|productization\/functional-shell-v1/);
@@ -46,8 +47,8 @@ test('root UI imports only Greenfield runtime facade and production service work
   const runtime=read('greenfield/runtime.mjs');
   assert.match(runtime,/\.\/device-unlock\.mjs/);
   const sw=read('sw.js');
-  assert.match(sw,/const RELEASE='5\.1\.0'/);
-  for(const required of ['greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(sw.includes(required),true,required);
+  assert.match(sw,/const RELEASE='5\.2\.0'/);
+  for(const required of ['theme.css','ui/theme-shell.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(sw.includes(required),true,required);
   for(const forbidden of ['flow-era','metropolis-r5','metropolis-v4','maintenance','remaster','stock-pocket-secure']) assert.equal(sw.includes(forbidden),false,forbidden);
 });
 
@@ -61,14 +62,14 @@ test('effective publication allowlist exactly matches application plus deploymen
   assert.deepEqual(allowed.sort(),expected);
   assert.ok(ignore.includes('!/greenfield/'));
   assert.ok(ignore.includes('!/ui/'));
-  for(const required of ['greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.ok(manifest.productionFiles.some(item=>item.path===required),required);
+  for(const required of ['theme.css','ui/theme-shell.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.ok(manifest.productionFiles.some(item=>item.path===required),required);
   assert.ok((manifest.deploymentFiles||[]).some(item=>item.path==='_headers'),'Cloudflare headers must be deployable but not offline-cached');
 });
 
 test('repository gate syntax covers every Greenfield production module introduced by the repair',()=>{
   const pkg=JSON.parse(read('package.json'));
-  assert.equal(pkg.version,'5.1.0');
+  assert.equal(pkg.version,'5.2.0');
   assert.match(pkg.scripts.test,/greenfield-\*\.test\.cjs/);
-  for(const required of ['ui/release-status.mjs','ui/product-model.mjs','ui/icons.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(pkg.scripts['check:syntax'].includes(required),true,required);
+  for(const required of ['ui/release-status.mjs','ui/theme-shell.mjs','ui/product-model.mjs','ui/icons.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(pkg.scripts['check:syntax'].includes(required),true,required);
   for(const legacy of ['flow-era','metropolis-r5','metropolis-v4','metropolis-maintenance','metropolis-remaster','highway-gate','app.js']) assert.equal(pkg.scripts['check:syntax'].includes(legacy),false,legacy);
 });
