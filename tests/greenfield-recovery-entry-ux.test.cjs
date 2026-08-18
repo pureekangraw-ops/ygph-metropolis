@@ -7,12 +7,19 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 
-test('recovery entry is rebuilt as one direct file restore action', () => {
-  assert.match(app, /function installDirectRecoveryPanel\(\)/);
+test('recovery entry is one direct file restore action', () => {
+  assert.match(app, /function showRecovery\(\)/);
   assert.match(app, /เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน/);
   assert.match(app, /id="restoreFile"/);
   assert.match(app, /id="directRestoreBtn"/);
   assert.doesNotMatch(app, /verifyGreenfieldRecoveryCode|resetGreenfieldDevicePassword|importEvidenceBtn|evidenceFile/);
+});
+
+test('first-run setup stays separate from file recovery', () => {
+  const setup = /function showFirstSetup\(\)[\s\S]*?function showRecovery/.exec(app)?.[0] || '';
+  assert.match(setup, /id="firstPassword"/);
+  assert.match(setup, /id="firstRecoveryCode"/);
+  assert.doesNotMatch(setup, /restoreFile|directRestoreBtn|type="file"|ไฟล์สำรอง/);
 });
 
 test('existing data asks once before replacement while file validation stays behind the scenes', () => {
