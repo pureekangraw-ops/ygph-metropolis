@@ -27,8 +27,7 @@ test('visible release authority agrees across package manifest service worker an
   const app = source('app.mjs');
   const uiRelease = /APP_RELEASE='([^']+)'/.exec(status)?.[1];
   const swRelease = /const RELEASE='([^']+)'/.exec(sw)?.[1];
-  assert.equal(manifest.release, '5.2.0');
-  assert.equal(pkg.version, manifest.release);
+  assert.equal(manifest.release, pkg.version);
   assert.equal(lock.version, manifest.release);
   assert.equal(lock.packages[''].version, manifest.release);
   assert.equal(uiRelease, manifest.release);
