@@ -19,6 +19,7 @@ import {
   buildPurchaseWorkflow,
   buildStockWithdrawalWorkflow,
   buildStockAdjustmentWorkflow,
+  buildBalanceAdjustmentWorkflow,
   buildOtherIncomeWorkflow,
   buildExpenseWorkflow,
   buildCalendarRescheduleWorkflow,
@@ -95,6 +96,26 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function adjustBalance({ workflowId, ledgerTransactionId, targetBalanceSatang, reason = 'ปรับให้ตรงกับเงินจริง' } = {}) {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const currentBalanceSatang = projectLedgerBalance(current);
+      const target = Number(targetBalanceSatang);
+      if (!Number.isSafeInteger(target) || target < 0) throw new Error('INVALID_TARGET_BALANCE');
+      if (currentBalanceSatang === target) {
+        lastState = current;
+        return { status:'UNCHANGED', previousBalanceSatang:currentBalanceSatang, balanceSatang:target, state:current };
+      }
+      const plan = buildBalanceAdjustmentWorkflow({ workflowId, ledgerTransactionId, currentBalanceSatang, targetBalanceSatang:target, reason });
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands:plan.commands });
+      lastState = result.state;
+      const balanceSatang = projectLedgerBalance(lastState);
+      if (balanceSatang !== target) throw new Error(`BALANCE_ADJUSTMENT_READBACK_MISMATCH:${balanceSatang}/${target}`);
+      return { ...result, status:'ADJUSTED', previousBalanceSatang:currentBalanceSatang, balanceSatang };
+    });
+  }
+
   async function ensureDailyGoal({ date, suggestedSatang }) {
     const key = goalDate(date);
     const suggested = goalAmount(suggestedSatang);
@@ -166,7 +187,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, changeDevicePassword,
+    diagnostics, readState, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
