@@ -18,8 +18,9 @@ test('hard-cut root contains only Greenfield production entrypoints while allowi
 
 test('release manifest declares current main artifact as Production Greenfield schema 2',()=>{
   const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
+  const pkg=JSON.parse(read('package.json'));
   assert.equal(manifest.product,'YGPH METROPOLIS');
-  assert.equal(manifest.release,'5.2.0');
+  assert.equal(manifest.release,pkg.version);
   assert.equal(manifest.architecture,'GREENFIELD');
   assert.equal(manifest.status,'PRODUCTION');
   assert.equal(manifest.productionBranch,'main');
@@ -47,7 +48,8 @@ test('root UI imports only Greenfield runtime facade and production service work
   const runtime=read('greenfield/runtime.mjs');
   assert.match(runtime,/\.\/device-unlock\.mjs/);
   const sw=read('sw.js');
-  assert.match(sw,/const RELEASE='5\.2\.0'/);
+  const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
+  assert.match(sw,new RegExp(`const RELEASE='${manifest.release.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}'`));
   for(const required of ['theme.css','ui/theme-shell.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(sw.includes(required),true,required);
   for(const forbidden of ['flow-era','metropolis-r5','metropolis-v4','maintenance','remaster','stock-pocket-secure']) assert.equal(sw.includes(forbidden),false,forbidden);
 });
@@ -68,7 +70,8 @@ test('effective publication allowlist exactly matches application plus deploymen
 
 test('repository gate syntax covers every Greenfield production module introduced by the repair',()=>{
   const pkg=JSON.parse(read('package.json'));
-  assert.equal(pkg.version,'5.2.0');
+  const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
+  assert.equal(pkg.version,manifest.release);
   assert.match(pkg.scripts.test,/greenfield-\*\.test\.cjs/);
   for(const required of ['ui/release-status.mjs','ui/theme-shell.mjs','ui/product-model.mjs','ui/icons.mjs','greenfield/ride-domain.mjs','greenfield/ride-workflows.mjs','greenfield/device-unlock.mjs','greenfield/evidence-integrity.mjs','greenfield/workflow-invariants.mjs']) assert.equal(pkg.scripts['check:syntax'].includes(required),true,required);
   for(const legacy of ['flow-era','metropolis-r5','metropolis-v4','metropolis-maintenance','metropolis-remaster','highway-gate','app.js']) assert.equal(pkg.scripts['check:syntax'].includes(legacy),false,legacy);
