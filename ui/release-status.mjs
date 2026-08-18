@@ -1,6 +1,6 @@
 import './theme-shell.mjs';
 
-export const APP_RELEASE='5.1.0';
+export const APP_RELEASE='5.2.0';
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
