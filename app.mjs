@@ -1,8 +1,8 @@
 import {
   openGreenfieldRuntime,
   openGreenfieldRuntimeWithDevicePin,
-  verifyGreenfieldRecoveryCode,
-  resetGreenfieldDevicePassword,
+  openGreenfieldRuntimeFromBackup,
+  enrollGreenfieldDeviceUnlock,
 } from './greenfield/runtime.mjs';
 import './ui/app.mjs';
 import './ui/action-popups.mjs';
@@ -10,7 +10,7 @@ import './ui/release-status.mjs';
 void openGreenfieldRuntime;
 
 const $ = id => document.getElementById(id);
-let verifiedRecoveryCode = '';
+let lastDevicePin = '';
 
 function setTruthCopy() {
   const homeBalanceLabel = $('homeBalance')?.closest('article')?.querySelector('small');
@@ -24,12 +24,6 @@ function clearAuthStatus() {
   $('gateStatus').textContent = '';
   $('gateStatus').classList.remove('error');
 }
-function clearRecoverySecrets() {
-  verifiedRecoveryCode = '';
-  $('recoveryPassphrase').value = '';
-  $('recoveryNewPassword').value = '';
-  $('recoveryConfirmPassword').value = '';
-}
 function clearChangePasswordFields() {
   $('changeCurrentPassword').value = '';
   $('changeNewPassword').value = '';
@@ -39,46 +33,91 @@ function closeChangePasswordPanel() {
   $('changePasswordPanel').classList.add('hidden');
   clearChangePasswordFields();
 }
-function resetRecoverySteps() {
-  $('recoveryVerifyStep').classList.remove('hidden');
-  $('recoveryResetStep').classList.add('hidden');
-}
 function showLogin() {
   $('recoveryPanel').classList.add('hidden');
   $('gate').classList.remove('hidden');
-  $('lockedAdvancedRecovery').open = false;
-  clearRecoverySecrets();
   closeChangePasswordPanel();
-  resetRecoverySteps();
   clearAuthStatus();
 }
-function showRecovery({ advanced = false } = {}) {
-  clearRecoverySecrets();
-  resetRecoverySteps();
+function showRecovery() {
   $('gate').classList.add('hidden');
   $('recoveryPanel').classList.remove('hidden');
-  $('lockedAdvancedRecovery').open = advanced;
   clearAuthStatus();
-  if (advanced) $('restoreFile').focus();
-  else $('recoveryPassphrase').focus();
+  $('restoreFile')?.focus();
 }
 function userFacingAuthMessage(message) {
   if (message === 'DEVICE_PIN_INVALID') return 'รหัสผ่านไม่ถูกต้อง';
-  if (message === 'DEVICE_PIN_TOO_SHORT') return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-  if (message === 'DEVICE_UNLOCK_INCOMPLETE') return 'ไม่สามารถเข้าสู่ระบบได้ กรุณาใช้ “ลืมรหัสผ่าน?”';
-  if (message.startsWith('INVALID_DEVICE_UNLOCK_')) return 'ไม่สามารถเข้าสู่ระบบได้ กรุณาใช้ “ลืมรหัสผ่าน?”';
-  if (message === 'GREENFIELD_VAULT_DECRYPT_FAILED') return 'รหัสกู้คืนไม่ถูกต้อง';
-  if (message === 'PASSPHRASE_TOO_SHORT') return 'รหัสกู้คืนไม่ถูกต้อง';
-  if (message === 'GREENFIELD_NOT_INITIALIZED') return 'ไม่พบข้อมูลเดิมในเครื่องนี้ หากต้องการกู้ข้อมูลให้เปิด “กู้คืนข้อมูลขั้นสูง”';
-  if (message.startsWith('INVALID_GREENFIELD_')) return 'ไม่สามารถกู้คืนการเข้าถึงได้ กรุณาเปิด “กู้คืนข้อมูลขั้นสูง”';
-  if (message === 'รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร') return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-  if (message.startsWith('เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป')) return 'ยังไม่ได้ตั้งรหัสผ่านสำหรับเครื่องนี้ กรุณาเลือก “ลืมรหัสผ่าน?”';
+  if (message === 'DEVICE_PIN_TOO_SHORT' || message === 'รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร') return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+  if (message === 'DEVICE_UNLOCK_INCOMPLETE' || message.startsWith('INVALID_DEVICE_UNLOCK_')) return 'ไม่สามารถเข้าสู่ระบบได้ กรุณากู้คืนจากไฟล์สำรอง';
+  if (message.startsWith('เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป')) return 'ยังไม่ได้ตั้งรหัสผ่านสำหรับเครื่องนี้';
   return message;
 }
+export function restoreErrorText(error) {
+  const message = String(error?.message || error || '');
+  if (message === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองรุ่นเก่านี้ยังต้องใช้รหัสกู้คืน กรุณาสร้างไฟล์สำรองใหม่จาก METRO รุ่นล่าสุด';
+  if (message === 'GREENFIELD_BACKUP_READBACK_MISMATCH' || message === 'GREENFIELD_BACKUP_ROLLBACK_FAILED') return 'กู้คืนไม่สำเร็จ ระบบหยุดก่อนใช้ข้อมูลที่ตรวจไม่ผ่าน';
+  if (message === 'GREENFIELD_VAULT_DECRYPT_FAILED' || message === 'GREENFIELD_BACKUP_EMPTY') return 'ไฟล์สำรองเปิดไม่ได้หรือข้อมูลไม่สมบูรณ์';
+  if (message.includes('JSON') || message.includes('Unexpected token')) return 'ไฟล์สำรองไม่ถูกต้อง';
+  if (message.startsWith('INVALID_GREENFIELD_') || message.includes('BACKUP_DATABASE_IDENTITY_MISMATCH')) return 'ไฟล์นี้ไม่ใช่ไฟล์สำรองที่ METRO ใช้ได้';
+  return 'กู้คืนข้อมูลไม่สำเร็จ กรุณาตรวจสอบไฟล์สำรอง';
+}
 function showAuthError(error) {
+  const gateStatus = $('gateStatus');
   gateStatus.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถดำเนินการได้'));
   gateStatus.classList.add('error');
 }
+
+function installDirectRecoveryPanel() {
+  const panel = $('recoveryPanel');
+  panel.innerHTML = `
+    <button id="recoveryBackBtn" class="secondary" type="button">กลับ</button>
+    <h1>กู้คืนข้อมูล</h1>
+    <p class="muted">เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน</p>
+    <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="directRestoreBtn" class="primary-action" type="button">กู้คืนข้อมูล</button></div>
+    <input id="recoveryPassphrase" class="hidden" aria-hidden="true" tabindex="-1">
+  `;
+  $('recoveryBackBtn').addEventListener('click', showLogin);
+  $('directRestoreBtn').addEventListener('click', restoreSelectedBackup);
+}
+installDirectRecoveryPanel();
+
+async function selectedBackup() {
+  const file = $('restoreFile').files?.[0];
+  if (!file) throw new Error('NO_BACKUP_FILE');
+  try { return JSON.parse(await file.text()); }
+  catch { throw new Error('INVALID_BACKUP_JSON'); }
+}
+async function performRestore(backup, allowOverwrite) {
+  const restoredRuntime = await openGreenfieldRuntimeFromBackup({ backup, allowOverwrite });
+  restoredRuntime.close();
+  const pin = lastDevicePin || $('devicePin').value;
+  if (pin.length >= 6 && String(backup?.recoveryKey || '').length >= 12) {
+    await enrollGreenfieldDeviceUnlock({ vaultPassphrase:backup.recoveryKey, pin });
+    sessionStorage.setItem('metro-auto-unlock-pin', pin);
+  }
+}
+async function restoreSelectedBackup() {
+  const button = $('directRestoreBtn');
+  const gateStatus = $('gateStatus');
+  clearAuthStatus();
+  button.disabled = true;
+  try {
+    const backup = await selectedBackup();
+    try {
+      await performRestore(backup, false);
+    } catch (error) {
+      if (error?.message !== 'GREENFIELD_RESTORE_CONFIRM_REQUIRED') throw error;
+      if (!confirm('มีข้อมูลอยู่ในเครื่องแล้ว\nกู้คืนไฟล์นี้แทนที่ข้อมูลปัจจุบันหรือไม่?')) return;
+      await performRestore(backup, true);
+    }
+    gateStatus.textContent = 'กู้คืนข้อมูลแล้ว';
+    location.reload();
+  } catch (error) {
+    gateStatus.textContent = error?.message === 'NO_BACKUP_FILE' ? 'เลือกไฟล์สำรองก่อน' : restoreErrorText(error);
+    gateStatus.classList.add('error');
+  } finally { button.disabled = false; }
+}
+
 const gateStatus = $('gateStatus');
 new MutationObserver(() => {
   const current = gateStatus.textContent || '';
@@ -89,54 +128,55 @@ new MutationObserver(() => {
   if (!$('workspace').classList.contains('hidden')) {
     $('devicePin').value = '';
     $('recoveryPanel').classList.add('hidden');
-    clearRecoverySecrets();
-    resetRecoverySteps();
   }
 }).observe($('workspace'), { attributes:true, attributeFilter:['class'] });
-$('forgotPasswordBtn').addEventListener('click', () => showRecovery());
-$('recoveryBackBtn').addEventListener('click', () => showLogin());
-$('verifyRecoveryBtn').addEventListener('click', async () => {
-  clearAuthStatus();
-  const recoveryCode = $('recoveryPassphrase').value;
-  const button = $('verifyRecoveryBtn');
-  button.disabled = true;
-  try {
-    await verifyGreenfieldRecoveryCode({ recoveryCode });
-    verifiedRecoveryCode = recoveryCode;
-    $('recoveryPassphrase').value = '';
-    $('recoveryVerifyStep').classList.add('hidden');
-    $('recoveryResetStep').classList.remove('hidden');
-    gateStatus.textContent = 'รหัสกู้คืนถูกต้อง ตั้งรหัสผ่านใหม่ได้';
-    $('recoveryNewPassword').focus();
-  } catch (error) { verifiedRecoveryCode = ''; showAuthError(error); }
-  finally { button.disabled = false; }
+
+$('unlockBtn').addEventListener('click', () => { lastDevicePin = $('devicePin').value; }, { capture:true });
+$('forgotPasswordBtn').textContent = 'กู้คืนข้อมูล';
+$('forgotPasswordBtn').addEventListener('click', showRecovery);
+
+$('changePasswordBtn').addEventListener('click', () => {
+  $('appStatus').textContent = '';
+  clearChangePasswordFields();
+  $('changePasswordPanel').classList.remove('hidden');
+  $('changeCurrentPassword').focus();
 });
-$('resetPasswordBtn').addEventListener('click', async () => {
-  clearAuthStatus();
-  if (!verifiedRecoveryCode) { gateStatus.textContent = 'กรุณาตรวจสอบรหัสกู้คืนก่อน'; gateStatus.classList.add('error'); return; }
-  const nextPassword = $('recoveryNewPassword').value;
-  const confirmPassword = $('recoveryConfirmPassword').value;
-  if (nextPassword.length < 6) { gateStatus.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; gateStatus.classList.add('error'); return; }
-  if (nextPassword !== confirmPassword) { gateStatus.textContent = 'รหัสผ่านทั้งสองช่องไม่ตรงกัน'; gateStatus.classList.add('error'); return; }
-  const button = $('resetPasswordBtn'); button.disabled = true;
-  try { await resetGreenfieldDevicePassword({ recoveryCode:verifiedRecoveryCode, nextPassword }); showLogin(); gateStatus.textContent = 'ตั้งรหัสผ่านใหม่แล้ว'; }
-  catch (error) { showAuthError(error); }
-  finally { button.disabled = false; }
-});
-$('changePasswordBtn').addEventListener('click', () => { $('appStatus').textContent = ''; clearChangePasswordFields(); $('changePasswordPanel').classList.remove('hidden'); $('changeCurrentPassword').focus(); });
 $('cancelChangePasswordBtn').addEventListener('click', () => { closeChangePasswordPanel(); $('appStatus').textContent = ''; });
 $('submitChangePasswordBtn').addEventListener('click', async () => {
   const currentPassword = $('changeCurrentPassword').value;
   const nextPassword = $('changeNewPassword').value;
   const confirmPassword = $('changeConfirmPassword').value;
-  const status = $('settingsStatus'); const button = $('submitChangePasswordBtn');
-  status.textContent = ''; status.classList.remove('error');
+  const status = $('settingsStatus');
+  const button = $('submitChangePasswordBtn');
+  status.textContent = '';
+  status.classList.remove('error');
   if (nextPassword.length < 6) { status.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; status.classList.add('error'); return; }
   if (nextPassword !== confirmPassword) { status.textContent = 'รหัสผ่านทั้งสองช่องไม่ตรงกัน'; status.classList.add('error'); return; }
-  let runtime = null; button.disabled = true;
-  try { runtime = await openGreenfieldRuntimeWithDevicePin({ pin:currentPassword }); await runtime.changeDevicePassword({ nextPassword }); closeChangePasswordPanel(); $('settingsDialog').close(); $('appStatus').textContent = 'เปลี่ยนรหัสผ่านแล้ว'; }
-  catch (error) { status.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถเปลี่ยนรหัสผ่านได้')); status.classList.add('error'); }
-  finally { runtime?.close(); button.disabled = false; }
+  let runtime = null;
+  button.disabled = true;
+  try {
+    runtime = await openGreenfieldRuntimeWithDevicePin({ pin:currentPassword });
+    await runtime.changeDevicePassword({ nextPassword });
+    lastDevicePin = nextPassword;
+    closeChangePasswordPanel();
+    $('settingsDialog').close();
+    $('appStatus').textContent = 'เปลี่ยนรหัสผ่านแล้ว';
+  } catch (error) {
+    status.textContent = userFacingAuthMessage(String(error?.message || error || 'ไม่สามารถเปลี่ยนรหัสผ่านได้'));
+    status.classList.add('error');
+  } finally { runtime?.close(); button.disabled = false; }
 });
-$('openRestoreRouteBtn').addEventListener('click', () => { $('systemLockBtn').click(); showRecovery({ advanced:true }); });
+$('openRestoreRouteBtn').addEventListener('click', () => {
+  if ($('settingsDialog').open) $('settingsDialog').close();
+  $('workspace').classList.add('hidden');
+  showRecovery();
+});
 $('systemLockBtn').addEventListener('click', () => { closeChangePasswordPanel(); showLogin(); });
+
+const autoPin = sessionStorage.getItem('metro-auto-unlock-pin');
+if (autoPin) {
+  sessionStorage.removeItem('metro-auto-unlock-pin');
+  lastDevicePin = autoPin;
+  $('devicePin').value = autoPin;
+  queueMicrotask(() => $('unlockBtn').click());
+}
