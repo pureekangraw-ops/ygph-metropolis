@@ -77,23 +77,26 @@ test('lifecycle catches up missed days exactly once and preserves outstanding st
   assert.deepEqual(second.closedDays,[]);
 });
 
-test('runtime read synchronizes daily lifecycle durably and catches up after downtime', async () => {
+test('runtime sync closes missed days durably while readState remains a pure read', async () => {
   const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
   const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
   let clock='2026-08-18T10:00:00.000Z';
   const runtime=createGreenfieldRuntime({store:createMemoryVaultStore(),passphrase:'correct horse battery staple',lockManager:null,now:()=>clock});
-  await runtime.initializeFromEvidence(evidence(),{expectedPackageId:'FLOW-1786527289637',expectedRevision:28});
-  const first=await runtime.readState();
-  assert.equal(first.meta.dailyLifecycle.activeDay,'2026-08-18');
-  const firstRevision=first.revision;
+  const imported=await runtime.initializeFromEvidence(evidence(),{expectedPackageId:'FLOW-1786527289637',expectedRevision:28});
+  const pure=await runtime.readState();
+  assert.equal(pure.revision,imported.state.revision);
+  assert.equal(pure.meta?.dailyLifecycle,undefined);
+  const firstSync=await runtime.syncDailyLifecycle();
+  assert.equal(firstSync.state.meta.dailyLifecycle.activeDay,'2026-08-18');
+  const firstRevision=firstSync.state.revision;
   clock='2026-08-20T03:00:00.000Z';
-  const second=await runtime.readState();
-  assert.equal(second.meta.dailyLifecycle.activeDay,'2026-08-20');
-  assert.equal(second.meta.dailyLifecycle.lastClosedDay,'2026-08-19');
-  assert.ok(second.meta.dailySummaries['2026-08-18']);
-  assert.ok(second.meta.dailySummaries['2026-08-19']);
-  assert.ok(second.revision>firstRevision);
-  const stable=await runtime.readState();
-  assert.equal(stable.revision,second.revision);
+  const second=await runtime.syncDailyLifecycle();
+  assert.equal(second.state.meta.dailyLifecycle.activeDay,'2026-08-20');
+  assert.equal(second.state.meta.dailyLifecycle.lastClosedDay,'2026-08-19');
+  assert.ok(second.state.meta.dailySummaries['2026-08-18']);
+  assert.ok(second.state.meta.dailySummaries['2026-08-19']);
+  assert.ok(second.state.revision>firstRevision);
+  const stable=await runtime.syncDailyLifecycle();
+  assert.equal(stable.state.revision,second.state.revision);
   runtime.close();
 });
