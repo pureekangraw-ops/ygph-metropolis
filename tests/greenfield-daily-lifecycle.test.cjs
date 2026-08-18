@@ -1,6 +1,7 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { signEvidence } = require('./flow-evidence-fixture.cjs');
 
 function fixture() {
   return {
@@ -19,10 +20,20 @@ function fixture() {
   };
 }
 
+function evidence() {
+  return signEvidence({
+    format:'YGPH_FLOW_EVENT_EXCHANGE', formatVersion:3, evidenceSchemaVersion:'3.1', packageId:'FLOW-1786527289637',
+    packageMode:'SNAPSHOT_AND_DELTA', snapshotAsOf:'2026-08-18T03:00:00.000Z', sourceRevision:28,
+    reconciliation:{status:'PASS',blockingIssues:[]},
+    events:[{eventId:'L0',source:'LEDGER',owner:'LEDGER',payload:{record:{recordId:'LEDGER-CURRENT',type:'CURRENT_BALANCE',amountSatang:0,calculation:{openingBalanceSatang:0}}},validation:{ownerConfirmation:'UNCONFIRMED'}}],
+  });
+}
+
 test('Bangkok day boundary changes at 00:00 Asia/Bangkok', async () => {
-  const { bangkokDayKey } = await import('../greenfield/daily-lifecycle.mjs');
+  const { bangkokDayKey, millisecondsUntilNextBangkokMidnight } = await import('../greenfield/daily-lifecycle.mjs');
   assert.equal(bangkokDayKey('2026-08-18T16:59:59.999Z'),'2026-08-18');
   assert.equal(bangkokDayKey('2026-08-18T17:00:00.000Z'),'2026-08-19');
+  assert.equal(millisecondsUntilNextBangkokMidnight('2026-08-18T16:59:59.000Z'),1000);
 });
 
 test('daily summary snapshots four daily metrics and current goal without counting balance adjustment', async () => {
@@ -64,4 +75,25 @@ test('lifecycle catches up missed days exactly once and preserves outstanding st
   const second = applyDailyLifecycle(first.state,{now:'2026-08-20T03:00:00.000Z'});
   assert.equal(second.changed,false);
   assert.deepEqual(second.closedDays,[]);
+});
+
+test('runtime read synchronizes daily lifecycle durably and catches up after downtime', async () => {
+  const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
+  const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
+  let clock='2026-08-18T10:00:00.000Z';
+  const runtime=createGreenfieldRuntime({store:createMemoryVaultStore(),passphrase:'correct horse battery staple',lockManager:null,now:()=>clock});
+  await runtime.initializeFromEvidence(evidence(),{expectedPackageId:'FLOW-1786527289637',expectedRevision:28});
+  const first=await runtime.readState();
+  assert.equal(first.meta.dailyLifecycle.activeDay,'2026-08-18');
+  const firstRevision=first.revision;
+  clock='2026-08-20T03:00:00.000Z';
+  const second=await runtime.readState();
+  assert.equal(second.meta.dailyLifecycle.activeDay,'2026-08-20');
+  assert.equal(second.meta.dailyLifecycle.lastClosedDay,'2026-08-19');
+  assert.ok(second.meta.dailySummaries['2026-08-18']);
+  assert.ok(second.meta.dailySummaries['2026-08-19']);
+  assert.ok(second.revision>firstRevision);
+  const stable=await runtime.readState();
+  assert.equal(stable.revision,second.revision);
+  runtime.close();
 });
