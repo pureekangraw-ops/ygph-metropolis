@@ -116,8 +116,8 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   async function readState() {
-    const result = await syncDailyLifecycle();
-    return result.state;
+    lastState = await readEncryptedState({ store, passphrase });
+    return lastState;
   }
 
   async function initializeFromEvidence(evidence, { expectedPackageId, expectedRevision } = {}) {
