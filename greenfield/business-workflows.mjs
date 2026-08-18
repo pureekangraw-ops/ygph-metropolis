@@ -10,6 +10,12 @@ function satang(value, { allowZero = false, code = 'INVALID_AMOUNT' } = {}) {
   return amount;
 }
 
+function signedSatang(value, code = 'INVALID_SIGNED_AMOUNT') {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount)) throw new Error(code);
+  return amount;
+}
+
 function quantity(value) {
   const output = Number(value);
   if (!Number.isSafeInteger(output) || output <= 0) throw new Error('INVALID_QUANTITY');
@@ -156,6 +162,26 @@ export function buildStockAdjustmentWorkflow({ workflowId, recordId, title, delt
     recordId, type: 'STOCK_ADJUSTMENT', title: text(title, 'INVALID_ADJUSTMENT_TITLE'), detail: text(reason, 'INVALID_ADJUSTMENT_REASON'),
     reason: text(reason, 'INVALID_ADJUSTMENT_REASON'), amountSatang: null, quantity: delta, status: 'COMPLETED',
   } }, `STORE:${recordId}`)] };
+}
+
+export function buildBalanceAdjustmentWorkflow({ workflowId, ledgerTransactionId, currentBalanceSatang, targetBalanceSatang, reason = 'ปรับให้ตรงกับเงินจริง' }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
+  const before = signedSatang(currentBalanceSatang, 'INVALID_CURRENT_BALANCE');
+  const after = satang(targetBalanceSatang, { allowZero: true, code: 'INVALID_TARGET_BALANCE' });
+  if (before === after) throw new Error('BALANCE_ALREADY_MATCHES');
+  const delta = after - before;
+  return { workflowId, commands: [command(workflowId, 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
+    recordId: ledgerTransactionId,
+    direction: delta > 0 ? 'IN' : 'OUT',
+    amountSatang: Math.abs(delta),
+    title: 'ปรับฐานเงิน',
+    subtype: 'BALANCE_ADJUSTMENT',
+    sourceRef: 'LEDGER/BALANCE_RECONCILIATION',
+    balanceBeforeSatang: before,
+    balanceAfterSatang: after,
+    adjustmentReason: text(reason, 'INVALID_BALANCE_ADJUSTMENT_REASON'),
+  }, `LEDGER:${ledgerTransactionId}`)] };
 }
 
 export function buildOtherIncomeWorkflow({ workflowId, ledgerTransactionId, title, amountSatang }) {
