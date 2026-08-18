@@ -12,17 +12,29 @@ function validateBackupEnvelope(backup) {
   return backup;
 }
 
-export async function exportGreenfieldBackup({ store, exportedAt = new Date().toISOString() }) {
+function portablePassphrase(backup) {
+  const value = String(backup?.recoveryKey || '');
+  if (value.length < 12) throw new Error('GREENFIELD_BACKUP_RECOVERY_KEY_MISSING');
+  return value;
+}
+
+export async function exportGreenfieldBackup({ store, recoveryKey, exportedAt = new Date().toISOString() }) {
   const vault = await store.get(VAULT_KEY);
   if (!vault) throw new Error('GREENFIELD_NOT_INITIALIZED');
   if (vault.format !== VAULT_FORMAT || Number(vault.version) !== VAULT_VERSION) throw new Error('INVALID_GREENFIELD_VAULT');
-  return {
+  const backup = {
     backupFormat: BACKUP_FORMAT,
     backupVersion: BACKUP_VERSION,
     exportedAt,
     database: { name: DB_NAME, version: DB_VERSION, store: DB_STORE, key: VAULT_KEY },
     vault: structuredClone(vault),
   };
+  if (recoveryKey !== undefined) {
+    const key = String(recoveryKey || '');
+    if (key.length < 12) throw new Error('PASSPHRASE_TOO_SHORT');
+    backup.recoveryKey = key;
+  }
+  return backup;
 }
 
 export async function verifyGreenfieldBackup({ backup, passphrase }) {
@@ -34,11 +46,30 @@ export async function verifyGreenfieldBackup({ backup, passphrase }) {
   return { status: 'VERIFIED', revision: state.revision, state };
 }
 
-export async function restoreGreenfieldBackup({ store, backup, passphrase }) {
-  if (await store.get(VAULT_KEY)) throw new Error('GREENFIELD_STORE_NOT_EMPTY');
+export async function verifyPortableGreenfieldBackup({ backup }) {
+  return verifyGreenfieldBackup({ backup, passphrase: portablePassphrase(backup) });
+}
+
+export async function restoreGreenfieldBackup({ store, backup, passphrase, allowOverwrite = false }) {
   const verified = await verifyGreenfieldBackup({ backup, passphrase });
-  await store.put(VAULT_KEY, structuredClone(backup.vault));
-  const durable = await readEncryptedState({ store, passphrase });
-  if (!durable || canonicalStringify(durable) !== canonicalStringify(verified.state)) throw new Error('GREENFIELD_BACKUP_READBACK_MISMATCH');
-  return { status: 'VERIFIED', revision: durable.revision, state: durable };
+  const previousVault = await store.get(VAULT_KEY);
+  if (previousVault && !allowOverwrite) throw new Error('GREENFIELD_RESTORE_CONFIRM_REQUIRED');
+  try {
+    await store.put(VAULT_KEY, structuredClone(backup.vault));
+    const durable = await readEncryptedState({ store, passphrase });
+    if (!durable || canonicalStringify(durable) !== canonicalStringify(verified.state)) throw new Error('GREENFIELD_BACKUP_READBACK_MISMATCH');
+    return { status: 'VERIFIED', revision: durable.revision, state: durable, replacedExisting: Boolean(previousVault) };
+  } catch (error) {
+    if (previousVault) {
+      try { await store.put(VAULT_KEY, structuredClone(previousVault)); }
+      catch { throw new Error('GREENFIELD_BACKUP_ROLLBACK_FAILED'); }
+    }
+    throw error;
+  }
+}
+
+export async function restorePortableGreenfieldBackup({ store, backup, allowOverwrite = false }) {
+  const passphrase = portablePassphrase(backup);
+  const result = await restoreGreenfieldBackup({ store, backup, passphrase, allowOverwrite });
+  return { ...result, passphrase };
 }
