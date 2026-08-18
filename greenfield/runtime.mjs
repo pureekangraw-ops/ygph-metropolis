@@ -9,7 +9,7 @@ import { registerRideDomainCommands, projectRideState } from './ride-domain.mjs'
 import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
-import { exportGreenfieldBackup, restoreGreenfieldBackup } from './backup.mjs';
+import { exportGreenfieldBackup, restoreGreenfieldBackup, restorePortableGreenfieldBackup } from './backup.mjs';
 import { buildCalendarActionIntent } from './action-contract.mjs';
 import {
   buildSaleWorkflow,
@@ -64,14 +64,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   async function initializeFromEvidence(evidence, { expectedPackageId, expectedRevision } = {}) {
     return coordinator.run(async () => {
-      const result = await initializeGreenfieldFromEvidence({
-        store,
-        passphrase,
-        evidence,
-        expectedPackageId,
-        expectedRevision,
-        now: now(),
-      });
+      const result = await initializeGreenfieldFromEvidence({ store, passphrase, evidence, expectedPackageId, expectedRevision, now: now() });
       lastState = result.state;
       return result;
     });
@@ -93,10 +86,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
       const queueId = String(input?.queueId || '');
       const queue = current?.domains?.CALENDAR?.records?.[queueId]?.record;
       if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
-      const intent = buildCalendarActionIntent(current, queue, input?.amountSatang, {
-        workflowId:input?.workflowId,
-        transactionId:input?.ledgerTransactionId,
-      });
+      const intent = buildCalendarActionIntent(current, queue, input?.amountSatang, { workflowId:input?.workflowId, transactionId:input?.ledgerTransactionId });
       if (intent.method !== expectedMethod) throw new Error(`CALENDAR_ACTION_METHOD_MISMATCH:${expectedMethod}/${intent.method}`);
       const plan = intent.method === 'payObligation' ? buildPayObligationWorkflow(intent.input) : buildReceiveCustomerPaymentWorkflow(intent.input);
       const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands:plan.commands });
@@ -112,10 +102,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
       const current = await readEncryptedState({ store, passphrase });
       if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
       const existing = current.meta?.dailyGoals?.[key];
-      if (existing) {
-        lastState = current;
-        return { status:'EXISTING', goal:structuredClone(existing), state:current };
-      }
+      if (existing) { lastState = current; return { status:'EXISTING', goal:structuredClone(existing), state:current }; }
       const at = now();
       const next = structuredClone(current);
       next.meta = next.meta && typeof next.meta === 'object' ? next.meta : {};
@@ -139,14 +126,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
       if (!existing) throw new Error(`DAILY_GOAL_NOT_INITIALIZED:${key}`);
       const at = now();
       const next = structuredClone(current);
-      next.meta.dailyGoals[key] = {
-        ...existing,
-        date:key,
-        goalSatang:amount,
-        autoSuggestedSatang:Number(existing.autoSuggestedSatang ?? existing.goalSatang ?? 0),
-        source:'MANUAL',
-        updatedAt:at,
-      };
+      next.meta.dailyGoals[key] = { ...existing, date:key, goalSatang:amount, autoSuggestedSatang:Number(existing.autoSuggestedSatang ?? existing.goalSatang ?? 0), source:'MANUAL', updatedAt:at };
       next.revision += 1;
       next.updatedAt = at;
       await commitEncryptedState({ store, passphrase, state:next, expectedDurableRevision:current.revision });
@@ -166,46 +146,27 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   function project() {
     if (!lastState) throw new Error('GREENFIELD_STATE_NOT_LOADED');
-    return {
-      revision: lastState.revision,
-      ledgerBalanceSatang: projectLedgerBalance(lastState),
-      calendar: projectCalendarSummary(lastState),
-      ride: projectRideState(lastState, now()),
-    };
+    return { revision:lastState.revision, ledgerBalanceSatang:projectLedgerBalance(lastState), calendar:projectCalendarSummary(lastState), ride:projectRideState(lastState, now()) };
   }
 
   function diagnostics() {
-    return {
-      architecture: 'GREENFIELD',
-      schema: GREENFIELD_SCHEMA,
-      database: DB_NAME,
-      vault: VAULT_FORMAT,
-      coordination: coordinator.status(),
-    };
+    return { architecture:'GREENFIELD', schema:GREENFIELD_SCHEMA, database:DB_NAME, vault:VAULT_FORMAT, coordination:coordinator.status() };
   }
 
   async function exportBackup(options = {}) {
-    return coordinator.run(() => exportGreenfieldBackup({ store, ...options }));
+    return coordinator.run(() => exportGreenfieldBackup({ store, recoveryKey:passphrase, ...options }));
   }
 
-  async function restoreBackup(backup) {
+  async function restoreBackup(backup, { allowOverwrite = false } = {}) {
     return coordinator.run(async () => {
-      const result = await restoreGreenfieldBackup({ store, backup, passphrase });
+      const result = await restoreGreenfieldBackup({ store, backup, passphrase, allowOverwrite });
       lastState = result.state;
       return result;
     });
   }
 
   return Object.freeze({
-    diagnostics,
-    readState,
-    initializeFromEvidence,
-    project,
-    exportBackup,
-    restoreBackup,
-    ensureDailyGoal,
-    overrideDailyGoal,
-    changeDevicePassword,
+    diagnostics, readState, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
@@ -231,22 +192,27 @@ export async function openGreenfieldRuntime({ passphrase, indexedDBImpl = global
   return createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
 }
 
-export async function inspectGreenfieldDeviceUnlock({ indexedDBImpl = globalThis.indexedDB } = {}) {
+export async function openGreenfieldRuntimeFromBackup({ backup, allowOverwrite = false, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
   try {
-    return await inspectDeviceUnlock({ store });
-  } finally {
+    const restored = await restorePortableGreenfieldBackup({ store, backup, allowOverwrite });
+    const runtime = createGreenfieldRuntime({ store, passphrase:restored.passphrase, lockManager, now, closeStore: () => store.close() });
+    await runtime.readState();
+    return runtime;
+  } catch (error) {
     store.close();
+    throw error;
   }
+}
+
+export async function inspectGreenfieldDeviceUnlock({ indexedDBImpl = globalThis.indexedDB } = {}) {
+  const store = await openGreenfieldVaultStore({ indexedDBImpl });
+  try { return await inspectDeviceUnlock({ store }); } finally { store.close(); }
 }
 
 export async function enrollGreenfieldDeviceUnlock({ vaultPassphrase, pin, indexedDBImpl = globalThis.indexedDB } = {}) {
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
-  try {
-    return await enrollDeviceUnlock({ store, vaultPassphrase, pin });
-  } finally {
-    store.close();
-  }
+  try { return await enrollDeviceUnlock({ store, vaultPassphrase, pin }); } finally { store.close(); }
 }
 
 export async function verifyGreenfieldRecoveryCode({ recoveryCode, indexedDBImpl = globalThis.indexedDB } = {}) {
@@ -255,9 +221,7 @@ export async function verifyGreenfieldRecoveryCode({ recoveryCode, indexedDBImpl
     const state = await readEncryptedState({ store, passphrase:recoveryCode });
     if (!state) throw new Error('GREENFIELD_NOT_INITIALIZED');
     return { status:'VERIFIED' };
-  } finally {
-    store.close();
-  }
+  } finally { store.close(); }
 }
 
 export async function resetGreenfieldDevicePassword({ recoveryCode, nextPassword, indexedDBImpl = globalThis.indexedDB } = {}) {
@@ -269,9 +233,7 @@ export async function resetGreenfieldDevicePassword({ recoveryCode, nextPassword
     const readback = await unlockVaultPassphrase({ store, pin:nextPassword });
     if (readback !== recoveryCode) throw new Error('DEVICE_UNLOCK_READBACK_MISMATCH');
     return { status:'RESET' };
-  } finally {
-    store.close();
-  }
+  } finally { store.close(); }
 }
 
 export async function openGreenfieldRuntimeWithDevicePin({ pin, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
