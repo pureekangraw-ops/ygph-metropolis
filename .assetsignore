@@ -23,6 +23,7 @@
 !/greenfield/
 !/greenfield/action-contract.mjs
 !/greenfield/calculation-authority.mjs
+!/greenfield/daily-lifecycle.mjs
 !/greenfield/backup.mjs
 !/greenfield/browser-store.mjs
 !/greenfield/business-workflows.mjs
