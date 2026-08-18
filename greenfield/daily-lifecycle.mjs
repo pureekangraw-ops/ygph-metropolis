@@ -30,6 +30,15 @@ function shiftDay(dayKey, amount) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
+export function millisecondsUntilNextBangkokMidnight(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('INVALID_DAILY_LIFECYCLE_NOW');
+  const currentDay = bangkokDayKey(date);
+  const nextDay = shiftDay(currentDay, 1);
+  const nextMidnight = new Date(`${nextDay}T00:00:00+07:00`).getTime();
+  return Math.max(0, nextMidnight - date.getTime());
+}
+
 function normalizeGoal(state, dayKey) {
   const amount = Number(state?.meta?.dailyGoals?.[dayKey]?.goalSatang ?? 0);
   return Number.isSafeInteger(amount) && amount >= 0 ? amount : 0;
