@@ -11,6 +11,7 @@ import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
 import { exportGreenfieldBackup, restoreGreenfieldBackup, restorePortableGreenfieldBackup } from './backup.mjs';
 import { buildCalendarActionIntent } from './action-contract.mjs';
+import { applyDailyLifecycle, millisecondsUntilNextBangkokMidnight } from './daily-lifecycle.mjs';
 import {
   buildSaleWorkflow,
   buildReceiveCustomerPaymentWorkflow,
@@ -48,6 +49,10 @@ function goalAmount(value) {
   return amount;
 }
 
+function browserLifecycleSyncEnabled() {
+  return typeof globalThis.window !== 'undefined';
+}
+
 export function createGreenfieldRuntime({ store, passphrase, lockManager = globalThis.navigator?.locks ?? null, now = () => new Date().toISOString(), closeStore = null } = {}) {
   if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
   if (typeof passphrase !== 'string' || passphrase.length < 12) throw new Error('PASSPHRASE_TOO_SHORT');
@@ -57,6 +62,62 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   registerRideDomainCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
   let lastState = null;
+  let dailyLifecycleTimer = null;
+
+  function clearDailyLifecycleBoundary() {
+    if (dailyLifecycleTimer != null && typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(dailyLifecycleTimer);
+    dailyLifecycleTimer = null;
+  }
+
+  function scheduleDailyLifecycleBoundary() {
+    if (!browserLifecycleSyncEnabled() || typeof globalThis.setTimeout !== 'function') return;
+    clearDailyLifecycleBoundary();
+    const delay = millisecondsUntilNextBangkokMidnight(now());
+    dailyLifecycleTimer = globalThis.setTimeout(async () => {
+      dailyLifecycleTimer = null;
+      try {
+        const result = await syncDailyLifecycle();
+        if (result.state && typeof globalThis.dispatchEvent === 'function') {
+          const detail = { activeDay:result.activeDay, closedDays:result.closedDays, status:result.status };
+          const event = typeof globalThis.CustomEvent === 'function'
+            ? new globalThis.CustomEvent('ygph:daily-lifecycle', { detail })
+            : new globalThis.Event('ygph:daily-lifecycle');
+          globalThis.dispatchEvent(event);
+        }
+      } catch (error) {
+        globalThis.console?.error?.('DAILY_LIFECYCLE_SYNC_FAILED', error);
+      } finally {
+        scheduleDailyLifecycleBoundary();
+      }
+    }, Math.max(1, delay + 25));
+  }
+
+  async function syncDailyLifecycle() {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) {
+        lastState = null;
+        clearDailyLifecycleBoundary();
+        return { status:'EMPTY', state:null, closedDays:[], activeDay:null };
+      }
+      const at = now();
+      const lifecycle = applyDailyLifecycle(current, { now:at });
+      if (!lifecycle.changed) {
+        lastState = current;
+        scheduleDailyLifecycleBoundary();
+        return { status:'UNCHANGED', state:current, closedDays:[], activeDay:lifecycle.activeDay };
+      }
+      const next = lifecycle.state;
+      next.revision = current.revision + 1;
+      next.updatedAt = at;
+      await commitEncryptedState({ store, passphrase, state:next, expectedDurableRevision:current.revision });
+      lastState = await readEncryptedState({ store, passphrase });
+      const readback = lastState?.meta?.dailyLifecycle;
+      if (!readback || readback.activeDay !== lifecycle.activeDay) throw new Error('DAILY_LIFECYCLE_READBACK_MISMATCH');
+      scheduleDailyLifecycleBoundary();
+      return { status:'UPDATED', state:lastState, closedDays:lifecycle.closedDays, activeDay:lifecycle.activeDay };
+    });
+  }
 
   async function readState() {
     lastState = await readEncryptedState({ store, passphrase });
@@ -187,7 +248,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
+    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
@@ -204,13 +265,15 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     rideJob: input => executePlan(buildRideJobWorkflow(input)),
     rideExpense: input => executePlan(buildRideExpenseWorkflow(input)),
     rideWithdrawCredit: input => executePlan(buildRideWithdrawCreditWorkflow(input)),
-    close() { if (typeof closeStore === 'function') closeStore(); else store.close?.(); },
+    close() { clearDailyLifecycleBoundary(); if (typeof closeStore === 'function') closeStore(); else store.close?.(); },
   });
 }
 
 export async function openGreenfieldRuntime({ passphrase, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
-  return createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+  const runtime = createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+  if (browserLifecycleSyncEnabled()) await runtime.syncDailyLifecycle();
+  return runtime;
 }
 
 export async function openGreenfieldRuntimeFromBackup({ backup, allowOverwrite = false, indexedDBImpl = globalThis.indexedDB, lockManager = globalThis.navigator?.locks ?? null, now } = {}) {
@@ -218,7 +281,8 @@ export async function openGreenfieldRuntimeFromBackup({ backup, allowOverwrite =
   try {
     const restored = await restorePortableGreenfieldBackup({ store, backup, allowOverwrite });
     const runtime = createGreenfieldRuntime({ store, passphrase:restored.passphrase, lockManager, now, closeStore: () => store.close() });
-    await runtime.readState();
+    if (browserLifecycleSyncEnabled()) await runtime.syncDailyLifecycle();
+    else await runtime.readState();
     return runtime;
   } catch (error) {
     store.close();
@@ -261,7 +325,9 @@ export async function openGreenfieldRuntimeWithDevicePin({ pin, indexedDBImpl = 
   const store = await openGreenfieldVaultStore({ indexedDBImpl });
   try {
     const passphrase = await unlockVaultPassphrase({ store, pin });
-    return createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+    const runtime = createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore: () => store.close() });
+    if (browserLifecycleSyncEnabled()) await runtime.syncDailyLifecycle();
+    return runtime;
   } catch (error) {
     store.close();
     throw error;
