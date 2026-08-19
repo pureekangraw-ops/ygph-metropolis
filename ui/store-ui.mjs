@@ -3,6 +3,17 @@ import { projectStoreReceivables } from './product-model.mjs';
 export function createStoreUi({ getById, getState, getActiveStoreView, bahtText, simpleItem, setStoreView }) {
   const $ = getById;
   const receivableAmountText = item => item.outstandingSatang == null ? 'ยอดต้องตรวจสอบ' : bahtText(item.outstandingSatang);
+  const appendSaleEconomics = (article, record) => {
+    if (record?.type !== 'SALE') return;
+    const storeCost = Number(record.storeCostSatang ?? 0);
+    const received = Number(record.receivedSatang ?? 0);
+    const netIncome = Number(record.netIncomeSatang ?? (received - storeCost));
+    if (![storeCost, received, netIncome].every(Number.isSafeInteger)) return;
+    const meta = document.createElement('small');
+    meta.className = 'muted';
+    meta.textContent = `ต้นทุนร้านค้า ${bahtText(storeCost)} · รายได้สุทธิ ${bahtText(netIncome)}`;
+    article.append(meta);
+  };
 
   function renderStore(context) {
     const receivables = projectStoreReceivables(getState());
@@ -62,6 +73,7 @@ export function createStoreUi({ getById, getState, getActiveStoreView, bahtText,
       stockMeta.className = 'muted';
       stockMeta.textContent = `ผลต่อสต็อก ${delta > 0 ? '+' : ''}${delta} ชิ้น`;
       article.append(stockMeta);
+      appendSaleEconomics(article, record);
       movementList.append(article);
     }
     if (!movements.length) movementList.textContent = 'ยังไม่มีความเคลื่อนไหวสต็อก';
@@ -71,7 +83,11 @@ export function createStoreUi({ getById, getState, getActiveStoreView, bahtText,
     const records = [...context.storeRecords]
       .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
       .slice(0, 50);
-    for (const record of records) list.append(simpleItem(record));
+    for (const record of records) {
+      const article = simpleItem(record);
+      appendSaleEconomics(article, record);
+      list.append(article);
+    }
     if (!records.length) list.textContent = 'ยังไม่มีรายการร้านค้า';
     setStoreView(getActiveStoreView());
   }
