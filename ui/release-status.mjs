@@ -1,4 +1,5 @@
 import './theme-shell.mjs';
+import './reset-all-ui.mjs';
 
 export const APP_RELEASE='5.2.5';
 
