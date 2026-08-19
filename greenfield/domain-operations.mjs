@@ -75,6 +75,13 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     record.status = requiredText(input.status ?? (type === 'PURCHASE' ? 'ACTIVE' : 'COMPLETED'), 'INVALID_STORE_STATUS');
     record.amountSatang = safeSatang(input.amountSatang, { allowNull: type === 'STOCK_ADJUSTMENT', code: 'INVALID_STORE_AMOUNT' });
     record.quantity = safeQuantity(input.quantity, { signed: type === 'STOCK_ADJUSTMENT', code: 'INVALID_STORE_QUANTITY' });
+    if (type === 'SALE') {
+      const received = safeSatang(input.receivedSatang ?? 0, { code: 'INVALID_RECEIVED_AMOUNT' });
+      const storeCost = safeSatang(input.storeCostSatang ?? 0, { code: 'INVALID_STORE_COST' });
+      record.receivedSatang = received;
+      record.storeCostSatang = storeCost;
+      record.netIncomeSatang = received - storeCost;
+    }
     record.createdAt = input.createdAt || at;
     record.updatedAt = at;
     createEntry(domainState, record, command, at);
@@ -88,6 +95,7 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     const total = Number(entry.record.totalSatang ?? entry.record.amountSatang);
     const received = Number(entry.record.receivedSatang ?? 0);
     const outstanding = Number(entry.record.outstandingSatang ?? (total - received));
+    const storeCost = safeSatang(entry.record.storeCostSatang ?? 0, { code: 'INVALID_STORE_COST' });
     if (![total, received, outstanding].every(Number.isSafeInteger) || total < 0 || received < 0 || outstanding < 0) throw new Error(`INVALID_RECEIVABLE_STATE:${id}`);
     if (amount > outstanding) throw new Error(`PAYMENT_OVER_OUTSTANDING:${id}`);
     const at = now();
@@ -95,6 +103,8 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
       record.totalSatang = total;
       record.receivedSatang = received + amount;
       record.outstandingSatang = outstanding - amount;
+      record.storeCostSatang = storeCost;
+      record.netIncomeSatang = record.receivedSatang - storeCost;
       record.status = record.outstandingSatang === 0 ? 'COMPLETED' : 'PARTIAL';
       record.updatedAt = at;
     });

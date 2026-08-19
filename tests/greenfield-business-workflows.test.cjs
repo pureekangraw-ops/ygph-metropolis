@@ -29,6 +29,18 @@ test('cash sale workflow creates Store truth and Ledger cash movement with no Ca
   assert.deepEqual(Object.keys(state.domains.CALENDAR.records), []);
 });
 
+test('sale cost stays in Store and net income equals received cash minus store-borne cost', async () => {
+  const { createGreenfieldState } = await import('../greenfield/core.mjs');
+  const { buildSaleWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const plan = buildSaleWorkflow({ workflowId:'WF-SALE-COST', saleId:'SALE-COST', ledgerTransactionId:'TX-COST', title:'ขายพร้อมต้นทุนร้าน', amountSatang:50000, quantity:1, receivedSatang:50000, storeCostSatang:6000 });
+  const state = await apply(createGreenfieldState(), plan.commands);
+  const sale = state.domains.STORE.records['SALE-COST'].record;
+  assert.equal(sale.storeCostSatang, 6000);
+  assert.equal(sale.netIncomeSatang, 44000);
+  assert.equal(state.domains.LEDGER.records['TX-COST'].record.amountSatang, 50000);
+  assert.equal(Object.values(state.domains.LEDGER.records).filter(entry => entry.record.direction === 'OUT').length, 0);
+});
+
 test('receivable sale and payment workflow keeps Calendar non-cash and closes only after atomic Ledger receipt', async () => {
   const { createGreenfieldState } = await import('../greenfield/core.mjs');
   const { buildSaleWorkflow, buildReceiveCustomerPaymentWorkflow } = await import('../greenfield/business-workflows.mjs');

@@ -1,6 +1,6 @@
 {
   "name": "ygph-metropolis",
-  "version": "5.2.4",
+  "version": "5.2.5",
   "private": true,
   "scripts": {
     "test": "node --test tests/greenfield-*.test.cjs",
