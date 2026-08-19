@@ -35,16 +35,18 @@ function command(workflowId, index, domain, type, payload, suffix = type) {
   return { commandId: `${workflowId}:${index}`, idempotencyKey: `${workflowId}:${suffix}`, domain, type, payload };
 }
 
-export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, calendarQueueId, title, amountSatang, quantity: qty, receivedSatang = 0, dueDate }) {
+export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, calendarQueueId, title, amountSatang, quantity: qty, receivedSatang = 0, storeCostSatang = 0, dueDate }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   saleId = text(saleId, 'INVALID_SALE_ID');
   const total = satang(amountSatang, { code: 'INVALID_SALE_AMOUNT' });
   const received = satang(receivedSatang, { allowZero: true, code: 'INVALID_RECEIVED_AMOUNT' });
+  const storeCost = satang(storeCostSatang, { allowZero: true, code: 'INVALID_STORE_COST' });
   if (received > total) throw new Error('RECEIVED_OVER_TOTAL');
   const outstanding = total - received;
   const commands = [command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
     recordId: saleId, type: 'SALE', title: text(title, 'INVALID_SALE_TITLE'), amountSatang: total, totalSatang: total,
-    receivedSatang: received, outstandingSatang: outstanding, quantity: quantity(qty),
+    receivedSatang: received, outstandingSatang: outstanding, storeCostSatang: storeCost, netIncomeSatang: received - storeCost,
+    quantity: quantity(qty),
     status: outstanding === 0 ? 'COMPLETED' : received > 0 ? 'PARTIAL' : 'OPEN',
   } }, `STORE:${saleId}`)];
   if (received > 0) {
