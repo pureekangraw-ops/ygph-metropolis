@@ -131,7 +131,7 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     if (!Number.isSafeInteger(installmentCount) || installmentCount < 1) throw new Error('INVALID_INSTALLMENT_COUNT');
     const record = {
       recordId: requiredText(payload.recordId, 'INVALID_RECORD_ID'), source: 'LEDGER', type: 'OBLIGATION',
-      title: requiredText(payload.title, 'INVALID_LEDGER_TITLE'), detail: String(payload.detail || ''),
+      title: requiredText(payload.title, 'INVALID_OBLIGATION_TITLE'), detail: String(payload.detail || ''),
       amountSatang: total, originalSatang: total, paidSatang: 0, remainingSatang: total, installmentCount,
       dueDate: payload.dueDate ? String(payload.dueDate) : null,
       installmentPlan: Array.isArray(payload.installmentPlan) ? structuredClone(payload.installmentPlan) : [],
