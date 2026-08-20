@@ -12,6 +12,7 @@
 !/ui/action-popups.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
+!/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
