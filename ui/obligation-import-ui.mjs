@@ -4,6 +4,13 @@ import { parseObligationImportFile, verifyObligationImportReadback } from '../gr
 const launcher = document.querySelector('[data-city-action-open="finance-actions"]');
 const cityDialog = document.getElementById('cityActionDialog');
 const workspace = document.getElementById('workspace');
+const unlockButton = document.getElementById('unlockBtn');
+const devicePinInput = document.getElementById('devicePin');
+let activeDevicePin = '';
+
+unlockButton?.addEventListener('click', () => {
+  activeDevicePin = String(devicePinInput?.value || '');
+}, { capture:true });
 
 function importErrorText(error) {
   const message = String(error?.message || error || '');
@@ -12,7 +19,7 @@ function importErrorText(error) {
   if (message.includes('OBLIGATION_IMPORT_TOTAL') || message.includes('INSTALLMENT')) return 'ยอดรวมกับยอดแบ่งงวดในไฟล์ไม่ตรงกัน';
   if (message.includes('DUPLICATE') || message.includes('ALREADY')) return 'รายการนี้มีอยู่ในระบบแล้ว';
   if (message === 'OBLIGATION_IMPORT_READBACK_MISMATCH') return 'บันทึกแล้วแต่ตรวจผลหลังนำเข้าไม่ผ่าน';
-  if (message === 'DEVICE_PIN_INVALID') return 'รหัสผ่านหมดอายุ กรุณาเข้าสู่ระบบใหม่';
+  if (message === 'DEVICE_PIN_INVALID') return 'การยืนยันตัวตนไม่พร้อม กรุณาเข้าสู่ระบบใหม่';
   return 'นำเข้าไฟล์ไม่สำเร็จ กรุณาตรวจสอบไฟล์';
 }
 
@@ -73,7 +80,7 @@ if (launcher && cityDialog && workspace) {
       try { documentPayload = JSON.parse(await file.text()); }
       catch { throw new Error('INVALID_OBLIGATION_IMPORT_JSON'); }
       const payload = parseObligationImportFile(documentPayload);
-      const pin = sessionStorage.getItem('metro-auto-unlock-pin') || '';
+      const pin = activeDevicePin;
       if (pin.length < 6) throw new Error('DEVICE_PIN_INVALID');
       runtime = await openGreenfieldRuntimeWithDevicePin({ pin });
       const before = await runtime.readState();
@@ -85,7 +92,6 @@ if (launcher && cityDialog && workspace) {
       const after = await runtime.readState();
       verifyObligationImportReadback(after, payload);
       status.textContent = 'นำเข้าสำเร็จ';
-      sessionStorage.setItem('metro-auto-unlock-pin', pin);
       setTimeout(() => location.reload(), 250);
     } catch (error) {
       status.textContent = importErrorText(error);
