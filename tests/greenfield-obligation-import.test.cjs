@@ -1,7 +1,10 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
+const root = path.resolve(__dirname, '..');
 const validFile = {
   format:'YGPH_METROPOLIS_RUNTIME_PAYLOAD',
   version:1,
@@ -53,4 +56,14 @@ test('runtime readback proves imported obligation and every installment queue ex
   } } } };
   assert.doesNotThrow(() => verifyObligationImportReadback(state, validFile.payload));
   assert.throws(() => verifyObligationImportReadback({ ...state, domains:{ ...state.domains, CALENDAR:{ records:{} } } }, validFile.payload), /OBLIGATION_IMPORT_READBACK_MISMATCH/);
+});
+
+test('Finance action flow loads an obligation file importer that executes through runtime.obligation', () => {
+  const releaseStatus = fs.readFileSync(path.join(root, 'ui/release-status.mjs'), 'utf8');
+  const importer = fs.readFileSync(path.join(root, 'ui/obligation-import-ui.mjs'), 'utf8');
+  assert.match(releaseStatus, /import ['"]\.\/obligation-import-ui\.mjs['"]/);
+  assert.match(importer, /data-city-action-open=[\\"']finance-actions/);
+  assert.match(importer, /runtime\.obligation\(payload\)/);
+  assert.match(importer, /verifyObligationImportReadback/);
+  assert.match(importer, /type\s*=\s*['"]file['"]/);
 });
