@@ -67,3 +67,11 @@ test('Finance action flow loads an obligation file importer that executes throug
   assert.match(importer, /verifyObligationImportReadback/);
   assert.match(importer, /type\s*=\s*['"]file['"]/);
 });
+
+test('obligation importer reuses the PIN from the current login attempt instead of stale sessionStorage', () => {
+  const importer = fs.readFileSync(path.join(root, 'ui/obligation-import-ui.mjs'), 'utf8');
+  assert.match(importer, /unlockBtn/);
+  assert.match(importer, /activeDevicePin/);
+  assert.match(importer, /openGreenfieldRuntimeWithDevicePin\(\{ pin \}\)/);
+  assert.doesNotMatch(importer, /sessionStorage\.getItem\(['"]metro-auto-unlock-pin['"]\)/);
+});
