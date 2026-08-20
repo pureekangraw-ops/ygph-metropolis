@@ -6,6 +6,7 @@ import {
   enrollGreenfieldDeviceUnlock,
 } from './greenfield/runtime.mjs';
 import { initializeFirstRun } from './greenfield/first-run.mjs';
+import { prepareBackupForRestore } from './greenfield/restore-compat.mjs';
 import './ui/app.mjs';
 import './ui/action-popups.mjs';
 import './ui/release-status.mjs';
@@ -190,7 +191,8 @@ function showRecovery() {
     <h1>กู้คืนข้อมูล</h1>
     <p class="muted">เลือกไฟล์สำรอง ระบบจะตรวจสอบไฟล์ให้เองก่อนกู้คืน</p>
     <div class="file-row"><input id="restoreFile" type="file" accept="application/json,.json"><button id="directRestoreBtn" class="primary-action" type="button">กู้คืนข้อมูล</button></div>
-    <input id="recoveryPassphrase" class="hidden" aria-hidden="true" tabindex="-1">
+    <label>รหัสกู้คืนสำหรับไฟล์สำรองรุ่นเก่า <input id="recoveryPassphrase" type="password" minlength="12" autocomplete="off"></label>
+    <p class="muted">ไฟล์สำรองจาก METRO รุ่นล่าสุดไม่ต้องกรอกช่องนี้</p>
   `;
   clearAuthStatus();
   $('recoveryBackBtn').addEventListener('click', showLogin);
@@ -206,7 +208,7 @@ function userFacingAuthMessage(message) {
 }
 export function restoreErrorText(error) {
   const message = String(error?.message || error || '');
-  if (message === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองรุ่นเก่านี้ยังต้องใช้รหัสกู้คืน กรุณาสร้างไฟล์สำรองใหม่จาก METRO รุ่นล่าสุด';
+  if (message === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองรุ่นเก่านี้ต้องใช้รหัสกู้คืนเดิม กรุณากรอกรหัสกู้คืนแล้วลองอีกครั้ง';
   if (message === 'GREENFIELD_BACKUP_READBACK_MISMATCH' || message === 'GREENFIELD_BACKUP_ROLLBACK_FAILED') return 'กู้คืนไม่สำเร็จ ระบบหยุดก่อนใช้ข้อมูลที่ตรวจไม่ผ่าน';
   if (message === 'GREENFIELD_VAULT_DECRYPT_FAILED' || message === 'GREENFIELD_BACKUP_EMPTY') return 'ไฟล์สำรองเปิดไม่ได้หรือข้อมูลไม่สมบูรณ์';
   if (message.includes('JSON') || message.includes('Unexpected token')) return 'ไฟล์สำรองไม่ถูกต้อง';
@@ -226,11 +228,12 @@ async function selectedBackup() {
   catch { throw new Error('INVALID_BACKUP_JSON'); }
 }
 async function performRestore(backup, allowOverwrite) {
-  const restoredRuntime = await openGreenfieldRuntimeFromBackup({ backup, allowOverwrite });
+  const prepared = prepareBackupForRestore(backup, $('recoveryPassphrase')?.value || '');
+  const restoredRuntime = await openGreenfieldRuntimeFromBackup({ backup:prepared.backup, allowOverwrite });
   restoredRuntime.close();
   const pin = lastDevicePin || $('devicePin').value;
-  if (pin.length >= 6 && String(backup?.recoveryKey || '').length >= 12) {
-    await enrollGreenfieldDeviceUnlock({ vaultPassphrase:backup.recoveryKey, pin });
+  if (pin.length >= 6) {
+    await enrollGreenfieldDeviceUnlock({ vaultPassphrase:prepared.recoveryKey, pin });
     sessionStorage.setItem('metro-auto-unlock-pin', pin);
   }
 }
