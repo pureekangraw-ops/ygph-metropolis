@@ -1,6 +1,7 @@
 import './theme-shell.mjs';
+import './reset-all-ui.mjs';
 
-export const APP_RELEASE='5.2.5';
+export const APP_RELEASE='5.2.6';
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';

@@ -48,6 +48,11 @@ export async function openGreenfieldVaultStore({ indexedDBImpl = globalThis.inde
       }
       return transactionResult(transaction, 'GREENFIELD_DB_WRITE_FAILED');
     },
+    resetAll() {
+      const transaction = db.transaction(DB_STORE, 'readwrite');
+      transaction.objectStore(DB_STORE).clear();
+      return transactionResult(transaction, 'GREENFIELD_DB_RESET_FAILED');
+    },
     close() { db.close(); },
   };
 }
