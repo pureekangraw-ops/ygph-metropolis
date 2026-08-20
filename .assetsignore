@@ -39,6 +39,7 @@
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/persistence.mjs
 !/greenfield/projections.mjs
+!/greenfield/restore-compat.mjs
 !/greenfield/ride-domain.mjs
 !/greenfield/ride-workflows.mjs
 !/greenfield/runtime.mjs
