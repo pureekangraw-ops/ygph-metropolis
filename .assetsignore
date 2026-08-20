@@ -18,6 +18,7 @@
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs
 !/ui/ride-ui.mjs
+!/ui/obligation-import-ui.mjs
 !/ui/ui-model.mjs
 !/ui/product-model.mjs
 !/ui/icons.mjs
@@ -37,6 +38,7 @@
 !/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/mutation-coordinator.mjs
+!/greenfield/obligation-import.mjs
 !/greenfield/persistence.mjs
 !/greenfield/projections.mjs
 !/greenfield/restore-compat.mjs
