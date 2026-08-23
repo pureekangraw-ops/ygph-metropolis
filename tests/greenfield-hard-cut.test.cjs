@@ -35,7 +35,7 @@ test('release manifest declares current main artifact as Production Greenfield s
   assert.equal(manifest.ride.policy,'LIVE_SCHEMA2_ONLY');
   assert.equal(manifest.ride.cashOwner,'LEDGER');
   assert.equal(manifest.functionalShell.visualPolish,'GRAPHITE_LIME_AREA_ACCENTS');
-  assert.equal(manifest.functionalShell.navigation,'COMMAND_STRIP_HOME_BUBBLE_V1');
+  assert.equal(manifest.functionalShell.navigation,'BRAND_HOME_BACK_COMMAND_STRIP_V2');
   assert.equal(manifest.functionalShell.calendarSurface,'FINANCE_SCHEDULE');
   assert.equal('compatibility' in manifest,false);
   const readme=read('README_TH.md');
