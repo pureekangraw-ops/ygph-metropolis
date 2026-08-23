@@ -6,14 +6,14 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 function text(file) { return fs.readFileSync(path.join(root, file), 'utf8'); }
 
-test('production shell exposes five bottom destinations while Settings stays a utility', () => {
+test('production shell exposes icon command destinations while Settings stays a utility and Home stays a bubble', () => {
   const html = text('index.html');
-  const nav = html.match(/<nav id="bottomNav"[\s\S]*?<\/nav>/)?.[0] || '';
-  assert.deepEqual([...nav.matchAll(/data-destination="([^"]+)"/g)].map(match => match[1]), ['home','store','ride','finance','calendar']);
-  assert.equal((nav.match(/class="bottom-nav-btn/g) || []).length, 5);
-  assert.match(html, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
-  assert.doesNotMatch(nav, /data-destination="system"|aria-label="ตั้งค่า"/);
-  assert.doesNotMatch(html, /id="thumbRail"|class="rail-btn|data-area-page="money"|data-money-page=/);
+  const nav = html.match(/<nav id="commandNav"[\s\S]*?<\/nav>/)?.[0] || '';
+  assert.deepEqual([...nav.matchAll(/data-command-destination="([^"]+)"/g)].map(match => match[1]), ['store','ride','finance']);
+  assert.equal((nav.match(/class="command-nav-btn/g) || []).length, 4);
+  assert.match(nav, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
+  assert.match(html, /id="homeBubble"[^>]*data-command-destination="home"/);
+  assert.doesNotMatch(html, /id="bottomNav"|id="thumbRail"|class="rail-btn|data-area-page="money"|data-money-page=/);
 });
 
 test('locked gate stays user-facing while recovery and technician tools remain deeper', () => {
@@ -33,31 +33,38 @@ test('locked gate stays user-facing while recovery and technician tools remain d
   assert.match(recovery, /id="restoreFile"/);
 });
 
-test('Home is attention first then useful summary then city doors', () => {
+test('Home is attention first then owner summaries then actual-cash chart without duplicate city doors', () => {
   const html = text('index.html');
   const home = html.match(/<section[^>]*data-area-page="home"[\s\S]*?<\/section>/)?.[0] || '';
   const attention = home.indexOf('id="attentionList"');
   const summary = home.indexOf('id="homeSummary"');
-  const cities = home.indexOf('id="cityEntries"');
-  assert.ok(attention >= 0 && summary > attention && cities > summary);
+  const chart = home.indexOf('id="homeCashFlowChart"');
+  assert.ok(attention >= 0 && summary > attention && chart > summary);
   for (const id of ['homeBalance','homeGenerated','homeStock','homeDue']) assert.match(home, new RegExp(`id="${id}"`));
-  for (const city of ['store','ride','finance','calendar']) assert.match(home, new RegExp(`data-city-entry="${city}"`));
-  assert.doesNotMatch(home.slice(0, cities), /<form\b/);
+  for (const key of ['balance','generated','stock','due']) assert.match(home, new RegExp(`data-home-summary="${key}"`));
+  assert.doesNotMatch(home, /id="cityEntries"|data-city-entry=/);
+  assert.doesNotMatch(home.slice(0, chart), /<form\b/);
 });
 
-test('each working area exists once and Calendar keeps focused responsibilities while Settings is a utility dialog', () => {
+test('four visible work areas exist once while Calendar schedule is Finance-hosted and Settings remains a utility dialog', () => {
   const html = text('index.html');
-  for (const area of ['home','store','ride','finance','calendar']) assert.equal((html.match(new RegExp(`data-area-page=\"${area}\"`, 'g')) || []).length, 1, area);
+  for (const area of ['home','store','ride','finance']) assert.equal((html.match(new RegExp(`data-area-page=\"${area}\"`, 'g')) || []).length, 1, area);
+  assert.equal((html.match(/data-area-page=\"calendar\"/g) || []).length, 0, 'calendar visible area');
   assert.doesNotMatch(html, /data-area-page=\"system\"/);
+  const financeStart = html.indexOf('data-area-page="finance"');
+  const schedule = html.indexOf('id="financeSchedule"');
+  assert.ok(financeStart >= 0 && schedule > financeStart);
   for (const id of ['monthGrid','prevMonth','todayMonth','nextMonth','settingsDialog','diagnostics']) assert.match(html, new RegExp(`id=\"${id}\"`));
   const settings = html.match(/<dialog[^>]*id=\"settingsDialog\"[\s\S]*?<\/dialog>/)?.[0] || '';
   assert.doesNotMatch(settings, /<details\b/);
 });
 
-test('mobile shell preserves content width and bottom navigation touch targets', () => {
+test('mobile shell preserves content width and command/Home touch targets', () => {
   const css = text('styles.css');
-  assert.match(css, /\.bottom-nav\s*\{[^}]*position\s*:\s*fixed[^}]*bottom\s*:/s);
-  assert.match(css, /\.bottom-nav-btn\s*\{[^}]*min-height\s*:\s*(?:48|5[0-9])px/s);
+  assert.match(css, /\.appbar\{[^}]*position:sticky[^}]*top:0/s);
+  assert.match(css, /\.command-nav-btn\{[^}]*min-height:46px/s);
+  assert.match(css, /@media\(max-width:700px\)[\s\S]*\.command-nav-btn\{[^}]*min-height:44px/s);
+  assert.match(css, /\.home-bubble\{[^}]*position:fixed[^}]*safe-area-inset-bottom/s);
   assert.doesNotMatch(css, /\.thumb-rail/);
   assert.doesNotMatch(css, /padding-right\s*:\s*76px/);
 });

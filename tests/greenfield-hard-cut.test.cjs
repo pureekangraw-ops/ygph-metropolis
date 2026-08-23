@@ -10,7 +10,7 @@ test('hard-cut root contains only Greenfield production entrypoints while allowi
   const html=read('index.html');
   assert.match(html,/app\.mjs/);
   assert.match(html,/data-area-page="ride"/);
-  assert.match(html,/data-destination="ride"/);
+  assert.match(html,/data-command-destination="ride"/);
   assert.doesNotMatch(html,/data-money-view="ride"|data-area-page="money"/);
   for(const forbidden of ['flow-era','metropolis-r5','metropolis-v4','metropolis-maintenance','metropolis-remaster','highway-gate','app.js','ridePage','stock-pocket-secure']) assert.equal(html.includes(forbidden),false,forbidden);
   for(const legacy of ['app.js','flow-era.js','flow-era-3.5.js','metropolis-v4.js','metropolis-r5.js','metropolis-maintenance.js','metropolis-remaster.js','metropolis-command-gate.js','highway-gate.js','vault.js','core.js']) assert.equal(fs.existsSync(path.join(root,legacy)),false,legacy);
@@ -34,7 +34,9 @@ test('release manifest declares current main artifact as Production Greenfield s
   assert.equal(manifest.cutoverEvidence.ridePolicy,'EXCLUDE');
   assert.equal(manifest.ride.policy,'LIVE_SCHEMA2_ONLY');
   assert.equal(manifest.ride.cashOwner,'LEDGER');
-  assert.equal(manifest.functionalShell.visualPolish,'GRAPHITE_LIME_YGGDRASIL_GEM');
+  assert.equal(manifest.functionalShell.visualPolish,'GRAPHITE_LIME_AREA_ACCENTS');
+  assert.equal(manifest.functionalShell.navigation,'COMMAND_STRIP_HOME_BUBBLE_V1');
+  assert.equal(manifest.functionalShell.calendarSurface,'FINANCE_SCHEDULE');
   assert.equal('compatibility' in manifest,false);
   const readme=read('README_TH.md');
   assert.doesNotMatch(readme,/BRANCH ONLY|NOT PRODUCTION|productization\/functional-shell-v1/);

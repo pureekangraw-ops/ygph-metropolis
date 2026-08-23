@@ -22,6 +22,11 @@ function dateEpoch(key) {
   return Date.UTC(year, month - 1, day);
 }
 
+function keyFromEpoch(epoch) {
+  const date = new Date(epoch);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;
+}
+
 function dayDistance(from, to) {
   return Math.round((dateEpoch(to) - dateEpoch(from)) / DAY_MS);
 }
@@ -59,6 +64,30 @@ export function projectGeneratedIncome(state, today) {
     if (Number.isSafeInteger(amount) && amount > 0) rideSatang += amount;
   }
   return { storeSatang, rideSatang, combinedSatang:storeSatang + rideSatang };
+}
+
+export function projectCashFlowSeries(state, today, days = 7) {
+  const current = dateKey(today);
+  const count = Number(days);
+  if (!current || !Number.isInteger(count) || count < 1 || count > 90) throw new Error('INVALID_CASH_FLOW_RANGE');
+  const currentEpoch = dateEpoch(current);
+  const series = Array.from({ length:count }, (_, index) => ({
+    date:keyFromEpoch(currentEpoch - (count - 1 - index) * DAY_MS),
+    inSatang:0,
+    outSatang:0,
+  }));
+  const byDate = new Map(series.map(item => [item.date,item]));
+  for (const record of recordsFor(state,'LEDGER')) {
+    if (record.type !== 'TRANSACTION' || isBalanceAdjustment(record)) continue;
+    const item = byDate.get(activityDate(record));
+    if (!item) continue;
+    const amount = Number(record.amountSatang || 0);
+    if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+    const direction = ledgerDirection(record);
+    if (direction === 'IN') item.inSatang += amount;
+    if (direction === 'OUT') item.outSatang += amount;
+  }
+  return series;
 }
 
 export function projectReceivableTruth(state) {

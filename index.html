@@ -11,7 +11,15 @@
   <title>YGPH METROPOLIS</title>
 </head>
 <body>
-  <header class="appbar"><div><strong>YGPH METROPOLIS</strong></div></header>
+  <header class="appbar">
+    <div><strong>YGPH METROPOLIS</strong></div>
+    <nav id="commandNav" class="command-nav hidden" aria-label="เมนูหลัก">
+      <button type="button" class="command-nav-btn" data-command-destination="store" aria-label="ร้านค้า" title="ร้านค้า"><svg data-icon="shopping-cart-simple"></svg></button>
+      <button type="button" class="command-nav-btn" data-command-destination="ride" aria-label="วิ่งงาน" title="วิ่งงาน"><svg data-icon="person-simple-run"></svg></button>
+      <button type="button" class="command-nav-btn" data-command-destination="finance" aria-label="การเงิน" title="การเงิน"><svg data-icon="wallet"></svg></button>
+      <button id="settingsBtn" type="button" class="command-nav-btn command-system-btn" aria-label="ตั้งค่า" title="ตั้งค่า"><svg data-icon="gear-six"></svg></button>
+    </nav>
+  </header>
 
   <main class="layout">
     <section id="gate" class="panel gate">
@@ -43,10 +51,7 @@
     <p id="gateStatus" class="status" aria-live="polite"></p>
 
     <div id="workspace" class="hidden">
-      <div class="workspace-toolbar">
-        <strong id="workspaceContext">หน้าหลัก</strong>
-        <button id="settingsBtn" class="utility-btn" type="button" aria-label="ตั้งค่า"><svg data-icon="gear-six"></svg><span>ตั้งค่า</span></button>
-      </div>
+      <button id="homeBubble" class="home-bubble" type="button" data-command-destination="home" aria-label="หน้าหลัก" title="หน้าหลัก"><svg data-icon="house-simple"></svg></button>
 
       <div class="workspace-content">
         <section class="area-page active" data-area-page="home">
@@ -54,17 +59,15 @@
           <div id="attentionList" class="attention-list"></div>
           <p id="homeQuiet" class="quiet hidden">ตอนนี้ไม่มีเรื่องเร่งด่วนที่ต้องดึงขึ้นมา</p>
           <div id="homeSummary" class="home-summary" aria-label="ภาพรวมที่จำเป็น">
-            <article><small>เงินใช้ได้</small><b id="homeBalance">0 บาท</b></article>
-            <article><small>สร้างได้วันนี้</small><b id="homeGenerated">0 บาท</b></article>
-            <article><small>สต็อก</small><b id="homeStock">0 ชิ้น</b></article>
-            <article><small>ใกล้ครบกำหนด</small><b id="homeDue">0 บาท</b></article>
+            <button type="button" class="home-summary-card" data-home-summary="balance"><small>เงินสดคงเหลือ</small><b id="homeBalance">0 บาท</b></button>
+            <button type="button" class="home-summary-card" data-home-summary="generated"><small>สร้างได้วันนี้</small><b id="homeGenerated">0 บาท</b></button>
+            <button type="button" class="home-summary-card" data-home-summary="stock"><small>สต็อก</small><b id="homeStock">0 ชิ้น</b></button>
+            <button type="button" class="home-summary-card" data-home-summary="due"><small>ใกล้ครบกำหนด</small><b id="homeDue">0 บาท</b></button>
           </div>
-          <div id="cityEntries" class="city-entries" aria-label="เข้าเมืองทำงาน">
-            <button type="button" data-city-entry="store"><strong>ร้านค้า</strong><small>ขายสินค้าและจัดการสต็อก</small></button>
-            <button type="button" data-city-entry="ride"><strong>วิ่งงาน</strong><small>รอบวิ่ง งาน และรายได้</small></button>
-            <button type="button" data-city-entry="finance"><strong>การเงิน</strong><small>เงินจริงและภาระ</small></button>
-            <button type="button" data-city-entry="calendar"><strong>ปฏิทิน</strong><small>สิ่งที่ต้องทำตามเวลา</small></button>
-          </div>
+          <section class="card cash-flow-card" aria-labelledby="cashFlowTitle">
+            <div class="subhead cash-flow-head"><div><small>เงินจริง 7 วัน</small><h2 id="cashFlowTitle">เงินเข้า / เงินออก</h2></div><div class="cash-flow-totals"><span class="cash-flow-total in"><small>เข้า</small><b id="homeCashFlowIn">0 บาท</b></span><span class="cash-flow-total out"><small>ออก</small><b id="homeCashFlowOut">0 บาท</b></span></div></div>
+            <div id="homeCashFlowChart" class="cash-flow-chart" aria-live="polite"></div>
+          </section>
           <details class="task-panel home-secondary">
             <summary>เป้ารายได้วันนี้</summary>
             <div class="metrics three"><article><small>เป้าวันนี้</small><b id="moneyGoal">0</b></article><article><small>เหลืออีก</small><b id="moneyRemaining">0</b></article><article><small>ถึงเป้า</small><b id="moneyProgress">0%</b></article></div>
@@ -148,20 +151,20 @@
           <div class="hero finance-hero"><small>เงินที่ใช้ได้ตอนนี้</small><strong id="financeBalance">0</strong><span>บาท</span></div>
           <div class="metrics three"><article><small>เงินเข้าวันนี้</small><b id="financeIn">0</b></article><article><small>เงินออกวันนี้</small><b id="financeOut">0</b></article><article><small>ยอดครบกำหนดเดือนนี้</small><b id="financeMonthDue">0</b></article></div>
           <div id="financePressure" class="pressure-card card"><small>เงินชนภาระ 7 วัน</small><b id="financePressureText">—</b><p id="financePressureMeta" class="muted"></p><button id="financeOpenNextDue" class="hidden">เปิดรายการถัดไป</button></div>
+
+          <section id="financeSchedule" class="finance-schedule" tabindex="-1" aria-labelledby="financeScheduleTitle">
+            <div class="subhead finance-schedule-head"><div><small>กำหนดชำระและคิว</small><h2 id="financeScheduleTitle">ภาระตามเวลา</h2></div></div>
+            <div class="metrics three"><article data-kind="OVERDUE"><small>เลยกำหนด</small><b id="calOverdue">0</b></article><article><small>ใกล้ถึง 7 วัน</small><b id="calNear">0</b></article><article><small>ชนวัน</small><b id="calCollision">0</b></article></div>
+            <div class="month-card card"><div class="month-head"><button id="prevMonth" aria-label="เดือนก่อน">‹</button><button id="todayMonth">วันนี้</button><h2 id="monthLabel"></h2><button id="nextMonth" aria-label="เดือนถัดไป">›</button></div><div class="weekday-grid" aria-hidden="true"><span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span></div><div id="monthGrid" class="month-grid"></div></div>
+            <div class="selected-day"><div><small>วันที่เลือก</small><b id="selectedDayTitle">—</b></div><select id="calendarFilter" aria-label="กรองสถานะ"><option value="ACTIVE">ที่ต้องจัดการ</option><option value="ALL">ทั้งหมด</option><option value="COMPLETED">เสร็จแล้ว</option><option value="CANCELLED">ยกเลิก</option></select></div>
+            <div id="calendarList" class="list"></div>
+          </section>
+
           <div class="action-row"><details class="task-panel flex-one"><summary>บันทึกรายรับอื่น</summary><form id="incomeForm"><label>รายการ <input name="title" required></label><label>จำนวน (บาท) <input name="amount" required inputmode="decimal"></label><button>บันทึกรายรับอื่น</button></form></details><details class="task-panel flex-one"><summary>เพิ่มรายจ่าย</summary><form id="expenseForm"><label>รายการ <input name="title" required></label><label>จำนวน (บาท) <input name="amount" required inputmode="decimal"></label><button>บันทึกรายจ่าย</button></form></details></div>
           <details class="task-panel"><summary>เพิ่มภาระ</summary><form id="obligationForm"><label>ชื่อภาระ <input name="title" required></label><label>ยอดรวม (บาท) <input name="total" required inputmode="decimal"></label><label>งวด — 1 บรรทัดต่อ 1 งวด <textarea name="installments" required placeholder="2026-08-15=300.00&#10;2026-09-15=600.00"></textarea></label><button>สร้างภาระ</button></form></details>
           <details class="task-panel"><summary>ภาระคงเหลือ</summary><div id="obligationList" class="list"></div></details>
           <details class="task-panel"><summary>ประวัติเงินจริง</summary><div id="ledgerList" class="list"></div></details>
         </section>
-
-        <section class="area-page" data-area-page="calendar">
-          <div class="page-head"><div><small>CALENDAR</small><h1>ภาระตามเวลา</h1></div></div>
-          <div class="metrics three"><article><small>เลยกำหนด</small><b id="calOverdue">0</b></article><article><small>ใกล้ถึง 7 วัน</small><b id="calNear">0</b></article><article><small>ชนวัน</small><b id="calCollision">0</b></article></div>
-          <div class="month-card card"><div class="month-head"><button id="prevMonth" aria-label="เดือนก่อน">‹</button><button id="todayMonth">วันนี้</button><h2 id="monthLabel"></h2><button id="nextMonth" aria-label="เดือนถัดไป">›</button></div><div class="weekday-grid" aria-hidden="true"><span>อา</span><span>จ</span><span>อ</span><span>พ</span><span>พฤ</span><span>ศ</span><span>ส</span></div><div id="monthGrid" class="month-grid"></div></div>
-          <div class="selected-day"><div><small>วันที่เลือก</small><b id="selectedDayTitle">—</b></div><select id="calendarFilter" aria-label="กรองสถานะ"><option value="ACTIVE">ที่ต้องจัดการ</option><option value="ALL">ทั้งหมด</option><option value="COMPLETED">เสร็จแล้ว</option><option value="CANCELLED">ยกเลิก</option></select></div>
-          <div id="calendarList" class="list"></div>
-        </section>
-
       </div>
 
       <dialog id="calendarEditDialog" class="modal-dialog" aria-labelledby="calendarEditTitle">
@@ -204,13 +207,6 @@
         </div>
       </dialog>
       <p id="appStatus" class="status app-status" aria-live="polite"></p>
-      <nav id="bottomNav" class="bottom-nav" aria-label="เมนูหลัก">
-        <button type="button" class="bottom-nav-btn active" data-destination="home" aria-label="หน้าหลัก" aria-current="page"><svg data-icon="house-simple"></svg><span>หน้าหลัก</span></button>
-        <button type="button" class="bottom-nav-btn" data-destination="store" aria-label="ร้านค้า"><svg data-icon="trend-up"></svg><span>ร้านค้า</span></button>
-        <button type="button" class="bottom-nav-btn" data-destination="ride" aria-label="วิ่งงาน"><svg data-icon="trend-up"></svg><span>วิ่งงาน</span></button>
-        <button type="button" class="bottom-nav-btn" data-destination="finance" aria-label="การเงิน"><svg data-icon="wallet"></svg><span>การเงิน</span></button>
-        <button type="button" class="bottom-nav-btn" data-destination="calendar" aria-label="ปฏิทิน"><svg data-icon="calendar-dots"></svg><span>ปฏิทิน</span></button>
-      </nav>
     </div>
   </main>
   <script type="module" src="app.mjs"></script>
