@@ -1,4 +1,5 @@
 "use strict";
+const fs = require('node:fs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -55,5 +56,23 @@ test('historical Store sale cost repair adds only the missing linked Ledger OUT'
   assert.equal(runtime.project().ledgerBalanceSatang, 87500);
   assert.deepEqual(durable.domains.STORE, storeBefore);
   assert.deepEqual(durable.domains.CALENDAR, calendarBefore);
+
+  const ledgerCount = Object.keys(durable.domains.LEDGER.records).length;
+  const duplicate = await runtime.repairStoreSaleCost({ saleId:'SALE-LEGACY-COST' });
+  const afterDuplicate = await runtime.readState();
+  assert.equal(duplicate.status, 'ALREADY_REPAIRED');
+  assert.equal(Object.keys(afterDuplicate.domains.LEDGER.records).length, ledgerCount);
+  assert.equal(runtime.project().ledgerBalanceSatang, 87500);
   runtime.close();
+});
+
+test('Store history exposes an explicit confirmed action for a missing historical cash cost', () => {
+  const storeUi = fs.readFileSync('ui/store-ui.mjs', 'utf8');
+  const rootApp = fs.readFileSync('app.mjs', 'utf8');
+  assert.match(storeUi, /เติมเงินออกที่ขาด/);
+  assert.match(storeUi, /ygph:repair-store-cost/);
+  assert.match(storeUi, /STORE_SALE_COST/);
+  assert.match(rootApp, /repairStoreSaleCost/);
+  assert.match(rootApp, /ไม่แก้ยอดขายหรือสต็อก/);
+  assert.match(rootApp, /confirm\(/);
 });
