@@ -84,6 +84,40 @@ function validatePaymentRelations(state, commands) {
   if (!relationMatches(state, queue, source, queueId)) throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
 }
 
+function validateVerifiedExpenseRelation(state, commands) {
+  const ledgerWrites = commands.filter(command =>
+    command?.domain === 'LEDGER' &&
+    command?.type === 'LEDGER_CREATE_TRANSACTION' &&
+    command?.payload?.subtype === 'VERIFIED_EXPENSE'
+  );
+  if (ledgerWrites.length === 0) return;
+  const completions = commands.filter(command =>
+    command?.domain === 'CALENDAR' &&
+    command?.type === 'CALENDAR_SET_STATUS' &&
+    command?.payload?.status === 'COMPLETED'
+  );
+  if (ledgerWrites.length !== 1 || completions.length !== 1) throw new Error('WORKFLOW_VERIFIED_EXPENSE_RELATION_AMBIGUOUS');
+
+  const sourceRef = String(ledgerWrites[0]?.payload?.sourceRef || '');
+  const match = /^CALENDAR\/(.+)$/.exec(sourceRef);
+  const queueId = String(completions[0]?.payload?.recordId || '');
+  if (!match || match[1] !== queueId) throw new Error(`WORKFLOW_VERIFIED_EXPENSE_SOURCE_MISMATCH:${queueId}/${sourceRef}`);
+  const queue = state?.domains?.CALENDAR?.records?.[queueId]?.record;
+  if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
+  const amount = Number(queue.amountSatang ?? 0);
+  if (queue.type !== 'VERIFY' || String(queue.ownerRef || '').toUpperCase() !== 'LEDGER' || !Number.isSafeInteger(amount) || amount <= 0) {
+    throw new Error(`WORKFLOW_VERIFIED_EXPENSE_QUEUE_INVALID:${queueId}`);
+  }
+  const alreadyLinked = recordsFor(state, 'LEDGER').some(record =>
+    record?.type === 'TRANSACTION' &&
+    record?.direction === 'OUT' &&
+    record?.subtype === 'VERIFIED_EXPENSE' &&
+    record?.sourceRef === `CALENDAR/${queueId}` &&
+    record?.status !== 'REVERSED'
+  );
+  if (alreadyLinked) throw new Error(`WORKFLOW_VERIFIED_EXPENSE_ALREADY_RECORDED:${queueId}`);
+}
+
 function validateStockInvariant(state, commands) {
   const finalStock = projectedStockBefore(state) + plannedStoreDelta(commands);
   if (finalStock < 0) throw new Error(`STORE_STOCK_UNDERFLOW:${finalStock}`);
@@ -93,6 +127,7 @@ export function validateWorkflowInvariants(state, commands) {
   if (!state || typeof state !== 'object') throw new TypeError('INVALID_WORKFLOW_STATE');
   if (!Array.isArray(commands)) throw new TypeError('INVALID_WORKFLOW_COMMANDS');
   validatePaymentRelations(state, commands);
+  validateVerifiedExpenseRelation(state, commands);
   validateStockInvariant(state, commands);
   return { status:'PASS' };
 }
