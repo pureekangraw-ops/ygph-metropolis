@@ -55,6 +55,14 @@ function browserLifecycleSyncEnabled() {
   return typeof globalThis.window !== 'undefined';
 }
 
+function ledgerTransactionSubtype(record) {
+  const explicit = String(record?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(record?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 export function createGreenfieldRuntime({ store, passphrase, lockManager = globalThis.navigator?.locks ?? null, now = () => new Date().toISOString(), closeStore = null } = {}) {
   if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('INVALID_GREENFIELD_STORE');
   if (typeof passphrase !== 'string' || passphrase.length < 12) throw new Error('PASSPHRASE_TOO_SHORT');
@@ -191,7 +199,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
       lastState = result.state;
       const transaction = lastState?.domains?.LEDGER?.records?.[transactionId]?.record;
       const queueAfter = lastState?.domains?.CALENDAR?.records?.[queueId]?.record;
-      if (!transaction || transaction.direction !== 'OUT' || transaction.subtype !== 'VERIFIED_EXPENSE' || transaction.sourceRef !== `CALENDAR/${queueId}` || queueAfter?.status !== 'COMPLETED') {
+      if (!transaction || transaction.direction !== 'OUT' || ledgerTransactionSubtype(transaction) !== 'VERIFIED_EXPENSE' || transaction.sourceRef !== `CALENDAR/${queueId}` || queueAfter?.status !== 'COMPLETED') {
         throw new Error('VERIFIED_EXPENSE_READBACK_MISMATCH');
       }
       return { ...result, status:'VERIFIED' };
