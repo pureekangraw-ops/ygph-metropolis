@@ -3,6 +3,15 @@ import './reset-all-ui.mjs';
 import './obligation-import-ui.mjs';
 
 export const APP_RELEASE='5.2.6';
+export const UPDATE_LOG=Object.freeze([
+  Object.freeze({
+    timestamp:'23 ส.ค. 2026 · 21:36',
+    items:Object.freeze([
+      'ร้านค้า — ต้นทุนร้านค้าที่จ่ายจริงจะถูกบันทึกเป็นเงินจริงออกใน Ledger ด้วย',
+      'ช่องต้นทุนร้านค้าระบุชัดว่าเป็นค่าใช้จ่ายที่จ่ายจริง เช่น ค่าส่ง / Grab / น้ำมัน / แพ็กเกจ',
+    ]),
+  }),
+]);
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
@@ -22,9 +31,37 @@ function ensureServiceWorkerNode(){
   return node;
 }
 
+function ensureUpdateLog(){
+  const systemSection=$('systemVersion')?.closest?.('.settings-section');
+  if(!systemSection)return null;
+  let section=$('systemUpdateLog');
+  if(section)return section;
+  section=document.createElement('section');
+  section.id='systemUpdateLog';
+  section.className='settings-section';
+  const title=document.createElement('h3');
+  title.textContent='มีอะไรใหม่';
+  section.append(title);
+  for(const entry of UPDATE_LOG){
+    const timestamp=document.createElement('p');
+    timestamp.className='muted';
+    timestamp.textContent=entry.timestamp;
+    const list=document.createElement('ul');
+    for(const item of entry.items){
+      const row=document.createElement('li');
+      row.textContent=item;
+      list.append(row);
+    }
+    section.append(timestamp,list);
+  }
+  systemSection.before(section);
+  return section;
+}
+
 function renderReleaseStatus(){
   const version=$('systemVersion');
   if(version)version.textContent=APP_RELEASE;
+  ensureUpdateLog();
   const worker=ensureServiceWorkerNode();
   if(worker)worker.textContent=serviceWorkerState;
 }
