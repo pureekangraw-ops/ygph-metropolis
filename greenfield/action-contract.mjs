@@ -43,8 +43,55 @@ function remainingFor(source, owner) {
   return Number(source?.outstandingSatang ?? Math.max(0, Number(source?.totalSatang ?? source?.amountSatang ?? 0) - Number(source?.receivedSatang ?? 0)));
 }
 
+function isLedgerExpenseVerify(queue) {
+  const amount = Number(queue?.amountSatang ?? 0);
+  return queue?.type === 'VERIFY' && String(queue?.ownerRef || '').toUpperCase() === 'LEDGER' && Number.isSafeInteger(amount) && amount > 0;
+}
+
+function linkedVerifiedExpense(state, queueId) {
+  const sourceRef = `CALENDAR/${queueId}`;
+  return recordsFor(state, 'LEDGER').find(record =>
+    record?.type === 'TRANSACTION' &&
+    record?.direction === 'OUT' &&
+    record?.subtype === 'VERIFIED_EXPENSE' &&
+    record?.sourceRef === sourceRef &&
+    record?.status !== 'REVERSED'
+  ) || null;
+}
+
 export function resolveCalendarAction(state, queue) {
   if (!queue || typeof queue !== 'object' || !String(queue.recordId || '')) return { available:false, reason:'ACTION_RECORD_INVALID' };
+
+  if (isLedgerExpenseVerify(queue)) {
+    const linked = linkedVerifiedExpense(state, queue.recordId);
+    if (linked) return { available:false, reason:queue.status === 'COMPLETED' ? 'ACTION_NOT_OPEN' : 'SOURCE_ALREADY_RECORDED' };
+    if (queue.status === 'COMPLETED') {
+      return {
+        available:true,
+        kind:'REPAIR_VERIFY_EXPENSE',
+        owner:'LEDGER',
+        sourceId:queue.recordId,
+        method:'verifiedExpense',
+        queueId:queue.recordId,
+        suggestedAmountSatang:Number(queue.amountSatang),
+        repair:true,
+      };
+    }
+    if (ACTIONABLE.has(queue.status)) {
+      return {
+        available:true,
+        kind:'VERIFY_EXPENSE',
+        owner:'LEDGER',
+        sourceId:queue.recordId,
+        method:'verifiedExpense',
+        queueId:queue.recordId,
+        suggestedAmountSatang:Number(queue.amountSatang),
+        repair:false,
+      };
+    }
+    return { available:false, reason:'ACTION_NOT_OPEN' };
+  }
+
   if (!ACTIONABLE.has(queue.status)) return { available:false, reason:'ACTION_NOT_OPEN' };
 
   if (OBLIGATION_TYPES.has(queue.type)) {
@@ -68,14 +115,26 @@ export function resolveCalendarAction(state, queue) {
   return { available:true, kind:'COMPLETE_CALENDAR', owner:'CALENDAR', sourceId:queue.recordId, method:'calendarStatus', queueId:queue.recordId };
 }
 
-export function buildCalendarActionIntent(state, queue, amountSatang, { workflowId, transactionId } = {}) {
+export function buildCalendarActionIntent(state, queue, amountSatang, { workflowId, transactionId, title } = {}) {
   const action = resolveCalendarAction(state, queue);
   if (!action.available) throw new Error(action.reason);
   if (action.kind === 'COMPLETE_CALENDAR') return { method:'calendarStatus', input:{ workflowId, queueId:queue.recordId, status:'COMPLETED' } };
   const amount = Number(amountSatang);
   if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error('INVALID_PAYMENT_AMOUNT');
-  if (amount > action.maxAmountSatang) throw new Error(`PAYMENT_OVER_REMAINING:${action.queueId}`);
   if (!String(workflowId || '') || !String(transactionId || '')) throw new Error('PAYMENT_ID_REQUIRED');
+  if (action.kind === 'VERIFY_EXPENSE' || action.kind === 'REPAIR_VERIFY_EXPENSE') {
+    return {
+      method:'verifiedExpense',
+      input:{
+        workflowId,
+        queueId:action.queueId,
+        ledgerTransactionId:transactionId,
+        title:String(title || queue.title || 'รายจ่าย').trim(),
+        amountSatang:amount,
+      },
+    };
+  }
+  if (amount > action.maxAmountSatang) throw new Error(`PAYMENT_OVER_REMAINING:${action.queueId}`);
   if (action.kind === 'PAY_OBLIGATION') return { method:action.method, input:{ workflowId, obligationId:action.sourceId, queueId:action.queueId, ledgerTransactionId:transactionId, amountSatang:amount } };
   return { method:action.method, input:{ workflowId, saleId:action.sourceId, queueId:action.queueId, ledgerTransactionId:transactionId, amountSatang:amount } };
 }
