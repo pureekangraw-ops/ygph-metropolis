@@ -24,6 +24,7 @@ import {
   buildBalanceAdjustmentWorkflow,
   buildOtherIncomeWorkflow,
   buildExpenseWorkflow,
+  buildVerifiedExpenseWorkflow,
   buildCalendarRescheduleWorkflow,
   buildCalendarStatusWorkflow,
 } from './business-workflows.mjs';
@@ -171,6 +172,32 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function executeResolvedVerifiedExpense(input) {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const queueId = String(input?.queueId || '');
+      const transactionId = String(input?.ledgerTransactionId || '');
+      const queue = current?.domains?.CALENDAR?.records?.[queueId]?.record;
+      if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
+      const intent = buildCalendarActionIntent(current, queue, input?.amountSatang, {
+        workflowId:input?.workflowId,
+        transactionId,
+        title:input?.title,
+      });
+      if (intent.method !== 'verifiedExpense') throw new Error(`CALENDAR_ACTION_METHOD_MISMATCH:verifiedExpense/${intent.method}`);
+      const plan = buildVerifiedExpenseWorkflow(intent.input);
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands:plan.commands });
+      lastState = result.state;
+      const transaction = lastState?.domains?.LEDGER?.records?.[transactionId]?.record;
+      const queueAfter = lastState?.domains?.CALENDAR?.records?.[queueId]?.record;
+      if (!transaction || transaction.direction !== 'OUT' || transaction.subtype !== 'VERIFIED_EXPENSE' || transaction.sourceRef !== `CALENDAR/${queueId}` || queueAfter?.status !== 'COMPLETED') {
+        throw new Error('VERIFIED_EXPENSE_READBACK_MISMATCH');
+      }
+      return { ...result, status:'VERIFIED' };
+    });
+  }
+
   async function adjustBalance({ workflowId, ledgerTransactionId, targetBalanceSatang, reason = 'ปรับให้ตรงกับเงินจริง' } = {}) {
     return coordinator.run(async () => {
       const current = await readEncryptedState({ store, passphrase });
@@ -272,6 +299,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     stockAdjustment: input => executePlan(buildStockAdjustmentWorkflow(input)),
     otherIncome: input => executePlan(buildOtherIncomeWorkflow(input)),
     expense: input => executePlan(buildExpenseWorkflow(input)),
+    verifiedExpense: input => executeResolvedVerifiedExpense(input),
     calendarReschedule: input => executePlan(buildCalendarRescheduleWorkflow(input)),
     calendarStatus: input => executePlan(buildCalendarStatusWorkflow(input)),
     rideStartRound: input => executePlan(buildRideStartRoundWorkflow(input)),
