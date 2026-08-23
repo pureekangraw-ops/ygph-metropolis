@@ -123,6 +123,32 @@ function installBalanceAdjustmentUi() {
 }
 installBalanceAdjustmentUi();
 
+globalThis.addEventListener('ygph:repair-store-cost', async event => {
+  const saleId = String(event?.detail?.saleId || '').trim();
+  const title = String(event?.detail?.title || 'ขายสินค้า');
+  const storeCostSatang = Number(event?.detail?.storeCostSatang);
+  if (!saleId || !Number.isSafeInteger(storeCostSatang) || storeCostSatang <= 0) return;
+  const amountText = (storeCostSatang / 100).toLocaleString('th-TH', { maximumFractionDigits:2 });
+  if (!confirm(`ต้นทุน ${amountText} บาท ของ "${title}" จ่ายเงินจริงใช่ไหม?\nระบบจะเติมเงินออกใน Ledger เท่านั้น ไม่แก้ยอดขายหรือสต็อก`)) return;
+  let repairRuntime = null;
+  try {
+    if (lastDevicePin.length < 6) throw new Error('กรุณาเข้าสู่ระบบใหม่ก่อนแก้รายการ');
+    repairRuntime = await openGreenfieldRuntimeWithDevicePin({ pin:lastDevicePin });
+    const result = await repairRuntime.repairStoreSaleCost({ saleId });
+    if (result.status === 'ALREADY_REPAIRED') {
+      $('appStatus').textContent = 'รายการนี้มีเงินจริงออกอยู่แล้ว';
+      return;
+    }
+    sessionStorage.setItem('metro-auto-unlock-pin', lastDevicePin);
+    location.reload();
+  } catch (error) {
+    $('appStatus').textContent = String(error?.message || error || 'เติมเงินออกที่ขาดไม่สำเร็จ');
+    $('appStatus').classList.add('error');
+  } finally {
+    repairRuntime?.close();
+  }
+});
+
 function clearAuthStatus() {
   $('gateStatus').textContent = '';
   $('gateStatus').classList.remove('error');

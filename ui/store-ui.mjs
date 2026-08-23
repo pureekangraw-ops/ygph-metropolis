@@ -3,7 +3,16 @@ import { projectStoreReceivables } from './product-model.mjs';
 export function createStoreUi({ getById, getState, getActiveStoreView, bahtText, simpleItem, setStoreView }) {
   const $ = getById;
   const receivableAmountText = item => item.outstandingSatang == null ? 'ยอดต้องตรวจสอบ' : bahtText(item.outstandingSatang);
-  const appendSaleEconomics = (article, record) => {
+  const hasLinkedStoreCostOut = saleId => {
+    const sourceRef = `STORE/${saleId}`;
+    return Object.values(getState()?.domains?.LEDGER?.records || {}).some(entry => {
+      const record = entry?.record;
+      return record?.direction === 'OUT'
+        && record?.sourceRef === sourceRef
+        && (String(record?.subtype || '') === 'STORE_SALE_COST' || String(record?.detail || '').endsWith(':STORE_SALE_COST'));
+    });
+  };
+  const appendSaleEconomics = (article, record, { showRepair = false } = {}) => {
     if (record?.type !== 'SALE') return;
     const storeCost = Number(record.storeCostSatang ?? 0);
     const received = Number(record.receivedSatang ?? 0);
@@ -13,6 +22,24 @@ export function createStoreUi({ getById, getState, getActiveStoreView, bahtText,
     meta.className = 'muted';
     meta.textContent = `ต้นทุนร้านค้า ${bahtText(storeCost)} · รายได้สุทธิ ${bahtText(netIncome)}`;
     article.append(meta);
+    if (!showRepair || storeCost <= 0 || hasLinkedStoreCostOut(record.recordId)) return;
+    const warning = document.createElement('small');
+    warning.className = 'truth-warning-text';
+    warning.textContent = 'ต้องตรวจสอบ · ต้นทุนรายการเก่านี้ยังไม่มีเงินจริงออกใน Ledger';
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+    const repair = document.createElement('button');
+    repair.type = 'button';
+    repair.textContent = 'เติมเงินออกที่ขาด';
+    repair.addEventListener('click', () => {
+      globalThis.dispatchEvent(new CustomEvent('ygph:repair-store-cost', { detail:{
+        saleId:record.recordId,
+        title:record.title || 'ขายสินค้า',
+        storeCostSatang:storeCost,
+      } }));
+    });
+    actions.append(repair);
+    article.append(warning, actions);
   };
 
   function renderStore(context) {
@@ -85,7 +112,7 @@ export function createStoreUi({ getById, getState, getActiveStoreView, bahtText,
       .slice(0, 50);
     for (const record of records) {
       const article = simpleItem(record);
-      appendSaleEconomics(article, record);
+      appendSaleEconomics(article, record, { showRepair:true });
       list.append(article);
     }
     if (!records.length) list.textContent = 'ยังไม่มีรายการร้านค้า';
