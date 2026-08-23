@@ -29,7 +29,7 @@ test('cash sale workflow creates Store truth and Ledger cash movement with no Ca
   assert.deepEqual(Object.keys(state.domains.CALENDAR.records), []);
 });
 
-test('sale cost stays in Store and net income equals received cash minus store-borne cost', async () => {
+test('sale cost remains Store attribution and also records the real Ledger cash out', async () => {
   const { createGreenfieldState } = await import('../greenfield/core.mjs');
   const { buildSaleWorkflow } = await import('../greenfield/business-workflows.mjs');
   const plan = buildSaleWorkflow({ workflowId:'WF-SALE-COST', saleId:'SALE-COST', ledgerTransactionId:'TX-COST', title:'ขายพร้อมต้นทุนร้าน', amountSatang:50000, quantity:1, receivedSatang:50000, storeCostSatang:6000 });
@@ -38,7 +38,9 @@ test('sale cost stays in Store and net income equals received cash minus store-b
   assert.equal(sale.storeCostSatang, 6000);
   assert.equal(sale.netIncomeSatang, 44000);
   assert.equal(state.domains.LEDGER.records['TX-COST'].record.amountSatang, 50000);
-  assert.equal(Object.values(state.domains.LEDGER.records).filter(entry => entry.record.direction === 'OUT').length, 0);
+  const expense = Object.values(state.domains.LEDGER.records).map(entry => entry.record).find(record => record.direction === 'OUT' && record.sourceRef === 'STORE/SALE-COST');
+  assert.equal(expense.amountSatang, 6000);
+  assert.equal(expense.detail, 'OUT:STORE_SALE_COST');
 });
 
 test('receivable sale and payment workflow keeps Calendar non-cash and closes only after atomic Ledger receipt', async () => {
