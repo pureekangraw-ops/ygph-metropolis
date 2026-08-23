@@ -21,6 +21,15 @@ test('runtime sale durably reads back linked Store cost OUT and 1200 - 325 cash 
   await commitEncryptedState({ store, passphrase, state:initial, expectedDurableRevision:null });
 
   const runtime = createGreenfieldRuntime({ store, passphrase, lockManager:null, now:() => '2026-08-23T14:31:00.000Z' });
+  await runtime.stockAdjustment({
+    workflowId:'WF-SEED-STOCK',
+    recordId:'ADJ-SEED-STOCK',
+    title:'ตั้งต้นสต็อกทดสอบ',
+    deltaQuantity:1,
+    reason:'test fixture',
+  });
+  assert.equal(runtime.project().ledgerBalanceSatang, 0);
+
   const result = await runtime.sale({
     workflowId:'WF-DURABLE-SALE-COST',
     saleId:'SALE-DURABLE-COST',
