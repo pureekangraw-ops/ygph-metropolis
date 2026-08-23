@@ -54,13 +54,26 @@ test('verified expense workflow atomically writes Ledger OUT linked to Calendar 
   assert.equal(plan.commands[1].payload.status, 'COMPLETED');
 });
 
+test('repair workflow writes only the missing Ledger OUT and preserves an already-completed Calendar record', async () => {
+  const { buildVerifiedExpenseWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const plan = buildVerifiedExpenseWorkflow({workflowId:'WF-R',queueId:'QV',ledgerTransactionId:'TX-R',title:'H SEM MOVE งวด 3/4',amountSatang:137300,repair:true});
+  assert.equal(plan.commands.length, 1);
+  assert.equal(plan.commands[0].domain, 'LEDGER');
+  assert.equal(plan.commands[0].type, 'LEDGER_CREATE_TRANSACTION');
+  assert.equal(plan.commands[0].payload.direction, 'OUT');
+  assert.equal(plan.commands[0].payload.subtype, 'VERIFIED_EXPENSE');
+  assert.equal(plan.commands[0].payload.sourceRef, 'CALENDAR/QV');
+});
+
 test('completed monetary VERIFY without a linked Ledger OUT remains repairable, but cannot duplicate once linked', async () => {
-  const { resolveCalendarAction } = await import('../greenfield/action-contract.mjs');
+  const { resolveCalendarAction, buildCalendarActionIntent } = await import('../greenfield/action-contract.mjs');
   const state = stateWithVerify('COMPLETED');
   let action = resolveCalendarAction(state, state.domains.CALENDAR.records.QV.record);
   assert.equal(action.available, true);
   assert.equal(action.kind, 'REPAIR_VERIFY_EXPENSE');
   assert.equal(action.method, 'verifiedExpense');
+  const intent = buildCalendarActionIntent(state, state.domains.CALENDAR.records.QV.record, 104755, {workflowId:'WF-R',transactionId:'TX-R',title:'ค่าไฟ MEA'});
+  assert.equal(intent.input.repair, true);
 
   state.domains.LEDGER.records.TX = {record:{recordId:'TX',type:'TRANSACTION',direction:'OUT',amountSatang:104755,subtype:'VERIFIED_EXPENSE',sourceRef:'CALENDAR/QV',status:'COMPLETED'}};
   action = resolveCalendarAction(state, state.domains.CALENDAR.records.QV.record);
