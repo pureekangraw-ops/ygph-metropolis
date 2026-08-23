@@ -43,6 +43,14 @@ function remainingFor(source, owner) {
   return Number(source?.outstandingSatang ?? Math.max(0, Number(source?.totalSatang ?? source?.amountSatang ?? 0) - Number(source?.receivedSatang ?? 0)));
 }
 
+function ledgerSubtype(record) {
+  const explicit = String(record?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(record?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 function isLedgerExpenseVerify(queue) {
   const amount = Number(queue?.amountSatang ?? 0);
   return queue?.type === 'VERIFY' && String(queue?.ownerRef || '').toUpperCase() === 'LEDGER' && Number.isSafeInteger(amount) && amount > 0;
@@ -53,7 +61,7 @@ function linkedVerifiedExpense(state, queueId) {
   return recordsFor(state, 'LEDGER').find(record =>
     record?.type === 'TRANSACTION' &&
     record?.direction === 'OUT' &&
-    record?.subtype === 'VERIFIED_EXPENSE' &&
+    ledgerSubtype(record) === 'VERIFIED_EXPENSE' &&
     record?.sourceRef === sourceRef &&
     record?.status !== 'REVERSED'
   ) || null;
@@ -131,6 +139,7 @@ export function buildCalendarActionIntent(state, queue, amountSatang, { workflow
         ledgerTransactionId:transactionId,
         title:String(title || queue.title || 'รายจ่าย').trim(),
         amountSatang:amount,
+        repair:action.repair === true,
       },
     };
   }
