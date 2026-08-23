@@ -105,13 +105,13 @@ test('partial payment keeps Finance and Calendar projection totals reconciled to
 
 test('every static non-submit button has an explicit action owner', () => {
   const html = rootFile('index.html');
-  const sources = [rootFile('app.mjs'), rootFile('ui/app.mjs'), rootFile('ui/ride-ui.mjs'), rootFile('ui/action-popups.mjs')].join('\n');
+  const sources = [rootFile('app.mjs'), rootFile('ui/app.mjs'), rootFile('ui/home-ui.mjs'), rootFile('ui/ride-ui.mjs'), rootFile('ui/action-popups.mjs')].join('\n');
   const tags = [...html.matchAll(/<button\b([^>]*)>/g)].map(match => match[1]);
   const orphan = [];
   for (const attrs of tags) {
     const type = /\btype="([^"]+)"/.exec(attrs)?.[1] || 'submit';
     if (type === 'submit') continue;
-    if (/\bdata-(?:command-destination|destination|city-entry|store-open|ride-open)="/.test(attrs)) continue;
+    if (/\bdata-(?:command-destination|home-summary|destination|city-entry|store-open|ride-open)="/.test(attrs)) continue;
     const id = /\bid="([^"]+)"/.exec(attrs)?.[1];
     if (!id) { orphan.push(attrs.trim()); continue; }
     const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
