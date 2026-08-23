@@ -47,7 +47,7 @@ test('historical Store sale cost repair adds only the missing linked Ledger OUT'
   const durable = await runtime.readState();
   const expense = Object.values(durable.domains.LEDGER.records)
     .map(entry => entry.record)
-    .find(record => record.direction === 'OUT' && record.sourceRef === 'STORE/SALE-LEGACY-COST' && record.subtype === 'STORE_SALE_COST');
+    .find(record => record.direction === 'OUT' && record.sourceRef === 'STORE/SALE-LEGACY-COST' && record.detail === 'OUT:STORE_SALE_COST');
 
   assert.equal(result.status, 'VERIFIED');
   assert.equal(expense.amountSatang, 32500);
