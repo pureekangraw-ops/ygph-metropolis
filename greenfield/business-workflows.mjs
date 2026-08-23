@@ -204,22 +204,21 @@ export function buildExpenseWorkflow({ workflowId, ledgerTransactionId, title, a
   }, `LEDGER:${ledgerTransactionId}`)] };
 }
 
-export function buildVerifiedExpenseWorkflow({ workflowId, queueId, ledgerTransactionId, title, amountSatang }) {
+export function buildVerifiedExpenseWorkflow({ workflowId, queueId, ledgerTransactionId, title, amountSatang, repair = false }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   queueId = text(queueId, 'INVALID_QUEUE_ID');
   ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
   const amount = satang(amountSatang, { code:'INVALID_EXPENSE_AMOUNT' });
-  return { workflowId, commands: [
-    command(workflowId, 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
-      recordId:ledgerTransactionId,
-      direction:'OUT',
-      amountSatang:amount,
-      title:text(title, 'INVALID_EXPENSE_TITLE'),
-      subtype:'VERIFIED_EXPENSE',
-      sourceRef:`CALENDAR/${queueId}`,
-    }, `LEDGER:${ledgerTransactionId}`),
-    command(workflowId, 2, 'CALENDAR', 'CALENDAR_SET_STATUS', { recordId:queueId, status:'COMPLETED' }, `CALENDAR:${queueId}:VERIFIED_EXPENSE`),
-  ] };
+  const commands = [command(workflowId, 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
+    recordId:ledgerTransactionId,
+    direction:'OUT',
+    amountSatang:amount,
+    title:text(title, 'INVALID_EXPENSE_TITLE'),
+    subtype:'VERIFIED_EXPENSE',
+    sourceRef:`CALENDAR/${queueId}`,
+  }, `LEDGER:${ledgerTransactionId}`)];
+  if (!repair) commands.push(command(workflowId, 2, 'CALENDAR', 'CALENDAR_SET_STATUS', { recordId:queueId, status:'COMPLETED' }, `CALENDAR:${queueId}:VERIFIED_EXPENSE`));
+  return { workflowId, commands };
 }
 
 export function buildCalendarRescheduleWorkflow({ workflowId, queueId, dueDate }) {
