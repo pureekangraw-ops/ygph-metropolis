@@ -84,6 +84,14 @@ function validatePaymentRelations(state, commands) {
   if (!relationMatches(state, queue, source, queueId)) throw new Error(`WORKFLOW_QUEUE_SOURCE_MISMATCH:${queueId}/${expectedDetail}`);
 }
 
+function ledgerSubtype(record) {
+  const explicit = String(record?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(record?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 function validateVerifiedExpenseRelation(state, commands) {
   const ledgerWrites = commands.filter(command =>
     command?.domain === 'LEDGER' &&
@@ -96,22 +104,33 @@ function validateVerifiedExpenseRelation(state, commands) {
     command?.type === 'CALENDAR_SET_STATUS' &&
     command?.payload?.status === 'COMPLETED'
   );
-  if (ledgerWrites.length !== 1 || completions.length !== 1) throw new Error('WORKFLOW_VERIFIED_EXPENSE_RELATION_AMBIGUOUS');
+  if (ledgerWrites.length !== 1 || completions.length > 1) throw new Error('WORKFLOW_VERIFIED_EXPENSE_RELATION_AMBIGUOUS');
 
   const sourceRef = String(ledgerWrites[0]?.payload?.sourceRef || '');
   const match = /^CALENDAR\/(.+)$/.exec(sourceRef);
-  const queueId = String(completions[0]?.payload?.recordId || '');
-  if (!match || match[1] !== queueId) throw new Error(`WORKFLOW_VERIFIED_EXPENSE_SOURCE_MISMATCH:${queueId}/${sourceRef}`);
+  const queueId = String(match?.[1] || '');
+  if (!queueId) throw new Error(`WORKFLOW_VERIFIED_EXPENSE_SOURCE_MISMATCH:${queueId}/${sourceRef}`);
+  if (completions.length === 1 && String(completions[0]?.payload?.recordId || '') !== queueId) {
+    throw new Error(`WORKFLOW_VERIFIED_EXPENSE_SOURCE_MISMATCH:${String(completions[0]?.payload?.recordId || '')}/${sourceRef}`);
+  }
+
   const queue = state?.domains?.CALENDAR?.records?.[queueId]?.record;
   if (!queue) throw new Error(`WORKFLOW_QUEUE_NOT_FOUND:${queueId}`);
   const amount = Number(queue.amountSatang ?? 0);
   if (queue.type !== 'VERIFY' || String(queue.ownerRef || '').toUpperCase() !== 'LEDGER' || !Number.isSafeInteger(amount) || amount <= 0) {
     throw new Error(`WORKFLOW_VERIFIED_EXPENSE_QUEUE_INVALID:${queueId}`);
   }
+  if (completions.length === 0 && queue.status !== 'COMPLETED') {
+    throw new Error(`WORKFLOW_VERIFIED_EXPENSE_COMPLETION_REQUIRED:${queueId}`);
+  }
+  if (completions.length === 1 && (queue.status === 'COMPLETED' || queue.status === 'CANCELLED')) {
+    throw new Error(`WORKFLOW_VERIFIED_EXPENSE_QUEUE_CLOSED:${queueId}/${queue.status}`);
+  }
+
   const alreadyLinked = recordsFor(state, 'LEDGER').some(record =>
     record?.type === 'TRANSACTION' &&
     record?.direction === 'OUT' &&
-    record?.subtype === 'VERIFIED_EXPENSE' &&
+    ledgerSubtype(record) === 'VERIFIED_EXPENSE' &&
     record?.sourceRef === `CALENDAR/${queueId}` &&
     record?.status !== 'REVERSED'
   );
