@@ -5,7 +5,6 @@ const DESTINATION_ICONS=Object.freeze({
   store:'shopping-cart-simple',
   ride:'person-simple-run',
   finance:'wallet',
-  calendar:'calendar-dots',
 });
 
 function ensureThemeStylesheet(){
@@ -29,8 +28,8 @@ function applyBrandMark(){
 }
 
 function applyDestinationIcons(){
-  for(const button of document.querySelectorAll('.bottom-nav-btn[data-destination]')){
-    const iconName=DESTINATION_ICONS[button.dataset.destination];
+  for(const button of document.querySelectorAll('[data-command-destination]')){
+    const iconName=DESTINATION_ICONS[button.dataset.commandDestination];
     const svg=button.querySelector('svg[data-icon]');
     if(!iconName||!svg)continue;
     svg.dataset.icon=iconName;
