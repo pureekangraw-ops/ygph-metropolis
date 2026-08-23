@@ -28,27 +28,30 @@ function sampleState() {
   };
 }
 
-test('Metro shell keeps Home inside the sticky command strip and has no floating/bottom/city-door navigation roots', () => {
-  assert.match(html, /id="commandNav"[^>]*class="[^"]*\bcommand-nav\b[^"]*"/, 'command navigation must live at the top shell');
-  for (const destination of ['home','store','ride','finance']) {
+test('Metro shell uses the YGPH M mark as Home/Back control and has no floating/bottom/city-door navigation roots', () => {
+  assert.match(html, /id="brandHomeControl"[^>]*data-command-destination="home"/, 'the M mark itself must own Home navigation');
+  assert.match(html, /id="brandHomeControl"[\s\S]{0,500}?class="brand-mark"/, 'the Home control must contain the YGPH M mark');
+  assert.match(html, /id="brandBackIcon"[^>]*data-icon="arrow-left"/, 'the same M slot must contain the Back glyph state');
+  assert.match(html, /id="commandNav"[^>]*class="[^"]*\bcommand-nav\b[^"]*"/, 'work destinations must remain in the top command strip');
+  for (const destination of ['store','ride','finance']) {
     assert.match(html, new RegExp(`data-command-destination="${destination}"`), `${destination} must be a direct command destination`);
   }
-  assert.match(html, /id="homeCommand"[^>]*data-command-destination="home"/, 'Home must occupy a command-strip slot');
   assert.match(html, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/, 'Settings must remain directly reachable from the command strip');
   assert.doesNotMatch(html, /id="homeBubble"/, 'floating Home bubble must be removed from the DOM root');
+  assert.doesNotMatch(html, /id="homeCommand"/, 'Home must not consume a second command-strip slot');
   assert.doesNotMatch(html, /id="bottomNav"/, 'bottom navigation root must be removed, not merely hidden');
   assert.doesNotMatch(html, /id="cityEntries"/, 'duplicate city-entry root must be removed');
   assert.doesNotMatch(html, /class="workspace-toolbar"/, 'redundant workspace context/settings row must be removed');
   assert.doesNotMatch(app, /\.bottom-nav-btn\[data-destination\]/, 'runtime must not retain obsolete bottom-nav routing');
 });
 
-test('Home command changes from Home to Back without creating a second routing authority', () => {
+test('YGPH M changes to Back on work areas without creating a second routing authority', () => {
   assert.match(icons, /['"]arrow-left['"]\s*:/, 'local icon authority must contain the Back glyph');
-  assert.match(app, /function\s+updateHomeCommand\(/, 'Home/Back visual state must be explicit in the composition root');
-  assert.match(app, /area===['"]home['"][\s\S]{0,400}?house-simple[\s\S]{0,400}?arrow-left/, 'Home uses a house while work areas use a Back arrow');
+  assert.match(app, /function\s+updateBrandHomeControl\(/, 'M/Back visual state must be explicit in the composition root');
+  assert.match(app, /brandHomeMark[\s\S]{0,400}?brandBackIcon/, 'one control must swap only its visual state');
   assert.match(app, /กลับหน้าหลัก/, 'Back state must remain semantically a return to Home');
-  assert.match(app, /\.command-nav-btn\[data-command-destination\][\s\S]{0,240}?routeTo\(\{area:button\.dataset\.commandDestination\}\)/, 'all command slots must enter through routeTo');
-  assert.doesNotMatch(app, /homeCommand[\s\S]{0,240}?activateArea\(['"]home['"]\)/, 'Home/Back must not bypass route normalization');
+  assert.match(app, /\[data-command-destination\][\s\S]{0,260}?routeTo\(\{area:button\.dataset\.commandDestination\}\)/, 'all command destinations including the M control must enter through routeTo');
+  assert.doesNotMatch(app, /brandHomeControl[\s\S]{0,240}?activateArea\(['"]home['"]\)/, 'M/Back must not bypass route normalization');
 });
 
 test('Calendar remains a domain concern but its visible surface is hosted inside Finance', () => {
@@ -81,14 +84,16 @@ test('cash-flow projection uses Ledger cash semantics and excludes balance adjus
   ]);
 });
 
-test('one theme authority provides area accents, a brighter graphite field, and mobile brand collision protection', () => {
+test('one theme authority lifts the whole graphite field without adding glow to content cards', () => {
   for (const token of ['--area-home','--area-store','--area-ride','--area-finance','--area-system']) {
     assert.match(theme, new RegExp(`${token}:`), `${token} must be defined by the shared theme authority`);
   }
-  assert.match(theme, /--graphite-950:#0c1213/, 'base graphite must be lifted from near-black');
+  assert.match(theme, /--graphite-950:#101516/, 'base graphite must be lifted to dark gray rather than near-black');
+  assert.match(theme, /--graphite-900:#151b1c/, 'secondary field must also lift coherently');
+  assert.match(theme, /\.panel,.card,.task-panel,.home-summary-card,.metrics article,.item,.settings-inline,.finance-schedule\{[\s\S]{0,260}?background:var\(--graphite-850\)/, 'content surfaces should use flat graphite rather than illuminated gradients');
+  assert.doesNotMatch(theme, /\.home-summary-card[^}]*box-shadow:[^}]*0 0/i, 'dashboard cards must not gain neon/glow treatment');
   assert.match(theme, /\.brand-lockup strong[^}]*color:var\(--text-primary\)/s, 'brand title must keep high text contrast');
   assert.match(theme, /@media\(max-width:520px\)[\s\S]*\.brand-lockup strong\{display:none\}/, 'narrow mobile must hide the long brand title before it can collide with commands');
-  assert.match(theme, /\.command-nav/, 'command strip styling must live in the theme authority');
   assert.match(theme, /\[data-kind="OVERDUE"\][^{]*\{[^}]*color:var\(--semantic-danger\)/s, 'overdue warning text must use semantic danger red');
   assert.match(theme, /\.status\.error\{[^}]*color:[^}]*semantic-danger/s, 'runtime errors must use the same semantic danger authority');
 });
