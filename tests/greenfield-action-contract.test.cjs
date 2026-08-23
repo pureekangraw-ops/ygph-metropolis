@@ -111,7 +111,7 @@ test('every static non-submit button has an explicit action owner', () => {
   for (const attrs of tags) {
     const type = /\btype="([^"]+)"/.exec(attrs)?.[1] || 'submit';
     if (type === 'submit') continue;
-    if (/\bdata-(?:destination|city-entry|store-open|ride-open)="/.test(attrs)) continue;
+    if (/\bdata-(?:command-destination|destination|city-entry|store-open|ride-open)="/.test(attrs)) continue;
     const id = /\bid="([^"]+)"/.exec(attrs)?.[1];
     if (!id) { orphan.push(attrs.trim()); continue; }
     const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
