@@ -40,12 +40,19 @@ test('Metro shell has one top command navigation, a Home bubble, and no bottom/c
   assert.doesNotMatch(app, /\.bottom-nav-btn\[data-destination\]/, 'runtime must not retain obsolete bottom-nav routing');
 });
 
+test('all visible command navigation enters through routeTo rather than bypassing route normalization', () => {
+  assert.match(app, /\.command-nav-btn\[data-command-destination\],#homeBubble\[data-command-destination\][\s\S]{0,240}?routeTo\(\{area:button\.dataset\.commandDestination\}\)/);
+  assert.doesNotMatch(app, /\.command-nav-btn\[data-command-destination\],#homeBubble\[data-command-destination\][\s\S]{0,240}?activateArea\(button\.dataset\.commandDestination\)/);
+});
+
 test('Calendar remains a domain concern but its visible surface is hosted inside Finance', () => {
   assert.doesNotMatch(html, /class="area-page"\s+data-area-page="calendar"/, 'Calendar must not remain a top-level visible area');
   assert.match(html, /data-area-page="finance"[\s\S]*id="financeSchedule"/, 'Finance must physically contain the schedule surface');
   assert.match(app, /function\s+normalizeAreaRoute\(/, 'global route normalization must be explicit');
   assert.match(app, /CALENDAR[^\n]+finance|calendar[^\n]+finance/i, 'Calendar intents must resolve to Finance');
   assert.match(app, /financeSchedule/, 'Calendar routing must focus the embedded Finance schedule');
+  assert.match(app, /dataset\.calendarRecordId=record\.recordId/, 'rendered Calendar rows must expose their canonical record identity');
+  assert.match(app, /focusRouteTarget\(route\.focus,target\.recordId\)/, 'Calendar deep links must carry record context through the route focus step');
 });
 
 test('Home summary cards are owner-routed controls and Home includes an actual-cash chart', () => {
