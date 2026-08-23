@@ -55,6 +55,12 @@ export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, cal
       recordId: ledgerTransactionId, direction: 'IN', amountSatang: received, title: `รับเงิน ${title}`, subtype: 'SALE', sourceRef: `STORE/${saleId}`,
     }, `LEDGER:${ledgerTransactionId}`));
   }
+  if (storeCost > 0) {
+    const storeCostLedgerTransactionId = `TX-STORE-COST/${saleId}`;
+    commands.push(command(workflowId, commands.length + 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
+      recordId: storeCostLedgerTransactionId, direction: 'OUT', amountSatang: storeCost, title: `ต้นทุน ${title}`, subtype: 'STORE_SALE_COST', sourceRef: `STORE/${saleId}`,
+    }, `LEDGER:${storeCostLedgerTransactionId}`));
+  }
   if (outstanding > 0) {
     calendarQueueId = text(calendarQueueId, 'CALENDAR_QUEUE_ID_REQUIRED');
     const due = isoDate(dueDate);
