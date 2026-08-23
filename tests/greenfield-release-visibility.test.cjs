@@ -43,3 +43,13 @@ test('System reports service-worker lifecycle instead of leaving update state in
   assert.match(status, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
   for (const label of ['กำลังตรวจสอบ','พร้อมใช้','กำลังอัปเดต','มีอัปเดตพร้อมใช้','อัปเดตแล้ว','มีปัญหา']) assert.match(status, new RegExp(label));
 });
+
+test('Settings exposes a human update log with the shipped timestamp and Store cash-cost change', () => {
+  const status = source('ui/release-status.mjs');
+  assert.match(status, /มีอะไรใหม่/);
+  assert.match(status, /23 ส\.ค\. 2026 · 21:36/);
+  assert.match(status, /ต้นทุนร้านค้าที่จ่ายจริง/);
+  assert.match(status, /Ledger/);
+  assert.match(status, /ค่าส่ง \/ Grab \/ น้ำมัน \/ แพ็กเกจ/);
+  assert.doesNotMatch(status, /ค่าเสื่อม/);
+});
