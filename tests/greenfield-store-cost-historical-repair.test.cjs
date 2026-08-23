@@ -76,3 +76,11 @@ test('Store history exposes an explicit confirmed action for a missing historica
   assert.match(rootApp, /ไม่แก้ยอดขายหรือสต็อก/);
   assert.match(rootApp, /confirm\(/);
 });
+
+test('Settings release note tells the device owner historical Store cash repair is available', () => {
+  const status = fs.readFileSync('ui/release-status.mjs', 'utf8');
+  assert.match(status, /24 ส\.ค\. 2026 · 02:28/);
+  assert.match(status, /รายการขายเก่า/);
+  assert.match(status, /เติมเงินออกที่ขาด/);
+  assert.match(status, /ไม่แก้ยอดขายหรือสต็อก/);
+});
