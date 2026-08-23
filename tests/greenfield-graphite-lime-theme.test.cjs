@@ -21,16 +21,17 @@ test('Graphite Lime has one token authority and semantic light states',()=>{
   assert.doesNotMatch(css,/forest-theme|emerald-theme|calendar-theme|finance-theme/i);
 });
 
-test('brand and command navigation use direct coherent local icon metaphors',()=>{
+test('brand Home/Back and command navigation use direct coherent local icon metaphors',()=>{
+  const html=read('index.html');
   const boot=read('ui/theme-shell.mjs');
   const icons=read('ui/icons.mjs');
-  assert.match(boot,/brand-mark/);
-  assert.doesNotMatch(boot,/yggdrasil-tree|tree-icon/i);
-  for(const icon of ['house-simple','shopping-cart-simple','person-simple-run','wallet','gear-six']) assert.match(icons,new RegExp(`'${icon}'`));
-  assert.match(boot,/home:\s*'house-simple'/);
+  assert.match(html,/id="brandHomeMark"[^>]*class="brand-mark"/);
+  assert.match(html,/id="brandBackIcon"[^>]*data-icon="arrow-left"/);
+  assert.doesNotMatch(boot,/applyBrandMark|yggdrasil-tree|tree-icon/i);
+  for(const icon of ['arrow-left','shopping-cart-simple','person-simple-run','wallet','gear-six']) assert.match(icons,new RegExp(`'${icon}'`));
   assert.match(boot,/store:\s*'shopping-cart-simple'/);
   assert.match(boot,/ride:\s*'person-simple-run'/);
   assert.match(boot,/finance:\s*'wallet'/);
-  assert.match(boot,/\[data-command-destination\]/);
-  assert.doesNotMatch(boot,/bottom-nav-btn|data-destination/);
+  assert.match(boot,/\.command-nav-btn\[data-command-destination\]/);
+  assert.doesNotMatch(boot,/home:\s*'house-simple'|bottom-nav-btn|data-destination/);
 });

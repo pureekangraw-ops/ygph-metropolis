@@ -6,13 +6,14 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('production navigation is icon command strip plus Home bubble', () => {
+test('production navigation is icon command strip plus YGPH M Home/Back control', () => {
   const html = read('index.html');
   const nav = html.match(/<nav id="commandNav"[\s\S]*?<\/nav>/)?.[0] || '';
   assert.deepEqual([...nav.matchAll(/data-command-destination="([^"]+)"/g)].map(m => m[1]), ['store','ride','finance']);
   for (const label of ['ร้านค้า','วิ่งงาน','การเงิน','ตั้งค่า']) assert.match(nav, new RegExp(`aria-label="${label}"`));
-  assert.match(html, /id="homeBubble"[^>]*aria-label="หน้าหลัก"/);
-  assert.doesNotMatch(html, /id="bottomNav"|id="thumbRail"|class="rail-btn|data-area="money"/);
+  assert.match(html, /id="brandHomeControl"[^>]*data-command-destination="home"[^>]*aria-label="หน้าหลัก"/);
+  assert.match(html, /id="brandBackIcon"[^>]*data-icon="arrow-left"/);
+  assert.doesNotMatch(html, /id="homeBubble"|id="bottomNav"|id="thumbRail"|class="rail-btn|data-area="money"/);
 });
 
 test('Home orders attention before summary before cash-flow chart and has no duplicate city doors', () => {
@@ -41,8 +42,8 @@ test('Store Ride Finance are direct areas while Calendar is Finance-hosted and S
 test('mobile CSS does not reserve a right-side or bottom navigation rail', () => {
   const css = read('styles.css');
   assert.match(css, /\.appbar\{[^}]*position:sticky[^}]*top:0/s);
-  assert.match(css, /\.home-bubble\{[^}]*position:fixed/s);
-  assert.doesNotMatch(css, /\.bottom-nav|\.thumb-rail/);
+  assert.match(css, /\.brand-home-control\{[^}]*min-height:44px/s);
+  assert.doesNotMatch(css, /\.home-bubble|\.bottom-nav|\.thumb-rail/);
   assert.doesNotMatch(css, /padding-right\s*:\s*76px/);
 });
 
@@ -51,5 +52,5 @@ test('release manifest names the production shell truth', () => {
   assert.deepEqual(manifest.functionalShell.areas, ['HOME','STORE','RIDE','FINANCE']);
   assert.equal(manifest.functionalShell.calendarSurface, 'FINANCE_SCHEDULE');
   assert.deepEqual(manifest.functionalShell.utilities, ['SYSTEM']);
-  assert.equal(manifest.functionalShell.navigation, 'COMMAND_STRIP_HOME_BUBBLE_V1');
+  assert.equal(manifest.functionalShell.navigation, 'BRAND_HOME_BACK_COMMAND_STRIP_V2');
 });

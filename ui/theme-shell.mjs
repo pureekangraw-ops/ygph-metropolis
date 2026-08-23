@@ -1,7 +1,6 @@
 import { hydrateIcons } from './icons.mjs';
 
 const DESTINATION_ICONS=Object.freeze({
-  home:'house-simple',
   store:'shopping-cart-simple',
   ride:'person-simple-run',
   finance:'wallet',
@@ -16,19 +15,8 @@ function ensureThemeStylesheet(){
   document.head.append(link);
 }
 
-function applyBrandMark(){
-  const appbar=document.querySelector('.appbar>div');
-  if(!appbar||appbar.classList.contains('brand-lockup'))return;
-  appbar.classList.add('brand-lockup');
-  const mark=document.createElement('span');
-  mark.className='brand-mark';
-  mark.setAttribute('aria-hidden','true');
-  mark.append(document.createElement('i'),document.createElement('i'),document.createElement('i'));
-  appbar.prepend(mark);
-}
-
 function applyDestinationIcons(){
-  for(const button of document.querySelectorAll('[data-command-destination]')){
+  for(const button of document.querySelectorAll('.command-nav-btn[data-command-destination]')){
     const iconName=DESTINATION_ICONS[button.dataset.commandDestination];
     const svg=button.querySelector('svg[data-icon]');
     if(!iconName||!svg)continue;
@@ -44,7 +32,6 @@ function markSystemFacts(){
 
 export function applyGraphiteLimeTheme(){
   ensureThemeStylesheet();
-  applyBrandMark();
   applyDestinationIcons();
   markSystemFacts();
 }

@@ -1,6 +1,6 @@
 "use strict";
 const RELEASE='5.2.6';
-const ASSET_REVISION='sha256-2d9e04c9f9e18045';
+const ASSET_REVISION='sha256-01a92afa18bbc067';
 const CACHE=`ygph-metropolis-${RELEASE}-${ASSET_REVISION}`;
 const SHELL=['./index.html','./app.mjs','./styles.css','./theme.css','./manifest.webmanifest','./icon-192.png','./icon-512.png','./ui/app.mjs','./ui/release-status.mjs','./ui/reset-all-ui.mjs','./ui/theme-shell.mjs','./ui/home-ui.mjs','./ui/store-ui.mjs','./ui/finance-ui.mjs','./ui/ride-ui.mjs','./ui/action-popups.mjs','./ui/obligation-import-ui.mjs','./ui/ui-model.mjs','./ui/product-model.mjs','./ui/icons.mjs','./greenfield/action-contract.mjs','./greenfield/calculation-authority.mjs','./greenfield/daily-lifecycle.mjs','./greenfield/runtime.mjs','./greenfield/device-unlock.mjs','./greenfield/first-run.mjs','./greenfield/core.mjs','./greenfield/persistence.mjs','./greenfield/browser-store.mjs','./greenfield/cutover.mjs','./greenfield/evidence-integrity.mjs','./greenfield/import-evidence.mjs','./greenfield/projections.mjs','./greenfield/restore-compat.mjs','./greenfield/obligation-import.mjs','./greenfield/command-runtime.mjs','./greenfield/domain-operations.mjs','./greenfield/ride-domain.mjs','./greenfield/ride-workflows.mjs','./greenfield/workflow-runtime.mjs','./greenfield/workflow-invariants.mjs','./greenfield/mutation-coordinator.mjs','./greenfield/business-workflows.mjs','./greenfield/backup.mjs'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));

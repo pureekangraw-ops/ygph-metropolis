@@ -12,7 +12,13 @@
 </head>
 <body>
   <header class="appbar">
-    <div><strong>YGPH METROPOLIS</strong></div>
+    <div class="brand-lockup">
+      <button id="brandHomeControl" class="brand-home-control" type="button" data-command-destination="home" aria-label="หน้าหลัก" title="หน้าหลัก">
+        <span id="brandHomeMark" class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <svg id="brandBackIcon" class="brand-back-icon hidden" data-icon="arrow-left"></svg>
+      </button>
+      <strong>YGPH METROPOLIS</strong>
+    </div>
     <nav id="commandNav" class="command-nav hidden" aria-label="เมนูหลัก">
       <button type="button" class="command-nav-btn" data-command-destination="store" aria-label="ร้านค้า" title="ร้านค้า"><svg data-icon="shopping-cart-simple"></svg></button>
       <button type="button" class="command-nav-btn" data-command-destination="ride" aria-label="วิ่งงาน" title="วิ่งงาน"><svg data-icon="person-simple-run"></svg></button>
@@ -51,8 +57,6 @@
     <p id="gateStatus" class="status" aria-live="polite"></p>
 
     <div id="workspace" class="hidden">
-      <button id="homeBubble" class="home-bubble" type="button" data-command-destination="home" aria-label="หน้าหลัก" title="หน้าหลัก"><svg data-icon="house-simple"></svg></button>
-
       <div class="workspace-content">
         <section class="area-page active" data-area-page="home">
           <div class="page-head"><div><small>ตอนนี้</small><h1>เรื่องสำคัญของคุณ</h1></div></div>
