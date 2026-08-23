@@ -28,7 +28,7 @@ function sampleState() {
 }
 
 test('Metro shell has one top command navigation, a Home bubble, and no bottom/city-door navigation roots', () => {
-  assert.match(html, /id="commandNav"[^>]*class="command-nav"/, 'command navigation must live at the top shell');
+  assert.match(html, /id="commandNav"[^>]*class="[^"]*\bcommand-nav\b[^"]*"/, 'command navigation must live at the top shell');
   for (const destination of ['store','ride','finance']) {
     assert.match(html, new RegExp(`data-command-destination="${destination}"`), `${destination} must be a direct command destination`);
   }
