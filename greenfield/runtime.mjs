@@ -11,6 +11,7 @@ import { createMutationCoordinator } from './mutation-coordinator.mjs';
 import { projectLedgerBalance, projectCalendarSummary } from './projections.mjs';
 import { exportGreenfieldBackup, restoreGreenfieldBackup, restorePortableGreenfieldBackup } from './backup.mjs';
 import { buildCalendarActionIntent } from './action-contract.mjs';
+import { parseFinanceSeedFile, assertFinanceSeedCanApply, verifyFinanceSeedReadback } from './finance-seed-import.mjs';
 import { applyDailyLifecycle, millisecondsUntilNextBangkokMidnight } from './daily-lifecycle.mjs';
 import {
   buildSaleWorkflow,
@@ -141,6 +142,19 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function importFinanceSeed(seed) {
+    const parsed = parseFinanceSeedFile(seed);
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const validated = assertFinanceSeedCanApply(current, parsed);
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands:validated.commands });
+      lastState = result.state;
+      verifyFinanceSeedReadback(lastState, validated);
+      return { ...result, status:'VERIFIED', verifyBeforeLedgerMutation:structuredClone(validated.verifyBeforeLedgerMutation) };
+    });
+  }
+
   async function executeResolvedCalendarPayment(input, expectedMethod) {
     return coordinator.run(async () => {
       const current = await readEncryptedState({ store, passphrase });
@@ -248,7 +262,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword,
+    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
