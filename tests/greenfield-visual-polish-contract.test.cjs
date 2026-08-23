@@ -10,7 +10,7 @@ test('visual polish contract is present without changing interaction architectur
   assert.match(css, /\.page-head h1[^}]*font-size:/);
   assert.match(css, /button\{[^}]*min-height:44px/);
   assert.match(css, /\.modal-dialog[^}]*overscroll-behavior:contain/);
-  assert.match(css, /\.bottom-nav-btn\.active[^}]*font-weight:/);
+  assert.match(css, /\.command-nav-btn\{[^}]*min-height:46px/);
   assert.match(css, /@media\(max-width:700px\)[\s\S]*\.workspace-content/);
 });
 
