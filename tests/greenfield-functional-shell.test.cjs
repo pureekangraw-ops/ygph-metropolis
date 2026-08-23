@@ -6,14 +6,15 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 function text(file) { return fs.readFileSync(path.join(root, file), 'utf8'); }
 
-test('production shell exposes icon command destinations while Settings stays a utility and Home stays a bubble', () => {
+test('production shell exposes icon work destinations while Settings stays a utility and the brand M owns Home/Back', () => {
   const html = text('index.html');
   const nav = html.match(/<nav id="commandNav"[\s\S]*?<\/nav>/)?.[0] || '';
   assert.deepEqual([...nav.matchAll(/data-command-destination="([^"]+)"/g)].map(match => match[1]), ['store','ride','finance']);
   assert.equal((nav.match(/class="command-nav-btn/g) || []).length, 4);
   assert.match(nav, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
-  assert.match(html, /id="homeBubble"[^>]*data-command-destination="home"/);
-  assert.doesNotMatch(html, /id="bottomNav"|id="thumbRail"|class="rail-btn|data-area-page="money"|data-money-page=/);
+  assert.match(html, /id="brandHomeControl"[^>]*data-command-destination="home"/);
+  assert.match(html, /id="brandHomeControl"[\s\S]{0,500}?id="brandHomeMark"[\s\S]{0,500}?id="brandBackIcon"/);
+  assert.doesNotMatch(html, /id="homeBubble"|id="bottomNav"|id="thumbRail"|class="rail-btn|data-area-page="money"|data-money-page=/);
 });
 
 test('locked gate stays user-facing while recovery and technician tools remain deeper', () => {
@@ -59,13 +60,14 @@ test('four visible work areas exist once while Calendar schedule is Finance-host
   assert.doesNotMatch(settings, /<details\b/);
 });
 
-test('mobile shell preserves content width and command/Home touch targets', () => {
+test('mobile shell preserves content width and command/brand Home touch targets', () => {
   const css = text('styles.css');
   assert.match(css, /\.appbar\{[^}]*position:sticky[^}]*top:0/s);
   assert.match(css, /\.command-nav-btn\{[^}]*min-height:46px/s);
+  assert.match(css, /\.brand-home-control\{[^}]*min-height:44px/s);
   assert.match(css, /@media\(max-width:700px\)[\s\S]*\.command-nav-btn\{[^}]*min-height:44px/s);
-  assert.match(css, /\.home-bubble\{[^}]*position:fixed[^}]*safe-area-inset-bottom/s);
-  assert.doesNotMatch(css, /\.thumb-rail/);
+  assert.match(css, /@media\(max-width:700px\)[\s\S]*\.brand-home-control\{[^}]*min-height:42px/s);
+  assert.doesNotMatch(css, /\.home-bubble|\.thumb-rail/);
   assert.doesNotMatch(css, /padding-right\s*:\s*76px/);
 });
 
