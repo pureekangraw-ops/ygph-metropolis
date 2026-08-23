@@ -5,6 +5,13 @@ import './obligation-import-ui.mjs';
 export const APP_RELEASE='5.2.6';
 export const UPDATE_LOG=Object.freeze([
   Object.freeze({
+    timestamp:'24 ส.ค. 2026 · 02:28',
+    items:Object.freeze([
+      'ร้านค้า — รายการขายเก่าที่มีต้นทุนจ่ายจริงแต่ยังขาดเงินจริงออก จะแสดงปุ่ม “เติมเงินออกที่ขาด” ในประวัติร้าน',
+      'ระบบจะถามยืนยันก่อนเติม Ledger OUT และไม่แก้ยอดขายหรือสต็อก',
+    ]),
+  }),
+  Object.freeze({
     timestamp:'23 ส.ค. 2026 · 21:36',
     items:Object.freeze([
       'ร้านค้า — ต้นทุนร้านค้าที่จ่ายจริงจะถูกบันทึกเป็นเงินจริงออกใน Ledger ด้วย',
