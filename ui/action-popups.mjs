@@ -117,11 +117,16 @@ for (const [task, form] of forms) {
 const workspace = document.getElementById('workspace');
 if (workspace) workspace.append(dialog);
 
+function clearTaskContext() {
+  forms.get('expense')?.removeAttribute('data-calendar-queue-id');
+}
+
 function closeTaskDialog() {
   if (dialog.open) dialog.close();
   for (const pane of panes.querySelectorAll('[data-task-pane]')) pane.classList.add('hidden');
   taskStatus.textContent = '';
   taskStatus.classList.remove('error');
+  clearTaskContext();
   pendingForm = null;
 }
 
@@ -129,6 +134,7 @@ function openTaskDialog(task) {
   const config = TASKS[task];
   const pane = panes.querySelector(`[data-task-pane="${task}"]`);
   if (!config || !pane) return;
+  if (task === 'expense') clearTaskContext();
   for (const candidate of panes.querySelectorAll('[data-task-pane]')) candidate.classList.toggle('hidden', candidate !== pane);
   title.textContent = config.label;
   taskStatus.textContent = '';
@@ -140,6 +146,24 @@ function openTaskDialog(task) {
 
 document.querySelectorAll('[data-task-open]').forEach(button => {
   button.addEventListener('click', () => openTaskDialog(button.dataset.taskOpen));
+});
+
+globalThis.addEventListener?.('ygph:open-task', event => {
+  const detail = event?.detail && typeof event.detail === 'object' ? event.detail : {};
+  const task = String(detail.task || '');
+  const form = forms.get(task);
+  if (!form) return;
+  openTaskDialog(task);
+  if (detail.values && typeof detail.values === 'object') {
+    for (const [name, value] of Object.entries(detail.values)) {
+      const field = form.elements.namedItem(name);
+      if (field && 'value' in field) field.value = String(value ?? '');
+    }
+  }
+  if (task === 'expense' && detail.context?.calendarQueueId) {
+    form.dataset.calendarQueueId = String(detail.context.calendarQueueId);
+  }
+  form.querySelector('input,select,textarea,button')?.focus();
 });
 
 closeButton.addEventListener('click', closeTaskDialog);
