@@ -8,9 +8,12 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 const storeUi = fs.readFileSync(path.join(root, 'ui', 'store-ui.mjs'), 'utf8');
 
-test('functional UX keeps five labeled bottom destinations', () => {
-  const matches = [...html.matchAll(/class="bottom-nav-btn[^\"]*"[^>]*data-destination="([^"]+)"/g)];
-  assert.deepEqual(matches.map(match => match[1]), ['home', 'store', 'ride', 'finance', 'calendar']);
+test('functional UX keeps three icon work destinations plus Settings and Home bubble', () => {
+  const nav = html.match(/<nav id="commandNav"[\s\S]*?<\/nav>/)?.[0] || '';
+  const matches = [...nav.matchAll(/data-command-destination="([^"]+)"/g)];
+  assert.deepEqual(matches.map(match => match[1]), ['store', 'ride', 'finance']);
+  assert.match(nav, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
+  assert.match(html, /id="homeBubble"[^>]*aria-label="หน้าหลัก"/);
 });
 
 test('touch and primary action contract remains explicit', () => {
