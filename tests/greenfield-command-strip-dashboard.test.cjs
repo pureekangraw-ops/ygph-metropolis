@@ -10,7 +10,6 @@ const html = read('index.html');
 const app = read('ui/app.mjs');
 const home = read('ui/home-ui.mjs');
 const theme = read('theme.css');
-const styles = read('styles.css');
 const icons = read('ui/icons.mjs');
 
 function sampleState() {
@@ -29,12 +28,12 @@ function sampleState() {
   };
 }
 
-test('Metro shell uses only the YGPH M mark as Home/Back before icon-only work commands', () => {
+test('Metro shell visibly uses only the YGPH M mark as Home/Back before icon-only work commands', () => {
   const header=html.match(/<header class="appbar">[\s\S]*?<\/header>/)?.[0]||'';
   assert.match(header, /id="brandHomeControl"[^>]*data-command-destination="home"/, 'the M mark itself must own Home navigation');
   assert.match(header, /id="brandHomeControl"[\s\S]{0,500}?class="brand-mark"/, 'the Home control must contain the YGPH M mark');
   assert.match(header, /id="brandBackIcon"[^>]*data-icon="arrow-left"/, 'the same M slot must contain the Back glyph state');
-  assert.doesNotMatch(header, /<strong>\s*YGPH METROPOLIS\s*<\/strong>/, 'visible brand text must not sit between the M and icon-only commands');
+  assert.match(theme, /\.brand-lockup strong\{[^}]*display:none[^}]*\}/s, 'brand text may remain identity metadata but must not occupy the visible command strip');
   assert.match(header, /id="commandNav"[^>]*class="[^"]*\bcommand-nav\b[^"]*"/, 'work destinations must remain in the top shell');
   for (const destination of ['store','ride','finance']) {
     assert.match(header, new RegExp(`data-command-destination="${destination}"`), `${destination} must be a direct command destination`);
@@ -51,7 +50,7 @@ test('YGPH M changes to Back on work areas without creating a second routing aut
   assert.match(app, /กลับหน้าหลัก/, 'Back state must remain semantically a return to Home');
   assert.match(app, /\[data-command-destination\][\s\S]{0,260}?routeTo\(\{area:button\.dataset\.commandDestination\}\)/, 'all command destinations including the M control must enter through routeTo');
   assert.doesNotMatch(app, /brandHomeControl[\s\S]{0,240}?activateArea\(['"]home['"]\)/, 'M/Back must not bypass route normalization');
-  assert.match(styles, /@media\(max-width:700px\)[\s\S]*\.brand-home-control\{[^}]*width:44px[^}]*height:44px[^}]*min-height:44px/s, 'mobile M/Back target must keep a full 44px touch target');
+  assert.match(theme, /@media\(max-width:700px\)[\s\S]*\.brand-home-control\{[^}]*width:44px[^}]*height:44px[^}]*min-height:44px/s, 'mobile M/Back target must keep a full 44px touch target');
 });
 
 test('Calendar remains a domain concern but its visible surface is hosted inside Finance', () => {
