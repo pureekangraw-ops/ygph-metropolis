@@ -206,6 +206,54 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function repairStoreSaleCost({ saleId } = {}) {
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const id = String(saleId || '').trim();
+      if (!id) throw new Error('INVALID_SALE_ID');
+      const sale = current?.domains?.STORE?.records?.[id]?.record;
+      if (!sale || sale.type !== 'SALE') throw new Error(`STORE_SALE_NOT_FOUND:${id}`);
+      const amount = Number(sale.storeCostSatang ?? 0);
+      if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error(`STORE_SALE_COST_NOT_REPAIRABLE:${id}`);
+
+      const sourceRef = `STORE/${id}`;
+      const transactionId = `TX-STORE-COST/${id}`;
+      const ledgerRecords = Object.values(current?.domains?.LEDGER?.records || {}).map(entry => entry?.record).filter(Boolean);
+      const linked = ledgerRecords.find(record => record.direction === 'OUT' && record.sourceRef === sourceRef && ledgerTransactionSubtype(record) === 'STORE_SALE_COST');
+      if (linked) {
+        if (Number(linked.amountSatang) !== amount) throw new Error(`STORE_SALE_COST_REPAIR_CONFLICT:${id}`);
+        lastState = current;
+        return { status:'ALREADY_REPAIRED', state:current };
+      }
+      if (current?.domains?.LEDGER?.records?.[transactionId]) throw new Error(`STORE_SALE_COST_REPAIR_ID_CONFLICT:${id}`);
+
+      const workflowId = `WF-STORE-COST-REPAIR/${id}`;
+      const commands = [{
+        commandId:`${workflowId}:1`,
+        idempotencyKey:`${workflowId}:LEDGER:${transactionId}`,
+        domain:'LEDGER',
+        type:'LEDGER_CREATE_TRANSACTION',
+        payload:{
+          recordId:transactionId,
+          direction:'OUT',
+          amountSatang:amount,
+          title:`ต้นทุน ${String(sale.title || 'ขายสินค้า')}`,
+          subtype:'STORE_SALE_COST',
+          sourceRef,
+          createdAt:sale.createdAt || now(),
+        },
+      }];
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands });
+      lastState = result.state;
+      const transaction = lastState?.domains?.LEDGER?.records?.[transactionId]?.record;
+      if (!transaction || transaction.direction !== 'OUT' || Number(transaction.amountSatang) !== amount || transaction.sourceRef !== sourceRef || ledgerTransactionSubtype(transaction) !== 'STORE_SALE_COST') {
+        throw new Error(`STORE_SALE_COST_REPAIR_READBACK_MISMATCH:${id}`);
+      }
+      return { ...result, status:'VERIFIED' };
+    });
+  }
+
   async function adjustBalance({ workflowId, ledgerTransactionId, targetBalanceSatang, reason = 'ปรับให้ตรงกับเงินจริง' } = {}) {
     return coordinator.run(async () => {
       const current = await readEncryptedState({ store, passphrase });
@@ -297,7 +345,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed,
+    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed, repairStoreSaleCost,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
