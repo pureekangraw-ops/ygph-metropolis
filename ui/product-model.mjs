@@ -1,5 +1,6 @@
 export { projectRideState, projectRideRound } from '../greenfield/ride-domain.mjs';
-import { projectGeneratedIncome, projectReceivableTruth, projectStockTruth, projectFinancialTruth } from '../greenfield/calculation-authority.mjs';
+import { projectGeneratedIncome, projectReceivableTruth, projectStockTruth, projectFinancialTruth, projectCashFlowSeries } from '../greenfield/calculation-authority.mjs';
+export { projectCashFlowSeries };
 
 const DAY_MS = 86400000;
 const MONEY_QUEUE_TYPES = new Set(['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT','RECEIVE_CUSTOMER_PAYMENT']);
