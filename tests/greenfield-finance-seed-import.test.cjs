@@ -74,11 +74,12 @@ test('runtime imports a Finance seed atomically through command authority and re
   runtime.close();
 });
 
-test('Finance file importer detects YGPH_METRO_FINANCE_SEED without weakening legacy obligation import', () => {
+test('one import door detects Finance seed without weakening obligation import', () => {
   const importer = fs.readFileSync(path.join(root, 'ui/obligation-import-ui.mjs'), 'utf8');
+  assert.match(importer, /detectMetroImport/);
   assert.match(importer, /parseFinanceSeedFile/);
   assert.match(importer, /runtime\.importFinanceSeed\(/);
-  assert.match(importer, /YGPH_METRO_FINANCE_SEED/);
   assert.match(importer, /parseObligationImportFile/);
   assert.match(importer, /runtime\.obligation\(/);
+  assert.doesNotMatch(importer, /นำเข้าการเงินจากไฟล์/);
 });
