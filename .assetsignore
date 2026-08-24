@@ -38,6 +38,7 @@
 !/greenfield/finance-seed-import.mjs
 !/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
+!/greenfield/import-router.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/obligation-import.mjs
 !/greenfield/persistence.mjs
