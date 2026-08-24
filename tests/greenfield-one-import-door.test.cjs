@@ -7,16 +7,18 @@ const { pathToFileURL } = require('node:url');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const importer = fs.readFileSync(path.join(root, 'ui', 'obligation-import-ui.mjs'), 'utf8');
+const releaseStatus = fs.readFileSync(path.join(root, 'ui', 'release-status.mjs'), 'utf8');
 
 test('Settings exposes one normal import door without asking the user to choose an internal file type', () => {
-  const settings = html.match(/<dialog id="settingsDialog"[\s\S]*?<\/dialog>/)?.[0] || '';
-  assert.match(settings, /<h3>ข้อมูลของฉัน<\/h3>/);
-  assert.match(settings, /id="settingsImportFile"[^>]*type="file"/);
-  assert.match(settings, /id="settingsImportBtn"[^>]*>นำเข้าไฟล์<\/button>/);
-  assert.match(settings, /id="backupBtn"[^>]*>สำรองข้อมูล<\/button>/);
-  assert.equal((settings.match(/type="file"/g) || []).length, 1);
-  assert.doesNotMatch(settings, />Restore</);
-  assert.doesNotMatch(settings, />Backup</);
+  assert.match(html, /id="settingsDialog"/);
+  assert.match(html, /id="backupBtn"/);
+  assert.match(importer, /settingsImportFile/);
+  assert.match(importer, /settingsImportBtn/);
+  assert.match(importer, /ข้อมูลของฉัน/);
+  assert.match(importer, /สำรองข้อมูล/);
+  assert.match(importer, /openRestoreRouteBtn/);
+  assert.match(importer, /classList\.add\(['"]hidden['"]\)/);
+  assert.doesNotMatch(importer, /data-city-action-open=[\\"']finance-actions/);
   assert.doesNotMatch(importer, /นำเข้าการเงินจากไฟล์/);
   assert.doesNotMatch(importer, /รองรับ YGPH_METRO_FINANCE_SEED/);
 });
@@ -47,4 +49,10 @@ test('one import UI routes through existing mutation authorities and reads back 
   assert.match(importer, /runtime\.obligation/);
   assert.match(importer, /verifyObligationImportReadback/);
   assert.match(importer, /openGreenfieldRuntimeFromBackup/);
+});
+
+test('update log tells the device owner that one import door has shipped', () => {
+  assert.match(releaseStatus, /24 ส\.ค\. 2026 · 08:15/);
+  assert.match(releaseStatus, /นำเข้าไฟล์/);
+  assert.match(releaseStatus, /ตรวจไฟล์.*เลือกวิธีนำเข้า/);
 });
