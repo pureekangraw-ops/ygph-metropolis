@@ -5,6 +5,13 @@ import './obligation-import-ui.mjs';
 export const APP_RELEASE='5.2.6';
 export const UPDATE_LOG=Object.freeze([
   Object.freeze({
+    timestamp:'24 ส.ค. 2026 · 08:15',
+    items:Object.freeze([
+      'นำเข้าไฟล์ — เลือกไฟล์ครั้งเดียว ระบบจะตรวจไฟล์และเลือกวิธีนำเข้าให้เอง',
+      'ก่อนบันทึก ระบบจะแสดงผลกระทบเป็นภาษาคน และถามยืนยันเฉพาะกรณีที่จะแทนข้อมูลเดิม',
+    ]),
+  }),
+  Object.freeze({
     timestamp:'24 ส.ค. 2026 · 02:28',
     items:Object.freeze([
       'ร้านค้า — รายการขายเก่าที่มีต้นทุนจ่ายจริงแต่ยังขาดเงินจริงออก จะแสดงปุ่ม “เติมเงินออกที่ขาด” ในประวัติร้าน',
@@ -61,7 +68,9 @@ function ensureUpdateLog(){
     }
     section.append(timestamp,list);
   }
-  systemSection.before(section);
+  const dataSection=$('settingsImportFile')?.closest?.('.settings-section');
+  if(dataSection && dataSection.parentElement===systemSection.parentElement)dataSection.after(section);
+  else systemSection.before(section);
   return section;
 }
 
