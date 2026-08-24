@@ -58,17 +58,18 @@ test('runtime readback proves imported obligation and every installment queue ex
   assert.throws(() => verifyObligationImportReadback({ ...state, domains:{ ...state.domains, CALENDAR:{ records:{} } } }, validFile.payload), /OBLIGATION_IMPORT_READBACK_MISMATCH/);
 });
 
-test('Finance action flow loads an obligation file importer that executes through runtime.obligation', () => {
+test('Settings one import door executes obligation payload through runtime.obligation', () => {
   const releaseStatus = fs.readFileSync(path.join(root, 'ui/release-status.mjs'), 'utf8');
   const importer = fs.readFileSync(path.join(root, 'ui/obligation-import-ui.mjs'), 'utf8');
   assert.match(releaseStatus, /import ['"]\.\/obligation-import-ui\.mjs['"]/);
-  assert.match(importer, /data-city-action-open=[\\"']finance-actions/);
+  assert.match(importer, /settingsImportFile/);
   assert.match(importer, /runtime\.obligation\(payload\)/);
   assert.match(importer, /verifyObligationImportReadback/);
-  assert.match(importer, /type\s*=\s*['"]file['"]/);
+  assert.match(importer, /input\.type\s*=\s*['"]file['"]/);
+  assert.doesNotMatch(importer, /data-city-action-open=[\\"']finance-actions/);
 });
 
-test('obligation importer reuses the PIN from the current login attempt instead of stale sessionStorage', () => {
+test('Settings importer reuses the PIN from the current login attempt instead of stale sessionStorage', () => {
   const importer = fs.readFileSync(path.join(root, 'ui/obligation-import-ui.mjs'), 'utf8');
   assert.match(importer, /unlockBtn/);
   assert.match(importer, /activeDevicePin/);
