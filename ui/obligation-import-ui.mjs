@@ -1,13 +1,22 @@
-import { openGreenfieldRuntimeWithDevicePin } from '../greenfield/runtime.mjs';
+import {
+  openGreenfieldRuntimeWithDevicePin,
+  openGreenfieldRuntimeFromBackup,
+  enrollGreenfieldDeviceUnlock,
+} from '../greenfield/runtime.mjs';
+import { verifyPortableGreenfieldBackup } from '../greenfield/backup.mjs';
+import { prepareBackupForRestore } from '../greenfield/restore-compat.mjs';
 import { parseObligationImportFile, verifyObligationImportReadback } from '../greenfield/obligation-import.mjs';
-import { FINANCE_SEED_FORMAT, parseFinanceSeedFile, verifyFinanceSeedReadback } from '../greenfield/finance-seed-import.mjs';
+import { parseFinanceSeedFile, verifyFinanceSeedReadback } from '../greenfield/finance-seed-import.mjs';
+import { detectMetroImport, previewMetroImport, METRO_IMPORT_KIND } from '../greenfield/import-router.mjs';
 
-const launcher = document.querySelector('[data-city-action-open="finance-actions"]');
-const cityDialog = document.getElementById('cityActionDialog');
-const workspace = document.getElementById('workspace');
 const unlockButton = document.getElementById('unlockBtn');
 const devicePinInput = document.getElementById('devicePin');
+const settingsStatus = document.getElementById('settingsStatus');
+const backupButton = document.getElementById('backupBtn');
+const restoreButton = document.getElementById('openRestoreRouteBtn');
 let activeDevicePin = '';
+let selectedDocument = null;
+let selectedKind = null;
 
 unlockButton?.addEventListener('click', () => {
   activeDevicePin = String(devicePinInput?.value || '');
@@ -15,85 +24,165 @@ unlockButton?.addEventListener('click', () => {
 
 function importErrorText(error) {
   const message = String(error?.message || error || '');
-  if (message.startsWith('INVALID_FINANCE_SEED') || message === 'FINANCE_SEED_SCHEMA_MISMATCH' || message === 'FINANCE_SEED_RESTORE_BOUNDARY_REQUIRED' || message.startsWith('FINANCE_SEED_COMMAND_NOT_ALLOWED')) return 'ไฟล์ Finance Seed ไม่ตรงกับ METRO รุ่นนี้';
-  if (message.startsWith('FINANCE_SEED_READBACK_MISMATCH')) return 'บันทึกแล้วแต่ตรวจผล Finance Seed หลังนำเข้าไม่ผ่าน';
+  if (message === 'UNSUPPORTED_METRO_IMPORT' || message === 'INVALID_METRO_IMPORT_JSON') return 'ไฟล์นี้ใช้กับ Metro ไม่ได้';
+  if (message === 'NO_METRO_IMPORT_FILE') return 'เลือกไฟล์ก่อนนำเข้า';
+  if (message === 'DEVICE_PIN_INVALID') return 'การยืนยันตัวตนไม่พร้อม กรุณาเข้าสู่ระบบใหม่';
+  if (message === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองรุ่นเก่านี้ต้องใช้รหัสกู้คืนเดิม';
+  if (message.startsWith('INVALID_GREENFIELD_BACKUP') || message.includes('BACKUP_DATABASE') || message.includes('BACKUP_VAULT')) return 'ไฟล์สำรองนี้ใช้กับ Metro ไม่ได้';
+  if (message.includes('BACKUP_READBACK_MISMATCH') || message.includes('BACKUP_ROLLBACK')) return 'กู้คืนแล้วแต่ตรวจข้อมูลหลังบันทึกไม่ผ่าน';
+  if (message.startsWith('INVALID_FINANCE_SEED') || message === 'FINANCE_SEED_SCHEMA_MISMATCH' || message === 'FINANCE_SEED_RESTORE_BOUNDARY_REQUIRED' || message.startsWith('FINANCE_SEED_COMMAND_NOT_ALLOWED')) return 'ไฟล์นี้ใช้กับ Metro รุ่นนี้ไม่ได้';
+  if (message.startsWith('FINANCE_SEED_READBACK_MISMATCH')) return 'บันทึกแล้วแต่ตรวจผลหลังนำเข้าไม่ผ่าน';
   if (message.includes('FINANCE_SEED_ALREADY_APPLIED') || message.includes('FINANCE_SEED_RECORD_ALREADY_EXISTS') || message.includes('DUPLICATE')) return 'รายการจากไฟล์นี้มีอยู่ในระบบแล้ว';
-  if (message === 'INVALID_OBLIGATION_IMPORT_FORMAT' || message === 'INVALID_OBLIGATION_IMPORT_VERSION' || message === 'INVALID_OBLIGATION_IMPORT_ENTRY_POINT') return 'ไฟล์นี้ไม่ใช่ไฟล์นำเข้าการเงินของ METRO';
-  if (message === 'OBLIGATION_IMPORT_NOT_UI_UPLOADABLE') return 'ไฟล์นี้ยังไม่ได้เปิดสิทธิ์ให้นำเข้าผ่านแอป';
+  if (message.startsWith('INVALID_OBLIGATION_IMPORT') || message === 'OBLIGATION_IMPORT_NOT_UI_UPLOADABLE') return 'ไฟล์นี้ใช้กับ Metro รุ่นนี้ไม่ได้';
   if (message.includes('OBLIGATION_IMPORT_TOTAL') || message.includes('INSTALLMENT')) return 'ยอดรวมกับยอดแบ่งงวดในไฟล์ไม่ตรงกัน';
   if (message.includes('ALREADY')) return 'รายการนี้มีอยู่ในระบบแล้ว';
   if (message === 'OBLIGATION_IMPORT_READBACK_MISMATCH') return 'บันทึกแล้วแต่ตรวจผลหลังนำเข้าไม่ผ่าน';
-  if (message === 'DEVICE_PIN_INVALID') return 'การยืนยันตัวตนไม่พร้อม กรุณาเข้าสู่ระบบใหม่';
   return 'นำเข้าไฟล์ไม่สำเร็จ กรุณาตรวจสอบไฟล์';
 }
 
-if (launcher && cityDialog && workspace) {
-  const dialog = document.createElement('dialog');
-  dialog.id = 'obligationImportDialog';
-  dialog.className = 'modal-dialog action-dialog';
-  dialog.innerHTML = `
-    <div class="dialog-body">
-      <div class="dialog-head"><h2>นำเข้าการเงินจากไฟล์</h2><button id="obligationImportClose" type="button" class="secondary">ปิด</button></div>
-      <p class="muted">รองรับ YGPH_METRO_FINANCE_SEED แบบเพิ่มข้อมูล และไฟล์ภาระ YGPH_METROPOLIS_RUNTIME_PAYLOAD เดิม</p>
-      <input id="obligationImportFile" type="file" accept="application/json,.json">
-      <button id="obligationImportSubmit" type="button" class="primary-action">นำเข้า</button>
-      <p id="obligationImportStatus" class="status" aria-live="polite"></p>
-    </div>`;
-  workspace.append(dialog);
+function setStatus(text, { error = false } = {}) {
+  if (!settingsStatus) return;
+  settingsStatus.textContent = text;
+  settingsStatus.classList.toggle('error', error);
+}
 
-  const close = () => { if (dialog.open) dialog.close(); };
-  document.getElementById('obligationImportClose').addEventListener('click', close);
-  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+async function readSelectedFile(input) {
+  const file = input?.files?.[0];
+  if (!file) throw new Error('NO_METRO_IMPORT_FILE');
+  try { return JSON.parse(await file.text()); }
+  catch { throw new Error('INVALID_METRO_IMPORT_JSON'); }
+}
 
-  function openImporter() {
-    document.getElementById('obligationImportStatus').textContent = '';
-    document.getElementById('obligationImportStatus').classList.remove('error');
-    document.getElementById('obligationImportFile').value = '';
-    if (!dialog.open) dialog.showModal();
-    document.getElementById('obligationImportFile').focus();
+function validateForKind(documentPayload, kind) {
+  if (kind === METRO_IMPORT_KIND.FINANCE_SEED) return parseFinanceSeedFile(documentPayload);
+  if (kind === METRO_IMPORT_KIND.OBLIGATION) return parseObligationImportFile(documentPayload);
+  if (kind === METRO_IMPORT_KIND.BACKUP) {
+    try { return prepareBackupForRestore(documentPayload); }
+    catch (error) {
+      if (String(error?.message || '') === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return null;
+      throw error;
+    }
   }
+  throw new Error('UNSUPPORTED_METRO_IMPORT');
+}
 
-  launcher.addEventListener('click', () => {
-    queueMicrotask(() => {
-      const choices = cityDialog.querySelector('.city-action-choices');
-      if (!choices || choices.querySelector('[data-obligation-import-open]')) return;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.obligationImportOpen = 'true';
-      button.textContent = 'นำเข้าการเงินจากไฟล์';
-      button.addEventListener('click', () => {
-        if (cityDialog.open) cityDialog.close();
-        openImporter();
-      });
-      choices.append(button);
-    });
+function installSettingsImportDoor() {
+  if (!backupButton) return null;
+  const dataSection = backupButton.closest('.settings-section');
+  if (!dataSection) return null;
+  const heading = dataSection.querySelector('h3');
+  if (heading) heading.textContent = 'ข้อมูลของฉัน';
+  backupButton.textContent = 'สำรองข้อมูล';
+  restoreButton?.classList.add('hidden');
+  restoreButton?.setAttribute('aria-hidden', 'true');
+  if (restoreButton) restoreButton.tabIndex = -1;
+
+  const securitySection = document.getElementById('changePasswordBtn')?.closest('.settings-section');
+  if (securitySection && dataSection.parentElement === securitySection.parentElement) securitySection.before(dataSection);
+
+  let input = document.getElementById('settingsImportFile');
+  let button = document.getElementById('settingsImportBtn');
+  let preview = document.getElementById('settingsImportPreview');
+  if (input && button && preview) return { input, button, preview };
+
+  const row = document.createElement('div');
+  row.className = 'file-row';
+  input = document.createElement('input');
+  input.id = 'settingsImportFile';
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  button = document.createElement('button');
+  button.id = 'settingsImportBtn';
+  button.type = 'button';
+  button.className = 'primary-action';
+  button.textContent = 'นำเข้าไฟล์';
+  row.append(input, button);
+
+  preview = document.createElement('p');
+  preview.id = 'settingsImportPreview';
+  preview.className = 'muted';
+  preview.setAttribute('aria-live', 'polite');
+  const actionRow = backupButton.parentElement;
+  dataSection.insertBefore(row, actionRow);
+  dataSection.insertBefore(preview, actionRow);
+  return { input, button, preview };
+}
+
+async function prepareBackupDocument(documentPayload) {
+  try { return prepareBackupForRestore(documentPayload); }
+  catch (error) {
+    if (String(error?.message || '') !== 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') throw error;
+    const recoveryCode = globalThis.prompt?.('ไฟล์สำรองรุ่นเก่า: ใส่รหัสกู้คืนเดิม') ?? '';
+    return prepareBackupForRestore(documentPayload, recoveryCode);
+  }
+}
+
+async function importBackup(documentPayload, pin, previewText) {
+  const prepared = await prepareBackupDocument(documentPayload);
+  await verifyPortableGreenfieldBackup({ backup:prepared.backup });
+  const confirmed = globalThis.confirm?.(`${previewText}\n\nข้อมูลปัจจุบันจะถูกแทนที่ ต้องการดำเนินการต่อหรือไม่?`) ?? false;
+  if (!confirmed) return { status:'CANCELLED' };
+  const restoredRuntime = await openGreenfieldRuntimeFromBackup({ backup:prepared.backup, allowOverwrite:true });
+  try {
+    await restoredRuntime.readState();
+  } finally {
+    restoredRuntime.close();
+  }
+  await enrollGreenfieldDeviceUnlock({ vaultPassphrase:prepared.recoveryKey, pin });
+  sessionStorage.setItem('metro-auto-unlock-pin', pin);
+  return { status:'VERIFIED' };
+}
+
+const controls = installSettingsImportDoor();
+if (controls) {
+  const { input, button, preview } = controls;
+
+  input.addEventListener('change', async () => {
+    selectedDocument = null;
+    selectedKind = null;
+    preview.textContent = '';
+    setStatus('');
+    try {
+      const documentPayload = await readSelectedFile(input);
+      const kind = detectMetroImport(documentPayload);
+      validateForKind(documentPayload, kind);
+      selectedDocument = documentPayload;
+      selectedKind = kind;
+      preview.textContent = previewMetroImport(documentPayload);
+    } catch (error) {
+      preview.textContent = '';
+      setStatus(importErrorText(error), { error:true });
+    }
   });
 
-  document.getElementById('obligationImportSubmit').addEventListener('click', async () => {
-    const input = document.getElementById('obligationImportFile');
-    const status = document.getElementById('obligationImportStatus');
-    const submit = document.getElementById('obligationImportSubmit');
+  button.addEventListener('click', async () => {
     let runtime = null;
-    status.textContent = '';
-    status.classList.remove('error');
-    submit.disabled = true;
+    button.disabled = true;
+    setStatus('');
     try {
-      const file = input.files?.[0];
-      if (!file) throw new Error('NO_OBLIGATION_IMPORT_FILE');
-      let documentPayload;
-      try { documentPayload = JSON.parse(await file.text()); }
-      catch { throw new Error('INVALID_OBLIGATION_IMPORT_JSON'); }
+      const documentPayload = selectedDocument || await readSelectedFile(input);
+      const kind = selectedKind || detectMetroImport(documentPayload);
+      const previewText = previewMetroImport(documentPayload);
+      preview.textContent = previewText;
       const pin = activeDevicePin;
       if (pin.length < 6) throw new Error('DEVICE_PIN_INVALID');
-      runtime = await openGreenfieldRuntimeWithDevicePin({ pin });
 
-      if (documentPayload?.format === FINANCE_SEED_FORMAT) {
+      if (kind === METRO_IMPORT_KIND.BACKUP) {
+        const result = await importBackup(documentPayload, pin, previewText);
+        if (result.status === 'CANCELLED') { setStatus('ยกเลิกการนำเข้าแล้ว'); return; }
+        setStatus('กู้คืนข้อมูลแล้ว และตรวจข้อมูลหลังบันทึกผ่าน');
+        setTimeout(() => location.reload(), 300);
+        return;
+      }
+
+      runtime = await openGreenfieldRuntimeWithDevicePin({ pin });
+      if (kind === METRO_IMPORT_KIND.FINANCE_SEED) {
         const seed = parseFinanceSeedFile(documentPayload);
         const result = await runtime.importFinanceSeed(seed);
         const after = await runtime.readState();
         verifyFinanceSeedReadback(after, seed);
-        status.textContent = `นำเข้าการเงินสำเร็จ ${result.appliedCommands} รายการ`;
-      } else {
+        setStatus(`เพิ่มข้อมูลแล้ว ${result.appliedCommands} รายการ และตรวจผลผ่าน`);
+      } else if (kind === METRO_IMPORT_KIND.OBLIGATION) {
         const payload = parseObligationImportFile(documentPayload);
         const before = await runtime.readState();
         if (before?.domains?.LEDGER?.records?.[payload.obligationId]) throw new Error('OBLIGATION_ALREADY_EXISTS');
@@ -103,15 +192,16 @@ if (launcher && cityDialog && workspace) {
         await runtime.obligation(payload);
         const after = await runtime.readState();
         verifyObligationImportReadback(after, payload);
-        status.textContent = 'นำเข้าสำเร็จ';
+        setStatus(`เพิ่มภาระ 1 รายการ และกำหนดชำระ ${payload.installments.length} รายการแล้ว ตรวจผลผ่าน`);
+      } else {
+        throw new Error('UNSUPPORTED_METRO_IMPORT');
       }
-      setTimeout(() => location.reload(), 250);
+      setTimeout(() => location.reload(), 300);
     } catch (error) {
-      status.textContent = importErrorText(error);
-      status.classList.add('error');
+      setStatus(importErrorText(error), { error:true });
     } finally {
       runtime?.close();
-      submit.disabled = false;
+      button.disabled = false;
     }
   });
 }
