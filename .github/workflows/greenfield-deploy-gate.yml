@@ -24,6 +24,8 @@ jobs:
         run: npm ci
       - name: Run Greenfield tests, syntax, and UTF-8 gates
         run: npm run deploy:gate
+      - name: Validate Wrangler production config
+        run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
 
   deploy:
     name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
@@ -39,5 +41,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.68.0"
-          command: deploy
+          wranglerVersion: "4.126.0"
+          command: deploy --env=""
