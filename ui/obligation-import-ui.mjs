@@ -18,6 +18,8 @@ let activeDevicePin = '';
 let selectedDocument = null;
 let selectedKind = null;
 
+settingsStatus?.classList.add('compact-status');
+
 unlockButton?.addEventListener('click', () => {
   activeDevicePin = String(devicePinInput?.value || '');
 }, { capture:true });
@@ -83,20 +85,36 @@ function installSettingsImportDoor() {
   let input = document.getElementById('settingsImportFile');
   let button = document.getElementById('settingsImportBtn');
   let preview = document.getElementById('settingsImportPreview');
-  if (input && button && preview) return { input, button, preview };
+  const existingFileName = document.getElementById('settingsImportFileName');
+  if (input && button && preview) return { input, button, preview, fileName:existingFileName };
 
   const row = document.createElement('div');
-  row.className = 'file-row';
+  row.className = 'settings-file-picker';
+
   input = document.createElement('input');
   input.id = 'settingsImportFile';
+  input.className='settings-file-native hidden';
   input.type = 'file';
   input.accept = 'application/json,.json';
+
+  const chooseButton = document.createElement('button');
+  chooseButton.id = 'settingsChooseImportFileBtn';
+  chooseButton.type = 'button';
+  chooseButton.className = 'secondary';
+  chooseButton.textContent = 'เลือกไฟล์';
+  chooseButton.addEventListener('click', () => input.click());
+
+  const fileName = document.createElement('span');
+  fileName.id = 'settingsImportFileName';
+  fileName.className = 'settings-file-name';
+  fileName.textContent = 'ยังไม่ได้เลือกไฟล์';
+
   button = document.createElement('button');
   button.id = 'settingsImportBtn';
   button.type = 'button';
   button.className = 'primary-action';
   button.textContent = 'นำเข้าไฟล์';
-  row.append(input, button);
+  row.append(chooseButton, fileName, input);
 
   preview = document.createElement('p');
   preview.id = 'settingsImportPreview';
@@ -105,7 +123,8 @@ function installSettingsImportDoor() {
   const actionRow = backupButton.parentElement;
   dataSection.insertBefore(row, actionRow);
   dataSection.insertBefore(preview, actionRow);
-  return { input, button, preview };
+  actionRow.insertBefore(button, backupButton);
+  return { input, button, preview, fileName };
 }
 
 async function prepareBackupDocument(documentPayload) {
@@ -135,13 +154,16 @@ async function importBackup(documentPayload, pin, previewText) {
 
 const controls = installSettingsImportDoor();
 if (controls) {
-  const { input, button, preview } = controls;
+  const { input, button, preview, fileName } = controls;
 
   input.addEventListener('change', async () => {
     selectedDocument = null;
     selectedKind = null;
     preview.textContent = '';
     setStatus('');
+    const file = input.files?.[0];
+    if (file && fileName) fileName.textContent=file.name;
+    else if (fileName) fileName.textContent='ยังไม่ได้เลือกไฟล์';
     try {
       const documentPayload = await readSelectedFile(input);
       const kind = detectMetroImport(documentPayload);
