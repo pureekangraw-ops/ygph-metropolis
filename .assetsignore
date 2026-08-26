@@ -4,6 +4,7 @@
 !/app.mjs
 !/styles.css
 !/theme.css
+!/compact-ui.css
 !/manifest.webmanifest
 !/sw.js
 !/icon-192.png

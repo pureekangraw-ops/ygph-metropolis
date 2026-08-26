@@ -6,13 +6,18 @@ const DESTINATION_ICONS=Object.freeze({
   finance:'wallet',
 });
 
-function ensureThemeStylesheet(){
-  if(document.querySelector('link[data-theme-authority="graphite-lime"]'))return;
+function ensureStylesheet({ marker, href }){
+  if(document.querySelector(`link[data-theme-authority="${marker}"]`))return;
   const link=document.createElement('link');
   link.rel='stylesheet';
-  link.href='./theme.css';
-  link.dataset.themeAuthority='graphite-lime';
+  link.href=href;
+  link.dataset.themeAuthority=marker;
   document.head.append(link);
+}
+
+function ensureThemeStylesheets(){
+  ensureStylesheet({ marker:'graphite-lime', href:'./theme.css' });
+  ensureStylesheet({ marker:'compact-mobile', href:'./compact-ui.css' });
 }
 
 function applyDestinationIcons(){
@@ -31,7 +36,7 @@ function markSystemFacts(){
 }
 
 export function applyGraphiteLimeTheme(){
-  ensureThemeStylesheet();
+  ensureThemeStylesheets();
   applyDestinationIcons();
   markSystemFacts();
 }

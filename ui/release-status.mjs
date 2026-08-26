@@ -36,24 +36,33 @@ function ensureUpdateLog(){
   if(!systemSection)return null;
   let section=$('systemUpdateLog');
   if(section)return section;
-  section=document.createElement('section');
+
+  section=document.createElement('details');
   section.id='systemUpdateLog';
-  section.className='settings-section';
-  const title=document.createElement('h3');
+  section.className='settings-section update-log';
+
+  const summary=document.createElement('summary');
+  summary.className='update-log-summary';
+  const title=document.createElement('strong');
   title.textContent='มีอะไรใหม่';
-  section.append(title);
+  const latest=document.createElement('small');
+  latest.textContent=UPDATE_LOG[0]?.timestamp || '';
+  summary.append(title,latest);
+  section.append(summary);
+
+  const body=document.createElement('div');
+  body.className='update-log-body';
   for(const entry of UPDATE_LOG){
-    const timestamp=document.createElement('p');
-    timestamp.className='muted';
-    timestamp.textContent=entry.timestamp;
     const list=document.createElement('ul');
     for(const item of entry.items){
       const row=document.createElement('li');
       row.textContent=item;
       list.append(row);
     }
-    section.append(timestamp,list);
+    body.append(list);
   }
+  section.append(body);
+
   const dataSection=$('settingsImportFile')?.closest?.('.settings-section');
   if(dataSection && dataSection.parentElement===systemSection.parentElement)dataSection.after(section);
   else systemSection.before(section);
