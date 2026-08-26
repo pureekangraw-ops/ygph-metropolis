@@ -10,6 +10,11 @@
       "/api/*"
     ]
   },
+  "secrets": {
+    "required": [
+      "OPENAI_API_KEY"
+    ]
+  },
   "ratelimits": [
     {
       "name": "INTERPRET_RATE_LIMITER",
@@ -19,5 +24,25 @@
         "period": 60
       }
     }
-  ]
+  ],
+  "env": {
+    "staging": {
+      "name": "ygph-metropolis-staging",
+      "secrets": {
+        "required": [
+          "OPENAI_API_KEY"
+        ]
+      },
+      "ratelimits": [
+        {
+          "name": "INTERPRET_RATE_LIMITER",
+          "namespace_id": "926082602",
+          "simple": {
+            "limit": 10,
+            "period": 60
+          }
+        }
+      ]
+    }
+  }
 }
