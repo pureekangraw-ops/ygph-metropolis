@@ -1,0 +1,1 @@
+Force production redeploy after METRO Root-1 security rail merge (PR #77). This marker is excluded from published assets by .assetsignore.
