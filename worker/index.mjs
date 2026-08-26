@@ -1,7 +1,8 @@
 import { RequestGuardError, readInterpretRequest } from './guards.mjs';
 import { errorResponse, jsonResponse, makeRequestId } from './http.mjs';
+import { enforceInterpretRateLimit } from './rate-limit.mjs';
 
-export async function handleApiRequest(request) {
+export async function handleApiRequest(request, env = {}) {
   const requestId = makeRequestId();
   const url = new URL(request.url);
 
@@ -19,6 +20,7 @@ export async function handleApiRequest(request) {
 
     if (url.pathname === '/api/v1/interpret') {
       await readInterpretRequest(request);
+      await enforceInterpretRateLimit(env);
       return errorResponse({
         requestId,
         code: 'INTERPRETER_NOT_CONFIGURED',

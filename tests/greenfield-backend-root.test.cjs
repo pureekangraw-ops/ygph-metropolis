@@ -169,7 +169,11 @@ test('valid interpret request remains closed until provider is configured and ne
     method: 'POST',
     headers: { 'content-type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ version: '1', text: prompt, context: {} }),
-  }));
+  }), {
+    INTERPRET_RATE_LIMITER: {
+      async limit() { return { success: true }; },
+    },
+  });
   assert.equal(response.status, 503);
   const bodyText = await response.text();
   const body = JSON.parse(bodyText);

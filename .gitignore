@@ -1,2 +1,6 @@
 .worktrees/
 node_modules/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
