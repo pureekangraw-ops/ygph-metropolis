@@ -36,6 +36,22 @@ test('wrangler config binds a dedicated 10-per-minute interpreter limiter', () =
   }]);
 });
 
+test('wrangler config keeps production and staging secrets and rate quotas isolated', () => {
+  const config = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
+  assert.deepEqual(config.secrets, { required: ['OPENAI_API_KEY'] });
+  assert.equal(config.env?.staging?.name, 'ygph-metropolis-staging');
+  assert.deepEqual(config.env?.staging?.secrets, { required: ['OPENAI_API_KEY'] });
+  assert.deepEqual(config.env?.staging?.ratelimits, [{
+    name: 'INTERPRET_RATE_LIMITER',
+    namespace_id: '926082602',
+    simple: { limit: 10, period: 60 },
+  }]);
+  assert.notEqual(
+    config.env.staging.ratelimits[0].namespace_id,
+    config.ratelimits[0].namespace_id,
+  );
+});
+
 test('valid interpret request fails closed when rate limiter binding is absent', async () => {
   const response = await workerFetch(validInterpretRequest());
   assert.equal(response.status, 503);
