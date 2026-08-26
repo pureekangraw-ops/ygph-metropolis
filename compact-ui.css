@@ -1,0 +1,129 @@
+/* Compact mobile layout: reclaim vertical space without shrinking touch targets below 44px. */
+.city-action-launcher.primary-action{
+  min-height:44px;
+  margin-top:8px;
+  padding:8px 12px;
+}
+
+.city-inspection-links{
+  gap:8px;
+  margin-top:10px;
+}
+.city-inspection-links button{
+  min-height:48px;
+  padding:9px 12px;
+  gap:2px;
+}
+.city-inspection-links button small{
+  line-height:1.35;
+}
+
+.compact-status{
+  min-height:0;
+  margin:4px 0 8px;
+  font-size:.9rem;
+}
+.compact-status:empty{display:none}
+
+.settings-file-picker{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  margin-top:8px;
+}
+.settings-file-picker button{
+  min-height:44px;
+  padding:8px 12px;
+}
+.settings-file-name{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+}
+.settings-file-native{display:none!important}
+#settingsImportPreview{
+  margin:6px 0 8px;
+  line-height:1.4;
+}
+#settingsImportPreview:empty{display:none}
+.settings-section>.action-row{
+  margin-top:8px;
+}
+.settings-section>.action-row button{
+  min-height:44px;
+  padding:8px 12px;
+}
+
+.update-log{
+  padding:10px 0;
+}
+.update-log-summary{
+  list-style:none;
+  cursor:pointer;
+  min-height:44px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+}
+.update-log-summary::-webkit-details-marker{display:none}
+.update-log-summary::after{
+  content:'›';
+  color:var(--muted);
+  font-size:1.2rem;
+  transform:rotate(90deg);
+  grid-column:2;
+  grid-row:1 / span 2;
+}
+.update-log[open]>.update-log-summary::after{transform:rotate(-90deg)}
+.update-log-summary strong{font-size:.95rem}
+.update-log-summary small{font-size:.8rem}
+.update-log-body{
+  padding:6px 0 0;
+}
+.update-log-body ul{
+  margin:6px 0 0;
+  padding-left:1.2rem;
+}
+.update-log-body li+li{margin-top:4px}
+
+@media(max-width:700px){
+  .metrics article{
+    padding:10px;
+    gap:2px;
+  }
+  .metrics article b{
+    font-size:1.05rem;
+  }
+  .finance-schedule{
+    padding:10px;
+    margin:12px 0;
+  }
+  .month-card{
+    margin-bottom:8px;
+    padding:6px;
+  }
+  .weekday-grid{
+    margin:8px 0 4px;
+  }
+  .day-cell{
+    min-height:44px;
+    padding:4px 2px;
+  }
+  .selected-day{
+    margin:8px 0;
+    gap:6px;
+  }
+  .city-action-launcher.primary-action{
+    width:100%;
+  }
+  .city-inspection-links button{
+    min-height:48px;
+  }
+  .settings-section{
+    padding:10px 0;
+  }
+}
