@@ -15,6 +15,9 @@
       "OPENAI_API_KEY"
     ]
   },
+  "vars": {
+    "INTERPRETER_PROVIDER_ENABLED": "true"
+  },
   "ratelimits": [
     {
       "name": "INTERPRET_RATE_LIMITER",
@@ -32,6 +35,9 @@
         "required": [
           "OPENAI_API_KEY"
         ]
+      },
+      "vars": {
+        "INTERPRETER_PROVIDER_ENABLED": "false"
       },
       "ratelimits": [
         {
