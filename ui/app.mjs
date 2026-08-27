@@ -1,4 +1,5 @@
 import { openGreenfieldRuntime, openGreenfieldRuntimeWithDevicePin, enrollGreenfieldDeviceUnlock } from '../greenfield/runtime.mjs';
+import { activateRuntimeSession, deactivateRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { resolveCalendarAction } from '../greenfield/action-contract.mjs';
 import { parseBahtToSatang, formatSatang, makeId, parseInstallments } from './ui-model.mjs';
 import { recordsForDomain, dateKey, deriveTimeState, isCalendarActionableStatus, projectMakeMoney, projectStore, suggestDailyGoal, projectFinance, projectCashFlowSeries, buildMonthGrid } from './product-model.mjs';
@@ -10,6 +11,8 @@ import { hydrateIcons } from './icons.mjs';
 
 const $=id=>document.getElementById(id);
 let runtime=null,state=null,activeArea='home',activeStoreView='overview';
+function releaseRuntime(){const current=runtime;if(!current){runtime=null;return;}deactivateRuntimeSession(current);current.close();runtime=null;}
+function adoptRuntime(next){runtime=next;activateRuntimeSession(next);return runtime;}
 let selectedCalendarDate=dateKey(new Date()),monthCursor=monthFromDate(selectedCalendarDate),editingCalendarRecordId=null;
 const AREA_LABEL=Object.freeze({home:'หน้าหลัก',store:'ร้านค้า',ride:'วิ่งงาน',finance:'การเงิน'});
 const STORE_VIEWS=new Set(['overview','receivables','stock-movements','history']);
@@ -17,7 +20,7 @@ function status(message,error=false,gate=false){const node=$(gate?'gateStatus':'
 function devicePin(){const value=$('devicePin').value;if(value.length<6)throw new Error('รหัสเข้าแอปต้องมีอย่างน้อย 6 ตัวอักษร');return value;}
 function recoveryPassphrase(){const value=$('recoveryPassphrase').value;if(value.length<12)throw new Error('รหัสกู้คืนต้องมีอย่างน้อย 12 ตัวอักษร');return value;}
 async function jsonFile(input){const file=input.files?.[0];if(!file)throw new Error('เลือกไฟล์ก่อน');return JSON.parse(await file.text());}
-async function ensureRecoveryRuntime(){runtime?.close();runtime=await openGreenfieldRuntime({passphrase:recoveryPassphrase()});return runtime;}
+async function ensureRecoveryRuntime(){releaseRuntime();return adoptRuntime(await openGreenfieldRuntime({passphrase:recoveryPassphrase()}));}
 function monthFromDate(key){const match=/^(\d{4})-(\d{2})/.exec(String(key||''));const now=new Date();return match?{year:Number(match[1]),monthIndex:Number(match[2])-1}:{year:now.getFullYear(),monthIndex:now.getMonth()};}
 function shiftDate(key,days){const [y,m,d]=key.split('-').map(Number);const date=new Date(Date.UTC(y,m-1,d+days));return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}-${String(date.getUTCDate()).padStart(2,'0')}`;}
 function todayKey(){return dateKey(new Date());}
@@ -57,8 +60,8 @@ function renderSystem(context){const diagnostics=runtime.diagnostics();$('system
 function buildContext(){const today=todayKey();const projection=runtime.project();const storeRecords=recordsForDomain(state,'STORE');const ledgerRecords=recordsForDomain(state,'LEDGER');const calendarRecords=recordsForDomain(state,'CALENDAR');const rideRecords=recordsForDomain(state,'RIDE');const money=projectMakeMoney(state,today);const store=projectStore(state,today);const finance=projectFinance(state,projection.ledgerBalanceSatang,today);const cashFlow=projectCashFlowSeries(state,today,7);const goal=state.meta?.dailyGoals?.[today]||{date:today,goalSatang:0,source:'AUTO'};return{today,projection,storeRecords,ledgerRecords,calendarRecords,rideRecords,money,store,finance,cashFlow,goal};}
 function render(){if(!runtime||!state)return;const context=buildContext();homeUi.renderHome(context);storeUi.renderStore(context);rideUi.renderRide(context);financeUi.renderFinance(context);renderCalendar();renderSystem(context);}
 
-$('unlockBtn').addEventListener('click',async()=>{try{runtime?.close();runtime=await openGreenfieldRuntimeWithDevicePin({pin:devicePin()});state=await runtime.readState();if(!state)throw new Error('ยังไม่พบฐาน METROPOLIS');await openWorkspace();}catch(error){const message=error.message==='DEVICE_UNLOCK_NOT_ENROLLED'?'เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป — เปิด “กู้คืนการเข้าถึง” เพื่อตั้งครั้งแรก':error.message;status(message,true,true);}});
-$('enrollDeviceBtn').addEventListener('click',async()=>{try{runtime?.close();runtime=null;await enrollGreenfieldDeviceUnlock({vaultPassphrase:recoveryPassphrase(),pin:devicePin()});runtime=await openGreenfieldRuntimeWithDevicePin({pin:devicePin()});state=await runtime.readState();if(!state)throw new Error('ยังไม่พบฐาน METROPOLIS');$('recoveryPassphrase').value='';await openWorkspace();status('ตั้งรหัสเข้าแอปบนเครื่องนี้แล้ว');}catch(error){status(error.message,true,true);}});
+$('unlockBtn').addEventListener('click',async()=>{try{releaseRuntime();adoptRuntime(await openGreenfieldRuntimeWithDevicePin({pin:devicePin()}));state=await runtime.readState();if(!state)throw new Error('ยังไม่พบฐาน METROPOLIS');await openWorkspace();}catch(error){releaseRuntime();state=null;const message=error.message==='DEVICE_UNLOCK_NOT_ENROLLED'?'เครื่องนี้ยังไม่ได้ตั้งรหัสเข้าแอป — เปิด “กู้คืนการเข้าถึง” เพื่อตั้งครั้งแรก':error.message;status(message,true,true);}});
+$('enrollDeviceBtn').addEventListener('click',async()=>{try{releaseRuntime();state=null;await enrollGreenfieldDeviceUnlock({vaultPassphrase:recoveryPassphrase(),pin:devicePin()});adoptRuntime(await openGreenfieldRuntimeWithDevicePin({pin:devicePin()}));state=await runtime.readState();if(!state)throw new Error('ยังไม่พบฐาน METROPOLIS');$('recoveryPassphrase').value='';await openWorkspace();status('ตั้งรหัสเข้าแอปบนเครื่องนี้แล้ว');}catch(error){releaseRuntime();state=null;status(error.message,true,true);}});
 $('importEvidenceBtn').addEventListener('click',async()=>{try{const evidence=await jsonFile($('evidenceFile'));await ensureRecoveryRuntime();const result=await runtime.initializeFromEvidence(evidence,{expectedPackageId:'FLOW-1786527289637',expectedRevision:28});state=result.state;await openWorkspace();status(`นำเข้า Evidence ผ่าน · revision ${state.revision}`);}catch(error){status(error.message,true,true);}});
 $('restoreBtn').addEventListener('click',async()=>{try{const backup=await jsonFile($('restoreFile'));await ensureRecoveryRuntime();const result=await runtime.restoreBackup(backup);state=result.state;await openWorkspace();status('กู้คืน Backup และตรวจอ่านกลับแล้ว');}catch(error){status(error.message,true,true);}});
 document.querySelectorAll('[data-command-destination]').forEach(button=>button.addEventListener('click',()=>routeTo({area:button.dataset.commandDestination})));
@@ -84,7 +87,7 @@ $('nextMonth').addEventListener('click',()=>{const date=new Date(Date.UTC(monthC
 $('todayMonth').addEventListener('click',()=>{selectedCalendarDate=todayKey();monthCursor=monthFromDate(selectedCalendarDate);renderCalendar();});
 $('calendarFilter').addEventListener('change',renderCalendar);
 $('backupBtn').addEventListener('click',async()=>{try{const backup=await runtime.exportBackup();const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`YGPH_METROPOLIS_BACKUP_${todayKey()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('settingsDialog').close();status('สร้าง Encrypted Backup แล้ว');}catch(error){$('settingsStatus').textContent=error.message;$('settingsStatus').classList.add('error');}});
-$('systemLockBtn').addEventListener('click',()=>{for(const id of ['settingsDialog','calendarEditDialog','calendarCancelDialog']){const dialog=$(id);if(dialog?.open)dialog.close();}editingCalendarRecordId=null;runtime?.close();runtime=null;state=null;$('workspace').classList.add('hidden');$('commandNav').classList.add('hidden');updateBrandHomeControl('home');$('gate').classList.remove('hidden');$('runtimeBadge').textContent='LOCKED';$('devicePin').value='';$('recoveryPassphrase').value='';status('',false,true);});
+$('systemLockBtn').addEventListener('click',()=>{for(const id of ['settingsDialog','calendarEditDialog','calendarCancelDialog']){const dialog=$(id);if(dialog?.open)dialog.close();}editingCalendarRecordId=null;releaseRuntime();state=null;$('workspace').classList.add('hidden');$('commandNav').classList.add('hidden');updateBrandHomeControl('home');$('gate').classList.remove('hidden');$('runtimeBadge').textContent='LOCKED';$('devicePin').value='';$('recoveryPassphrase').value='';status('',false,true);});
 globalThis.addEventListener?.('ygph:daily-lifecycle',async()=>{if(!runtime||!state)return;try{state=await runtime.readState();if(!state)return;await ensureTodayGoal();render();}catch(error){status(error.message,true);}});
 hydrateIcons();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
