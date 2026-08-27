@@ -290,7 +290,7 @@ For the first expense path, `COMPLETE` requires a durable LEDGER record with at 
 - direction `OUT`;
 - subtype `EXPENSE`;
 - `amountSatang === 6500`;
-- title equivalent to `ข้าว`;
+- title exactly `ข้าว`;
 - the expected generated record ID;
 - state revision/readback available after execution.
 
@@ -317,25 +317,31 @@ Manual will later be another peer source/control/view surface that can emit or i
 
 ## 11. First deterministic pattern
 
-The first pattern exists only to prove the skeleton.
+The first pattern exists only to prove the skeleton without creating a dangerous general-purpose guesser.
 
-Supported proof form:
+Foundation pattern form:
 
 ```text
-<title> <positive amount in baht>
+<known deterministic expense term> <positive amount in baht>
 ```
 
-For Foundation, the specific golden case is `ข้าว 65`.
+The initial allowlist contains only the golden deterministic term `ข้าว`. Therefore:
+
+```text
+ข้าว 65  → MATCH → EXPENSE / 6500 satang
+ขาย 800  → NO_MATCH
+foo 65   → NO_MATCH
+```
 
 The parser must be conservative:
 
+- the title must be in the explicit deterministic expense-term allowlist;
 - exact positive numeric amount required;
-- non-empty title required;
 - convert baht to satang safely;
-- ambiguous/unsupported text returns `NO_MATCH` rather than guessing;
+- unknown, ambiguous, unsupported, or unsafe input returns `NO_MATCH` rather than guessing;
 - no AI fallback is implemented in this first slice.
 
-We should not broaden the grammar until the first Path proof is green.
+The allowlist is a proof mechanism, not a claim that future LIGHT HOUSE should use a hard-coded vocabulary forever. Expand or replace source interpretation only after the first Path proof is green and fresh Reality justifies the next step.
 
 ## 12. Proposed module boundaries
 
@@ -388,6 +394,8 @@ Implementation must proceed test-first.
 ### Pattern tests
 
 - `ข้าว 65` → EXPENSE / 6500 satang;
+- unknown bare title + amount → `NO_MATCH`;
+- `ขาย 800` → `NO_MATCH`;
 - invalid/ambiguous strings → `NO_MATCH`;
 - invalid money values do not guess or silently round unsafe input.
 
