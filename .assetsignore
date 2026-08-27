@@ -12,6 +12,8 @@
 !/ui/
 !/ui/action-popups.mjs
 !/ui/app.mjs
+!/ui/b2-foundation.mjs
+!/ui/b2-foundation.css
 !/ui/release-status.mjs
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
@@ -25,6 +27,10 @@
 !/ui/icons.mjs
 !/ui/master-input.mjs
 !/ui/master-input.css
+!/foundation/
+!/foundation/output-gate.mjs
+!/foundation/manual-gate.mjs
+!/foundation/manual-runtime.mjs
 !/greenfield/
 !/greenfield/action-contract.mjs
 !/greenfield/calculation-authority.mjs

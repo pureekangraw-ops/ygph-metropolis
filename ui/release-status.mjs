@@ -1,6 +1,7 @@
 import './theme-shell.mjs';
 import './reset-all-ui.mjs';
 import './obligation-import-ui.mjs';
+import './b2-foundation.mjs';
 
 export const APP_RELEASE='5.2.6';
 export const UPDATE_LOG=Object.freeze([
