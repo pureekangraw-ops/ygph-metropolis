@@ -1,9 +1,8 @@
-import { openGreenfieldRuntimeWithDevicePin } from '../greenfield/runtime.mjs';
+import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfield/master-input-router.mjs';
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','UNSUPPORTED','SUCCESS','ERROR']);
 const $ = id => document.getElementById(id);
-let sessionPin = '';
 let preparedExecution = null;
 let currentIntent = null;
 
@@ -76,8 +75,7 @@ function friendlyError(error) {
     RATE_LIMITER_NOT_CONFIGURED:'ระบบจำกัดการเรียกใช้งานยังไม่พร้อม',
     MASTER_INPUT_RIDE_ROUND_REQUIRED:'ยังไม่มีรอบวิ่งที่กำลังทำงาน',
     MASTER_INPUT_RIDE_ROUND_ACTIVE:'มีรอบวิ่งกำลังทำงานอยู่แล้ว',
-    MASTER_INPUT_RUNTIME_LOCKED:'กรุณาล็อกแล้วเข้าแอปใหม่ก่อนใช้ Master Input',
-    DEVICE_PIN_INVALID:'รหัสผ่านของเซสชันนี้ใช้ไม่ได้ กรุณาล็อกแล้วเข้าแอปใหม่',
+    MASTER_INPUT_RUNTIME_LOCKED:'Runtime ของแอปยังไม่พร้อม กรุณาเข้าแอปใหม่',
     MASTER_INPUT_RESPONSE_INVALID:'คำตอบจากล่ามไม่ผ่านสัญญาระบบ',
   };
   return map[code] || 'ดำเนินการไม่สำเร็จ';
@@ -160,31 +158,19 @@ async function requestInterpretation(text) {
   return validateGatedIntent(body);
 }
 
-function captureDevicePin() {
-  const pin = String($('devicePin')?.value || '');
-  if (pin.length >= 6) sessionPin = pin;
-}
-
-function clearSessionPin() {
-  sessionPin = '';
-}
-
-function installCredentialTracking() {
-  $('unlockBtn')?.addEventListener('click', captureDevicePin, { capture:true });
-  $('enrollDeviceBtn')?.addEventListener('click', captureDevicePin, { capture:true });
-  $('systemLockBtn')?.addEventListener('click', clearSessionPin, { capture:true });
-}
-
-async function openRuntime() {
+async function withMasterRuntime(operation) {
   const workspace = $('workspace');
-  if (!workspace || workspace.classList.contains('hidden') || sessionPin.length < 6) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
-  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin:sessionPin });
-  const state = await runtime.readState();
-  if (!state) {
-    runtime.close();
-    throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  if (!workspace || workspace.classList.contains('hidden')) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  try {
+    return await withRuntimeSession(async runtime => {
+      const state = await runtime.readState();
+      if (!state) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+      return operation(runtime);
+    });
+  } catch (error) {
+    if (String(error?.message || error || '') === 'RUNTIME_SESSION_LOCKED') throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+    throw error;
   }
-  return runtime;
 }
 
 async function interpretCurrentText() {
@@ -205,12 +191,8 @@ async function interpretCurrentText() {
       setState('UNSUPPORTED', { title:'ยังไม่รองรับ', copy:intent.question || 'รายการนี้อยู่นอกขอบเขต v1', meta });
       return;
     }
-    let runtime = null;
-    try {
-      runtime = await openRuntime();
-      preparedExecution = prepareMasterExecution(intent, { projection:runtime.project() });
-    } finally { runtime?.close(); }
-    setState('READY', { title:'ระบบเข้าใจว่า', copy:previewText(intent), meta:'ตรวจขอบเขตและสถานะในเครื่องแล้ว', execute:true });
+    preparedExecution = await withMasterRuntime(runtime => prepareMasterExecution(intent, { projection:runtime.project() }));
+    setState('READY', { title:'ระบบเข้าใจว่า', copy:previewText(intent), meta:'ตรวจขอบเขตและสถานะใน Runtime ที่เปิดอยู่แล้ว', execute:true });
   } catch (error) {
     const code = String(error?.code || error?.message || '');
     if (code === 'MASTER_INPUT_RIDE_ROUND_REQUIRED') {
@@ -221,7 +203,6 @@ async function interpretCurrentText() {
       setState('UNSUPPORTED', { title:'สถานะไม่อนุญาต', copy:friendlyError(error), meta:'ยังไม่มีการเขียนข้อมูล' });
       return;
     }
-    if (code === 'DEVICE_PIN_INVALID') clearSessionPin();
     setState('ERROR', { title:'Master Input หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ไม่มีการเขียนข้อมูลจากคำสั่งนี้' });
   }
 }
@@ -229,10 +210,8 @@ async function interpretCurrentText() {
 async function executePrepared() {
   if (!preparedExecution || !currentIntent) return;
   setState('INTERPRETING', { title:'กำลังดำเนินการ', copy:'Runtime กำลังตรวจและอ่านกลับผลจริง' });
-  let runtime = null;
   try {
-    runtime = await openRuntime();
-    const result = await executePreparedMasterIntent(runtime, preparedExecution);
+    const result = await withMasterRuntime(runtime => executePreparedMasterIntent(runtime, preparedExecution));
     const query = currentIntent.action === 'QUERY';
     setState('SUCCESS', {
       title:query ? 'อ่านข้อมูลแล้ว' : 'บันทึกและอ่านกลับแล้ว',
@@ -242,11 +221,9 @@ async function executePrepared() {
     preparedExecution = null;
     if (!query) globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
   } catch (error) {
-    if (String(error?.code || error?.message || '') === 'DEVICE_PIN_INVALID') clearSessionPin();
     setState('ERROR', { title:'Runtime หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ตรวจ readback ไม่สำเร็จ จึงไม่สรุปว่าเสร็จ' });
-  } finally { runtime?.close(); }
+  }
 }
 
 installStyle();
 createShell();
-installCredentialTracking();
