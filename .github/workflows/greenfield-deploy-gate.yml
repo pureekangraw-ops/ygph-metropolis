@@ -48,8 +48,16 @@ jobs:
       - name: Verify staging health and closed interpreter
         run: |
           base="https://ygph-metropolis-staging.pureekangraw.workers.dev"
-          health="$(curl --fail --silent --show-error "$base/api/v1/health")"
-          node -e 'const x=JSON.parse(process.argv[1]); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$health"
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code="$(curl --silent --show-error --output "$RUNNER_TEMP/health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
+            if [ "$code" = "200" ] && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/health.json"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
           code="$(curl --silent --show-error --output "$RUNNER_TEMP/interpret.json" --write-out '%{http_code}' -X POST "$base/api/v1/interpret" -H 'content-type: application/json' --data '{"version":"1","text":"staging gate","context":{}}')"
           test "$code" = "503"
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.code!=="INTERPRETER_NOT_CONFIGURED"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/interpret.json"
