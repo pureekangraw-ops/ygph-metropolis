@@ -51,5 +51,6 @@
 !/greenfield/ride-domain.mjs
 !/greenfield/ride-workflows.mjs
 !/greenfield/runtime.mjs
+!/greenfield/runtime-session.mjs
 !/greenfield/workflow-invariants.mjs
 !/greenfield/workflow-runtime.mjs
