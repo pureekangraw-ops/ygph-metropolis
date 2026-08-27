@@ -5,24 +5,19 @@ const fs = require('node:fs');
 
 const read = file => fs.readFileSync(file, 'utf8');
 
-test('B2 shell exposes AI and Manual operational surfaces', () => {
-  const html = read('index.html');
-  assert.match(html, /id="b2Workspace"/);
-  assert.match(html, /data-b2-page="ai"/);
-  assert.match(html, /data-b2-page="manual"/);
-  assert.match(html, /id="b2AiForm"/);
-  assert.match(html, /id="b2AppLanguage"/);
-  assert.match(html, /id="b2SendToManual"/);
-  assert.match(html, /id="b2ManualAreas"/);
-  assert.match(html, /id="b2ManualResult"/);
-  assert.match(html, /id="b2Audit"/);
-  assert.match(html, /ui\/b2-foundation\.css/);
+test('B2 module creates AI and Manual operational surfaces without rewriting the legacy shell', () => {
+  const ui = read('ui/b2-foundation.mjs');
+  for (const required of [
+    'b2Workspace','data-b2-page="ai"','data-b2-page="manual"','b2AiForm','b2AppLanguage',
+    'b2SendToManual','b2ManualAreas','b2ManualResult','b2Audit','b2ManualForm',
+  ]) assert.match(ui, new RegExp(required));
+  assert.match(ui, /b2-foundation\.css/);
 });
 
 test('B2 UI borrows the active Runtime session and keeps both gates distinct', () => {
-  const app = read('app.mjs');
+  const release = read('ui/release-status.mjs');
   const ui = read('ui/b2-foundation.mjs');
-  assert.match(app, /import ['"]\.\/ui\/b2-foundation\.mjs['"]/);
+  assert.match(release, /import ['"]\.\/b2-foundation\.mjs['"]/);
   assert.match(ui, /withRuntimeSession/);
   assert.match(ui, /translateIntentToAppLanguage/);
   assert.match(ui, /executeManualAppLanguage/);
