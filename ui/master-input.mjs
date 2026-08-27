@@ -3,6 +3,7 @@ import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfie
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','UNSUPPORTED','SUCCESS','ERROR']);
 const $ = id => document.getElementById(id);
+let sessionPin = '';
 let preparedExecution = null;
 let currentIntent = null;
 
@@ -75,8 +76,8 @@ function friendlyError(error) {
     RATE_LIMITER_NOT_CONFIGURED:'ระบบจำกัดการเรียกใช้งานยังไม่พร้อม',
     MASTER_INPUT_RIDE_ROUND_REQUIRED:'ยังไม่มีรอบวิ่งที่กำลังทำงาน',
     MASTER_INPUT_RIDE_ROUND_ACTIVE:'มีรอบวิ่งกำลังทำงานอยู่แล้ว',
-    MASTER_INPUT_RUNTIME_LOCKED:'กรุณาปลดล็อกแอปก่อนใช้ Master Input',
-    DEVICE_PIN_INVALID:'รหัสผ่านไม่ถูกต้อง',
+    MASTER_INPUT_RUNTIME_LOCKED:'กรุณาล็อกแล้วเข้าแอปใหม่ก่อนใช้ Master Input',
+    DEVICE_PIN_INVALID:'รหัสผ่านของเซสชันนี้ใช้ไม่ได้ กรุณาล็อกแล้วเข้าแอปใหม่',
     MASTER_INPUT_RESPONSE_INVALID:'คำตอบจากล่ามไม่ผ่านสัญญาระบบ',
   };
   return map[code] || 'ดำเนินการไม่สำเร็จ';
@@ -159,12 +160,25 @@ async function requestInterpretation(text) {
   return validateGatedIntent(body);
 }
 
+function captureDevicePin() {
+  const pin = String($('devicePin')?.value || '');
+  if (pin.length >= 6) sessionPin = pin;
+}
+
+function clearSessionPin() {
+  sessionPin = '';
+}
+
+function installCredentialTracking() {
+  $('unlockBtn')?.addEventListener('click', captureDevicePin, { capture:true });
+  $('enrollDeviceBtn')?.addEventListener('click', captureDevicePin, { capture:true });
+  $('systemLockBtn')?.addEventListener('click', clearSessionPin, { capture:true });
+}
+
 async function openRuntime() {
   const workspace = $('workspace');
-  if (!workspace || workspace.classList.contains('hidden')) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
-  const pin = String($('devicePin')?.value || '');
-  if (pin.length < 6) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
-  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin });
+  if (!workspace || workspace.classList.contains('hidden') || sessionPin.length < 6) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin:sessionPin });
   const state = await runtime.readState();
   if (!state) {
     runtime.close();
@@ -207,6 +221,7 @@ async function interpretCurrentText() {
       setState('UNSUPPORTED', { title:'สถานะไม่อนุญาต', copy:friendlyError(error), meta:'ยังไม่มีการเขียนข้อมูล' });
       return;
     }
+    if (code === 'DEVICE_PIN_INVALID') clearSessionPin();
     setState('ERROR', { title:'Master Input หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ไม่มีการเขียนข้อมูลจากคำสั่งนี้' });
   }
 }
@@ -227,9 +242,11 @@ async function executePrepared() {
     preparedExecution = null;
     if (!query) globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
   } catch (error) {
+    if (String(error?.code || error?.message || '') === 'DEVICE_PIN_INVALID') clearSessionPin();
     setState('ERROR', { title:'Runtime หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ตรวจ readback ไม่สำเร็จ จึงไม่สรุปว่าเสร็จ' });
   } finally { runtime?.close(); }
 }
 
 installStyle();
 createShell();
+installCredentialTracking();
