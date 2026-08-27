@@ -5,8 +5,10 @@ import { gateIntentProposal } from '../master-input/intent-contract.mjs';
 import { InterpreterProviderError, interpretTextWithOpenAI } from '../master-input/interpreter-provider.mjs';
 
 async function interpretRequest(input, env, deps) {
+  const explicitlyEnabled = String(env?.INTERPRETER_PROVIDER_ENABLED || '').trim().toLowerCase() === 'true';
+  const injectedTestProvider = typeof deps?.interpretText === 'function' && env?.INTERPRETER_PROVIDER_ENABLED == null;
   const apiKey = typeof env?.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
-  if (!apiKey) throw new InterpreterProviderError('INTERPRETER_NOT_CONFIGURED', 503);
+  if ((!explicitlyEnabled && !injectedTestProvider) || !apiKey) throw new InterpreterProviderError('INTERPRETER_NOT_CONFIGURED', 503);
   const interpretText = typeof deps?.interpretText === 'function' ? deps.interpretText : interpretTextWithOpenAI;
   let proposal;
   try {
