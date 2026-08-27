@@ -36,13 +36,23 @@ jobs:
     steps:
       - name: Check out release candidate
         uses: actions/checkout@v7.0.1
+      - name: Prepare disabled staging secret contract
+        run: printf '%s\n' 'OPENAI_API_KEY=STAGING_DISABLED_PLACEHOLDER' > "$RUNNER_TEMP/metro-staging.secrets"
       - name: Deploy staging Worker with provider disabled
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.126.0"
-          command: deploy --env staging
+          command: deploy --env staging --secrets-file "${{ runner.temp }}/metro-staging.secrets"
+      - name: Verify staging health and closed interpreter
+        run: |
+          base="https://ygph-metropolis-staging.pureekangraw.workers.dev"
+          health="$(curl --fail --silent --show-error "$base/api/v1/health")"
+          node -e 'const x=JSON.parse(process.argv[1]); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$health"
+          code="$(curl --silent --show-error --output "$RUNNER_TEMP/interpret.json" --write-out '%{http_code}' -X POST "$base/api/v1/interpret" -H 'content-type: application/json' --data '{"version":"1","text":"staging gate","context":{}}')"
+          test "$code" = "503"
+          node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.code!=="INTERPRETER_NOT_CONFIGURED"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/interpret.json"
 
   deploy:
     name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
