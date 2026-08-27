@@ -3,10 +3,8 @@ import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfie
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','UNSUPPORTED','SUCCESS','ERROR']);
 const $ = id => document.getElementById(id);
-let sessionPin = sessionStorage.getItem('metro-auto-unlock-pin') || '';
 let preparedExecution = null;
 let currentIntent = null;
-let pendingPassword = '';
 
 function installStyle() {
   if (document.querySelector('link[data-master-input-style]')) return;
@@ -77,6 +75,7 @@ function friendlyError(error) {
     RATE_LIMITER_NOT_CONFIGURED:'ระบบจำกัดการเรียกใช้งานยังไม่พร้อม',
     MASTER_INPUT_RIDE_ROUND_REQUIRED:'ยังไม่มีรอบวิ่งที่กำลังทำงาน',
     MASTER_INPUT_RIDE_ROUND_ACTIVE:'มีรอบวิ่งกำลังทำงานอยู่แล้ว',
+    MASTER_INPUT_RUNTIME_LOCKED:'กรุณาปลดล็อกแอปก่อนใช้ Master Input',
     DEVICE_PIN_INVALID:'รหัสผ่านไม่ถูกต้อง',
     MASTER_INPUT_RESPONSE_INVALID:'คำตอบจากล่ามไม่ผ่านสัญญาระบบ',
   };
@@ -117,7 +116,6 @@ function createShell() {
       $('masterInputForm').requestSubmit();
     }
   });
-  restoreLastReadback();
 }
 
 function setState(state, { title = '', copy = '', meta = '', execute = false } = {}) {
@@ -162,9 +160,16 @@ async function requestInterpretation(text) {
 }
 
 async function openRuntime() {
-  if (sessionPin.length < 6) throw new Error('DEVICE_PIN_INVALID');
-  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin:sessionPin });
-  await runtime.readState();
+  const workspace = $('workspace');
+  if (!workspace || workspace.classList.contains('hidden')) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  const pin = String($('devicePin')?.value || '');
+  if (pin.length < 6) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  const runtime = await openGreenfieldRuntimeWithDevicePin({ pin });
+  const state = await runtime.readState();
+  if (!state) {
+    runtime.close();
+    throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
+  }
   return runtime;
 }
 
@@ -213,57 +218,18 @@ async function executePrepared() {
   try {
     runtime = await openRuntime();
     const result = await executePreparedMasterIntent(runtime, preparedExecution);
-    if (currentIntent.action === 'QUERY') {
-      setState('SUCCESS', { title:'อ่านข้อมูลแล้ว', copy:readbackText(currentIntent.object, result.readback), meta:'QUERY ไม่ได้แก้ไขข้อมูล' });
-      preparedExecution = null;
-      return;
-    }
-    const persisted = { object:currentIntent.object, readback:result.readback, recovered:result.recovered === true, at:new Date().toISOString() };
-    sessionStorage.setItem('metro-master-readback', JSON.stringify(persisted));
-    sessionStorage.setItem('metro-auto-unlock-pin', sessionPin);
-    location.reload();
+    const query = currentIntent.action === 'QUERY';
+    setState('SUCCESS', {
+      title:query ? 'อ่านข้อมูลแล้ว' : 'บันทึกและอ่านกลับแล้ว',
+      copy:readbackText(currentIntent.object, result.readback),
+      meta:query ? 'QUERY ไม่ได้แก้ไขข้อมูล' : result.recovered ? 'ตรวจพบ retry และยืนยัน truth เดิมโดยไม่เขียนซ้ำ' : 'ผลนี้มาจาก durable readback',
+    });
+    preparedExecution = null;
+    if (!query) globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
   } catch (error) {
     setState('ERROR', { title:'Runtime หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ตรวจ readback ไม่สำเร็จ จึงไม่สรุปว่าเสร็จ' });
   } finally { runtime?.close(); }
 }
 
-function restoreLastReadback() {
-  const raw = sessionStorage.getItem('metro-master-readback');
-  if (!raw) return;
-  sessionStorage.removeItem('metro-master-readback');
-  try {
-    const saved = JSON.parse(raw);
-    setState('SUCCESS', {
-      title:'บันทึกและอ่านกลับแล้ว',
-      copy:readbackText(saved.object, saved.readback),
-      meta:saved.recovered ? 'ตรวจพบ retry และยืนยัน truth เดิมโดยไม่เขียนซ้ำ' : 'ผลนี้มาจาก durable readback',
-    });
-  } catch {
-    setState('IDLE');
-  }
-}
-
-function captureDevicePin() {
-  const value = String($('devicePin')?.value || '');
-  if (value.length >= 6) sessionPin = value;
-}
-
-function installCredentialTracking() {
-  $('unlockBtn')?.addEventListener('click', captureDevicePin, { capture:true });
-  $('systemLockBtn')?.addEventListener('click', () => { sessionPin = ''; }, { capture:true });
-  $('submitChangePasswordBtn')?.addEventListener('click', () => {
-    const next = String($('changeNewPassword')?.value || '');
-    pendingPassword = next.length >= 6 ? next : '';
-  }, { capture:true });
-  const appStatus = $('appStatus');
-  if (appStatus) new MutationObserver(() => {
-    if ((appStatus.textContent || '').includes('เปลี่ยนรหัสผ่านแล้ว') && pendingPassword.length >= 6) {
-      sessionPin = pendingPassword;
-      pendingPassword = '';
-    }
-  }).observe(appStatus, { childList:true, characterData:true, subtree:true });
-}
-
 installStyle();
 createShell();
-installCredentialTracking();
