@@ -23,6 +23,8 @@
 !/ui/ui-model.mjs
 !/ui/product-model.mjs
 !/ui/icons.mjs
+!/ui/master-input.mjs
+!/ui/master-input.css
 !/greenfield/
 !/greenfield/action-contract.mjs
 !/greenfield/calculation-authority.mjs
@@ -40,6 +42,7 @@
 !/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/import-router.mjs
+!/greenfield/master-input-router.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/obligation-import.mjs
 !/greenfield/persistence.mjs
