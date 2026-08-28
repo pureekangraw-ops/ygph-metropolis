@@ -87,14 +87,25 @@ function localRoute(prepared) {
   });
 }
 
+function refreshedRecoverySession(session, routed) {
+  const refreshed = createRecoverySession(routed, { inputId:session.inputId });
+  refreshed.originalRawText = typeof session.originalRawText === 'string'
+    ? session.originalRawText
+    : session.rawText;
+  refreshed.cycle = session?.cycle ?? 1;
+  return refreshed;
+}
+
 export function createRecoverySession(routed, { inputId } = {}) {
   if (typeof inputId !== 'string' || !inputId.trim()) {
     throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
   }
 
+  const rawText = routed?.prepared?.parsed?.rawText ?? '';
   return {
     inputId:inputId.trim(),
-    rawText:routed?.prepared?.parsed?.rawText ?? '',
+    rawText,
+    originalRawText:rawText,
     cycle:1,
     status:'RECOVERY_REQUIRED',
     slots:recoverySlots(routed),
@@ -176,8 +187,11 @@ export function reassembleRecoverySession(session) {
   if (typeof session?.inputId !== 'string' || !session.inputId.trim()) {
     throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
   }
-  const originalRawText = session.rawText;
-  let text = originalRawText;
+  const sourceRawText = session.rawText;
+  const originalRawText = typeof session.originalRawText === 'string'
+    ? session.originalRawText
+    : sourceRawText;
+  let text = sourceRawText;
   for (const item of replacementSpans(session)) {
     text = `${text.slice(0, item.start)}${item.replacement}${text.slice(item.end)}`;
   }
@@ -187,8 +201,13 @@ export function reassembleRecoverySession(session) {
 export async function rejoinRecoverySession(session, options = {}) {
   const reassembled = reassembleRecoverySession(session);
   const prepared = prepareIntentPath(reassembled.text, options);
+  const routed = localRoute(prepared);
+  const recoverySession = routed.status === 'RECOVERY_REQUIRED'
+    ? refreshedRecoverySession(session, routed)
+    : null;
   return Object.freeze({
     ...reassembled,
-    routed:localRoute(prepared),
+    routed,
+    ...(recoverySession ? { recoverySession } : {}),
   });
 }
