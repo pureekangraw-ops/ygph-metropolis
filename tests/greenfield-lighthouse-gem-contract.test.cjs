@@ -13,3 +13,15 @@ test('Gem result rejects execution authority fields', async () => {
     status:'RESOLVED', proposal:{ object:'EXPENSE' }, runtimeMethod:'expense',
   }), /GEM_EXECUTION_AUTHORITY_FORBIDDEN/);
 });
+
+test('Gem result rejects nested execution authority fields anywhere in transformation output', async () => {
+  const { validateGemProcessResult } = await import('../lighthouse/gem-contract.mjs');
+  assert.throws(() => validateGemProcessResult({
+    status:'RESOLVED',
+    proposal:{ object:'EXPENSE', routing:{ runtimeMethod:'expense' } },
+  }), /GEM_EXECUTION_AUTHORITY_FORBIDDEN/);
+  assert.throws(() => validateGemProcessResult({
+    status:'NEEDS_SUPPORT',
+    supportRequest:{ capability:'LEDGER_WRITE' },
+  }), /GEM_EXECUTION_AUTHORITY_FORBIDDEN/);
+});
