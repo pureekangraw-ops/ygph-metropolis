@@ -211,3 +211,29 @@ test('P1Q12 a provider cannot turn a marked question into an executable create',
   assert.equal(routed.intent, null);
   assert.equal(routed.prepared.request, null);
 });
+
+test('P1Q13 imported duplicates with unknown recording times report matches without claiming latest', async () => {
+  for (const dates of [[undefined, 'not-a-date'], [undefined, '2026-08-28T02:00:00.000Z']]) {
+    const env = await setupProductionUi(`Q13-${dates[1]}`, {
+      importedRecords:dates.map((createdAt, index) => ({
+        recordId:`TX-IMPORTED-${index}`, type:'TRANSACTION', direction:'OUT', detail:'OUT:EXPENSE',
+        title:'ข้าว', amountSatang:6500, status:'ACTIVE', ...(createdAt ? { createdAt } : {}),
+      })),
+    });
+    try {
+      const before = await env.runtime.readState();
+      const result = await searchThroughRuntime(env, 'ลงข้าว65หรือยัง');
+      assert.equal(result.readback.found, true);
+      assert.equal(result.readback.matchCount, 2);
+      assert.equal(result.readback.record, null, 'do not pick an arbitrary record as latest');
+      assert.equal(result.readback.selectionReason, 'LATEST_RECORD_TIME_UNKNOWN');
+      assert.equal(await env.submit('ลงข้าว65หรือยัง'), 'SUCCESS');
+      assert.match(env.document.getElementById('masterInputTitle').textContent, /พบรายการ/);
+      assert.doesNotMatch(env.document.getElementById('masterInputTitle').textContent, /ไม่พบ/);
+      assert.match(env.document.getElementById('masterInputCopy').textContent, /ระบุรายการล่าสุดไม่ได้/);
+      assert.doesNotMatch(env.document.getElementById('masterInputMeta').textContent, /เลือกรายการล่าสุด/);
+      assert.equal(env.document.getElementById('masterInputActions').children.length, 0);
+      assert.deepEqual(await env.runtime.readState(), before);
+    } finally { env.cleanup(); }
+  }
+});

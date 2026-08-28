@@ -98,7 +98,9 @@ class FakeDocument {
   }
 }
 
-function minimalEvidence(packageId) {
+function minimalEvidence(packageId, importedRecords = []) {
+  const balance = importedRecords.reduce((sum, record) => record.type !== 'TRANSACTION' || record.status === 'CANCELLED'
+    ? sum : sum + (record.direction === 'IN' ? 1 : -1) * record.amountSatang, 0);
   return signEvidence({
     format:'YGPH_FLOW_EVENT_EXCHANGE',
     formatVersion:3,
@@ -110,13 +112,16 @@ function minimalEvidence(packageId) {
     reconciliation:{ status:'PASS', blockingIssues:[] },
     events:[{
       eventId:`${packageId}-0`, source:'LEDGER', owner:'LEDGER',
-      payload:{ record:{ recordId:'LEDGER-CURRENT', type:'CURRENT_BALANCE', amountSatang:0, calculation:{ openingBalanceSatang:0 } } },
+      payload:{ record:{ recordId:'LEDGER-CURRENT', type:'CURRENT_BALANCE', amountSatang:balance, calculation:{ openingBalanceSatang:0 } } },
       validation:{ ownerConfirmation:'UNCONFIRMED' },
-    }],
+    }, ...importedRecords.map((record, index) => ({
+      eventId:`${packageId}-import-${index}`, source:'LEDGER', owner:'LEDGER',
+      payload:{ record }, validation:{ ownerConfirmation:'UNCONFIRMED' },
+    }))],
   });
 }
 
-async function initializedRuntime(packageId, { now = ()=>'2026-08-28T02:00:00.000Z' } = {}) {
+async function initializedRuntime(packageId, { now = ()=>'2026-08-28T02:00:00.000Z', importedRecords = [] } = {}) {
   const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
   const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
   const runtime = createGreenfieldRuntime({
@@ -125,7 +130,7 @@ async function initializedRuntime(packageId, { now = ()=>'2026-08-28T02:00:00.00
     lockManager:null,
     now,
   });
-  const initial = await runtime.initializeFromEvidence(minimalEvidence(packageId), {
+  const initial = await runtime.initializeFromEvidence(minimalEvidence(packageId, importedRecords), {
     expectedPackageId:packageId,
     expectedRevision:1,
   });
