@@ -47,6 +47,10 @@ async function integrationTools() {
   };
 }
 
+async function frontDoorTools() {
+  return import('../lighthouse/master-input-route.mjs');
+}
+
 test('P1A01 attached raw ข้าว65 crosses Intent bridge -> PATH -> real durable LEDGER', async () => {
   const { prepareIntentPath, kernel } = await integrationTools();
   const runtime = await initializedRuntime();
@@ -107,4 +111,71 @@ test('P1A04 relative business date survives Intent -> PATH -> real durable readb
   const record = state.domains.LEDGER.records['TX-LH-REQ-p1-a04'].record;
   assert.equal(record.businessDate, '2026-08-28');
   assert.equal(record.createdAt, '2026-08-28T02:00:00.000Z');
+});
+
+test('P1B01 supported local Direct intent bypasses provider and stays prepared until explicit execute', async () => {
+  const { routeMasterInputText } = await frontDoorTools();
+  let providerCalls = 0;
+  const routed = await routeMasterInputText('ข้าว65', {
+    receivedAt:'2026-08-28T01:30:00.000Z',
+    timeZone:'Asia/Bangkok',
+    requestIdFactory:()=>'REQ-p1-b01',
+    interpretFallback:async () => { providerCalls += 1; throw new Error('PROVIDER_SHOULD_NOT_RUN'); },
+  });
+  assert.equal(providerCalls, 0);
+  assert.equal(routed.route, 'LOCAL_PATH');
+  assert.equal(routed.prepared.status, 'READY');
+  assert.equal(routed.prepared.request.fields.title, 'ข้าว');
+  assert.equal(routed.prepared.request.fields.amountSatang, 6500);
+});
+
+test('P1B02 prohibition and understood unsupported condition never fall through to provider', async () => {
+  const { routeMasterInputText } = await frontDoorTools();
+  let providerCalls = 0;
+  const options = {
+    receivedAt:'2026-08-28T01:30:00.000Z',
+    timeZone:'Asia/Bangkok',
+    requestIdFactory:()=>'REQ-p1-b02',
+    interpretFallback:async () => { providerCalls += 1; throw new Error('PROVIDER_SHOULD_NOT_RUN'); },
+  };
+  const prohibited = await routeMasterInputText('ไม่ต้องลงข้าว65', options);
+  assert.equal(prohibited.route, 'STOP');
+  assert.equal(prohibited.status, 'BLOCKED');
+  assert.equal(prohibited.reason, 'PROHIBITED_GROUP');
+
+  const conditional = await routeMasterInputText('ถ้าฝนตกค่อยลงข้าว65', options);
+  assert.equal(conditional.route, 'STOP');
+  assert.equal(conditional.status, 'UNSUPPORTED');
+  assert.equal(conditional.reason, 'CONDITION_NOT_SUPPORTED');
+  assert.equal(providerCalls, 0);
+});
+
+test('P1B03 text not claimed by local Direct ownership keeps the existing provider route', async () => {
+  const { routeMasterInputText } = await frontDoorTools();
+  let providerCalls = 0;
+  const providerIntent = Object.freeze({ version:'1', status:'READY', action:'CREATE', object:'RIDE_JOB', fields:Object.freeze({}) });
+  const routed = await routeMasterInputText('งาน 380 เงินสด', {
+    receivedAt:'2026-08-28T01:30:00.000Z',
+    timeZone:'Asia/Bangkok',
+    requestIdFactory:()=>'REQ-p1-b03',
+    interpretFallback:async text => {
+      providerCalls += 1;
+      assert.equal(text, 'งาน 380 เงินสด');
+      return providerIntent;
+    },
+  });
+  assert.equal(providerCalls, 1);
+  assert.equal(routed.route, 'PROVIDER');
+  assert.equal(routed.intent, providerIntent);
+});
+
+test('P1B04 production Master Input front door is wired to local route and executes local READY only through PATH', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync(new URL('../ui/master-input.mjs', `file://${__filename}`), 'utf8');
+  assert.match(source, /routeMasterInputText/);
+  assert.match(source, /createPathKernel/);
+  assert.match(source, /createExpenseCapability/);
+  assert.match(source, /preparedPathRequest/);
+  assert.match(source, /localPathKernel\.run/);
+  assert.match(source, /requestInterpretation/);
 });
