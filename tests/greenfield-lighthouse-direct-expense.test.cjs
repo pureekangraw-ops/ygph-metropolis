@@ -68,7 +68,7 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
   const transaction = state.domains.LEDGER.records['TX-LH-1'].record;
   assert.equal(transaction.type, 'TRANSACTION');
   assert.equal(transaction.direction, 'OUT');
-  assert.equal(transaction.subtype, 'EXPENSE');
+  assert.equal(transaction.detail, 'OUT:EXPENSE');
   assert.equal(transaction.title, 'ข้าว');
   assert.equal(transaction.amountSatang, 6500);
 });
