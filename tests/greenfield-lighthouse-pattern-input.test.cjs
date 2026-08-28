@@ -2,11 +2,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-test('golden deterministic Pattern normalizes ข้าว 65', async () => {
+test('golden deterministic Pattern normalizes ข้าว 65 and assigns local operation identity', async () => {
   const { normalizePatternInput } = await import('../lighthouse/pattern-input.mjs');
-  const result = normalizePatternInput('ข้าว 65');
+  const result = normalizePatternInput('ข้าว 65', { requestIdFactory:() => 'REQ-pattern-1' });
   assert.equal(result.status, 'MATCH');
   assert.equal(result.request.source, 'PATTERN');
+  assert.equal(result.request.requestId, 'REQ-pattern-1');
   assert.equal(result.request.object, 'EXPENSE');
   assert.equal(result.request.fields.title, 'ข้าว');
   assert.equal(result.request.fields.amountSatang, 6500);
