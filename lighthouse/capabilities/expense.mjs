@@ -19,6 +19,14 @@ function ledgerRecord(state, recordId) {
   return state?.domains?.LEDGER?.records?.[recordId]?.record || null;
 }
 
+function ledgerSubtype(record) {
+  const explicit = String(record?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(record?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 export function createExpenseCapability({ idFactory } = {}) {
   if (typeof idFactory !== 'function') throw new Error('EXPENSE_CAPABILITY_ID_FACTORY_REQUIRED');
 
@@ -46,12 +54,13 @@ export function createExpenseCapability({ idFactory } = {}) {
 
       const state = await runtime.readState();
       const found = ledgerRecord(state, ledgerTransactionId);
+      const subtype = ledgerSubtype(found);
       if (
         !found ||
         found.recordId !== ledgerTransactionId ||
         found.type !== 'TRANSACTION' ||
         found.direction !== 'OUT' ||
-        found.subtype !== 'EXPENSE' ||
+        subtype !== 'EXPENSE' ||
         found.title !== request.fields.title ||
         found.amountSatang !== request.fields.amountSatang
       ) {
@@ -63,7 +72,7 @@ export function createExpenseCapability({ idFactory } = {}) {
         readback:Object.freeze({
           recordId:found.recordId,
           direction:found.direction,
-          subtype:found.subtype,
+          subtype,
           title:found.title,
           amountSatang:found.amountSatang,
           revision:state?.revision ?? null,
