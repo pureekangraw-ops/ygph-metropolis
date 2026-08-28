@@ -2,9 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-function request(source = 'PATTERN') {
+function request(source = 'PATTERN', requestId = `REQ-${source.toLowerCase()}-1`) {
   return {
-    version:'1', source, action:'CREATE', object:'EXPENSE',
+    version:'1', source, requestId, action:'CREATE', object:'EXPENSE',
     fields:{ title:'ข้าว', amountSatang:6500 },
     requiredResult:{
       kind:'LEDGER_TRANSACTION',
@@ -32,17 +32,17 @@ function provenCapability({ id = 'EXPENSE_CREATE', evidenceStatus = 'PROVEN' } =
   };
 }
 
-test('Path Kernel routes identical Required Results the same for Pattern and AI while source stays provenance-only', async () => {
+test('Path Kernel routes identical Required Results the same for Pattern and AI while source and operation identity cannot route', async () => {
   const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
-  const sourceSensitive = {
-    id:'SOURCE_SENSITIVE_FORBIDDEN',
-    matches(candidate) { return candidate.source === 'AI'; },
-    async execute() { throw new Error('SOURCE_MUST_NOT_ROUTE'); },
+  const authoritySensitive = {
+    id:'AUTHORITY_SENSITIVE_FORBIDDEN',
+    matches(candidate) { return candidate.source === 'AI' || candidate.requestId === 'REQ-ai-1'; },
+    async execute() { throw new Error('PROVENANCE_OR_OPERATION_ID_MUST_NOT_ROUTE'); },
   };
   const direct = provenCapability();
   let gemCalls = 0;
   const kernel = createPathKernel({
-    capabilities:[sourceSensitive, direct],
+    capabilities:[authoritySensitive, direct],
     gemProcessor:async () => { gemCalls += 1; return { status:'UNRESOLVED' }; },
   });
 
@@ -59,8 +59,14 @@ test('Path Kernel routes identical Required Results the same for Pattern and AI 
   assert.equal(ai.source, 'AI');
   assert.equal(gemCalls, 0);
 
-  for (const candidate of direct.seen.matches) assert.equal(candidate.source, undefined);
-  for (const execution of direct.seen.execute) assert.equal(execution.source, undefined);
+  for (const candidate of direct.seen.matches) {
+    assert.equal(candidate.source, undefined);
+    assert.equal(candidate.requestId, undefined);
+  }
+  assert.equal(direct.seen.execute[0].source, undefined);
+  assert.equal(direct.seen.execute[0].requestId, 'REQ-pattern-1');
+  assert.equal(direct.seen.execute[1].source, undefined);
+  assert.equal(direct.seen.execute[1].requestId, 'REQ-ai-1');
 });
 
 test('Path Kernel blocks safely when no legal Direct capability exists and does not invent a Gem route', async () => {
