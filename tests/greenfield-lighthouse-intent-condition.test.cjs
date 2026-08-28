@@ -1,8 +1,48 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { signEvidence } = require('./flow-evidence-fixture.cjs');
 
 const C01_TEXT = 'ถ้าพรุ่งนี้ฝนตกค่อยลงค่าแท็กซี่200';
+
+function minimalEvidence() {
+  return signEvidence({
+    format:'YGPH_FLOW_EVENT_EXCHANGE',
+    formatVersion:3,
+    evidenceSchemaVersion:'3.1',
+    packageId:'FLOW-C06-READBACK-PROOF',
+    packageMode:'SNAPSHOT_AND_DELTA',
+    snapshotAsOf:'2026-08-28T01:00:00.000Z',
+    sourceRevision:1,
+    reconciliation:{ status:'PASS', blockingIssues:[] },
+    events:[
+      {
+        eventId:'C06-L0',
+        source:'LEDGER',
+        owner:'LEDGER',
+        payload:{ record:{ recordId:'LEDGER-CURRENT', type:'CURRENT_BALANCE', amountSatang:50000, calculation:{ openingBalanceSatang:50000 } } },
+        validation:{ ownerConfirmation:'UNCONFIRMED' },
+      },
+    ],
+  });
+}
+
+async function initializedRuntime() {
+  const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
+  const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
+  const runtime = createGreenfieldRuntime({
+    store:createMemoryVaultStore(),
+    passphrase:'correct horse battery staple',
+    lockManager:null,
+    now:()=>'2026-08-28T01:30:00.000Z',
+  });
+  const initial = await runtime.initializeFromEvidence(minimalEvidence(), {
+    expectedPackageId:'FLOW-C06-READBACK-PROOF',
+    expectedRevision:1,
+  });
+  assert.equal(initial.status, 'IMPORTED_VERIFIED');
+  return runtime;
+}
 
 test('C01 condition and temporal meaning stay with the command group but unsupported condition does not execute', async () => {
   const parser = await import('../lighthouse/intent-parser.mjs');
@@ -79,7 +119,7 @@ test('C05 understood but unsupported condition keeps understood meaning instead 
   assert.deepEqual(result.condition, condition);
 });
 
-test('C06 expense without a title becomes รายจ่ายทั่วไป only at request preparation and readback uses the same title', async () => {
+test('C06 expense without a title becomes รายจ่ายทั่วไป and survives real durable LEDGER readback', async () => {
   const { gateIntentProposal } = await import('../master-input/intent-contract.mjs');
   const { prepareMasterExecution, executePreparedMasterIntent } = await import('../greenfield/master-input-router.mjs');
 
@@ -90,32 +130,23 @@ test('C06 expense without a title becomes รายจ่ายทั่วไ�
   assert.equal(gated.status, 'READY');
   assert.equal(gated.fields.title, null);
 
+  const runtime = await initializedRuntime();
   const prepared = prepareMasterExecution(gated, {
-    projection:{ ledgerBalanceSatang:50000, ride:{ activeRound:null } },
+    projection:runtime.project(),
     idFactory:prefix => `${prefix}-C06`,
   });
   assert.equal(prepared.input.title, 'รายจ่ายทั่วไป');
   assert.equal(prepared.verify.title, 'รายจ่ายทั่วไป');
 
-  const state = { revision:1, domains:{ LEDGER:{ records:{} }, RIDE:{ records:{} } } };
-  const runtime = {
-    async expense(input) {
-      state.revision = 2;
-      state.domains.LEDGER.records[input.ledgerTransactionId] = { record:{
-        recordId:input.ledgerTransactionId,
-        type:'TRANSACTION',
-        direction:'OUT',
-        subtype:'EXPENSE',
-        title:input.title,
-        amountSatang:input.amountSatang,
-      } };
-    },
-    async readState(){ return structuredClone(state); },
-    project(){ return { ledgerBalanceSatang:35000, ride:{ activeRound:null } }; },
-  };
   const executed = await executePreparedMasterIntent(runtime, prepared);
   assert.equal(executed.status, 'SUCCESS');
   assert.equal(executed.readback.title, 'รายจ่ายทั่วไป');
+  assert.equal(executed.readback.subtype, 'EXPENSE');
+
+  const state = await runtime.readState();
+  const record = state.domains.LEDGER.records[prepared.input.ledgerTransactionId]?.record;
+  assert.equal(record?.detail, 'OUT:EXPENSE');
+  assert.equal(Object.hasOwn(record || {}, 'subtype'), false);
 
   const income = gateIntentProposal({
     action:'CREATE', object:'OTHER_INCOME',
