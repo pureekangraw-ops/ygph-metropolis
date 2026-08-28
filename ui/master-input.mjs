@@ -255,13 +255,21 @@ async function answerLocalQuestion(routed) {
     const prepared = prepareMasterExecution(routed.intent, { projection:runtime.project() });
     return executePreparedMasterIntent(runtime, prepared);
   });
-  const { record, matchCount, steps } = result.readback;
+  const { found, record, matchCount, steps, selectionReason } = result.readback;
   const counts = steps.map(step => step.count).join(' → ');
+  if (selectionReason === 'LATEST_RECORD_TIME_UNKNOWN') {
+    setState('SUCCESS', {
+      title:'พบรายการที่บันทึกแล้ว',
+      copy:`พบ ${matchCount} รายการตรงกัน แต่ระบุรายการล่าสุดไม่ได้ เพราะเวลาบันทึกไม่ครบหรือไม่ถูกต้อง`,
+      meta:`กรองตามกล่อง ${counts} · ยังไม่เลือกรายการใด · ไม่มีการเขียนข้อมูล`,
+    });
+    return;
+  }
   const recordedAt = record?.createdAt && Number.isFinite(Date.parse(record.createdAt))
     ? new Intl.DateTimeFormat('th-TH', { dateStyle:'short', timeStyle:'short', timeZone:'Asia/Bangkok' }).format(new Date(record.createdAt))
     : 'ไม่ระบุเวลาบันทึก';
   setState('SUCCESS', {
-    title:record ? 'พบรายการที่บันทึกแล้ว' : 'ไม่พบรายการตรงกัน',
+    title:found ? 'พบรายการที่บันทึกแล้ว' : 'ไม่พบรายการตรงกัน',
     copy:record ? `${record.title} · ${formatSatang(record.amountSatang)} บาท · บันทึก ${recordedAt}` : 'ไม่พบรายการที่ตรงกับกล่องข้อมูลของคำถามนี้',
     meta:`กรองตามกล่อง ${counts}${record ? ` · ${record.recordId}` : ''}${matchCount > 1 ? ' · เลือกรายการล่าสุดที่ตรงกัน' : ''} · ไม่มีการเขียนข้อมูล`,
   });

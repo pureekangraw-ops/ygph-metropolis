@@ -193,11 +193,14 @@ function expenseQueryReadback(state, check) {
     steps.push({ role:'TIME', value:check.businessDate, count:candidates.length });
   }
   // Latest means recording time, not businessDate or array/insertion order.
-  const recordedAt = found => Number.isFinite(Date.parse(found.createdAt)) ? Date.parse(found.createdAt) : -Infinity;
-  candidates.sort((a, b) => (recordedAt(b) - recordedAt(a)) || String(a.recordId).localeCompare(String(b.recordId)));
-  const found = candidates[0];
+  const latestUnknown = candidates.length > 1 && candidates.some(found => !Number.isFinite(Date.parse(found.createdAt)));
+  if (!latestUnknown) {
+    candidates.sort((a, b) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || String(a.recordId).localeCompare(String(b.recordId)));
+  }
+  const found = latestUnknown ? null : candidates[0];
   return {
-    type:'EXPENSE_RECORDED', found:Boolean(found), matchCount:candidates.length, steps,
+    type:'EXPENSE_RECORDED', found:candidates.length > 0, matchCount:candidates.length, steps,
+    selectionReason:latestUnknown ? 'LATEST_RECORD_TIME_UNKNOWN' : null,
     revision:state.revision,
     record:found ? {
       recordId:found.recordId, title:found.title, amountSatang:found.amountSatang,
