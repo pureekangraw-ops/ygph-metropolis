@@ -1,7 +1,7 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfield/master-input-router.mjs';
 import { routeMasterInputText } from '../lighthouse/master-input-route.mjs';
-import { createRecoverySession, applySessionOwnerInput } from '../lighthouse/master-input-recovery-session.mjs';
+import { createRecoverySession, applySessionOwnerInput, rejoinRecoverySession } from '../lighthouse/master-input-recovery-session.mjs';
 import { createPathKernel } from '../lighthouse/path-kernel.mjs';
 import { createExpenseCapability } from '../lighthouse/capabilities/expense.mjs';
 
@@ -223,14 +223,7 @@ function handlePendingRecoveryInput(text) {
     activeRecoverySession = null;
     return recoveryInput;
   }
-  if (recoveryInput.status === 'APPLIED') {
-    setState('ASK', {
-      title:'รับการแก้ไขแล้ว',
-      copy:'แก้จุดที่เลือกไว้ใน recovery session แล้ว',
-      meta:'C2 ยังไม่ประกอบกลับหรือส่งทำงานอัตโนมัติ · ไม่มีการเขียนข้อมูล',
-    });
-    return recoveryInput;
-  }
+  if (recoveryInput.status === 'APPLIED') return recoveryInput;
   if (recoveryInput.status === 'SELECTION_REQUIRED') {
     setState('ASK', {
       title:'มีหลายจุดให้แก้',
@@ -255,7 +248,49 @@ async function interpretCurrentText() {
   currentIntent = null;
 
   const recoveryInput = handlePendingRecoveryInput(text);
-  if (recoveryInput.status === 'APPLIED' || recoveryInput.status === 'SELECTION_REQUIRED' || recoveryInput.status === 'NO_MATCH') return;
+  if (recoveryInput.status === 'SELECTION_REQUIRED' || recoveryInput.status === 'NO_MATCH') return;
+  if (recoveryInput.status === 'APPLIED') {
+    setState('INTERPRETING', { title:'กำลังประกอบผลแก้ไข', copy:'ยังไม่มีการเขียนข้อมูล' });
+    try {
+      const rejoined = await rejoinRecoverySession(recoveryInput.state, {
+        receivedAt:new Date().toISOString(),
+        timeZone:'Asia/Bangkok',
+        requestIdFactory:localRequestId,
+      });
+      text = rejoined.text;
+      $('masterInputText').value = text;
+
+      if (rejoined.routed.route === 'LOCAL_PATH') {
+        activeRecoverySession = null;
+        preparedPathRequest = rejoined.routed.prepared.request;
+        currentIntent = localIntentFromRequest(preparedPathRequest);
+        setState('READY', {
+          title:'ระบบเข้าใจว่า',
+          copy:previewText(currentIntent),
+          meta:'Recovery ประกอบกลับเข้า Local Intent/PATH แล้ว · ยังไม่มีการเขียนข้อมูล',
+          execute:true,
+        });
+        return;
+      }
+
+      if (rejoined.routed.status === 'RECOVERY_REQUIRED') {
+        activeRecoverySession = recoveryInput.state;
+        setState('ASK', {
+          title:'แก้แล้วแต่ยังมีจุดไม่ชัด',
+          copy:'ค่าที่แก้ถูกใส่กลับบ้านเดิมแล้ว แต่ข้อความยังต้องกู้เฉพาะจุดต่อ',
+          meta:'ยังถือ input เดิมและยังไม่มีการเขียนข้อมูล',
+        });
+        return;
+      }
+
+      activeRecoverySession = null;
+      showLocalStop(rejoined.routed);
+      return;
+    } catch (error) {
+      setState('ERROR', { title:'ประกอบผลแก้ไขไม่สำเร็จ', copy:friendlyError(error), meta:'ไม่มีการเขียนข้อมูลจากคำสั่งนี้' });
+      return;
+    }
+  }
   if (recoveryInput.status === 'REPLACE') {
     text = recoveryInput.payload;
     $('masterInputText').value = text;

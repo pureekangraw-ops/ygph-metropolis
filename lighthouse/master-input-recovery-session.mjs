@@ -5,6 +5,7 @@ import {
   nextRecoveryCycle,
   runLocalRecovery,
 } from './intent-recovery.mjs';
+import { prepareIntentPath } from './intent-path-adapter.mjs';
 
 function cloneSession(session) {
   return {
@@ -40,6 +41,50 @@ function recoverableSlotIds(session) {
   return Object.values(session?.slots ?? {})
     .filter(slot => recoverableStates.has(slot?.state))
     .map(slot => slot.slotId);
+}
+
+function scalarReplacement(slot) {
+  if (!slot || !['CORRECTED', 'RESOLVED'].includes(slot.state)) return null;
+  if (typeof slot.value === 'string' || typeof slot.value === 'number') return String(slot.value);
+  return null;
+}
+
+function replacementSpans(session) {
+  const rawText = session?.rawText;
+  if (typeof rawText !== 'string') throw new TypeError('MASTER_INPUT_RECOVERY_RAW_TEXT_REQUIRED');
+
+  const replacements = [];
+  for (const slot of Object.values(session?.slots ?? {})) {
+    const replacement = scalarReplacement(slot);
+    if (replacement == null) continue;
+    const start = slot?.rawSpan?.start;
+    const end = slot?.rawSpan?.end;
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > rawText.length) {
+      throw new TypeError('MASTER_INPUT_RECOVERY_SPAN_INVALID');
+    }
+    replacements.push({ start, end, replacement, slotId:slot.slotId });
+  }
+
+  replacements.sort((left, right) => right.start - left.start || right.end - left.end);
+  let lastStart = rawText.length;
+  for (const item of replacements) {
+    if (item.end > lastStart) throw new TypeError('MASTER_INPUT_RECOVERY_SPAN_OVERLAP');
+    lastStart = item.start;
+  }
+  return replacements;
+}
+
+function localRoute(prepared) {
+  if (prepared.status === 'READY') {
+    return Object.freeze({ route:'LOCAL_PATH', status:'READY', reason:null, prepared, intent:null });
+  }
+  return Object.freeze({
+    route:'STOP',
+    status:prepared.status,
+    reason:prepared.reason ?? null,
+    prepared,
+    intent:null,
+  });
 }
 
 export function createRecoverySession(routed, { inputId } = {}) {
@@ -125,4 +170,25 @@ export function advanceSessionCycle(session, { unresolved = false } = {}) {
     state.status = next.status;
   }
   return { ...next, state };
+}
+
+export function reassembleRecoverySession(session) {
+  if (typeof session?.inputId !== 'string' || !session.inputId.trim()) {
+    throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
+  }
+  const originalRawText = session.rawText;
+  let text = originalRawText;
+  for (const item of replacementSpans(session)) {
+    text = `${text.slice(0, item.start)}${item.replacement}${text.slice(item.end)}`;
+  }
+  return Object.freeze({ inputId:session.inputId, originalRawText, text });
+}
+
+export async function rejoinRecoverySession(session, options = {}) {
+  const reassembled = reassembleRecoverySession(session);
+  const prepared = prepareIntentPath(reassembled.text, options);
+  return Object.freeze({
+    ...reassembled,
+    routed:localRoute(prepared),
+  });
 }
