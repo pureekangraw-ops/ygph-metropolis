@@ -23,6 +23,19 @@ function requestId(factory) {
   return factory();
 }
 
+function queryMeaningRepresented(rawText, group, temporal) {
+  // Remove only owned spans. Any unrepresented unit/time/context must survive
+  // this check instead of being silently discarded to produce a search match.
+  let remainder = rawText.slice(group.rawSpan.start, group.rawSpan.end);
+  for (const item of [...group.slots].sort((a, b) => b.rawSpan.start - a.rawSpan.start)) {
+    const start = item.rawSpan.start - group.rawSpan.start;
+    const end = item.rawSpan.end - group.rawSpan.start;
+    remainder = remainder.slice(0, start) + ' '.repeat(end - start) + remainder.slice(end);
+  }
+  if (temporal?.rawText) remainder = remainder.replace(temporal.rawText, '');
+  return /^(?:ลง)?\s*(?:บาท)?\s*(?:แล้ว)?\s*(?:ครับ|ค่ะ|คะ|นะครับ|นะคะ)?\s*[?？]*\s*$/u.test(remainder.trim());
+}
+
 export function prepareIntentPath(rawText, options = {}) {
   if (typeof rawText !== 'string') throw new TypeError('INTENT_PATH_TEXT_REQUIRED');
 
@@ -90,6 +103,18 @@ export function prepareIntentPath(rawText, options = {}) {
   }
 
   const businessDate = temporal?.businessDate ?? null;
+  if (group.intent === 'QUERY') {
+    if (!queryMeaningRepresented(rawText, group, temporal)) {
+      return stopped('UNSUPPORTED', 'QUERY_CONTEXT_NOT_REPRESENTED', { parsed, group, condition:null, temporal });
+    }
+    return frozenResult({
+      status:'QUERY', reason:null, request:null, parsed, group, condition:null, temporal,
+      intent:Object.freeze({
+        version:'1', status:'READY', action:'QUERY', object:'EXPENSE',
+        fields:Object.freeze({ title, amountSatang, ...(businessDate ? { businessDate } : {}) }),
+      }),
+    });
+  }
   const request = validatePathRequest({
     version:'1',
     source:'PATTERN',

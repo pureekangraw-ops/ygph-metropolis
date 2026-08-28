@@ -106,6 +106,7 @@ function createShell() {
       <button id="masterInputInterpret" class="primary-action" type="submit">ตีความ</button>
     </form>
     <div id="masterInputResult" class="master-input-result" aria-live="polite" hidden>
+      <p id="masterInputQuestionBox" hidden>คำถาม · <mark id="masterInputQuestion"></mark></p>
       <strong id="masterInputTitle"></strong>
       <p id="masterInputCopy"></p>
       <p id="masterInputMeta" class="muted"></p>
@@ -240,12 +241,39 @@ function handlePendingRecoveryInput(text) {
   return recoveryInput;
 }
 
+function markQuestion(routed) {
+  const question = routed?.prepared?.parsed?.groups?.find(group => group.question)?.question;
+  $('masterInputQuestionBox').hidden = !question;
+  $('masterInputQuestion').textContent = question?.rawText || '';
+}
+
+async function answerLocalQuestion(routed) {
+  markQuestion(routed);
+  currentIntent = routed.intent;
+  setState('INTERPRETING', { title:'กำลังค้นรายการ', copy:previewText(currentIntent), meta:'คำถาม · อ่านข้อมูลที่เก็บไว้เท่านั้น' });
+  const result = await withMasterRuntime(async runtime => {
+    const prepared = prepareMasterExecution(routed.intent, { projection:runtime.project() });
+    return executePreparedMasterIntent(runtime, prepared);
+  });
+  const { record, matchCount, steps } = result.readback;
+  const counts = steps.map(step => step.count).join(' → ');
+  const recordedAt = record?.createdAt && Number.isFinite(Date.parse(record.createdAt))
+    ? new Intl.DateTimeFormat('th-TH', { dateStyle:'short', timeStyle:'short', timeZone:'Asia/Bangkok' }).format(new Date(record.createdAt))
+    : 'ไม่ระบุเวลาบันทึก';
+  setState('SUCCESS', {
+    title:record ? 'พบรายการที่บันทึกแล้ว' : 'ไม่พบรายการตรงกัน',
+    copy:record ? `${record.title} · ${formatSatang(record.amountSatang)} บาท · บันทึก ${recordedAt}` : 'ไม่พบรายการที่ตรงกับกล่องข้อมูลของคำถามนี้',
+    meta:`กรองตามกล่อง ${counts}${record ? ` · ${record.recordId}` : ''}${matchCount > 1 ? ' · เลือกรายการล่าสุดที่ตรงกัน' : ''} · ไม่มีการเขียนข้อมูล`,
+  });
+}
+
 async function interpretCurrentText() {
   let text = $('masterInputText').value.trim();
   if (!text) return;
   preparedExecution = null;
   preparedPathRequest = null;
   currentIntent = null;
+  markQuestion(null);
 
   const recoveryInput = handlePendingRecoveryInput(text);
   if (recoveryInput.status === 'SELECTION_REQUIRED' || recoveryInput.status === 'NO_MATCH') return;
@@ -259,6 +287,13 @@ async function interpretCurrentText() {
       });
       text = rejoined.text;
       $('masterInputText').value = text;
+      markQuestion(rejoined.routed);
+
+      if (rejoined.routed.route === 'LOCAL_QUERY') {
+        await answerLocalQuestion(rejoined.routed);
+        activeRecoverySession = null;
+        return;
+      }
 
       if (rejoined.routed.route === 'LOCAL_PATH') {
         activeRecoverySession = null;
@@ -305,6 +340,12 @@ async function interpretCurrentText() {
       requestIdFactory:localRequestId,
       interpretFallback:requestInterpretation,
     });
+    markQuestion(routed);
+
+    if (routed.route === 'LOCAL_QUERY') {
+      await answerLocalQuestion(routed);
+      return;
+    }
 
     if (routed.route === 'STOP') {
       showLocalStop(routed);

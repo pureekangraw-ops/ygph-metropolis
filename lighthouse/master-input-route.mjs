@@ -39,6 +39,11 @@ export async function routeMasterInputText(rawText, options = {}) {
     requestIdFactory:options.requestIdFactory,
     ...(options.interpretedAt != null ? { interpretedAt:options.interpretedAt } : {}),
   });
+  const hasQuestion = prepared.parsed?.groups?.some(group => group.intent === 'QUERY');
+
+  if (prepared.status === 'QUERY') {
+    return freeze({ route:'LOCAL_QUERY', prepared, intent:prepared.intent, status:'READY', reason:null });
+  }
 
   if (prepared.status === 'READY') {
     return freeze({ route:'LOCAL_PATH', prepared, intent:null, status:'READY', reason:null });
@@ -49,14 +54,14 @@ export async function routeMasterInputText(rawText, options = {}) {
   }
 
   if (prepared.status === 'UNSUPPORTED') {
-    if (LOCAL_STOP_REASONS.has(prepared.reason)) {
+    if (hasQuestion || LOCAL_STOP_REASONS.has(prepared.reason)) {
       return freeze({ route:'STOP', prepared, intent:null, status:prepared.status, reason:prepared.reason });
     }
     return providerRoute(rawText, options.interpretFallback);
   }
 
   if (prepared.status === 'RECOVERY_REQUIRED') {
-    if (localDirectClaim(prepared)) {
+    if (hasQuestion || localDirectClaim(prepared)) {
       return freeze({ route:'STOP', prepared, intent:null, status:'RECOVERY_REQUIRED', reason:prepared.reason });
     }
     return providerRoute(rawText, options.interpretFallback);

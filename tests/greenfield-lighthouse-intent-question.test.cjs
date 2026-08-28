@@ -158,3 +158,14 @@ test('P1Q09 a represented relative date narrows matches before choosing latest',
     assert.deepEqual(result.readback.steps.map(step => step.count), [2,2,2,1]);
   } finally { env.cleanup(); }
 });
+
+test('P1Q10 a date query includes ordinary records without businessDate using their Bangkok recording day', async () => {
+  const env = await setupProductionUi('Q10', { now:()=> '2026-08-26T18:00:00.000Z' });
+  try {
+    await expense(env, 'ordinary-date', 'ข้าว', 6500);
+    const before = await env.runtime.readState();
+    const result = await searchThroughRuntime(env, 'ลงข้าว65 เมื่อวานหรือยัง');
+    assert.equal(result.readback.record?.recordId, 'TX-Q-ordinary-date');
+    assert.deepEqual(await env.runtime.readState(), before);
+  } finally { env.cleanup(); }
+});

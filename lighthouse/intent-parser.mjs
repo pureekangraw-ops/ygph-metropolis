@@ -138,13 +138,21 @@ function targetRange(rawText, workStart, workEnd, numbers) {
 
 function parseGroup(rawText, range, groupIndex) {
   const groupId = `G${groupIndex + 1}`;
+  const questionMatch = /หรือยัง/u.exec(rawText.slice(range.start, range.end));
+  const question = questionMatch ? Object.freeze({
+    rawText:questionMatch[0],
+    rawSpan:Object.freeze({
+      start:range.start + questionMatch.index,
+      end:range.start + questionMatch.index + questionMatch[0].length,
+    }),
+  }) : null;
   const condition = extractConditionPrefix(rawText, {
     start:range.start,
     end:range.end,
     groupId,
   });
   const commandStart = condition?.rawSpan?.end ?? range.start;
-  const command = removeLeadingCommandWords(rawText, commandStart, range.end);
+  const command = removeLeadingCommandWords(rawText, commandStart, question?.rawSpan.start ?? range.end);
   const numbers = numericCandidates(rawText, command.start, command.end);
   const target = targetRange(rawText, command.start, command.end, numbers);
   const slots = [];
@@ -193,6 +201,10 @@ function parseGroup(rawText, range, groupIndex) {
   }
 
   if (numbers.length === 0) needsRecovery = true;
+  if (question) {
+    slots.push(makeSlot(groupId, slotIndex++, 'QUESTION', rawText,
+      question.rawSpan.start, question.rawSpan.end, 'QUERY', 'RESOLVED'));
+  }
   return {
     needsRecovery,
     group:Object.freeze({
@@ -201,6 +213,8 @@ function parseGroup(rawText, range, groupIndex) {
       rawText:rawText.slice(range.start, range.end),
       connectorBefore:range.connectorBefore ?? null,
       prohibited:command.prohibited,
+      intent:question ? 'QUERY' : 'COMMAND',
+      question,
       condition,
       slots:Object.freeze(slots),
     }),

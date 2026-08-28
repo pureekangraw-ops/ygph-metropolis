@@ -44,6 +44,8 @@ function recoverableSlotIds(session) {
 }
 
 function scalarReplacement(slot) {
+  // QUESTION stores the interpretation mode, not replacement text.
+  if (slot?.role === 'QUESTION') return null;
   if (!slot || !['CORRECTED', 'RESOLVED'].includes(slot.state)) return null;
   if (typeof slot.value === 'string' || typeof slot.value === 'number') return String(slot.value);
   return null;
@@ -75,6 +77,9 @@ function replacementSpans(session) {
 }
 
 function localRoute(prepared) {
+  if (prepared.status === 'QUERY') {
+    return Object.freeze({ route:'LOCAL_QUERY', status:'READY', reason:null, prepared, intent:prepared.intent });
+  }
   if (prepared.status === 'READY') {
     return Object.freeze({ route:'LOCAL_PATH', status:'READY', reason:null, prepared, intent:null });
   }
