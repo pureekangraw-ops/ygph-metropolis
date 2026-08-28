@@ -91,12 +91,21 @@ function record(state, domain, recordId) {
   return state?.domains?.[domain]?.records?.[recordId]?.record || null;
 }
 
+function ledgerSubtype(found) {
+  const explicit = String(found?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(found?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 function verifyReadback(state, projection, prepared) {
   const check = prepared.verify;
   if (check.type === 'LEDGER_TRANSACTION') {
     const found = record(state, 'LEDGER', check.recordId);
+    const subtype = ledgerSubtype(found);
     const titleMismatch = Object.hasOwn(check, 'title') && found?.title !== check.title;
-    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || String(found.subtype || '') !== check.subtype || titleMismatch) {
+    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || subtype !== check.subtype || titleMismatch) {
       throw new Error('MASTER_INPUT_READBACK_MISMATCH');
     }
     return {
@@ -104,7 +113,7 @@ function verifyReadback(state, projection, prepared) {
       direction:found.direction,
       title:found.title ?? null,
       amountSatang:Number(found.amountSatang),
-      subtype:found.subtype,
+      subtype,
       revision:state?.revision ?? null,
       ledgerBalanceSatang:Number(projection?.ledgerBalanceSatang ?? 0),
     };
