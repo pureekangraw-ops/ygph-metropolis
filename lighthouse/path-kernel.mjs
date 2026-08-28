@@ -1,0 +1,72 @@
+import { validatePathRequest } from './path-contract.mjs';
+
+function sourceNeutralRequest(validated) {
+  return Object.freeze({
+    version:validated.version,
+    action:validated.action,
+    object:validated.object,
+    fields:validated.fields,
+    requiredResult:validated.requiredResult,
+  });
+}
+
+function validCapability(capability) {
+  return capability &&
+    typeof capability.id === 'string' &&
+    capability.id.trim() &&
+    typeof capability.matches === 'function' &&
+    typeof capability.execute === 'function';
+}
+
+export function createPathKernel({ capabilities = [], gemProcessor = null } = {}) {
+  if (!Array.isArray(capabilities)) throw new Error('PATH_CAPABILITIES_INVALID');
+  const registry = capabilities.map(capability => {
+    if (!validCapability(capability)) throw new Error('PATH_CAPABILITY_INVALID');
+    return capability;
+  });
+  if (gemProcessor !== null && typeof gemProcessor !== 'function') throw new Error('PATH_GEM_PROCESSOR_INVALID');
+
+  return Object.freeze({
+    async run(input, { runtime } = {}) {
+      const validated = validatePathRequest(input);
+      const source = validated.source;
+      const executionRequest = sourceNeutralRequest(validated);
+
+      const capability = registry.find(candidate => candidate.matches(executionRequest));
+      if (!capability) {
+        return Object.freeze({ status:'BLOCKED', route:null, source, reason:'NO_LEGAL_PATH' });
+      }
+
+      let evidence;
+      try {
+        evidence = await capability.execute({ request:executionRequest, runtime });
+      } catch (error) {
+        return Object.freeze({
+          status:'BLOCKED',
+          route:'DIRECT',
+          capabilityId:capability.id,
+          source,
+          reason:String(error?.message || error || 'CAPABILITY_EXECUTION_FAILED'),
+        });
+      }
+
+      if (evidence?.evidenceStatus === 'PROVEN') {
+        return Object.freeze({
+          status:'COMPLETE',
+          route:'DIRECT',
+          capabilityId:capability.id,
+          source,
+          readback:evidence.readback,
+        });
+      }
+
+      return Object.freeze({
+        status:'VERIFY',
+        route:'DIRECT',
+        capabilityId:capability.id,
+        source,
+        reason:evidence?.reason || 'CAPABILITY_EVIDENCE_UNPROVEN',
+      });
+    },
+  });
+}
