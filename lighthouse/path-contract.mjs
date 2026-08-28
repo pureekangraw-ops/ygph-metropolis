@@ -1,7 +1,15 @@
 const SOURCES = new Set(['PATTERN', 'AI', 'MANUAL', 'API', 'AUTOMATION']);
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
 
 function plainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeRequestId(value) {
+  if (typeof value !== 'string') throw new Error('PATH_INVALID_REQUEST_ID');
+  const output = value.trim();
+  if (!REQUEST_ID_PATTERN.test(output)) throw new Error('PATH_INVALID_REQUEST_ID');
+  return output;
 }
 
 function normalizeTitle(value) {
@@ -28,6 +36,7 @@ export function validatePathRequest(request) {
   if (!plainObject(request)) throw new Error('PATH_INVALID_REQUEST');
   if (request.version !== '1') throw new Error('PATH_UNSUPPORTED_VERSION');
   if (!SOURCES.has(request.source)) throw new Error('PATH_INVALID_SOURCE');
+  const requestId = normalizeRequestId(request.requestId);
   if (request.action !== 'CREATE') throw new Error('PATH_UNSUPPORTED_ACTION');
   if (request.object !== 'EXPENSE') throw new Error('PATH_UNSUPPORTED_OBJECT');
   if (!plainObject(request.fields)) throw new Error('PATH_INVALID_FIELDS');
@@ -52,6 +61,7 @@ export function validatePathRequest(request) {
   return deepFreeze({
     version:'1',
     source:request.source,
+    requestId,
     action:'CREATE',
     object:'EXPENSE',
     fields:{ title, amountSatang },
