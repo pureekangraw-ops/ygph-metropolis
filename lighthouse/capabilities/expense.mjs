@@ -1,3 +1,5 @@
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
+
 function expenseRequiredResult(request) {
   const effect = request?.requiredResult?.effect;
   return request?.action === 'CREATE' &&
@@ -9,10 +11,18 @@ function expenseRequiredResult(request) {
     effect?.amountSatang === request?.fields?.amountSatang;
 }
 
-function nextId(idFactory, prefix) {
-  const value = idFactory(prefix);
-  if (typeof value !== 'string' || !value.trim()) throw new Error('EXPENSE_CAPABILITY_INVALID_ID');
-  return value.trim();
+function operationIds(requestId) {
+  if (typeof requestId !== 'string' || !REQUEST_ID_PATTERN.test(requestId)) {
+    throw new Error('EXPENSE_CAPABILITY_INVALID_REQUEST_ID');
+  }
+  return {
+    workflowId:`WF-LH-${requestId}`,
+    ledgerTransactionId:`TX-LH-${requestId}`,
+  };
+}
+
+function duplicateError(error) {
+  return String(error?.message || error || '').startsWith('DUPLICATE_COMMAND:');
 }
 
 function ledgerRecord(state, recordId) {
@@ -27,9 +37,7 @@ function ledgerSubtype(record) {
   return separator >= 0 ? detail.slice(separator + 1) : '';
 }
 
-export function createExpenseCapability({ idFactory } = {}) {
-  if (typeof idFactory !== 'function') throw new Error('EXPENSE_CAPABILITY_ID_FACTORY_REQUIRED');
-
+export function createExpenseCapability() {
   return Object.freeze({
     id:'EXPENSE_CREATE',
 
@@ -43,16 +51,25 @@ export function createExpenseCapability({ idFactory } = {}) {
         throw new Error('EXPENSE_CAPABILITY_RUNTIME_INVALID');
       }
 
-      const workflowId = nextId(idFactory, 'WF-LH');
-      const ledgerTransactionId = nextId(idFactory, 'TX-LH');
-      await runtime.expense({
-        workflowId,
-        ledgerTransactionId,
-        title:request.fields.title,
-        amountSatang:request.fields.amountSatang,
-      });
+      const { workflowId, ledgerTransactionId } = operationIds(request.requestId);
+      try {
+        await runtime.expense({
+          workflowId,
+          ledgerTransactionId,
+          title:request.fields.title,
+          amountSatang:request.fields.amountSatang,
+        });
+      } catch (error) {
+        if (!duplicateError(error)) throw error;
+      }
 
-      const state = await runtime.readState();
+      let state;
+      try {
+        state = await runtime.readState();
+      } catch {
+        return Object.freeze({ evidenceStatus:'UNVERIFIED', reason:'LEDGER_READBACK_UNAVAILABLE' });
+      }
+
       const found = ledgerRecord(state, ledgerTransactionId);
       const subtype = ledgerSubtype(found);
       if (
