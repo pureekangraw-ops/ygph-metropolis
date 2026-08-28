@@ -169,3 +169,45 @@ test('P1Q10 a date query includes ordinary records without businessDate using th
     assert.deepEqual(await env.runtime.readState(), before);
   } finally { env.cleanup(); }
 });
+
+test('P1Q11 provider-owned questions retain the existing validated query route and marker', async () => {
+  const { routeMasterInputText } = await import('../lighthouse/master-input-route.mjs');
+  const { gateIntentProposal } = await import('../master-input/intent-contract.mjs');
+  for (const text of ['วันนี้วิ่งถึง1000หรือยัง', 'วันนี้วิ่งถึงเป้าหรือยัง']) {
+    let calls = 0;
+    const routed = await routeMasterInputText(text, {
+      receivedAt:'2026-08-28T02:00:00.000Z', timeZone:'Asia/Bangkok',
+      interpretFallback:async raw => {
+        calls += 1;
+        assert.equal(raw, text);
+        return gateIntentProposal({ action:'QUERY', object:'RIDE_TODAY_SUMMARY',
+          fields:{ title:null, amountBaht:null, paymentMode:null, note:null } });
+      },
+    });
+    assert.equal(routed.route, 'PROVIDER');
+    assert.equal(routed.intent.status, 'READY');
+    assert.equal(routed.intent.action, 'QUERY');
+    assert.equal(routed.intent.object, 'RIDE_TODAY_SUMMARY');
+    assert.equal(routed.prepared.parsed.groups[0].question.rawText, 'หรือยัง');
+    assert.equal(calls, 1);
+  }
+});
+
+test('P1Q12 a provider cannot turn a marked question into an executable create', async () => {
+  const { routeMasterInputText } = await import('../lighthouse/master-input-route.mjs');
+  const { gateIntentProposal } = await import('../master-input/intent-contract.mjs');
+  let calls = 0;
+  const routed = await routeMasterInputText('ลงน้ำมัน500หรือยัง', {
+    receivedAt:'2026-08-28T02:00:00.000Z', timeZone:'Asia/Bangkok',
+    interpretFallback:async () => {
+      calls += 1;
+      return gateIntentProposal({ action:'CREATE', object:'EXPENSE',
+        fields:{ title:'น้ำมัน', amountBaht:500, paymentMode:null, note:null } });
+    },
+  });
+  assert.equal(calls, 1, 'preserve existing provider routing for an unowned target');
+  assert.equal(routed.route, 'STOP');
+  assert.equal(routed.reason, 'QUERY_PROVIDER_ACTION_MISMATCH');
+  assert.equal(routed.intent, null);
+  assert.equal(routed.prepared.request, null);
+});
