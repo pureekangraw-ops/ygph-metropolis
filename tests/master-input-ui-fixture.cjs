@@ -198,4 +198,3 @@ async function setupProductionUi(caseId, options = {}) {
 }
 
 module.exports = { setupProductionUi, transactionRecords };
-
