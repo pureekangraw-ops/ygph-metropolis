@@ -21,7 +21,7 @@ function ledgerState({ title = 'ข้าว', amountSatang = 6500 } = {}) {
         records:{
           'TX-LH-1':{
             record:{
-              recordId:'TX-LH-1', type:'TRANSACTION', direction:'OUT', subtype:'EXPENSE', title, amountSatang,
+              recordId:'TX-LH-1', type:'TRANSACTION', direction:'OUT', detail:'OUT:EXPENSE', title, amountSatang,
             },
           },
         },
@@ -30,7 +30,7 @@ function ledgerState({ title = 'ข้าว', amountSatang = 6500 } = {}) {
   };
 }
 
-test('expense capability maps normalized request only through runtime.expense and proves exact durable readback', async () => {
+test('expense capability maps normalized request only through runtime.expense and proves canonical durable Ledger readback', async () => {
   const { createExpenseCapability } = await import('../lighthouse/capabilities/expense.mjs');
   const ids = ['WF-LH-1', 'TX-LH-1'];
   const calls = [];
