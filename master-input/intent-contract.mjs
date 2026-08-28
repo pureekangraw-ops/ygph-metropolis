@@ -69,7 +69,10 @@ export function gateIntentProposal(proposal) {
 
   if (action === 'CREATE') {
     if (!CREATE_ALLOWLIST.has(object)) return unsupported(action, object, fields, { question:'รายการนี้ยังไม่เปิดให้สร้างผ่าน Master Input v1' });
-    if (object === 'EXPENSE' || object === 'OTHER_INCOME') {
+    if (object === 'EXPENSE') {
+      if (fields.amountSatang == null) return ask(action, object, fields, ['amountSatang'], 'บอกจำนวนเงินรายจ่าย');
+    }
+    if (object === 'OTHER_INCOME') {
       const missing = [];
       if (!fields.title) missing.push('title');
       if (fields.amountSatang == null) missing.push('amountSatang');
