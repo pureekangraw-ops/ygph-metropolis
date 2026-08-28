@@ -24,10 +24,13 @@ function localDirectClaim(prepared) {
   return prepared.parsed.groups.some(group => DIRECT_EXPENSE_TERMS.has(resolvedTarget(group)));
 }
 
-async function providerRoute(rawText, interpretFallback) {
+async function providerRoute(rawText, interpretFallback, questionPrepared = null) {
   if (typeof interpretFallback !== 'function') throw new TypeError('MASTER_INPUT_INTERPRET_FALLBACK_REQUIRED');
   const intent = await interpretFallback(rawText);
-  return freeze({ route:'PROVIDER', intent, prepared:null, status:intent?.status ?? null, reason:null });
+  if (questionPrepared && intent?.status === 'READY' && intent.action !== 'QUERY') {
+    return freeze({ route:'STOP', intent:null, prepared:questionPrepared, status:'UNSUPPORTED', reason:'QUERY_PROVIDER_ACTION_MISMATCH' });
+  }
+  return freeze({ route:'PROVIDER', intent, prepared:questionPrepared, status:intent?.status ?? null, reason:null });
 }
 
 export async function routeMasterInputText(rawText, options = {}) {
@@ -54,18 +57,18 @@ export async function routeMasterInputText(rawText, options = {}) {
   }
 
   if (prepared.status === 'UNSUPPORTED') {
-    if (hasQuestion || LOCAL_STOP_REASONS.has(prepared.reason)) {
+    if ((hasQuestion && localDirectClaim(prepared)) || LOCAL_STOP_REASONS.has(prepared.reason)) {
       return freeze({ route:'STOP', prepared, intent:null, status:prepared.status, reason:prepared.reason });
     }
-    return providerRoute(rawText, options.interpretFallback);
+    return providerRoute(rawText, options.interpretFallback, hasQuestion ? prepared : null);
   }
 
   if (prepared.status === 'RECOVERY_REQUIRED') {
-    if (hasQuestion || localDirectClaim(prepared)) {
+    if (localDirectClaim(prepared)) {
       return freeze({ route:'STOP', prepared, intent:null, status:'RECOVERY_REQUIRED', reason:prepared.reason });
     }
-    return providerRoute(rawText, options.interpretFallback);
+    return providerRoute(rawText, options.interpretFallback, hasQuestion ? prepared : null);
   }
 
-  return providerRoute(rawText, options.interpretFallback);
+  return providerRoute(rawText, options.interpretFallback, hasQuestion ? prepared : null);
 }
