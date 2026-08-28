@@ -54,3 +54,14 @@
 !/greenfield/runtime-session.mjs
 !/greenfield/workflow-invariants.mjs
 !/greenfield/workflow-runtime.mjs
+!/lighthouse/
+!/lighthouse/master-input-route.mjs
+!/lighthouse/intent-path-adapter.mjs
+!/lighthouse/intent-parser.mjs
+!/lighthouse/intent-number.mjs
+!/lighthouse/intent-condition.mjs
+!/lighthouse/intent-temporal.mjs
+!/lighthouse/path-contract.mjs
+!/lighthouse/pattern-input.mjs
+!/lighthouse/path-kernel.mjs
+!/lighthouse/capabilities/expense.mjs
