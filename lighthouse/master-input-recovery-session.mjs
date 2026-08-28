@@ -96,6 +96,16 @@ function refreshedRecoverySession(session, routed) {
   return refreshed;
 }
 
+function replaceRecoverySessionState(session, refreshed) {
+  session.inputId = refreshed.inputId;
+  session.rawText = refreshed.rawText;
+  session.originalRawText = refreshed.originalRawText;
+  session.cycle = refreshed.cycle;
+  session.status = refreshed.status;
+  session.slots = refreshed.slots;
+  return session;
+}
+
 export function createRecoverySession(routed, { inputId } = {}) {
   if (typeof inputId !== 'string' || !inputId.trim()) {
     throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
@@ -203,7 +213,7 @@ export async function rejoinRecoverySession(session, options = {}) {
   const prepared = prepareIntentPath(reassembled.text, options);
   const routed = localRoute(prepared);
   const recoverySession = routed.status === 'RECOVERY_REQUIRED'
-    ? refreshedRecoverySession(session, routed)
+    ? replaceRecoverySessionState(session, refreshedRecoverySession(session, routed))
     : null;
   return Object.freeze({
     ...reassembled,
