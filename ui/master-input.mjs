@@ -1,9 +1,14 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfield/master-input-router.mjs';
+import { routeMasterInputText } from '../lighthouse/master-input-route.mjs';
+import { createPathKernel } from '../lighthouse/path-kernel.mjs';
+import { createExpenseCapability } from '../lighthouse/capabilities/expense.mjs';
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','UNSUPPORTED','SUCCESS','ERROR']);
 const $ = id => document.getElementById(id);
+const localPathKernel = createPathKernel({ capabilities:[createExpenseCapability()] });
 let preparedExecution = null;
+let preparedPathRequest = null;
 let currentIntent = null;
 
 function installStyle() {
@@ -77,6 +82,7 @@ function friendlyError(error) {
     MASTER_INPUT_RIDE_ROUND_ACTIVE:'มีรอบวิ่งกำลังทำงานอยู่แล้ว',
     MASTER_INPUT_RUNTIME_LOCKED:'Runtime ของแอปยังไม่พร้อม กรุณาเข้าแอปใหม่',
     MASTER_INPUT_RESPONSE_INVALID:'คำตอบจากล่ามไม่ผ่านสัญญาระบบ',
+    MASTER_INPUT_PATH_NOT_PROVEN:'PATH ยังยืนยันผลจริงไม่ได้',
   };
   return map[code] || 'ดำเนินการไม่สำเร็จ';
 }
@@ -173,14 +179,60 @@ async function withMasterRuntime(operation) {
   }
 }
 
+function localRequestId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid ? `MI-${uuid}` : `MI-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function localIntentFromRequest(request) {
+  return Object.freeze({ action:'CREATE', object:'EXPENSE', fields:Object.freeze({ ...request.fields }) });
+}
+
+function showLocalStop(routed) {
+  if (routed.status === 'RECOVERY_REQUIRED') {
+    setState('ASK', { title:'ขอแก้เฉพาะจุด', copy:'ข้อความนี้ยังมีจุดที่ต้องกู้หรือระบุให้ชัดก่อนส่งทำงาน', meta:'ยังไม่มีการเขียนข้อมูล' });
+    return;
+  }
+  if (routed.status === 'REFERENCE') {
+    setState('UNSUPPORTED', { title:'เป็นข้อความอ้างอิง', copy:'ข้อความนี้ยังไม่ได้สั่งให้บันทึก', meta:'ไม่มีการเขียนข้อมูล' });
+    return;
+  }
+  if (routed.status === 'BLOCKED') {
+    setState('UNSUPPORTED', { title:'ไม่ส่งทำงาน', copy:'ตรวจพบคำห้าม จึงหยุดก่อน PATH และ Runtime', meta:'ไม่มีการเขียนข้อมูล' });
+    return;
+  }
+  setState('UNSUPPORTED', { title:'ยังไม่รองรับ', copy:'เข้าใจความหมายส่วนนี้แล้ว แต่ปลายทางยังทำตามเงื่อนไขนี้ไม่ได้', meta:'เก็บความหมายไว้และไม่มีการเขียนข้อมูล' });
+}
+
 async function interpretCurrentText() {
   const text = $('masterInputText').value.trim();
   if (!text) return;
   preparedExecution = null;
+  preparedPathRequest = null;
   currentIntent = null;
   setState('INTERPRETING', { title:'กำลังตีความ', copy:'ยังไม่มีการเขียนข้อมูล' });
   try {
-    const intent = await requestInterpretation(text);
+    const receivedAt = new Date().toISOString();
+    const routed = await routeMasterInputText(text, {
+      receivedAt,
+      timeZone:'Asia/Bangkok',
+      requestIdFactory:localRequestId,
+      interpretFallback:requestInterpretation,
+    });
+
+    if (routed.route === 'STOP') {
+      showLocalStop(routed);
+      return;
+    }
+
+    if (routed.route === 'LOCAL_PATH') {
+      preparedPathRequest = routed.prepared.request;
+      currentIntent = localIntentFromRequest(preparedPathRequest);
+      setState('READY', { title:'ระบบเข้าใจว่า', copy:previewText(currentIntent), meta:'Local Intent ผ่าน safety gate และเตรียม PATH แล้ว · ยังไม่มีการเขียนข้อมูล', execute:true });
+      return;
+    }
+
+    const intent = routed.intent;
     currentIntent = intent;
     if (intent.status === 'ASK') {
       setState('ASK', { title:'ขอข้อมูลเพิ่ม', copy:intent.question || 'ข้อมูลยังไม่พอสำหรับดำเนินการ', meta:'ยังไม่มีการเขียนข้อมูล' });
@@ -208,8 +260,33 @@ async function interpretCurrentText() {
 }
 
 async function executePrepared() {
-  if (!preparedExecution || !currentIntent) return;
+  if ((!preparedPathRequest && !preparedExecution) || !currentIntent) return;
   setState('INTERPRETING', { title:'กำลังดำเนินการ', copy:'Runtime กำลังตรวจและอ่านกลับผลจริง' });
+
+  if (preparedPathRequest) {
+    try {
+      const output = await withMasterRuntime(async runtime => {
+        const result = await localPathKernel.run(preparedPathRequest, { runtime });
+        if (result.status !== 'COMPLETE') throw new Error('MASTER_INPUT_PATH_NOT_PROVEN');
+        return { result, projection:runtime.project() };
+      });
+      const readback = {
+        ...output.result.readback,
+        ledgerBalanceSatang:Number(output.projection?.ledgerBalanceSatang ?? 0),
+      };
+      setState('SUCCESS', {
+        title:'บันทึกและอ่านกลับแล้ว',
+        copy:readbackText(currentIntent.object, readback),
+        meta:'ผลนี้ผ่าน PATH และมาจาก durable readback',
+      });
+      preparedPathRequest = null;
+      globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
+    } catch (error) {
+      setState('ERROR', { title:'PATH ยังยืนยันผลไม่ได้', copy:friendlyError(error), meta:'ยังเก็บ operation เดิมไว้ให้ retry โดยไม่สร้าง request ใหม่', execute:true });
+    }
+    return;
+  }
+
   try {
     const result = await withMasterRuntime(runtime => executePreparedMasterIntent(runtime, preparedExecution));
     const query = currentIntent.action === 'QUERY';
