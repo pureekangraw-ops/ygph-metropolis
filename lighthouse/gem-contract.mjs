@@ -18,16 +18,29 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
+function assertNoExecutionAuthority(value, seen = new Set()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return;
+  seen.add(value);
+
+  for (const [key, child] of Object.entries(value)) {
+    if (FORBIDDEN_AUTHORITY_KEYS.has(key)) throw new Error('GEM_EXECUTION_AUTHORITY_FORBIDDEN');
+    assertNoExecutionAuthority(child, seen);
+  }
+}
+
 export const GEM_MAX_SUPPORT_HOPS = 1;
 
 export function validateGemProcessResult(result) {
   if (!plainObject(result)) throw new Error('GEM_INVALID_RESULT');
 
   for (const key of Object.keys(result)) {
-    if (FORBIDDEN_AUTHORITY_KEYS.has(key)) throw new Error('GEM_EXECUTION_AUTHORITY_FORBIDDEN');
-    if (!ALLOWED_KEYS.has(key)) throw new Error('GEM_INVALID_RESULT_FIELD');
+    if (!ALLOWED_KEYS.has(key)) {
+      if (FORBIDDEN_AUTHORITY_KEYS.has(key)) throw new Error('GEM_EXECUTION_AUTHORITY_FORBIDDEN');
+      throw new Error('GEM_INVALID_RESULT_FIELD');
+    }
   }
 
+  assertNoExecutionAuthority(result);
   if (!STATUSES.has(result.status)) throw new Error('GEM_INVALID_STATUS');
 
   const normalized = { status:result.status };
