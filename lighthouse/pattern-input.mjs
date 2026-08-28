@@ -2,6 +2,11 @@ import { validatePathRequest } from './path-contract.mjs';
 
 const FOUNDATION_EXPENSE_TERMS = new Set(['ข้าว']);
 
+function defaultRequestIdFactory() {
+  const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `REQ-${suffix}`;
+}
+
 function noMatch() {
   return Object.freeze({ status:'NO_MATCH', source:'PATTERN' });
 }
@@ -17,7 +22,8 @@ function amountToSatang(text) {
   return amountSatang;
 }
 
-export function normalizePatternInput(input) {
+export function normalizePatternInput(input, { requestIdFactory = defaultRequestIdFactory } = {}) {
+  if (typeof requestIdFactory !== 'function') throw new Error('PATTERN_REQUEST_ID_FACTORY_INVALID');
   if (typeof input !== 'string') return noMatch();
   const match = /^([^\s]+)\s+(\d+(?:\.\d{1,2})?)$/.exec(input.trim());
   if (!match) return noMatch();
@@ -31,6 +37,7 @@ export function normalizePatternInput(input) {
   const request = validatePathRequest({
     version:'1',
     source:'PATTERN',
+    requestId:requestIdFactory(),
     action:'CREATE',
     object:'EXPENSE',
     fields:{ title, amountSatang },
