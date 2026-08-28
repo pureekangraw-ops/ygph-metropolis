@@ -25,13 +25,9 @@ function minimalEvidence() {
   });
 }
 
-test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenfield LEDGER Reality', async () => {
+async function initializedRuntime() {
   const { createMemoryVaultStore } = await import('../greenfield/persistence.mjs');
   const { createGreenfieldRuntime } = await import('../greenfield/runtime.mjs');
-  const { normalizePatternInput } = await import('../lighthouse/pattern-input.mjs');
-  const { createExpenseCapability } = await import('../lighthouse/capabilities/expense.mjs');
-  const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
-
   const store = createMemoryVaultStore();
   const runtime = createGreenfieldRuntime({
     store,
@@ -44,7 +40,15 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
     expectedRevision:1,
   });
   assert.equal(initial.status, 'IMPORTED_VERIFIED');
+  return runtime;
+}
 
+test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenfield LEDGER Reality', async () => {
+  const { normalizePatternInput } = await import('../lighthouse/pattern-input.mjs');
+  const { createExpenseCapability } = await import('../lighthouse/capabilities/expense.mjs');
+  const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
+
+  const runtime = await initializedRuntime();
   const normalized = normalizePatternInput('ข้าว 65');
   assert.equal(normalized.status, 'MATCH');
 
@@ -71,4 +75,41 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
   assert.equal(transaction.detail, 'OUT:EXPENSE');
   assert.equal(transaction.title, 'ข้าว');
   assert.equal(transaction.amountSatang, 6500);
+});
+
+test('retry after committed expense with unavailable readback must recover the same operation without duplicate Ledger truth', async () => {
+  const { normalizePatternInput } = await import('../lighthouse/pattern-input.mjs');
+  const { createExpenseCapability } = await import('../lighthouse/capabilities/expense.mjs');
+  const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
+
+  const runtime = await initializedRuntime();
+  let failReadbackOnce = true;
+  const flakyRuntime = {
+    expense: input => runtime.expense(input),
+    async readState() {
+      if (failReadbackOnce) {
+        failReadbackOnce = false;
+        throw new Error('SIMULATED_READBACK_OUTAGE_AFTER_COMMIT');
+      }
+      return runtime.readState();
+    },
+  };
+
+  const normalized = normalizePatternInput('ข้าว 65');
+  const ids = ['WF-LH-1', 'TX-LH-1', 'WF-LH-2', 'TX-LH-2'];
+  const capability = createExpenseCapability({ idFactory:() => ids.shift() });
+  const kernel = createPathKernel({ capabilities:[capability] });
+
+  const first = await kernel.run(normalized.request, { runtime:flakyRuntime });
+  assert.equal(first.status, 'VERIFY');
+
+  const retry = await kernel.run(normalized.request, { runtime:flakyRuntime });
+  assert.equal(retry.status, 'COMPLETE');
+
+  const state = await runtime.readState();
+  const transactions = Object.values(state.domains.LEDGER.records)
+    .map(entry => entry?.record)
+    .filter(record => record?.type === 'TRANSACTION' && record?.detail === 'OUT:EXPENSE' && record?.title === 'ข้าว');
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].recordId, 'TX-LH-1');
 });
