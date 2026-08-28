@@ -1,4 +1,6 @@
 import { parseNumericText } from './intent-number.mjs';
+import { extractConditionPrefix } from './intent-condition.mjs';
+export { evaluateConditionRoute } from './intent-condition.mjs';
 
 const KNOWN_SHORT_TARGETS = Object.freeze(['น้ำมัน', 'ข้าว']);
 const DIGIT_NUMBER_RE = /[0-9๐-๙][0-9๐-๙,]*(?:\.[0-9๐-๙]+)?/gu;
@@ -136,7 +138,13 @@ function targetRange(rawText, workStart, workEnd, numbers) {
 
 function parseGroup(rawText, range, groupIndex) {
   const groupId = `G${groupIndex + 1}`;
-  const command = removeLeadingCommandWords(rawText, range.start, range.end);
+  const condition = extractConditionPrefix(rawText, {
+    start:range.start,
+    end:range.end,
+    groupId,
+  });
+  const commandStart = condition?.rawSpan?.end ?? range.start;
+  const command = removeLeadingCommandWords(rawText, commandStart, range.end);
   const numbers = numericCandidates(rawText, command.start, command.end);
   const target = targetRange(rawText, command.start, command.end, numbers);
   const slots = [];
@@ -193,6 +201,7 @@ function parseGroup(rawText, range, groupIndex) {
       rawText:rawText.slice(range.start, range.end),
       connectorBefore:range.connectorBefore ?? null,
       prohibited:command.prohibited,
+      condition,
       slots:Object.freeze(slots),
     }),
   };
