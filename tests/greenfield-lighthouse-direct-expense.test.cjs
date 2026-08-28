@@ -49,11 +49,10 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
   const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
 
   const runtime = await initializedRuntime();
-  const normalized = normalizePatternInput('ข้าว 65');
+  const normalized = normalizePatternInput('ข้าว 65', { requestIdFactory:() => 'REQ-proof-1' });
   assert.equal(normalized.status, 'MATCH');
 
-  const ids = ['WF-LH-1', 'TX-LH-1'];
-  const capability = createExpenseCapability({ idFactory:() => ids.shift() });
+  const capability = createExpenseCapability();
   let gemCalls = 0;
   const kernel = createPathKernel({
     capabilities:[capability],
@@ -65,11 +64,11 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
   assert.equal(result.route, 'DIRECT');
   assert.equal(result.capabilityId, 'EXPENSE_CREATE');
   assert.equal(result.source, 'PATTERN');
-  assert.equal(result.readback.recordId, 'TX-LH-1');
+  assert.equal(result.readback.recordId, 'TX-LH-REQ-proof-1');
   assert.equal(gemCalls, 0);
 
   const state = await runtime.readState();
-  const transaction = state.domains.LEDGER.records['TX-LH-1'].record;
+  const transaction = state.domains.LEDGER.records['TX-LH-REQ-proof-1'].record;
   assert.equal(transaction.type, 'TRANSACTION');
   assert.equal(transaction.direction, 'OUT');
   assert.equal(transaction.detail, 'OUT:EXPENSE');
@@ -77,7 +76,7 @@ test('LIGHT HOUSE proves ข้าว 65 through Direct Path into durable Greenf
   assert.equal(transaction.amountSatang, 6500);
 });
 
-test('retry after committed expense with unavailable readback must recover the same operation without duplicate Ledger truth', async () => {
+test('retry after committed expense with unavailable readback recovers the same operation without duplicate Ledger truth', async () => {
   const { normalizePatternInput } = await import('../lighthouse/pattern-input.mjs');
   const { createExpenseCapability } = await import('../lighthouse/capabilities/expense.mjs');
   const { createPathKernel } = await import('../lighthouse/path-kernel.mjs');
@@ -95,21 +94,23 @@ test('retry after committed expense with unavailable readback must recover the s
     },
   };
 
-  const normalized = normalizePatternInput('ข้าว 65');
-  const ids = ['WF-LH-1', 'TX-LH-1', 'WF-LH-2', 'TX-LH-2'];
-  const capability = createExpenseCapability({ idFactory:() => ids.shift() });
+  const normalized = normalizePatternInput('ข้าว 65', { requestIdFactory:() => 'REQ-retry-1' });
+  const capability = createExpenseCapability();
   const kernel = createPathKernel({ capabilities:[capability] });
 
   const first = await kernel.run(normalized.request, { runtime:flakyRuntime });
-  assert.equal(first.status, 'VERIFY');
+  assert.deepEqual(first, {
+    status:'VERIFY', route:'DIRECT', capabilityId:'EXPENSE_CREATE', source:'PATTERN', reason:'LEDGER_READBACK_UNAVAILABLE',
+  });
 
   const retry = await kernel.run(normalized.request, { runtime:flakyRuntime });
   assert.equal(retry.status, 'COMPLETE');
+  assert.equal(retry.readback.recordId, 'TX-LH-REQ-retry-1');
 
   const state = await runtime.readState();
   const transactions = Object.values(state.domains.LEDGER.records)
     .map(entry => entry?.record)
     .filter(record => record?.type === 'TRANSACTION' && record?.detail === 'OUT:EXPENSE' && record?.title === 'ข้าว');
   assert.equal(transactions.length, 1);
-  assert.equal(transactions[0].recordId, 'TX-LH-1');
+  assert.equal(transactions[0].recordId, 'TX-LH-REQ-retry-1');
 });
