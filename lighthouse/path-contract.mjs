@@ -24,6 +24,22 @@ function normalizeAmount(value) {
   return value;
 }
 
+function normalizeBusinessDate(value) {
+  if (typeof value !== 'string') throw new Error('PATH_INVALID_BUSINESS_DATE');
+  const input = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!match) throw new Error('PATH_INVALID_BUSINESS_DATE');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (
+    date.getUTCFullYear() !== Number(match[1]) ||
+    date.getUTCMonth() !== Number(match[2]) - 1 ||
+    date.getUTCDate() !== Number(match[3])
+  ) {
+    throw new Error('PATH_INVALID_BUSINESS_DATE');
+  }
+  return input;
+}
+
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -43,17 +59,22 @@ export function validatePathRequest(request) {
 
   const title = normalizeTitle(request.fields.title);
   const amountSatang = normalizeAmount(request.fields.amountSatang);
+  const hasBusinessDate = request.fields.businessDate != null;
+  const businessDate = hasBusinessDate ? normalizeBusinessDate(request.fields.businessDate) : null;
 
   if (!plainObject(request.requiredResult)) throw new Error('PATH_REQUIRED_RESULT_REQUIRED');
   const effect = request.requiredResult.effect;
   if (request.requiredResult.kind !== 'LEDGER_TRANSACTION' || !plainObject(effect)) {
     throw new Error('PATH_REQUIRED_RESULT_MISMATCH');
   }
+  const effectHasBusinessDate = effect.businessDate != null;
   if (
     effect.direction !== 'OUT' ||
     effect.subtype !== 'EXPENSE' ||
     effect.title !== title ||
-    effect.amountSatang !== amountSatang
+    effect.amountSatang !== amountSatang ||
+    effectHasBusinessDate !== hasBusinessDate ||
+    (hasBusinessDate && effect.businessDate !== businessDate)
   ) {
     throw new Error('PATH_REQUIRED_RESULT_MISMATCH');
   }
@@ -64,7 +85,7 @@ export function validatePathRequest(request) {
     requestId,
     action:'CREATE',
     object:'EXPENSE',
-    fields:{ title, amountSatang },
+    fields:{ title, amountSatang, ...(hasBusinessDate ? { businessDate } : {}) },
     requiredResult:{
       kind:'LEDGER_TRANSACTION',
       effect:{
@@ -72,6 +93,7 @@ export function validatePathRequest(request) {
         subtype:'EXPENSE',
         title,
         amountSatang,
+        ...(hasBusinessDate ? { businessDate } : {}),
       },
     },
   });
