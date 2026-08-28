@@ -56,6 +56,8 @@
 !/greenfield/workflow-runtime.mjs
 !/lighthouse/
 !/lighthouse/master-input-route.mjs
+!/lighthouse/master-input-recovery-session.mjs
+!/lighthouse/intent-recovery.mjs
 !/lighthouse/intent-path-adapter.mjs
 !/lighthouse/intent-parser.mjs
 !/lighthouse/intent-number.mjs
