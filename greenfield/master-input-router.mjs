@@ -1,3 +1,5 @@
+const DEFAULT_EXPENSE_TITLE = 'รายจ่ายทั่วไป';
+
 function defaultIdFactory(prefix) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${suffix}`;
@@ -37,9 +39,10 @@ export function prepareMasterExecution(intent, { projection, idFactory = default
   if (intent.object === 'EXPENSE') {
     const workflowId = id(idFactory, 'WF-MASTER');
     const ledgerTransactionId = id(idFactory, 'TX-MASTER');
+    const title = fields.title || DEFAULT_EXPENSE_TITLE;
     return createPrepared('EXPENSE', 'expense', {
-      workflowId, ledgerTransactionId, title:fields.title, amountSatang:fields.amountSatang,
-    }, { type:'LEDGER_TRANSACTION', recordId:ledgerTransactionId, direction:'OUT', subtype:'EXPENSE', amountSatang:fields.amountSatang });
+      workflowId, ledgerTransactionId, title, amountSatang:fields.amountSatang,
+    }, { type:'LEDGER_TRANSACTION', recordId:ledgerTransactionId, direction:'OUT', subtype:'EXPENSE', title, amountSatang:fields.amountSatang });
   }
 
   if (intent.object === 'OTHER_INCOME') {
@@ -92,12 +95,14 @@ function verifyReadback(state, projection, prepared) {
   const check = prepared.verify;
   if (check.type === 'LEDGER_TRANSACTION') {
     const found = record(state, 'LEDGER', check.recordId);
-    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || String(found.subtype || '') !== check.subtype) {
+    const titleMismatch = Object.hasOwn(check, 'title') && found?.title !== check.title;
+    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || String(found.subtype || '') !== check.subtype || titleMismatch) {
       throw new Error('MASTER_INPUT_READBACK_MISMATCH');
     }
     return {
       recordId:found.recordId,
       direction:found.direction,
+      title:found.title ?? null,
       amountSatang:Number(found.amountSatang),
       subtype:found.subtype,
       revision:state?.revision ?? null,
