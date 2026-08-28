@@ -1,8 +1,19 @@
 import { validatePathRequest } from './path-contract.mjs';
 
-function sourceNeutralRequest(validated) {
+function routingRequest(validated) {
   return Object.freeze({
     version:validated.version,
+    action:validated.action,
+    object:validated.object,
+    fields:validated.fields,
+    requiredResult:validated.requiredResult,
+  });
+}
+
+function executionRequest(validated) {
+  return Object.freeze({
+    version:validated.version,
+    requestId:validated.requestId,
     action:validated.action,
     object:validated.object,
     fields:validated.fields,
@@ -30,16 +41,17 @@ export function createPathKernel({ capabilities = [], gemProcessor = null } = {}
     async run(input, { runtime } = {}) {
       const validated = validatePathRequest(input);
       const source = validated.source;
-      const executionRequest = sourceNeutralRequest(validated);
+      const candidateRequest = routingRequest(validated);
+      const runRequest = executionRequest(validated);
 
-      const capability = registry.find(candidate => candidate.matches(executionRequest));
+      const capability = registry.find(candidate => candidate.matches(candidateRequest));
       if (!capability) {
         return Object.freeze({ status:'BLOCKED', route:null, source, reason:'NO_LEGAL_PATH' });
       }
 
       let evidence;
       try {
-        evidence = await capability.execute({ request:executionRequest, runtime });
+        evidence = await capability.execute({ request:runRequest, runtime });
       } catch (error) {
         return Object.freeze({
           status:'BLOCKED',
