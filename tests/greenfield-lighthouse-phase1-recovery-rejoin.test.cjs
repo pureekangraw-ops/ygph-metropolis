@@ -87,13 +87,27 @@ test('P1C303 unresolved correction refreshes the same recovery home so a second 
   assert.equal(secondRejoin.routed.prepared.request.fields.amountSatang, 16000);
 });
 
-test('P1C304 production Master Input keeps the refreshed recovery session after an unresolved rejoin and still waits for explicit execute after READY', () => {
+test('P1C304 unresolved rejoin refreshes the exact session object held by production UI before the next correction', async () => {
   const ui = fs.readFileSync('ui/master-input.mjs', 'utf8');
-  assert.match(ui, /master-input-recovery-session\.mjs/);
-  assert.match(ui, /rejoinRecoverySession/);
-  assert.match(ui, /recoveryInput\.status\s*===\s*['"]APPLIED['"][\s\S]{0,2200}rejoinRecoverySession\(/);
-  assert.match(ui, /rejoined\.routed\.status\s*===\s*['"]RECOVERY_REQUIRED['"][\s\S]{0,500}activeRecoverySession\s*=\s*rejoined\.recoverySession/);
-  assert.match(ui, /rejoined\.routed\.route\s*===\s*['"]LOCAL_PATH['"][\s\S]{0,1200}preparedPathRequest\s*=\s*rejoined\.routed\.prepared\.request/);
-  assert.match(ui, /preparedPathRequest[\s\S]{0,1000}setState\(['"]READY['"][\s\S]{0,500}execute:true/);
-  assert.match(ui, /button\.addEventListener\(['"]click['"],\s*\(\)\s*=>\s*void executePrepared\(\)\)/);
+  assert.match(ui, /activeRecoverySession\s*=\s*recoveryInput\.state/);
+  assert.match(ui, /rejoinRecoverySession\(recoveryInput\.state/);
+
+  const routed = await routeRecoveryInput('ข้าว 1,50', 'REQ-C304');
+  const { createRecoverySession, applySessionOwnerInput, rejoinRecoverySession } = await sessionTools();
+  const session = createRecoverySession(routed, { inputId:'I-C304' });
+  const corrected = applySessionOwnerInput(session, 'แก้ไข 1,60');
+  const heldByProductionUi = corrected.state;
+  assert.equal(Object.values(heldByProductionUi.slots).some(slot => slot.state === 'CORRECTED'), true);
+
+  const rejoined = await rejoinRecoverySession(heldByProductionUi, {
+    receivedAt:'2026-08-28T01:30:00.000Z',
+    timeZone:'Asia/Bangkok',
+    requestIdFactory:()=>'REQ-C304-R',
+  });
+  assert.equal(rejoined.routed.status, 'RECOVERY_REQUIRED');
+  assert.equal(rejoined.recoverySession, heldByProductionUi);
+  assert.equal(Object.values(heldByProductionUi.slots).some(slot => slot.state === 'INVALID' || slot.state === 'AMBIGUOUS' || slot.state === 'WAITING'), true);
+
+  const nextCorrection = applySessionOwnerInput(heldByProductionUi, 'แก้ไข 160');
+  assert.equal(nextCorrection.status, 'APPLIED');
 });
