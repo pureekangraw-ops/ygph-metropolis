@@ -28,9 +28,26 @@ jobs:
         run: node --test tests/greenfield-lighthouse-dual-vocab.test.cjs
       - name: Run D16 front-door integration gate
         run: node --test tests/greenfield-lighthouse-dual-vocab-integration.test.cjs
-      - name: Prove serial full suite
+      - name: Pair Lighthouse + Master Input
+        continue-on-error: true
+        run: node --test --test-concurrency=1 tests/greenfield-lighthouse-*.test.cjs tests/greenfield-master-input*.test.cjs
+      - name: Pair Lighthouse + Remaining
+        continue-on-error: true
+        shell: bash
+        run: |
+          files=(tests/greenfield-lighthouse-*.test.cjs)
+          while IFS= read -r -d '' file; do files+=("$file"); done < <(find tests -maxdepth 1 -name 'greenfield-*.test.cjs' ! -name 'greenfield-lighthouse-*' ! -name 'greenfield-master-input*' -print0)
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: Pair Master Input + Remaining
+        continue-on-error: true
+        shell: bash
+        run: |
+          files=(tests/greenfield-master-input*.test.cjs)
+          while IFS= read -r -d '' file; do files+=("$file"); done < <(find tests -maxdepth 1 -name 'greenfield-*.test.cjs' ! -name 'greenfield-lighthouse-*' ! -name 'greenfield-master-input*' -print0)
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: Run serial full test suite
         run: node --test --test-concurrency=1 tests/greenfield-*.test.cjs
-      - name: Run full test suite
+      - name: Run normal full test suite
         run: npm test
       - name: Check syntax
         run: npm run check:syntax
