@@ -28,6 +28,15 @@ jobs:
         run: node --test tests/greenfield-lighthouse-dual-vocab.test.cjs
       - name: Run D16 front-door integration gate
         run: node --test tests/greenfield-lighthouse-dual-vocab-integration.test.cjs
+      - name: Diagnose Lighthouse compatibility tests
+        continue-on-error: true
+        run: node --test tests/greenfield-lighthouse-*.test.cjs
+      - name: Diagnose Master Input compatibility tests
+        continue-on-error: true
+        run: node --test tests/greenfield-master-input*.test.cjs
+      - name: Diagnose remaining regression tests
+        continue-on-error: true
+        run: find tests -maxdepth 1 -name 'greenfield-*.test.cjs' ! -name 'greenfield-lighthouse-*' ! -name 'greenfield-master-input*' -print0 | xargs -0 node --test
       - name: Run full test suite
         run: npm test
       - name: Check syntax
