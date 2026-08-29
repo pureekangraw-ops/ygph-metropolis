@@ -151,6 +151,39 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
     });
   }
 
+  async function executeMultiGroupCommands({ baseRevision, commands } = {}) {
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) throw new Error('MULTI_GROUP_INVALID_BASE_REVISION');
+    if (!Array.isArray(commands) || commands.length === 0) throw new Error('MULTI_GROUP_COMMANDS_REQUIRED');
+    const keys = commands.map(command => String(command?.idempotencyKey ?? '').trim());
+    if (keys.some(key => !key)) throw new Error('MULTI_GROUP_IDEMPOTENCY_KEY_REQUIRED');
+    if (new Set(keys).size !== keys.length) throw new Error('MULTI_GROUP_DUPLICATE_IDEMPOTENCY_KEY');
+
+    return coordinator.run(async () => {
+      const current = await readEncryptedState({ store, passphrase });
+      if (!current) throw new Error('GREENFIELD_NOT_INITIALIZED');
+      const committed = keys.filter(key => current.commandLog?.[key]);
+      if (committed.length === keys.length) {
+        lastState = current;
+        return { status:'RECOVERED', fromRevision:baseRevision, toRevision:current.revision, appliedCommands:0, state:current };
+      }
+      if (committed.length > 0) {
+        lastState = current;
+        return { status:'VERIFY', reason:'MULTI_GROUP_PARTIAL_COMMAND_LOG', fromRevision:baseRevision, toRevision:current.revision, appliedCommands:0, state:current };
+      }
+      if (current.revision !== baseRevision) {
+        lastState = current;
+        return {
+          status:'STALE', reason:'MULTI_GROUP_STALE_BASE_REVISION', expectedRevision:baseRevision,
+          actualRevision:current.revision, fromRevision:baseRevision, toRevision:current.revision,
+          appliedCommands:0, state:current,
+        };
+      }
+      const result = await executeAtomicWorkflow({ store, passphrase, runtime:commandRuntime, commands });
+      lastState = result.state;
+      return result;
+    });
+  }
+
   async function importFinanceSeed(seed) {
     const parsed = parseFinanceSeedFile(seed);
     return coordinator.run(async () => {
@@ -345,7 +378,7 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
   }
 
   return Object.freeze({
-    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed, repairStoreSaleCost,
+    diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed, repairStoreSaleCost, executeMultiGroupCommands,
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
