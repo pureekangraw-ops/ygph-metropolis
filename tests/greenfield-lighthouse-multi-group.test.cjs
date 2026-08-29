@@ -147,7 +147,7 @@ test('forward dependency is blocked instead of reordering meaning after the fact
 test('MG04 atomic runtime failure in a later command leaves durable state and revision unchanged', async () => {
   const { runtime, read } = await durableRuntime(state => {
     state.domains.STORE.records.P1 = imported({ recordId:'P1', type:'PURCHASE', title:'stock', amountSatang:50000, quantity:5, status:'ACTIVE' });
-    state.domains.LEDGER.records.DUP = imported({ recordId:'TX-DUP', type:'TRANSACTION', direction:'IN', amountSatang:1, title:'existing', subtype:'OTHER_INCOME', status:'POSTED' });
+    state.domains.LEDGER.records['TX-DUP'] = imported({ recordId:'TX-DUP', type:'TRANSACTION', direction:'IN', amountSatang:1, title:'existing', subtype:'OTHER_INCOME', status:'POSTED' });
   });
   const before = await read();
   const commands = [
