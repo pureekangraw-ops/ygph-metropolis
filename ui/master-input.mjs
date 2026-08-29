@@ -213,7 +213,7 @@ function renderWaitingDirective(directive) {
 }
 
 function showWaitingSession({ title = 'รอข้อมูลเพิ่ม', copy = null } = {}) {
-  const directive = waitingDirectiveForSession(activeRecoverySession);
+  const directive = activeRecoverySession?.uiDirective ?? waitingDirectiveForSession(activeRecoverySession);
   const fallback = 'งานเดิมหยุดรอข้อมูลที่ยังขาดอยู่';
   setState('WAITING', {
     title,
@@ -246,7 +246,7 @@ async function withMasterRuntime(operation) {
     return await withRuntimeSession(async runtime => {
       const state = await runtime.readState();
       if (!state) throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
-      return operation(runtime);
+      return operation(runtime, state);
     });
   } catch (error) {
     if (String(error?.message || error || '') === 'RUNTIME_SESSION_LOCKED') throw new Error('MASTER_INPUT_RUNTIME_LOCKED');
@@ -264,13 +264,23 @@ function localInputId() {
   return uuid ? `MI-I-${uuid}` : `MI-I-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function localPauseId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid ? `MI-P-${uuid}` : `MI-P-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function localIntentFromRequest(request) {
   return Object.freeze({ action:'CREATE', object:'EXPENSE', fields:Object.freeze({ ...request.fields }) });
 }
 
-function showLocalStop(routed) {
+async function showLocalStop(routed) {
   if (routed.status === 'RECOVERY_REQUIRED') {
-    activeRecoverySession = createRecoverySession(routed, { inputId:localInputId() });
+    const pauseContext = await withMasterRuntime((_runtime, state) => ({ baseRevision:state.revision }));
+    activeRecoverySession = createRecoverySession(routed, {
+      inputId:localInputId(),
+      pauseId:localPauseId(),
+      baseRevision:pauseContext.baseRevision,
+    });
     activeRecoverySelection = null;
     showWaitingSession({ title:'รอให้ระบุเฉพาะจุด' });
     return;
@@ -376,11 +386,13 @@ async function interpretCurrentText() {
   if (recoveryInput.status === 'APPLIED') {
     setState('INTERPRETING', { title:'กำลังประกอบผลแก้ไข', copy:'ยังไม่มีการเขียนข้อมูล' });
     try {
-      const rejoined = await rejoinRecoverySession(recoveryInput.state, {
+      const rejoined = await withMasterRuntime((_runtime, state) => rejoinRecoverySession(recoveryInput.state, {
         receivedAt:new Date().toISOString(),
         timeZone:'Asia/Bangkok',
         requestIdFactory:localRequestId,
-      });
+        currentRevision:state.revision,
+        capabilityPreflight:request => localPathKernel.preflight(request),
+      }));
       text = rejoined.text;
       $('masterInputText').value = text;
       markQuestion(rejoined.routed);
@@ -397,10 +409,11 @@ async function interpretCurrentText() {
         activeRecoverySelection = null;
         preparedPathRequest = rejoined.routed.prepared.request;
         currentIntent = localIntentFromRequest(preparedPathRequest);
+        const realityMeta = rejoined.revalidation?.revisionChanged ? ' · ตรวจ durable revision ใหม่แล้ว' : '';
         setState('READY', {
           title:'ระบบเข้าใจว่า',
           copy:previewText(currentIntent),
-          meta:'Recovery ประกอบกลับเข้า Local Intent/PATH แล้ว · ยังไม่มีการเขียนข้อมูล',
+          meta:`Recovery ประกอบกลับเข้า Local Intent/PATH แล้ว${realityMeta} · ยังไม่มีการเขียนข้อมูล`,
           execute:true,
         });
         return;
@@ -418,7 +431,7 @@ async function interpretCurrentText() {
 
       activeRecoverySession = null;
       activeRecoverySelection = null;
-      showLocalStop(rejoined.routed);
+      await showLocalStop(rejoined.routed);
       return;
     } catch (error) {
       setState('ERROR', { title:'ประกอบผลแก้ไขไม่สำเร็จ', copy:friendlyError(error), meta:'ไม่มีการเขียนข้อมูลจากคำสั่งนี้' });
@@ -447,7 +460,7 @@ async function interpretCurrentText() {
     }
 
     if (routed.route === 'STOP') {
-      showLocalStop(routed);
+      await showLocalStop(routed);
       return;
     }
 
