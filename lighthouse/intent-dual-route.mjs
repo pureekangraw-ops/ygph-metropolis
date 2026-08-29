@@ -1,10 +1,12 @@
 import { parseIntentTask1 } from './intent-parser.mjs';
 import { FOUNDATION_PATTERN_EXPENSE_TERMS } from './pattern-input.mjs';
+import { scanIntentVocabulary } from './intent-vocabulary.mjs';
 
 const DIRECT_TARGETS = new Set(FOUNDATION_PATTERN_EXPENSE_TERMS);
 const POLITE_PREFIX_RE = /^\s*ช่วย\s*/u;
 const POLITE_SUFFIX_RE = /\s*(?:ให้หน่อย)?\s*(?:ครับ|ค่ะ|คะ|นะครับ|นะคะ)\s*$/u;
 const EXPLICIT_NEXT_COMMAND_RE = /\s+(?:แล้ว|และ)\s*(?=(?:ไม่ต้อง\s*)?ลง)/gu;
+const DIRECT_FORBIDDEN_ROLES = new Set(['QUESTION', 'PROHIBITION', 'CONDITION_MARKER']);
 
 function freeze(value) {
   return Object.freeze(value);
@@ -63,7 +65,7 @@ function rebaseGroup(group, range, originalText, groupIndex) {
 function parseExplicitGroups(rawText, ranges) {
   const groups = [];
   let needsRecovery = false;
-  for (const [index, range] of ranges.entries()) {
+  for (const range of ranges) {
     const localText = rawText.slice(range.start, range.end).trim();
     const trimLead = rawText.slice(range.start, range.end).indexOf(localText);
     const actualRange = { start:range.start + trimLead, end:range.start + trimLead + localText.length };
@@ -94,6 +96,15 @@ function groupIsClearDirect(group) {
     && money.resolvedValue.amountSatang > 0;
 }
 
+function probeMeaningIsFullyOwned(probeText) {
+  const scanned = scanIntentVocabulary(probeText);
+  return scanned.every(token => {
+    if (DIRECT_FORBIDDEN_ROLES.has(token.role)) return false;
+    if (token.state === 'UNKNOWN' || token.state === 'AMBIGUOUS') return /^\s*$/u.test(token.raw);
+    return true;
+  });
+}
+
 export function decideInputRoute(rawText) {
   if (typeof rawText !== 'string' || !rawText.trim()) throw new TypeError('INTENT_DUAL_ROUTE_TEXT_REQUIRED');
 
@@ -106,7 +117,8 @@ export function decideInputRoute(rawText) {
   const probeParsed = parseForDecision(normalizedForProbe);
   const direct = probeParsed.status === 'PARSED'
     && probeParsed.groups.length === 1
-    && groupIsClearDirect(probeParsed.groups[0]);
+    && groupIsClearDirect(probeParsed.groups[0])
+    && probeMeaningIsFullyOwned(normalizedForProbe);
 
   if (direct) {
     return freeze({ route:'DIRECT', reason:'SINGLE_CLEAR', parsed:probeParsed, normalizedForProbe });
