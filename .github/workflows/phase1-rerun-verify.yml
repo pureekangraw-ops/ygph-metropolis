@@ -23,3 +23,7 @@ jobs:
         run: npm ci
       - name: Run P1.2 numeric decoder tests
         run: node --test tests/greenfield-lighthouse-intent-number.test.cjs
+      - name: Run P1.3 grouping and slot tests
+        run: node --test tests/greenfield-lighthouse-intent-parser.test.cjs
+      - name: Check Phase 1 module syntax
+        run: node --check lighthouse/intent-number.mjs && node --check lighthouse/intent-parser.mjs
