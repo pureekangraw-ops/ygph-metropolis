@@ -107,3 +107,9 @@ test('R10 only verified AI/BIG recovery word corrections are learned under the c
   history = recordVerifiedCorrection(history, { wrong:'รายจาาย', correct:'รายจ่าย', source:'AI_RECOVERY', kind:'WORD', verified:false });
   assert.deepEqual(history, { 'รายจ่าย': { 'รากยจาาย': 2 } });
 });
+
+test('R11 explicit cancel is distinguished from a new command while a switch phrase keeps only the new payload', async () => {
+  const { classifyIncomingInput } = await recovery();
+  assert.deepEqual(classifyIncomingInput('ยกเลิก'), { type:'CANCEL', payload:null });
+  assert.deepEqual(classifyIncomingInput('ช่างอันเดิมก่อน ไปดูยอดขายวันนี้'), { type:'NEW_INPUT', payload:'ไปดูยอดขายวันนี้' });
+});
