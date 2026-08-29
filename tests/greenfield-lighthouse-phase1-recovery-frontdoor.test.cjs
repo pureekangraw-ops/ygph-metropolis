@@ -24,7 +24,7 @@ test('P1C201 production Master Input imports the verified recovery session contr
 
 test('P1C202 local RECOVERY_REQUIRED opens a WAITING session before any provider call and new text is rerouted only after ABORTED', () => {
   const ui = source(uiPath);
-  assert.match(ui, /routed\.status\s*===\s*['"]RECOVERY_REQUIRED['"][\s\S]{0,1200}createRecoverySession\(/);
+  assert.match(ui, /routed\.status\s*===\s*['"]RECOVERY_REQUIRED['"][\s\S]{0,1800}createRecoverySession\(/);
   assert.match(ui, /setState\(['"]WAITING['"]/);
   assert.match(ui, /applySessionOwnerInput\(activeRecoverySession,\s*text/);
   assert.match(ui, /recoveryInput\.status\s*===\s*['"]ABORTED['"][\s\S]{0,500}activeRecoverySession\s*=\s*null/);
@@ -62,4 +62,11 @@ test('P1C205 paused recovery is internally WAITING but the visible state label i
   assert.match(ui, /WAITING\s*:\s*['"]รอ['"]/);
   assert.match(ui, /state\s*===\s*['"]ERROR['"]/);
   assert.doesNotMatch(ui, /state\s*===\s*['"]WAITING['"][^\n]{0,120}master-input-error/);
+});
+
+test('P1C206 production pause captures current durable revision and every resume supplies fresh revision plus capability preflight', () => {
+  const ui = source(uiPath);
+  assert.match(ui, /withMasterRuntime\([\s\S]{0,700}baseRevision\s*:\s*state\.revision/);
+  assert.match(ui, /rejoinRecoverySession\(recoveryInput\.state,[\s\S]{0,900}currentRevision\s*:\s*state\.revision/);
+  assert.match(ui, /capabilityPreflight\s*:[\s\S]{0,300}localPathKernel\.preflight/);
 });
