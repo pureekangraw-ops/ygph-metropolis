@@ -17,23 +17,26 @@ test('P1C201 production Master Input imports the verified recovery session contr
   assert.match(ui, /master-input-recovery-session\.mjs/);
   assert.match(ui, /createRecoverySession/);
   assert.match(ui, /applySessionOwnerInput/);
+  assert.match(ui, /waitingDirectiveForSession/);
   assert.match(ui, /let\s+activeRecoverySession\s*=\s*null/);
   assert.doesNotMatch(ui, /localStorage|sessionStorage|indexedDB/i);
 });
 
-test('P1C202 local RECOVERY_REQUIRED opens the active session before ASK while normal text remains routable as NEW_INPUT', () => {
+test('P1C202 local RECOVERY_REQUIRED opens a WAITING session before any provider call and new text is rerouted only after ABORTED', () => {
   const ui = source(uiPath);
   assert.match(ui, /routed\.status\s*===\s*['"]RECOVERY_REQUIRED['"][\s\S]{0,1200}createRecoverySession\(/);
+  assert.match(ui, /setState\(['"]WAITING['"]/);
   assert.match(ui, /applySessionOwnerInput\(activeRecoverySession,\s*text/);
-  assert.match(ui, /recoveryInput\.status\s*===\s*['"]NEW_INPUT['"]/);
+  assert.match(ui, /recoveryInput\.status\s*===\s*['"]ABORTED['"][\s\S]{0,500}activeRecoverySession\s*=\s*null/);
   assert.match(ui, /routeMasterInputText\(text/);
 });
 
-test('P1C203 explicit correction and replacement are consumed by the pending recovery session without inventing execution', () => {
+test('P1C203 explicit correction and replacement are consumed by the pending recovery session while interruption aborts it', () => {
   const ui = source(uiPath);
   assert.match(ui, /recoveryInput\.status\s*===\s*['"]APPLIED['"]/);
   assert.match(ui, /recoveryInput\.status\s*===\s*['"]SELECTION_REQUIRED['"]/);
   assert.match(ui, /recoveryInput\.status\s*===\s*['"]REPLACE['"]/);
+  assert.match(ui, /recoveryInput\.status\s*===\s*['"]ABORTED['"]/);
   assert.match(ui, /activeRecoverySession\s*=\s*recoveryInput\.state/);
   assert.doesNotMatch(ui, /runSessionLocalRecovery\(/);
 });
@@ -51,4 +54,12 @@ test('P1C204 production closure publishes and syntax-checks both recovery module
   const syntax = JSON.parse(source(packagePath)).scripts['check:syntax'];
   assert.match(syntax, /node --check lighthouse\/master-input-recovery-session\.mjs/);
   assert.match(syntax, /node --check lighthouse\/intent-recovery\.mjs/);
+});
+
+test('P1C205 paused recovery is internally WAITING but the visible state label is รอ and is not styled as ERROR', () => {
+  const ui = source(uiPath);
+  assert.match(ui, /STATES[\s\S]{0,220}WAITING/);
+  assert.match(ui, /WAITING\s*:\s*['"]รอ['"]/);
+  assert.match(ui, /state\s*===\s*['"]ERROR['"]/);
+  assert.doesNotMatch(ui, /state\s*===\s*['"]WAITING['"][^\n]{0,120}master-input-error/);
 });
