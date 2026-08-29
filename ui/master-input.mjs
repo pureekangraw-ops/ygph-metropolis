@@ -1,17 +1,24 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfield/master-input-router.mjs';
 import { routeMasterInputText } from '../lighthouse/master-input-route.mjs';
-import { createRecoverySession, applySessionOwnerInput, rejoinRecoverySession } from '../lighthouse/master-input-recovery-session.mjs';
+import {
+  createRecoverySession,
+  applySessionOwnerInput,
+  rejoinRecoverySession,
+  waitingDirectiveForSession,
+} from '../lighthouse/master-input-recovery-session.mjs';
 import { createPathKernel } from '../lighthouse/path-kernel.mjs';
 import { createExpenseCapability } from '../lighthouse/capabilities/expense.mjs';
 
-const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','UNSUPPORTED','SUCCESS','ERROR']);
+const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','WAITING','UNSUPPORTED','SUCCESS','ERROR']);
+const STATE_LABELS = Object.freeze({ WAITING:'รอ' });
 const $ = id => document.getElementById(id);
 const localPathKernel = createPathKernel({ capabilities:[createExpenseCapability()] });
 let preparedExecution = null;
 let preparedPathRequest = null;
 let currentIntent = null;
 let activeRecoverySession = null;
+let activeRecoverySelection = null;
 
 function installStyle() {
   if (document.querySelector('link[data-master-input-style]')) return;
@@ -128,9 +135,10 @@ function createShell() {
 
 function setState(state, { title = '', copy = '', meta = '', execute = false } = {}) {
   if (!STATES.includes(state)) throw new Error('MASTER_INPUT_UI_STATE_INVALID');
-  $('masterInputState').textContent = state;
+  $('masterInputState').textContent = STATE_LABELS[state] ?? state;
   const result = $('masterInputResult');
   result.classList.toggle('master-input-error', state === 'ERROR');
+  if (state !== 'WAITING') delete result.dataset.waitingDirective;
   const show = Boolean(title || copy || meta || execute);
   result.hidden = !show;
   $('masterInputTitle').textContent = title;
@@ -149,6 +157,70 @@ function setState(state, { title = '', copy = '', meta = '', execute = false } =
   const busy = state === 'INTERPRETING';
   $('masterInputInterpret').disabled = busy;
   $('masterInputText').disabled = busy;
+}
+
+function submitRecoveryValue(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return;
+  $('masterInputText').value = `แก้ไข ${normalized}`;
+  $('masterInputForm').requestSubmit();
+}
+
+function renderWaitingDirective(directive) {
+  if (!directive) return;
+  const result = $('masterInputResult');
+  result.dataset.waitingDirective = directive.type;
+  const actions = $('masterInputActions');
+
+  if (directive.type === 'SELECT_TARGET' && directive.options.length) {
+    for (const option of directive.options) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = option.label;
+      button.addEventListener('click', () => {
+        activeRecoverySelection = option.value;
+        $('masterInputMeta').textContent = `${directive.telemetryTag} · เลือกจุดแล้ว กรอกคำตอบเพื่อทำงานเดิมต่อ`;
+      });
+      actions.append(button);
+    }
+    return;
+  }
+
+  if (directive.type === 'PICK_DATE') {
+    const picker = document.createElement('input');
+    picker.type = 'datetime-local';
+    picker.setAttribute('aria-label', 'เลือกวันที่และเวลา');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'ใช้วันที่นี้';
+    button.addEventListener('click', () => submitRecoveryValue(picker.value));
+    actions.append(picker, button);
+    return;
+  }
+
+  if (directive.type === 'ENTER_VALUE') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.placeholder = 'กรอกค่า';
+    input.setAttribute('aria-label', 'กรอกข้อมูลที่ขาด');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'ใช้ค่านี้';
+    button.addEventListener('click', () => submitRecoveryValue(input.value));
+    actions.append(input, button);
+  }
+}
+
+function showWaitingSession({ title = 'รอข้อมูลเพิ่ม', copy = null } = {}) {
+  const directive = waitingDirectiveForSession(activeRecoverySession);
+  const fallback = 'งานเดิมหยุดรอข้อมูลที่ยังขาดอยู่';
+  setState('WAITING', {
+    title,
+    copy:copy || directive?.prompt || fallback,
+    meta:directive ? `${directive.telemetryTag} · ${directive.type} · ยังไม่มีการเขียนข้อมูล` : 'WAITING · ยังไม่มีการเขียนข้อมูล',
+  });
+  renderWaitingDirective(directive);
 }
 
 async function requestInterpretation(text) {
@@ -199,7 +271,8 @@ function localIntentFromRequest(request) {
 function showLocalStop(routed) {
   if (routed.status === 'RECOVERY_REQUIRED') {
     activeRecoverySession = createRecoverySession(routed, { inputId:localInputId() });
-    setState('ASK', { title:'ขอแก้เฉพาะจุด', copy:'ข้อความนี้ยังมีจุดที่ต้องกู้หรือระบุให้ชัดก่อนส่งทำงาน', meta:'เปิด recovery session ในหน่วยความจำแล้ว · ยังไม่มีการเขียนข้อมูล' });
+    activeRecoverySelection = null;
+    showWaitingSession({ title:'รอให้ระบุเฉพาะจุด' });
     return;
   }
   if (routed.status === 'REFERENCE') {
@@ -215,28 +288,34 @@ function showLocalStop(routed) {
 
 function handlePendingRecoveryInput(text) {
   if (!activeRecoverySession) return { status:'NEW_INPUT', payload:text };
-  const recoveryInput = applySessionOwnerInput(activeRecoverySession, text);
-  activeRecoverySession = recoveryInput.state;
+  const recoveryInput = applySessionOwnerInput(activeRecoverySession, text, { selection:activeRecoverySelection });
 
-  if (recoveryInput.status === 'NEW_INPUT') return recoveryInput;
-  if (recoveryInput.status === 'REPLACE') {
-    activeRecoverySession = recoveryInput.state;
+  if (recoveryInput.status === 'ABORTED') {
     activeRecoverySession = null;
+    activeRecoverySelection = null;
     return recoveryInput;
   }
-  if (recoveryInput.status === 'APPLIED') return recoveryInput;
+
+  activeRecoverySession = recoveryInput.state;
+  if (recoveryInput.status === 'REPLACE') {
+    activeRecoverySession = null;
+    activeRecoverySelection = null;
+    return recoveryInput;
+  }
+  if (recoveryInput.status === 'APPLIED') {
+    activeRecoverySelection = null;
+    return recoveryInput;
+  }
   if (recoveryInput.status === 'SELECTION_REQUIRED') {
-    setState('ASK', {
-      title:'มีหลายจุดให้แก้',
-      copy:'ระบุจุดที่ต้องการแก้ก่อน เพื่อไม่เดาบ้านของค่าใหม่',
-      meta:'ยังไม่มีการเขียนข้อมูล',
+    showWaitingSession({
+      title:'รอเลือกจุดที่จะตอบ',
+      copy:'มีหลายจุดที่รับค่านี้ได้ เลือกจุดก่อนเพื่อไม่เดาแทน',
     });
     return recoveryInput;
   }
-  setState('ASK', {
-    title:'ยังแก้จุดนี้ไม่ได้',
-    copy:'ไม่พบจุดที่ตรงกับการแก้ไขนี้ใน recovery session ปัจจุบัน',
-    meta:'ยังไม่มีการเขียนข้อมูล',
+  showWaitingSession({
+    title:'รอข้อมูลที่ตรงกับจุดค้าง',
+    copy:'ยังจับคำตอบเข้ากับจุดที่รออยู่ไม่ได้',
   });
   return recoveryInput;
 }
@@ -285,6 +364,15 @@ async function interpretCurrentText() {
 
   const recoveryInput = handlePendingRecoveryInput(text);
   if (recoveryInput.status === 'SELECTION_REQUIRED' || recoveryInput.status === 'NO_MATCH') return;
+  if (recoveryInput.status === 'ABORTED') {
+    if (!recoveryInput.payload) {
+      $('masterInputText').value = '';
+      setState('IDLE');
+      return;
+    }
+    text = recoveryInput.payload;
+    $('masterInputText').value = text;
+  }
   if (recoveryInput.status === 'APPLIED') {
     setState('INTERPRETING', { title:'กำลังประกอบผลแก้ไข', copy:'ยังไม่มีการเขียนข้อมูล' });
     try {
@@ -300,11 +388,13 @@ async function interpretCurrentText() {
       if (rejoined.routed.route === 'LOCAL_QUERY') {
         await answerLocalQuestion(rejoined.routed);
         activeRecoverySession = null;
+        activeRecoverySelection = null;
         return;
       }
 
       if (rejoined.routed.route === 'LOCAL_PATH') {
         activeRecoverySession = null;
+        activeRecoverySelection = null;
         preparedPathRequest = rejoined.routed.prepared.request;
         currentIntent = localIntentFromRequest(preparedPathRequest);
         setState('READY', {
@@ -317,16 +407,17 @@ async function interpretCurrentText() {
       }
 
       if (rejoined.routed.status === 'RECOVERY_REQUIRED') {
-        activeRecoverySession = recoveryInput.state;
-        setState('ASK', {
-          title:'แก้แล้วแต่ยังมีจุดไม่ชัด',
-          copy:'ค่าที่แก้ถูกใส่กลับบ้านเดิมแล้ว แต่ข้อความยังต้องกู้เฉพาะจุดต่อ',
-          meta:'ยังถือ input เดิมและยังไม่มีการเขียนข้อมูล',
+        activeRecoverySession = rejoined.recoverySession ?? recoveryInput.state;
+        activeRecoverySelection = null;
+        showWaitingSession({
+          title:'รออีกจุดก่อนทำงานต่อ',
+          copy:'ค่าที่แก้ถูกใส่กลับบ้านเดิมแล้ว แต่ยังมีจุดที่ต้องระบุเพิ่ม',
         });
         return;
       }
 
       activeRecoverySession = null;
+      activeRecoverySelection = null;
       showLocalStop(rejoined.routed);
       return;
     } catch (error) {
