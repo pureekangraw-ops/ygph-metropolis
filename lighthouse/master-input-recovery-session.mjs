@@ -58,6 +58,40 @@ function recoverableSlotIds(session) {
   return recoverableSlots(session).map(slot => slot.slotId);
 }
 
+function pauseHome(session) {
+  const waiting = recoverableSlots(session);
+  const groupIds = [...new Set(waiting.map(slot => slot.groupId).filter(Boolean))];
+  const groupId = groupIds.length === 1
+    ? groupIds[0]
+    : (session?.groupId ?? Object.values(session?.slots ?? {})[0]?.groupId ?? null);
+  if (waiting.length === 1) {
+    return { groupId, missingSlot:waiting[0].slotId, reason:null };
+  }
+  if (waiting.length > 1) {
+    return { groupId, missingSlot:null, reason:'AMBIGUOUS_RECOVERY_SLOTS' };
+  }
+  return { groupId, missingSlot:null, reason:session?.reason ?? 'RECOVERY_REQUIRED' };
+}
+
+function syncPauseContract(session, { baseRevision = session?.baseRevision } = {}) {
+  const revision = Number(baseRevision);
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new TypeError('MASTER_INPUT_RECOVERY_BASE_REVISION_REQUIRED');
+  const home = pauseHome(session);
+  session.baseRevision = revision;
+  session.groupId = home.groupId;
+  session.missingSlot = home.missingSlot;
+  session.reason = home.reason;
+  session.uiDirective = waitingDirectiveForSession(session);
+  if (session.uiDirective) session.status = 'WAITING';
+  return session;
+}
+
+function clearPauseDirective(session) {
+  session.uiDirective = null;
+  session.missingSlot = null;
+  return session;
+}
+
 function scalarReplacement(slot) {
   // QUESTION stores the interpretation mode, not replacement text.
   if (slot?.role === 'QUESTION') return null;
@@ -107,8 +141,12 @@ function localRoute(prepared) {
   });
 }
 
-function refreshedRecoverySession(session, routed) {
-  const refreshed = createRecoverySession(routed, { inputId:session.inputId });
+function refreshedRecoverySession(session, routed, { baseRevision }) {
+  const refreshed = createRecoverySession(routed, {
+    inputId:session.inputId,
+    pauseId:session.pauseId,
+    baseRevision,
+  });
   refreshed.originalRawText = typeof session.originalRawText === 'string'
     ? session.originalRawText
     : session.rawText;
@@ -117,10 +155,16 @@ function refreshedRecoverySession(session, routed) {
 }
 
 function replaceRecoverySessionState(session, refreshed) {
+  session.pauseId = refreshed.pauseId;
   session.inputId = refreshed.inputId;
   session.rawText = refreshed.rawText;
   session.originalRawText = refreshed.originalRawText;
   session.cycle = refreshed.cycle;
+  session.baseRevision = refreshed.baseRevision;
+  session.groupId = refreshed.groupId;
+  session.missingSlot = refreshed.missingSlot;
+  session.reason = refreshed.reason;
+  session.uiDirective = refreshed.uiDirective;
   session.status = refreshed.status;
   session.slots = refreshed.slots;
   return session;
@@ -203,6 +247,8 @@ export function waitingDirectiveForSession(session) {
 function abortSession(session, payload) {
   const state = cloneSession(session);
   state.status = 'ABORTED';
+  state.reason = 'ABORTED_BY_USER_INTERRUPTION';
+  clearPauseDirective(state);
   for (const slot of Object.values(state.slots)) slot.queueId = null;
   return {
     status:'ABORTED',
@@ -222,20 +268,51 @@ function directAnswerCandidateIds(session, payload) {
     .map(slot => slot.slotId);
 }
 
-export function createRecoverySession(routed, { inputId } = {}) {
+function normalizedCapability(preflight) {
+  const status = String(preflight?.status ?? '').trim().toUpperCase();
+  if (status === 'READY') {
+    return Object.freeze({
+      status:'READY',
+      route:preflight?.route ?? 'DIRECT',
+      capabilityId:preflight?.capabilityId ?? null,
+    });
+  }
+  return Object.freeze({
+    status:status || 'BLOCKED',
+    route:preflight?.route ?? null,
+    capabilityId:preflight?.capabilityId ?? null,
+    reason:preflight?.reason ?? 'CAPABILITY_PREFLIGHT_FAILED',
+  });
+}
+
+export function createRecoverySession(routed, { inputId, pauseId = null, baseRevision = 0 } = {}) {
   if (typeof inputId !== 'string' || !inputId.trim()) {
     throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
   }
+  const revision = Number(baseRevision);
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new TypeError('MASTER_INPUT_RECOVERY_BASE_REVISION_REQUIRED');
+  }
 
+  const normalizedInputId = inputId.trim();
+  const normalizedPauseId = typeof pauseId === 'string' && pauseId.trim()
+    ? pauseId.trim()
+    : `PAUSE-${normalizedInputId}`;
   const rawText = routed?.prepared?.parsed?.rawText ?? '';
-  return {
-    inputId:inputId.trim(),
+  return syncPauseContract({
+    pauseId:normalizedPauseId,
+    inputId:normalizedInputId,
     rawText,
     originalRawText:rawText,
     cycle:1,
-    status:'RECOVERY_REQUIRED',
+    baseRevision:revision,
+    groupId:null,
+    missingSlot:null,
+    reason:routed?.reason ?? 'RECOVERY_REQUIRED',
+    uiDirective:null,
+    status:'WAITING',
     slots:recoverySlots(routed),
-  };
+  });
 }
 
 export function runSessionLocalRecovery(session, { slotId, passFns = [], queueIdFactory } = {}) {
@@ -252,6 +329,7 @@ export function runSessionLocalRecovery(session, { slotId, passFns = [], queueId
       queueId:null,
       state:'RESOLVED',
     };
+    syncPauseContract(state);
     return { ...recovered, state };
   }
 
@@ -269,7 +347,13 @@ export function runSessionLocalRecovery(session, { slotId, passFns = [], queueId
     queueId:queueId.trim(),
     state:'WAITING',
   };
+  syncPauseContract(state);
   return { ...recovered, state };
+}
+
+function syncedCorrection(result) {
+  if (result?.state && result.status === 'APPLIED') syncPauseContract(result.state);
+  return result;
 }
 
 export function applySessionOwnerInput(session, text, { selection = null } = {}) {
@@ -280,11 +364,11 @@ export function applySessionOwnerInput(session, text, { selection = null } = {})
   if (incoming.type === 'NEW_INPUT') {
     const directCandidates = directAnswerCandidateIds(session, incoming.payload);
     if (directCandidates.length > 0) {
-      return applyOwnerCorrection(session, {
+      return syncedCorrection(applyOwnerCorrection(session, {
         candidateSlotIds:directCandidates,
         payload:incoming.payload,
         selection:directCandidates.length === 1 ? directCandidates[0] : selection,
-      });
+      }));
     }
     return abortSession(session, incoming.payload);
   }
@@ -292,21 +376,25 @@ export function applySessionOwnerInput(session, text, { selection = null } = {})
   if (incoming.type === 'REPLACE') {
     const state = cloneSession(session);
     state.status = 'REPLACED';
+    state.reason = null;
+    clearPauseDirective(state);
     for (const slot of Object.values(state.slots)) {
       slot.queueId = null;
     }
     return { status:'REPLACE', payload:incoming.payload, state };
   }
 
-  return applyOwnerCorrection(session, {
+  return syncedCorrection(applyOwnerCorrection(session, {
     candidateSlotIds:recoverableSlotIds(session),
     payload:incoming.payload,
     selection,
-  });
+  }));
 }
 
 export function applySessionResult(session, result = {}) {
-  return applySlotResult(session, result);
+  const applied = applySlotResult(session, result);
+  if (applied.status === 'APPLIED') syncPauseContract(applied.state);
+  return applied;
 }
 
 export function advanceSessionCycle(session, { unresolved = false } = {}) {
@@ -315,6 +403,7 @@ export function advanceSessionCycle(session, { unresolved = false } = {}) {
   state.cycle = next.cycle;
   if (next.status === 'COMPLETE' || next.status === 'REPLACE_REQUIRED') {
     state.status = next.status;
+    if (next.status === 'COMPLETE') clearPauseDirective(state);
   }
   return { ...next, state };
 }
@@ -335,15 +424,55 @@ export function reassembleRecoverySession(session) {
 }
 
 export async function rejoinRecoverySession(session, options = {}) {
+  const currentRevision = Number(options.currentRevision);
+  if (!Number.isSafeInteger(currentRevision) || currentRevision < 0) {
+    throw new TypeError('MASTER_INPUT_RECOVERY_CURRENT_REVISION_REQUIRED');
+  }
+  const baseRevision = Number(session?.baseRevision);
+  if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+    throw new TypeError('MASTER_INPUT_RECOVERY_BASE_REVISION_REQUIRED');
+  }
+
   const reassembled = reassembleRecoverySession(session);
   const prepared = prepareIntentPath(reassembled.text, options);
-  const routed = localRoute(prepared);
+  let routed = localRoute(prepared);
+  let capability;
+
+  if (routed.route === 'LOCAL_PATH') {
+    if (typeof options.capabilityPreflight !== 'function') {
+      throw new TypeError('MASTER_INPUT_RECOVERY_CAPABILITY_PREFLIGHT_REQUIRED');
+    }
+    capability = normalizedCapability(await options.capabilityPreflight(routed.prepared.request));
+    if (capability.status !== 'READY') {
+      routed = Object.freeze({
+        route:'STOP',
+        status:'BLOCKED',
+        reason:capability.reason,
+        prepared:routed.prepared,
+        intent:null,
+      });
+    }
+  } else if (routed.route === 'LOCAL_QUERY') {
+    capability = Object.freeze({ status:'READY', route:'LOCAL_QUERY', capabilityId:'EXPENSE_QUERY' });
+  } else {
+    capability = Object.freeze({ status:routed.status, route:routed.route, capabilityId:null });
+  }
+
+  const revalidation = Object.freeze({
+    baseRevision,
+    currentRevision,
+    revisionChanged:currentRevision !== baseRevision,
+    referenceState:'NONE',
+    capability,
+  });
+
   const recoverySession = routed.status === 'RECOVERY_REQUIRED'
-    ? replaceRecoverySessionState(session, refreshedRecoverySession(session, routed))
+    ? replaceRecoverySessionState(session, refreshedRecoverySession(session, routed, { baseRevision:currentRevision }))
     : null;
   return Object.freeze({
     ...reassembled,
     routed,
+    revalidation,
     ...(recoverySession ? { recoverySession } : {}),
   });
 }
