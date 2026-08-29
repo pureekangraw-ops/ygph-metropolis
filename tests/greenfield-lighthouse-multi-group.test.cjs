@@ -71,6 +71,28 @@ function plan(groups, overrides = {}) {
   return { version:'1', planId:'MG-PREFLIGHT', baseRevision:7, groups, ...overrides };
 }
 
+function supportedPlan(baseRevision, overrides = {}) {
+  const sale = saleGroup({
+    fields:{
+      title:'ลูกค้าเอ', amountSatang:30000, quantity:5, receivedSatang:18000, dueDate:'2026-08-30',
+      saleId:'SALE-104', calendarQueueId:'Q-SALE-104', ledgerTransactionId:'TX-SALE-104-INITIAL',
+    },
+  });
+  const payment = paymentGroup({
+    fields:{ amountSatang:12000, ledgerTransactionId:'TX-SALE-104-PAYMENT' },
+    references:{
+      saleId:{ type:'GROUP_RESULT', groupId:'G-SALE', field:'saleId' },
+      queueId:{ type:'GROUP_RESULT', groupId:'G-SALE', field:'queueId' },
+    },
+    dependsOn:['G-SALE'],
+  });
+  return {
+    version:'1', planId:'MG02-SALE-PAY', baseRevision,
+    groups:[sale, payment],
+    ...overrides,
+  };
+}
+
 test('MG06 missing explicit reference returns NEEDS_INFO and never calls mutation runtime', async () => {
   const { prepareMultiGroupPlan } = await import('../lighthouse/multi-group-execution.mjs');
   const state = await stateAt(7, current => {
@@ -189,4 +211,69 @@ test('MG07 stale baseRevision is rejected before any plan command commits', asyn
   const finalState = await read();
   assert.equal(finalState.revision, afterBump.revision);
   assert.equal(finalState.domains.LEDGER.records['TX-MG07'], undefined);
+});
+
+test('MG02 supported sale plus payment chain commits once and returns COMPLETE from durable readback', async () => {
+  const { executeMultiGroupPlan } = await import('../lighthouse/multi-group-execution.mjs');
+  const { runtime, read } = await durableRuntime(state => {
+    state.domains.STORE.records.STOCK = imported({ recordId:'STOCK', type:'PURCHASE', title:'stock baseline', amountSatang:50000, quantity:5, status:'ACTIVE' });
+  });
+  const before = await read();
+  const result = await executeMultiGroupPlan(runtime, supportedPlan(before.revision));
+  assert.equal(result.status, 'COMPLETE');
+  const durable = await read();
+  const sale = durable.domains.STORE.records['SALE-104']?.record;
+  const queue = durable.domains.CALENDAR.records['Q-SALE-104']?.record;
+  const initial = durable.domains.LEDGER.records['TX-SALE-104-INITIAL']?.record;
+  const payment = durable.domains.LEDGER.records['TX-SALE-104-PAYMENT']?.record;
+  assert.equal(sale.totalSatang, 30000);
+  assert.equal(sale.quantity, 5);
+  assert.equal(sale.receivedSatang, 30000);
+  assert.equal(sale.outstandingSatang, 0);
+  assert.equal(sale.status, 'COMPLETED');
+  assert.equal(queue.amountSatang, 12000);
+  assert.equal(queue.paidSatang, 12000);
+  assert.equal(queue.status, 'COMPLETED');
+  assert.equal(initial.amountSatang, 18000);
+  assert.equal(payment.amountSatang, 12000);
+  assert.equal(result.readback.sale.receivedSatang, 30000);
+  assert.equal(result.readback.queue.status, 'COMPLETED');
+});
+
+test('MG03 unsupported group blocks an otherwise supported plan before any durable mutation', async () => {
+  const { executeMultiGroupPlan } = await import('../lighthouse/multi-group-execution.mjs');
+  const { runtime, read } = await durableRuntime(state => {
+    state.domains.STORE.records.STOCK = imported({ recordId:'STOCK', type:'PURCHASE', title:'stock baseline', amountSatang:50000, quantity:5, status:'ACTIVE' });
+  });
+  const before = await read();
+  const base = supportedPlan(before.revision);
+  const result = await executeMultiGroupPlan(runtime, {
+    ...base,
+    groups:[...base.groups, {
+      groupId:'G-DELETE', action:'DELETE', object:'TEST_ORDER', fields:{ recordId:'TEST-ORDER' }, references:{},
+      dependsOn:['G-PAY'], requiredResult:{ kind:'DELETE' }, confirmation:'CONFIRMED',
+    }],
+  });
+  assert.equal(result.status, 'BLOCKED');
+  assert.equal(result.groupId, 'G-DELETE');
+  assert.equal(result.reason, 'CAPABILITY_NOT_CONNECTED');
+  assert.deepEqual(await read(), before);
+});
+
+test('MG05 plan retry after lost response returns COMPLETE from durable evidence without duplicate mutation', async () => {
+  const { executeMultiGroupPlan } = await import('../lighthouse/multi-group-execution.mjs');
+  const { runtime, read } = await durableRuntime(state => {
+    state.domains.STORE.records.STOCK = imported({ recordId:'STOCK', type:'PURCHASE', title:'stock baseline', amountSatang:50000, quantity:5, status:'ACTIVE' });
+  });
+  const before = await read();
+  const request = supportedPlan(before.revision);
+  const first = await executeMultiGroupPlan(runtime, request);
+  assert.equal(first.status, 'COMPLETE');
+  const afterFirst = await read();
+  const retry = await executeMultiGroupPlan(runtime, request);
+  assert.equal(retry.status, 'COMPLETE');
+  assert.equal(retry.executionStatus, 'RECOVERED');
+  assert.deepEqual(await read(), afterFirst);
+  assert.equal(Object.keys(afterFirst.domains.LEDGER.records).filter(key => key === 'TX-SALE-104-INITIAL').length, 1);
+  assert.equal(Object.keys(afterFirst.domains.LEDGER.records).filter(key => key === 'TX-SALE-104-PAYMENT').length, 1);
 });
