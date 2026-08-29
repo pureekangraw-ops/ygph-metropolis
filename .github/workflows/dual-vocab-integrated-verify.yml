@@ -26,3 +26,5 @@ jobs:
         run: node --test tests/greenfield-lighthouse-intent-parser.test.cjs
       - name: Run dual vocab D01-D15 gate
         run: node --test tests/greenfield-lighthouse-dual-vocab.test.cjs
+      - name: Run D16 front-door integration gate
+        run: node --test tests/greenfield-lighthouse-dual-vocab-integration.test.cjs
