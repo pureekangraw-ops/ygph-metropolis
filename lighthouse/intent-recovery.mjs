@@ -95,6 +95,11 @@ export function nextRecoveryCycle({ cycle = 1, unresolved = false } = {}) {
   return { status:'REPLACE_REQUIRED', cycle:2, command:'แทนที่' };
 }
 
+function switchPayload(input) {
+  const match = /^(?:ช่าง(?:อันเดิม|เรื่องเดิม)(?:ก่อน)?|ยกเลิก(?:อันเดิม|เรื่องเดิม)(?:ก่อน)?)[\s,，:：;；-]*(.+)$/u.exec(input);
+  return match?.[1]?.trim() || null;
+}
+
 export function classifyIncomingInput(text) {
   if (typeof text !== 'string') throw new TypeError('INTENT_RECOVERY_TEXT_REQUIRED');
   const input = text.trim();
@@ -104,6 +109,13 @@ export function classifyIncomingInput(text) {
 
   const replace = /^แทนที่\s+(.+)$/u.exec(input);
   if (replace) return { type:'REPLACE', payload:replace[1].trim() };
+
+  if (/^(?:ยกเลิก(?:อันเดิม|เรื่องเดิม)?|ช่าง(?:อันเดิม|เรื่องเดิม)(?:ก่อน)?)$/u.test(input)) {
+    return { type:'CANCEL', payload:null };
+  }
+
+  const switched = switchPayload(input);
+  if (switched) return { type:'NEW_INPUT', payload:switched };
 
   return { type:'NEW_INPUT', payload:input };
 }
