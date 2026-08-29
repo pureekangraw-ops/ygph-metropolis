@@ -156,3 +156,20 @@ test('P1C107 semantic waiting directives are closed to the five approved UI type
   assert.equal(directive.slotId, 'S1');
   assert.equal(Object.hasOwn(directive, 'needsAI'), false);
 });
+
+test('P1C108 a real paused session carries the Architecture Lock minimum contract including durable baseRevision and semantic directive', async () => {
+  const routed = await routeRecoveryInput('ข้าว 2 65');
+  const { createRecoverySession } = await sessionTools();
+  const session = createRecoverySession(routed, { inputId:'I-C8', pauseId:'P-C8', baseRevision:17 });
+  assert.equal(session.pauseId, 'P-C8');
+  assert.equal(session.inputId, 'I-C8');
+  assert.equal(session.groupId, 'G1');
+  assert.equal(session.baseRevision, 17);
+  assert.equal(session.status, 'WAITING');
+  assert.equal(session.missingSlot, null);
+  assert.equal(session.reason, 'AMBIGUOUS_RECOVERY_SLOTS');
+  assert.equal(session.uiDirective.status, 'WAITING');
+  assert.equal(session.uiDirective.type, 'SELECT_TARGET');
+  assert.equal(session.uiDirective.telemetryTag, 'WAIT_AMBIGUOUS_TARGET');
+  assert.equal(Object.isFrozen(session.uiDirective), true);
+});
