@@ -5,7 +5,21 @@ import {
   nextRecoveryCycle,
   runLocalRecovery,
 } from './intent-recovery.mjs';
+import { parseNumericText } from './intent-number.mjs';
 import { prepareIntentPath } from './intent-path-adapter.mjs';
+
+export const SEMANTIC_UI_TYPES = Object.freeze([
+  'CONFIRM_TEXT',
+  'PICK_DATE',
+  'SELECT_TARGET',
+  'ENTER_VALUE',
+  'CONFIRM_ACTION',
+]);
+
+const SEMANTIC_UI_TYPE_SET = new Set(SEMANTIC_UI_TYPES);
+const RECOVERABLE_STATES = new Set(['AMBIGUOUS', 'INVALID', 'WAITING']);
+const NUMERIC_ROLES = new Set(['NUMBER', 'MONEY', 'QUANTITY']);
+const DATE_ROLES = new Set(['DATE', 'TIME', 'DATETIME']);
 
 function cloneSession(session) {
   return {
@@ -36,11 +50,12 @@ function recoverySlots(routed) {
   return slots;
 }
 
+function recoverableSlots(session) {
+  return Object.values(session?.slots ?? {}).filter(slot => RECOVERABLE_STATES.has(slot?.state));
+}
+
 function recoverableSlotIds(session) {
-  const recoverableStates = new Set(['AMBIGUOUS', 'INVALID', 'WAITING']);
-  return Object.values(session?.slots ?? {})
-    .filter(slot => recoverableStates.has(slot?.state))
-    .map(slot => slot.slotId);
+  return recoverableSlots(session).map(slot => slot.slotId);
 }
 
 function scalarReplacement(slot) {
@@ -111,6 +126,102 @@ function replaceRecoverySessionState(session, refreshed) {
   return session;
 }
 
+function normalizedOptions(options) {
+  if (!Array.isArray(options)) return Object.freeze([]);
+  return Object.freeze(options.map(option => Object.freeze({
+    value:String(option?.value ?? ''),
+    label:String(option?.label ?? option?.value ?? ''),
+  })));
+}
+
+export function createWaitingDirective(type, details = {}) {
+  const normalizedType = String(type ?? '').trim().toUpperCase();
+  if (!SEMANTIC_UI_TYPE_SET.has(normalizedType)) throw new TypeError('WAITING_DIRECTIVE_TYPE_INVALID');
+  const telemetryTag = String(details.telemetryTag ?? (
+    normalizedType === 'SELECT_TARGET' ? 'WAIT_AMBIGUOUS_TARGET' : 'WAIT_MISSING_PARAM'
+  )).trim();
+  return Object.freeze({
+    status:'WAITING',
+    type:normalizedType,
+    telemetryTag,
+    slotId:details.slotId == null ? null : String(details.slotId),
+    groupId:details.groupId == null ? null : String(details.groupId),
+    prompt:details.prompt == null ? null : String(details.prompt),
+    options:normalizedOptions(details.options),
+  });
+}
+
+function waitingOption(slot) {
+  const raw = slot?.rawValue ?? slot?.value ?? slot?.role ?? slot?.slotId;
+  return { value:slot.slotId, label:String(raw ?? slot.slotId) };
+}
+
+export function waitingDirectiveForSession(session) {
+  const waiting = recoverableSlots(session);
+  if (waiting.length === 0) return null;
+  if (waiting.length > 1) {
+    return createWaitingDirective('SELECT_TARGET', {
+      telemetryTag:'WAIT_AMBIGUOUS_TARGET',
+      prompt:'มีหลายจุดที่ต้องระบุให้ชัด เลือกจุดที่ต้องการตอบ',
+      options:waiting.map(waitingOption),
+    });
+  }
+
+  const slot = waiting[0];
+  if (NUMERIC_ROLES.has(slot.role)) {
+    return createWaitingDirective('ENTER_VALUE', {
+      telemetryTag:'WAIT_MISSING_PARAM',
+      slotId:slot.slotId,
+      groupId:slot.groupId,
+      prompt:'กรอกค่าที่ขาดเพื่อทำงานเดิมต่อ',
+    });
+  }
+  if (DATE_ROLES.has(slot.role)) {
+    return createWaitingDirective('PICK_DATE', {
+      telemetryTag:'WAIT_MISSING_PARAM',
+      slotId:slot.slotId,
+      groupId:slot.groupId,
+      prompt:'เลือกวันที่หรือเวลาเพื่อทำงานเดิมต่อ',
+    });
+  }
+  if (slot.role === 'TARGET') {
+    return createWaitingDirective('CONFIRM_TEXT', {
+      telemetryTag:slot.state === 'AMBIGUOUS' ? 'WAIT_AMBIGUOUS_TARGET' : 'WAIT_MISSING_PARAM',
+      slotId:slot.slotId,
+      groupId:slot.groupId,
+      prompt:'ยืนยันข้อความหรือเป้าหมายเพื่อทำงานเดิมต่อ',
+    });
+  }
+  return createWaitingDirective('CONFIRM_TEXT', {
+    telemetryTag:slot.state === 'AMBIGUOUS' ? 'WAIT_AMBIGUOUS_TARGET' : 'WAIT_MISSING_PARAM',
+    slotId:slot.slotId,
+    groupId:slot.groupId,
+    prompt:'ยืนยันข้อมูลเพื่อทำงานเดิมต่อ',
+  });
+}
+
+function abortSession(session, payload) {
+  const state = cloneSession(session);
+  state.status = 'ABORTED';
+  for (const slot of Object.values(state.slots)) slot.queueId = null;
+  return {
+    status:'ABORTED',
+    reason:'ABORTED_BY_USER_INTERRUPTION',
+    payload:payload == null ? null : String(payload),
+    state,
+  };
+}
+
+function directAnswerCandidateIds(session, payload) {
+  const text = String(payload ?? '').trim();
+  if (!text || /\s/u.test(text)) return [];
+  const numeric = parseNumericText(text);
+  if (numeric.state !== 'RESOLVED') return [];
+  return recoverableSlots(session)
+    .filter(slot => NUMERIC_ROLES.has(slot.role))
+    .map(slot => slot.slotId);
+}
+
 export function createRecoverySession(routed, { inputId } = {}) {
   if (typeof inputId !== 'string' || !inputId.trim()) {
     throw new TypeError('MASTER_INPUT_RECOVERY_INPUT_ID_REQUIRED');
@@ -164,8 +275,18 @@ export function runSessionLocalRecovery(session, { slotId, passFns = [], queueId
 export function applySessionOwnerInput(session, text, { selection = null } = {}) {
   const incoming = classifyIncomingInput(text);
 
+  if (incoming.type === 'CANCEL') return abortSession(session, null);
+
   if (incoming.type === 'NEW_INPUT') {
-    return { status:'NEW_INPUT', payload:incoming.payload, state:cloneSession(session) };
+    const directCandidates = directAnswerCandidateIds(session, incoming.payload);
+    if (directCandidates.length > 0) {
+      return applyOwnerCorrection(session, {
+        candidateSlotIds:directCandidates,
+        payload:incoming.payload,
+        selection:directCandidates.length === 1 ? directCandidates[0] : selection,
+      });
+    }
+    return abortSession(session, incoming.payload);
   }
 
   if (incoming.type === 'REPLACE') {
