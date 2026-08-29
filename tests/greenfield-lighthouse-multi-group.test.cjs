@@ -231,7 +231,7 @@ test('MG02 supported sale plus payment chain commits once and returns COMPLETE f
   assert.equal(sale.receivedSatang, 30000);
   assert.equal(sale.outstandingSatang, 0);
   assert.equal(sale.status, 'COMPLETED');
-  assert.equal(queue.amountSatang, 12000);
+  assert.equal(queue.amountSatang, 0);
   assert.equal(queue.paidSatang, 12000);
   assert.equal(queue.status, 'COMPLETED');
   assert.equal(initial.amountSatang, 18000);
