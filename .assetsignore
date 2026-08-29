@@ -63,6 +63,9 @@
 !/lighthouse/intent-number.mjs
 !/lighthouse/intent-condition.mjs
 !/lighthouse/intent-temporal.mjs
+!/lighthouse/intent-dual-route.mjs
+!/lighthouse/intent-vocabulary.mjs
+!/lighthouse/intent-interpret.mjs
 !/lighthouse/path-contract.mjs
 !/lighthouse/pattern-input.mjs
 !/lighthouse/path-kernel.mjs
