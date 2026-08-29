@@ -1,0 +1,25 @@
+name: Dual Vocab Verify
+
+on:
+  push:
+    branches:
+      - feature/lighthouse-dual-vocab-20260829
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Dual + vocab verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run dual vocab focused tests
+        run: node --test tests/greenfield-lighthouse-dual-vocab.test.cjs
