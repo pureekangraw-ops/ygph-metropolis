@@ -100,7 +100,7 @@ test('P1Q05 correcting a question rejoins its query instead of turning into a cr
   try {
     await expense(env, 'corrected', 'ข้าว', 6500);
     const before = await env.runtime.readState();
-    assert.equal(await env.submit('ลงข้าว1,50หรือยัง'), 'ASK');
+    assert.equal(await env.submit('ลงข้าว1,50หรือยัง'), 'รอ');
     assert.equal(await env.submit('แก้ไข 65'), 'SUCCESS');
     assert.equal(env.document.getElementById('masterInputQuestion').textContent, 'หรือยัง');
     assert.equal(env.document.getElementById('masterInputActions').children.length, 0);
