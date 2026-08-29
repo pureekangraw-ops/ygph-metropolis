@@ -21,9 +21,9 @@ jobs:
           node-version: 22
       - name: Install locked dependencies
         run: npm ci
-      - name: Run P1.2 numeric decoder tests
-        run: node --test tests/greenfield-lighthouse-intent-number.test.cjs
-      - name: Run P1.3 grouping and slot tests
-        run: node --test tests/greenfield-lighthouse-intent-parser.test.cjs
-      - name: Check Phase 1 module syntax
-        run: node --check lighthouse/intent-number.mjs && node --check lighthouse/intent-parser.mjs
+      - name: Run full test suite
+        run: npm test
+      - name: Check syntax
+        run: npm run check:syntax
+      - name: Check UTF-8
+        run: npm run check:utf8
