@@ -23,7 +23,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Run MG01-MG07 targeted gate
-        run: node --test --test-concurrency=1 tests/greenfield-lighthouse-multi-group.test.cjs
+        run: node --test --test-concurrency=1 tests/greenfield-lighthouse-multi-group*.test.cjs
       - name: Run serial full test suite
         run: node --test --test-concurrency=1 tests/greenfield-*.test.cjs
       - name: Run normal full test suite
