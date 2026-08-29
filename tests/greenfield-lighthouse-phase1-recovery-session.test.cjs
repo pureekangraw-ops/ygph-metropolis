@@ -128,7 +128,8 @@ test('P1C105 explicit cancel drops paused work without creating a fake next comm
 
 test('P1C106 a scalar reply answers the only waiting numeric slot instead of becoming a new command', async () => {
   const session = {
-    inputId:'I-C6', rawText:'ข้าว ?', originalRawText:'ข้าว ?', cycle:1, status:'RECOVERY_REQUIRED',
+    pauseId:'P-C6', inputId:'I-C6', rawText:'ข้าว ?', originalRawText:'ข้าว ?', cycle:1,
+    baseRevision:0, groupId:'G1', missingSlot:'S1', reason:null, uiDirective:null, status:'WAITING',
     slots:{ S1:{ slotId:'S1', groupId:'G1', role:'NUMBER', rawSpan:{ start:4, end:5 }, value:'?', queueId:'Q-C6', state:'WAITING' } },
   };
   const { applySessionOwnerInput } = await sessionTools();
