@@ -265,7 +265,7 @@ test('activation moves current and previous pointers together', async () => {
   };
 
   await store.stage(candidate);
-  await store.activate('0.0.2');
+  await store.activate('0.0.2', '0.0.1');
 
   assert.deepEqual(await store.readMeta(), {
     currentVersion: '0.0.2',
@@ -301,7 +301,7 @@ test('rollback atomically swaps back to the previous complete snapshot', async (
   };
 
   await store.stage(candidate);
-  await store.activate('0.0.2');
+  await store.activate('0.0.2', '0.0.1');
   await store.rollback();
 
   assert.deepEqual(await store.readMeta(), {
@@ -328,7 +328,7 @@ test('IndexedDB store persists the active pointer and supports rollback after re
     databaseName,
   });
   await first.stage(candidate);
-  await first.activate('0.0.2');
+  await first.activate('0.0.2', '0.0.1');
   assert.deepEqual(await first.readCurrent(), candidate);
 
   const reopened = createIndexedDbPatchStore({
@@ -348,4 +348,37 @@ test('IndexedDB store persists the active pointer and supports rollback after re
     previousVersion: '0.0.2',
   });
   assert.deepEqual(await reopened.readCurrent(), base);
+});
+
+test('activation with stale expected version is rejected and leaves newer patch Current', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+
+  // Stage and activate 0.0.2 first
+  const v2 = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>v2</main>' },
+  };
+  await store.stage(v2);
+  await store.activate('0.0.2', '0.0.1');
+  assert.equal((await store.readMeta()).currentVersion, '0.0.2');
+
+  // Now try to activate a stale 0.0.2 as if it was based on 0.0.1
+  const staleV2 = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>stale v2</main>' },
+  };
+  await store.stage(staleV2);
+
+  // This should fail because current has moved to 0.0.2, not 0.0.1
+  await assert.rejects(
+    store.activate('0.0.2', '0.0.1'),
+    /Cannot activate.*current version changed/i,
+  );
+
+  // Verify current is still 0.0.2 (the newer patch won)
+  assert.equal((await store.readMeta()).currentVersion, '0.0.2');
+  const current = await store.readCurrent();
+  assert.equal(current.assets['ui.html'], '<main>v2</main>');
 });
