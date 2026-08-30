@@ -47,6 +47,10 @@ function snapshotsEqual(left, right) {
   return PATCH_ALLOWED_FILES.every((path) => left.assets?.[path] === right.assets?.[path]);
 }
 
+function snapshotConflictError(version) {
+  return new Error(`Patch snapshot version is immutable and already exists with different content: ${version}`);
+}
+
 function requestValue(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -96,6 +100,36 @@ async function initializeDatabase(database, baseSnapshot) {
   await done;
 }
 
+function stageIndexedDbSnapshot(database, candidate) {
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, 'readwrite');
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.get(candidate.version);
+    let stageError;
+
+    request.onsuccess = () => {
+      try {
+        if (request.result) {
+          const existing = validateSnapshot(request.result);
+          if (!snapshotsEqual(existing, candidate)) throw snapshotConflictError(candidate.version);
+          return;
+        }
+        store.add(clone(candidate), candidate.version);
+      } catch (error) {
+        stageError = error;
+        transaction.abort();
+      }
+    };
+    request.onerror = () => {
+      stageError = request.error ?? new Error('Unable to read staged patch snapshot');
+      transaction.abort();
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(stageError ?? transaction.error ?? new Error('Patch snapshot transaction failed'));
+    transaction.onabort = () => reject(stageError ?? transaction.error ?? new Error('Patch snapshot transaction aborted'));
+  });
+}
+
 export function composeSnapshot({ currentSnapshot, baseAssets, verifiedPatch }) {
   const patch = asObject(verifiedPatch, 'Verified patch');
   if (typeof patch.version !== 'string' || patch.version.length === 0) {
@@ -127,6 +161,11 @@ export function createMemoryPatchStore({ baseSnapshot }) {
   return {
     async stage(snapshot) {
       const candidate = validateSnapshot(snapshot);
+      const existing = snapshots.get(candidate.version);
+      if (existing) {
+        if (!snapshotsEqual(existing, candidate)) throw snapshotConflictError(candidate.version);
+        return clone(existing);
+      }
       snapshots.set(candidate.version, clone(candidate));
       return clone(candidate);
     },
@@ -245,10 +284,7 @@ export function createIndexedDbPatchStore({
     async stage(snapshot) {
       const candidate = validateSnapshot(snapshot);
       const database = await ready;
-      const transaction = database.transaction(SNAPSHOTS_STORE, 'readwrite');
-      const done = transactionDone(transaction);
-      transaction.objectStore(SNAPSHOTS_STORE).put(clone(candidate), candidate.version);
-      await done;
+      await stageIndexedDbSnapshot(database, candidate);
 
       const readback = await readSnapshot(candidate.version);
       if (!snapshotsEqual(candidate, readback)) {
