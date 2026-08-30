@@ -94,9 +94,13 @@ async function patchSnapshot() {
   };
 }
 
-async function flushUi() {
-  await Promise.resolve();
-  await new Promise(resolve => setTimeout(resolve, 0));
+async function waitFor(predicate, label, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.fail(`Timed out waiting for ${label}`);
 }
 
 async function mountIntegratedFrontDoor(brain) {
@@ -125,7 +129,6 @@ async function submit(dom, app, value) {
   const input = app.querySelector('[data-chat-input]');
   input.value = value;
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
-  await flushUi();
 }
 
 test('actual patched Front Door calls trusted brain and writes only after visible explicit confirmation', async (t) => {
@@ -142,6 +145,7 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
 
   const initial = await runtime.readState();
   await submit(dom, app, 'ข้าว 65');
+  await waitFor(() => app.querySelector('[data-brain-confirm]'), 'READY confirmation control');
 
   const beforeConfirm = await runtime.readState();
   assert.equal(beforeConfirm.revision, initial.revision);
@@ -152,9 +156,11 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
   assert.match(messages.at(-1).textContent, /พร้อม|ยืนยัน/);
 
   const confirm = app.querySelector('[data-brain-confirm]');
-  assert.ok(confirm, 'READY response must expose an explicit confirmation control');
   confirm.click();
-  await flushUi();
+  await waitFor(
+    () => app.querySelector('[data-chat-log]').textContent.includes('บันทึกและอ่านกลับแล้ว'),
+    'durable SUCCESS readback in conversation',
+  );
 
   const afterConfirm = await runtime.readState();
   const records = expenseRecords(afterConfirm);
@@ -178,20 +184,26 @@ test('actual patched Front Door shows WAITING, accepts correction, then confirms
 
   const initial = await runtime.readState();
   await submit(dom, app, 'ข้าว 1,50');
+  await waitFor(
+    () => /กรอก|ข้อมูล|ระบุ|ยืนยัน/.test(app.querySelector('[data-chat-log]').textContent),
+    'WAITING recovery prompt',
+  );
   assert.equal(expenseRecords(await runtime.readState()).length, 0);
-  assert.match(app.querySelector('[data-chat-log]').textContent, /กรอก|ข้อมูล|ระบุ|ยืนยัน/);
   assert.equal(app.querySelector('[data-brain-confirm]'), null);
 
   await submit(dom, app, '150');
+  await waitFor(() => app.querySelector('[data-brain-confirm]'), 'corrected READY confirmation');
   const readyState = await runtime.readState();
   assert.equal(readyState.revision, initial.revision);
   assert.equal(expenseRecords(readyState).length, 0);
 
   const confirm = app.querySelector('[data-brain-confirm]');
-  assert.ok(confirm, 'corrected READY response must expose confirmation');
   assert.match(app.querySelector('[data-chat-log]').textContent, /150\.00|150,00|150 บาท/);
   confirm.click();
-  await flushUi();
+  await waitFor(
+    () => app.querySelector('[data-chat-log]').textContent.includes('บันทึกและอ่านกลับแล้ว'),
+    'corrected durable SUCCESS readback in conversation',
+  );
 
   const records = expenseRecords(await runtime.readState());
   assert.equal(records.length, 1);
