@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/lighthouse-multi-group-frontdoor-20260830
+      - feature/lighthouse-paused-ask-resume-20260830
 
 permissions:
   contents: read
