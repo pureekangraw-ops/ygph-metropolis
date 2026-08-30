@@ -9,6 +9,9 @@ import {
   initializeTrustedFirstRun,
   openTrustedBrain,
 } from '../www/trusted/bootstrap.mjs';
+import { openGreenfieldVaultStore } from '../../greenfield/browser-store.mjs';
+
+const ERROR_STATISTICS_KEY = 'trusted-error-statistics:v1';
 
 function tick() {
   return new Promise(resolve => setTimeout(resolve, 0));
@@ -147,6 +150,15 @@ test('actual trusted session keeps error statistics encrypted in the Greenfield 
     publicCode:404,
     message:'Sorry — error code 404',
   });
+
+  const rawStore = await openGreenfieldVaultStore({ indexedDBImpl });
+  const rawJournal = await rawStore.get(ERROR_STATISTICS_KEY);
+  rawStore.close();
+  assert.ok(rawJournal && typeof rawJournal === 'object', 'encrypted error journal must exist in the Greenfield vault store');
+  assert.equal(typeof rawJournal.ciphertext, 'string');
+  const rawText = JSON.stringify(rawJournal);
+  assert.doesNotMatch(rawText, /วิ่ง 65/);
+  assert.doesNotMatch(rawText, /REMOTE_INTERPRETER_NOT_CONFIGURED/);
 
   assert.equal(typeof session.readErrorStatistics, 'function');
   const statistics = await session.readErrorStatistics();
