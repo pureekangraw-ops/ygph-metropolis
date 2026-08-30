@@ -139,8 +139,11 @@ export function createMemoryPatchStore({ baseSnapshot }) {
       return clone(snapshot);
     },
 
-    async activate(version) {
+    async activate(version, expectedCurrentVersion) {
       if (!snapshots.has(version)) throw new Error(`Staged patch snapshot is missing: ${version}`);
+      if (meta.currentVersion !== expectedCurrentVersion) {
+        throw new Error(`Cannot activate: current version changed from ${expectedCurrentVersion} to ${meta.currentVersion}`);
+      }
       if (version === meta.currentVersion) return clone(meta);
       meta = {
         currentVersion: version,
@@ -256,11 +259,14 @@ export function createIndexedDbPatchStore({
       return snapshot;
     },
 
-    async activate(version) {
+    async activate(version, expectedCurrentVersion) {
       const candidate = await readSnapshot(version);
       if (!candidate) throw new Error(`Staged patch snapshot is missing: ${version}`);
 
       const nextMeta = await mutateMeta((meta) => {
+        if (meta.currentVersion !== expectedCurrentVersion) {
+          throw new Error(`Cannot activate: current version changed from ${expectedCurrentVersion} to ${meta.currentVersion}`);
+        }
         if (meta.currentVersion === version) return meta;
         return { currentVersion: version, previousVersion: meta.currentVersion };
       });
