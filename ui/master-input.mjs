@@ -1,6 +1,7 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfield/master-input-router.mjs';
 import { routeMasterInputText } from '../lighthouse/master-input-route.mjs';
+import { executeFrontdoorMultiGroupBoxes } from '../lighthouse/multi-group-frontdoor-runtime.mjs';
 import {
   createRecoverySession,
   applySessionOwnerInput,
@@ -16,6 +17,7 @@ const $ = id => document.getElementById(id);
 const localPathKernel = createPathKernel({ capabilities:[createExpenseCapability()] });
 let preparedExecution = null;
 let preparedPathRequest = null;
+let preparedMultiGroupRoute = null;
 let currentIntent = null;
 let activeRecoverySession = null;
 let activeRecoverySelection = null;
@@ -76,6 +78,10 @@ function readbackText(object, readback = {}) {
     return `สร้างได้ ${formatSatang(readback.generatedSatang)} บาท · เงินสด ${formatSatang(readback.cashJobSatang)} · เครดิต ${formatSatang(readback.creditJobSatang)} · ค่าใช้จ่าย ${formatSatang(readback.expenseSatang)}`;
   }
   return 'อ่านกลับสำเร็จ';
+}
+
+function commandStatusText(commands = []) {
+  return commands.map(command => `${command.rawText || command.groupId || 'คำสั่ง'} · ${command.status}`).join(' · ');
 }
 
 function friendlyError(error) {
@@ -285,12 +291,20 @@ async function showLocalStop(routed) {
     showWaitingSession({ title:'รอให้ระบุเฉพาะจุด' });
     return;
   }
+  if (routed.status === 'WAITING') {
+    setState('WAITING', {
+      title:'รอข้อมูลของคำสั่งนี้',
+      copy:commandStatusText(routed.commands),
+      meta:'คำสั่งที่ยังไม่พร้อมจะไม่ถูกส่งทำงาน',
+    });
+    return;
+  }
   if (routed.status === 'REFERENCE') {
     setState('UNSUPPORTED', { title:'เป็นข้อความอ้างอิง', copy:'ข้อความนี้ยังไม่ได้สั่งให้บันทึก', meta:'ไม่มีการเขียนข้อมูล' });
     return;
   }
   if (routed.status === 'BLOCKED') {
-    setState('UNSUPPORTED', { title:'ไม่ส่งทำงาน', copy:'ตรวจพบคำห้าม จึงหยุดก่อน PATH และ Runtime', meta:'ไม่มีการเขียนข้อมูล' });
+    setState('UNSUPPORTED', { title:'ไม่ส่งทำงาน', copy:commandStatusText(routed.commands) || 'คำสั่งนี้ยังไม่ผ่าน capability gate', meta:'ไม่มีการเขียนข้อมูล' });
     return;
   }
   setState('UNSUPPORTED', { title:'ยังไม่รองรับ', copy:'เข้าใจความหมายส่วนนี้แล้ว แต่ปลายทางยังทำตามเงื่อนไขนี้ไม่ได้', meta:'เก็บความหมายไว้และไม่มีการเขียนข้อมูล' });
@@ -369,6 +383,7 @@ async function interpretCurrentText() {
   if (!text) return;
   preparedExecution = null;
   preparedPathRequest = null;
+  preparedMultiGroupRoute = null;
   currentIntent = null;
   markQuestion(null);
 
@@ -446,9 +461,11 @@ async function interpretCurrentText() {
   setState('INTERPRETING', { title:'กำลังตีความ', copy:'ยังไม่มีการเขียนข้อมูล' });
   try {
     const receivedAt = new Date().toISOString();
+    const routeContext = await withMasterRuntime((_runtime, state) => ({ baseRevision:state.revision }));
     const routed = await routeMasterInputText(text, {
       receivedAt,
       timeZone:'Asia/Bangkok',
+      baseRevision:routeContext.baseRevision,
       requestIdFactory:localRequestId,
       interpretFallback:requestInterpretation,
     });
@@ -456,6 +473,20 @@ async function interpretCurrentText() {
 
     if (routed.route === 'LOCAL_QUERY') {
       await answerLocalQuestion(routed);
+      return;
+    }
+
+    if (routed.route === 'LOCAL_MULTI_GROUP') {
+      preparedMultiGroupRoute = routed;
+      const readyCount = routed.commands.filter(command => command.status === 'READY').length;
+      const waitingCount = routed.commands.filter(command => command.status === 'WAITING').length;
+      const blockedCount = routed.commands.filter(command => command.status === 'BLOCKED').length;
+      setState('READY', {
+        title:'แยกคำสั่งเป็นกล่องแล้ว',
+        copy:commandStatusText(routed.commands),
+        meta:`READY ${readyCount}${waitingCount ? ` · WAITING ${waitingCount}` : ''}${blockedCount ? ` · BLOCKED ${blockedCount}` : ''} · ยังไม่มีการเขียนข้อมูล`,
+        execute:readyCount > 0,
+      });
       return;
     }
 
@@ -499,8 +530,43 @@ async function interpretCurrentText() {
 }
 
 async function executePrepared() {
-  if ((!preparedPathRequest && !preparedExecution) || !currentIntent) return;
+  if (!preparedMultiGroupRoute && (((!preparedPathRequest && !preparedExecution) || !currentIntent))) return;
   setState('INTERPRETING', { title:'กำลังดำเนินการ', copy:'Runtime กำลังตรวจและอ่านกลับผลจริง' });
+
+  if (preparedMultiGroupRoute) {
+    try {
+      const result = await withMasterRuntime(runtime => executeFrontdoorMultiGroupBoxes(runtime, preparedMultiGroupRoute));
+      const copy = commandStatusText(result.commands);
+      if (result.status === 'COMPLETE') {
+        setState('SUCCESS', {
+          title:'บันทึกและอ่านกลับแล้ว',
+          copy,
+          meta:'แต่ละคำสั่งขึ้น COMPLETE หลัง durable readback เท่านั้น',
+        });
+        preparedMultiGroupRoute = null;
+        globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
+        return;
+      }
+
+      preparedMultiGroupRoute = Object.freeze({ ...preparedMultiGroupRoute, commands:result.commands });
+      if (result.commands.some(command => command.status === 'ERROR')) {
+        setState('ERROR', { title:'มีคำสั่งที่ Runtime ทำไม่สำเร็จ', copy, meta:'แสดงสถานะจริงรายคำสั่ง · ไม่สรุปทั้งก้อนว่าเสร็จ', execute:true });
+        return;
+      }
+      if (result.commands.some(command => command.status === 'BLOCKED')) {
+        setState('UNSUPPORTED', { title:'มีคำสั่งที่ทำไม่ได้', copy, meta:'คำสั่ง BLOCKED ไม่ถูกส่งต่อ · สถานะคำสั่งอื่นยังคงแยกกัน' });
+        return;
+      }
+      if (result.commands.some(command => command.status === 'WAITING')) {
+        setState('WAITING', { title:'ยังมีคำสั่งรอข้อมูล', copy, meta:'คำสั่งที่รอยังไม่ถูกทำ · สถานะแต่ละคำสั่งไม่ถูกยกทับ' });
+        return;
+      }
+      setState('READY', { title:'ยังยืนยันผลไม่ครบ', copy, meta:'ยังไม่ประกาศ COMPLETE จนกว่า durable readback จะพิสูจน์ได้', execute:true });
+    } catch (error) {
+      setState('ERROR', { title:'Multi-Group หยุดอย่างปลอดภัย', copy:friendlyError(error), meta:'ไม่สรุปว่าเสร็จเมื่อยังตรวจ readback ไม่ครบ', execute:true });
+    }
+    return;
+  }
 
   if (preparedPathRequest) {
     try {
