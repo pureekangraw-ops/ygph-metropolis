@@ -1,0 +1,16 @@
+{
+  "schema": "lighthouse.patch.v1",
+  "baseVersion": "0.0.1",
+  "version": "0.0.2",
+  "files": {
+    "ui.html": {
+      "sha256": "292749f676b5cc619d7821de23aa0d5aa762bf186fd1777413d13bc752db838c",
+      "content": "<main class=\"lighthouse-proof\"><h1>LIGHTHOUSE Patch Proof 0.0.2</h1><p>Manual signed web patch is active.</p><p>Package: <code>com.yggdrasil.lighthouse</code></p><p class=\"version\">Web snapshot: <code data-lighthouse-version>0.0.2</code></p></main>"
+    }
+  },
+  "signature": {
+    "alg": "ECDSA-P256-SHA256",
+    "keyId": "lighthouse-debug-patch-1",
+    "value": "FGAQg-mC2t3lou7wOPvhWfvPy_crLazAOkvd1nhz6PLriKr-cCEHM3Mg5c_fWYGObaz6FDakG6v_AZplfPoiaA"
+  }
+}

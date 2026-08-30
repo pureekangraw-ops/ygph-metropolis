@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="LIGHTHOUSE APK Foundation Proof">
+  <title>LIGHTHOUSE</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; background: #10151d; color: #f5f7fb; }
+    .patch-controls { box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .8rem 1rem; border-top: 1px solid #293241; background: #0c1118; }
+    .patch-controls label, .patch-controls button { font: inherit; }
+    .patch-controls input { max-width: 14rem; }
+    .patch-controls button { padding: .4rem .7rem; }
+    #patch-status { flex: 1 1 12rem; margin: 0; font-size: .85rem; color: #c7d0dc; }
+  </style>
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <aside class="patch-controls" aria-label="LIGHTHOUSE Patch controls">
+    <label for="patch-file">Patch</label>
+    <input id="patch-file" type="file">
+    <button id="patch-rollback" type="button">Rollback</button>
+    <p id="patch-status" role="status">กำลังเปิด LIGHTHOUSE…</p>
+  </aside>
+  <script type="module" src="./patch/patch-runtime.mjs"></script>
+</body>
+</html>

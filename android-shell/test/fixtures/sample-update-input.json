@@ -1,0 +1,7 @@
+{
+  "baseVersion": "0.0.1",
+  "version": "0.0.2",
+  "files": {
+    "ui.html": "<main class=\"lighthouse-proof\"><h1>LIGHTHOUSE Patch Proof 0.0.2</h1><p>Manual signed web patch is active.</p><p>Package: <code>com.yggdrasil.lighthouse</code></p><p class=\"version\">Web snapshot: <code data-lighthouse-version>0.0.2</code></p></main>"
+  }
+}
