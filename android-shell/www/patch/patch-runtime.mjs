@@ -34,6 +34,13 @@ async function loadTrustedKey(fetchImpl) {
   return response.json();
 }
 
+export async function parseSelectedPatchFile(file) {
+  if (!file?.name?.toLowerCase().endsWith('.lhpatch')) {
+    throw new Error('Patch file must use .lhpatch');
+  }
+  return JSON.parse(await file.text());
+}
+
 function defaultCreateModuleUrl(source) {
   return URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
 }
@@ -170,10 +177,7 @@ export async function startPatchRuntime({
     status.textContent = 'กำลังตรวจ Patch…';
 
     try {
-      if (!file.name?.toLowerCase().endsWith('.lhpatch')) {
-        throw new Error('Patch file must use .lhpatch');
-      }
-      const bundle = JSON.parse(await file.text());
+      const bundle = await parseSelectedPatchFile(file);
       attemptedVersion = bundle?.version ?? null;
       const trustedKey = await loadTrustedKey(fetchImpl);
       const { before, current } = await applyPatchBundle(bundle, { store, trustedKey });
