@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
+import { mountSnapshot } from '../www/patch/patch-runtime.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
@@ -10,21 +11,43 @@ async function loadPatchInput() {
   return JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
 }
 
-async function importPatchLogic(source) {
-  const encoded = Buffer.from(source, 'utf8').toString('base64');
-  return import(`data:text/javascript;base64,${encoded}`);
+async function buildPatchSnapshot(input) {
+  return {
+    version: input.version,
+    assets: {
+      'ui.html': input.files['ui.html'],
+      'ui.css': input.files['ui.css'],
+      'logic.mjs': input.files['logic.mjs'],
+      'rules.json': await read('www/app/rules.json'),
+      'vocabulary.json': await read('www/app/vocabulary.json'),
+    },
+  };
 }
 
-function createFrontDoorDom(input, { foundationControls = true } = {}) {
+function createFrontDoorDom({ foundationControls = true } = {}) {
   const foundation = foundationControls
     ? '<aside class="patch-controls"><input id="patch-file" type="file"><button id="patch-rollback" type="button">Rollback</button><p id="patch-status"></p></aside>'
     : '';
-  const dom = new JSDOM(`<!doctype html><html><body><div id="app"></div>${foundation}</body></html>`, {
+  const dom = new JSDOM(`<!doctype html><html><head></head><body><div id="app"></div>${foundation}</body></html>`, {
     url: 'https://lighthouse.test/',
   });
-  const app = dom.window.document.getElementById('app');
-  app.innerHTML = input.files['ui.html'];
-  return { dom, app };
+  return {
+    dom,
+    app: dom.window.document.getElementById('app'),
+  };
+}
+
+async function mountFrontDoor(input, { foundationControls = true } = {}) {
+  const { dom, app } = createFrontDoorDom({ foundationControls });
+  const snapshot = await buildPatchSnapshot(input);
+  const cleanup = await mountSnapshot(snapshot, {
+    root: app,
+    documentRef: dom.window.document,
+    createModuleUrl: (source) => `data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`,
+    importModule: (url) => import(url),
+    revokeModuleUrl: () => {},
+  });
+  return { dom, app, cleanup };
 }
 
 test('0.0.3 front door ships as patch input while packaged 0.0.1 stays unchanged', async () => {
@@ -37,11 +60,9 @@ test('0.0.3 front door ships as patch input while packaged 0.0.1 stays unchanged
   assert.deepEqual(Object.keys(input.files).sort(), ['logic.mjs', 'ui.css', 'ui.html']);
 });
 
-test('0.0.3 front door mounts and handles a real chat submit without claiming execution', async () => {
+test('patch runtime mounts 0.0.3 and the real chat submit renders user + truthful disconnected reply', async () => {
   const input = await loadPatchInput();
-  const { dom, app } = createFrontDoorDom(input);
-  const logic = await importPatchLogic(input.files['logic.mjs']);
-  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
+  const { dom, app, cleanup } = await mountFrontDoor(input);
 
   try {
     assert.equal(app.querySelector('[data-lighthouse-version]').textContent, '0.0.3');
@@ -72,11 +93,9 @@ test('0.0.3 front door mounts and handles a real chat submit without claiming ex
   }
 });
 
-test('Settings opens in the mounted UI and Patch/Rollback buttons proxy the real foundation controls', async () => {
+test('mounted Settings opens and Patch/Rollback actions proxy the foundation runtime controls', async () => {
   const input = await loadPatchInput();
-  const { dom, app } = createFrontDoorDom(input);
-  const logic = await importPatchLogic(input.files['logic.mjs']);
-  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
+  const { dom, app, cleanup } = await mountFrontDoor(input);
 
   try {
     const settings = app.querySelector('[data-settings-panel]');
@@ -102,11 +121,9 @@ test('Settings opens in the mounted UI and Patch/Rollback buttons proxy the real
   }
 });
 
-test('mounted UI shows a real system alert when foundation Patch controls are unavailable', async () => {
+test('mounted 0.0.3 shows a real system alert when foundation Patch controls are unavailable', async () => {
   const input = await loadPatchInput();
-  const { dom, app } = createFrontDoorDom(input, { foundationControls: false });
-  const logic = await importPatchLogic(input.files['logic.mjs']);
-  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
+  const { dom, app, cleanup } = await mountFrontDoor(input, { foundationControls: false });
 
   try {
     const alert = app.querySelector('[data-system-alert]');
