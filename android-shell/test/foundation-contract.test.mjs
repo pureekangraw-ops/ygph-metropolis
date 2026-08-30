@@ -15,6 +15,7 @@ test('Capacitor shell contract is pinned to LIGHTHOUSE Android foundation', asyn
   assert.equal(pkg.dependencies['@capacitor/core'], '8.5.0');
   assert.equal(pkg.devDependencies['@capacitor/cli'], '8.5.0');
   assert.equal(pkg.devDependencies['@capacitor/android'], '8.5.0');
+  assert.equal(pkg.scripts['android:debug'], 'cd android && ./gradlew assembleDebug');
 });
 
 test('foundation page stays local and excludes later-phase native scope', async () => {
@@ -23,11 +24,11 @@ test('foundation page stays local and excludes later-phase native scope', async 
   assert.doesNotMatch(html, /geolocation|google maps|api[_ -]?key|gps/i);
 });
 
-test('GitHub Actions builds and uploads a debug APK', async () => {
+test('GitHub Actions builds from the Android project and uploads a debug APK', async () => {
   const workflow = await read('.github/workflows/lighthouse-apk-debug.yml');
   assert.match(workflow, /node-version:\s*22/);
   assert.match(workflow, /npx cap add android/);
-  assert.match(workflow, /assembleDebug/);
+  assert.match(workflow, /run:\s*npm run android:debug/);
   assert.match(workflow, /android-shell\/android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
 });
