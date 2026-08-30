@@ -1,58 +1,140 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { JSDOM } from 'jsdom';
 
 const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
 
-test('0.0.3 front door ships as a patch input while packaged 0.0.1 stays unchanged', async () => {
+async function loadPatchInput() {
+  return JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
+}
+
+async function importPatchLogic(source) {
+  const encoded = Buffer.from(source, 'utf8').toString('base64');
+  return import(`data:text/javascript;base64,${encoded}`);
+}
+
+function createFrontDoorDom(input, { foundationControls = true } = {}) {
+  const foundation = foundationControls
+    ? '<aside class="patch-controls"><input id="patch-file" type="file"><button id="patch-rollback" type="button">Rollback</button><p id="patch-status"></p></aside>'
+    : '';
+  const dom = new JSDOM(`<!doctype html><html><body><div id="app"></div>${foundation}</body></html>`, {
+    url: 'https://lighthouse.test/',
+  });
+  const app = dom.window.document.getElementById('app');
+  app.innerHTML = input.files['ui.html'];
+  return { dom, app };
+}
+
+test('0.0.3 front door ships as patch input while packaged 0.0.1 stays unchanged', async () => {
   const packagedHtml = await read('www/app/ui.html');
   assert.match(packagedHtml, /LIGHTHOUSE APK Foundation Proof/);
 
-  const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
+  const input = await loadPatchInput();
   assert.equal(input.baseVersion, '0.0.1');
   assert.equal(input.version, '0.0.3');
   assert.deepEqual(Object.keys(input.files).sort(), ['logic.mjs', 'ui.css', 'ui.html']);
 });
 
-test('0.0.3 patch UI is chat-first and never claims connected intent execution', async () => {
-  const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
-  const html = input.files['ui.html'];
-  const logic = input.files['logic.mjs'];
+test('0.0.3 front door mounts and handles a real chat submit without claiming execution', async () => {
+  const input = await loadPatchInput();
+  const { dom, app } = createFrontDoorDom(input);
+  const logic = await importPatchLogic(input.files['logic.mjs']);
+  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
 
-  assert.match(html, /LIGHTHOUSE/);
-  assert.match(html, /textarea|input[^>]+(?:message|chat|command)/i);
-  assert.match(html, /settings/i);
-  assert.doesNotMatch(html, /Foundation Proof/i);
-  assert.doesNotMatch(html, /ความมั่นใจ|confidence/i);
-  assert.doesNotMatch(html, /บันทึกสำเร็จ|บันทึกและอ่านกลับแล้ว/i);
-  assert.doesNotMatch(logic, /\/api\/v1\/interpret|prepareMasterExecution|executePreparedMasterIntent/);
-  assert.match(logic, /ยังไม่เชื่อม|not connected/i);
+  try {
+    assert.equal(app.querySelector('[data-lighthouse-version]').textContent, '0.0.3');
+    assert.equal(app.querySelector('[data-empty-state]').hidden, false);
+
+    const composer = app.querySelector('[data-chat-form]');
+    const chatInput = app.querySelector('[data-chat-input]');
+    chatInput.value = 'ข้าว 65';
+    const submitted = composer.dispatchEvent(new dom.window.Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    assert.equal(submitted, false, 'submit handler must prevent browser form navigation');
+    assert.equal(chatInput.value, '');
+    assert.equal(app.querySelector('[data-empty-state]').hidden, true);
+
+    const messages = [...app.querySelectorAll('.message')];
+    assert.equal(messages.length, 2);
+    assert.equal(messages[0].classList.contains('message-user'), true);
+    assert.equal(messages[0].textContent, 'ข้าว 65');
+    assert.equal(messages[1].classList.contains('message-lighthouse'), true);
+    assert.match(messages[1].textContent, /ระบบตีความยังไม่เชื่อม/);
+    assert.match(messages[1].textContent, /ยังไม่มีการบันทึกหรือดำเนินการ/);
+  } finally {
+    await cleanup();
+    dom.window.close();
+  }
 });
 
-test('patch management is exposed through settings using manual file import and rollback proxies', async () => {
-  const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
+test('Settings opens in the mounted UI and Patch/Rollback buttons proxy the real foundation controls', async () => {
+  const input = await loadPatchInput();
+  const { dom, app } = createFrontDoorDom(input);
+  const logic = await importPatchLogic(input.files['logic.mjs']);
+  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
+
+  try {
+    const settings = app.querySelector('[data-settings-panel]');
+    assert.equal(settings.hidden, true);
+    app.querySelector('[data-settings-open]').click();
+    assert.equal(settings.hidden, false);
+
+    let filePickerClicks = 0;
+    let rollbackClicks = 0;
+    dom.window.document.getElementById('patch-file').addEventListener('click', () => { filePickerClicks += 1; });
+    dom.window.document.getElementById('patch-rollback').addEventListener('click', () => { rollbackClicks += 1; });
+
+    app.querySelector('[data-patch-import]').click();
+    app.querySelector('[data-patch-rollback]').click();
+    assert.equal(filePickerClicks, 1);
+    assert.equal(rollbackClicks, 1);
+
+    app.querySelector('[data-settings-close]').click();
+    assert.equal(settings.hidden, true);
+  } finally {
+    await cleanup();
+    dom.window.close();
+  }
+});
+
+test('mounted UI shows a real system alert when foundation Patch controls are unavailable', async () => {
+  const input = await loadPatchInput();
+  const { dom, app } = createFrontDoorDom(input, { foundationControls: false });
+  const logic = await importPatchLogic(input.files['logic.mjs']);
+  const cleanup = await logic.mount({ root: app, version: '0.0.3' });
+
+  try {
+    const alert = app.querySelector('[data-system-alert]');
+    assert.equal(alert.hidden, true);
+
+    app.querySelector('[data-patch-import]').click();
+    assert.equal(alert.hidden, false);
+    assert.match(app.querySelector('[data-system-alert-copy]').textContent, /ไม่พบช่องนำเข้า Patch/);
+
+    app.querySelector('[data-system-alert-close]').click();
+    assert.equal(alert.hidden, true);
+  } finally {
+    await cleanup();
+    dom.window.close();
+  }
+});
+
+test('0.0.3 patch remains manual, web-only, and does not wire the future Intent execution path', async () => {
+  const input = await loadPatchInput();
   const html = input.files['ui.html'];
   const css = input.files['ui.css'];
   const logic = input.files['logic.mjs'];
 
-  assert.match(html, /เลือกไฟล์ Patch|นำเข้า Patch/i);
+  assert.match(html, /เลือกไฟล์ Patch/);
   assert.match(html, /Rollback/);
-  assert.doesNotMatch(html, /ตรวจหา Patch ใหม่/i);
-  assert.match(html, /data-lighthouse-version/);
-  assert.match(logic, /patch-file/);
-  assert.match(logic, /patch-rollback/);
-  assert.match(logic, /\.click\(\)/);
+  assert.doesNotMatch(html, /ตรวจหา Patch ใหม่/);
   assert.match(css, /\.patch-controls\s*\{[^}]*display\s*:\s*none/is);
-});
-
-test('0.0.3 patch keeps real problems distinct from normal chat and stays web-only', async () => {
-  const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
-  const html = input.files['ui.html'];
-  const logic = input.files['logic.mjs'];
-
-  assert.match(html, /role=["']alert["']|data-system-alert/i);
-  assert.match(logic, /showSystemAlert|systemAlert/);
-  assert.match(logic, /setTimeout/);
+  assert.doesNotMatch(logic, /\/api\/v1\/interpret|prepareMasterExecution|executePreparedMasterIntent|fetch\s*\(/);
   assert.doesNotMatch(logic, /geolocation|navigator\.permissions|google\.maps|capacitor/i);
+  assert.doesNotMatch(html, /ความมั่นใจ|confidence|บันทึกสำเร็จ|บันทึกและอ่านกลับแล้ว/i);
 });
