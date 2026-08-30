@@ -69,4 +69,8 @@
 !/lighthouse/path-contract.mjs
 !/lighthouse/pattern-input.mjs
 !/lighthouse/path-kernel.mjs
+!/lighthouse/multi-group-contract.mjs
+!/lighthouse/multi-group-execution.mjs
+!/lighthouse/multi-group-frontdoor.mjs
+!/lighthouse/multi-group-frontdoor-runtime.mjs
 !/lighthouse/capabilities/expense.mjs
