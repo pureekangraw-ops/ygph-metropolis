@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 
 import { mountSnapshot } from '../www/patch/patch-runtime.mjs';
 import { createTrustedBrainAdapter } from '../www/trusted/brain-adapter.mjs';
+import { createTrustedBrainGate } from '../www/trusted/brain-gate.mjs';
 import { routeMasterInputText } from '../../lighthouse/master-input-route.mjs';
 import {
   createRecoverySession,
@@ -65,7 +66,7 @@ async function createRuntimeAndBrain() {
   });
   activateRuntimeSession(runtime);
   const pathKernel = createPathKernel({ capabilities:[createExpenseCapability()] });
-  const brain = createTrustedBrainAdapter({
+  const adapter = createTrustedBrainAdapter({
     routeMasterInputText,
     createRecoverySession,
     applySessionOwnerInput,
@@ -76,6 +77,10 @@ async function createRuntimeAndBrain() {
     inputIdFactory:ids('INPUT-DOM'),
     receivedAt:() => '2026-08-31T00:10:02.000Z',
     timeZone:'Asia/Bangkok',
+  });
+  const brain = createTrustedBrainGate({
+    brain:adapter,
+    confirmImpl:() => true,
   });
   return { runtime, brain };
 }
@@ -131,7 +136,7 @@ async function submit(dom, app, value) {
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
 }
 
-test('actual patched Front Door calls trusted brain and writes only after visible explicit confirmation', async (t) => {
+test('actual patched Front Door calls trusted brain and writes only after trusted confirmation', async (t) => {
   const { runtime, brain } = await createRuntimeAndBrain();
   const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
 
@@ -154,6 +159,7 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
   const messages = [...app.querySelectorAll('.message')];
   assert.equal(messages[0].textContent, 'ข้าว 65');
   assert.match(messages.at(-1).textContent, /พร้อม|ยืนยัน/);
+  assert.equal(brain.execute, undefined, 'mounted patch capability must not expose execute');
 
   const confirm = app.querySelector('[data-brain-confirm]');
   confirm.click();
