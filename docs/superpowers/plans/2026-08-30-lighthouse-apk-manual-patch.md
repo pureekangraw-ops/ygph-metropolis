@@ -4,7 +4,7 @@
 
 **Goal:** Add a manual, signed, local-first `.lhpatch` path that updates selected LIGHTHOUSE web assets without rebuilding/reinstalling the base APK, with staged verification, atomic activation, readback, and rollback.
 
-**Architecture:** Keep the APK as a stable Capacitor shell. Verify a signed patch bundle in pure JavaScript, materialize a complete asset snapshot from changed files plus the current/base snapshot, persist it in IndexedDB, and switch only metadata pointers inside an atomic transaction. A bootstrap module mounts the current snapshot and exposes manual import/rollback controls; no network update or native change is introduced.
+**Architecture:** Keep the APK as a stable Capacitor shell. Verify a signed patch bundle in pure JavaScript, materialize a complete asset snapshot from changed files plus the current/base snapshot, persist it in IndexedDB, and switch only metadata pointers inside an atomic transaction. Activation is compare-and-swap bound to the exact current version used during verification so a stale concurrent import cannot overwrite a newer patch. A bootstrap module mounts the current snapshot and exposes manual import/rollback controls; no network update or native change is introduced.
 
 **Tech Stack:** Node 22 test runner, browser/WebView Web Crypto, IndexedDB, ES modules, Capacitor 8.5.0.
 
@@ -19,6 +19,7 @@
 - Per-file integrity is lowercase-hex SHA-256 over UTF-8 content.
 - Total patch content maximum is 2 MiB.
 - `baseVersion` must equal current active version; `version` must be a greater numeric SemVer triplet.
+- The version used during verification must still be Current inside the activation metadata transaction; otherwise activation rejects as stale.
 - Patch activation cannot modify user data.
 - No auto-download, deploy, GPS, maps, permission, native plugin, Android Manifest, release signing, or store publishing changes.
 - Existing APK build remains debug-only and verification-only.
@@ -57,14 +58,14 @@
 - Produces: `composeSnapshot({currentSnapshot, baseAssets, verifiedPatch}) -> snapshot`
 - Produces: `createMemoryPatchStore()` for deterministic Node tests.
 - Produces: `createIndexedDbPatchStore({indexedDB})` for runtime.
-- Store API: `stage(snapshot)`, `activate(version)`, `readMeta()`, `readSnapshot(version)`, `readCurrent()`, `rollback()`.
+- Store API: `stage(snapshot)`, `activate(version, {expectedCurrentVersion})`, `readMeta()`, `readSnapshot(version)`, `readCurrent()`, `rollback()`.
 - Snapshot shape: `{version, assets:{ui.html,ui.css,logic.mjs,rules.json,vocabulary.json}}` with all five assets present.
 
-- [ ] **Step 1: Write failing tests** proving a changed-file-only patch inherits unchanged assets, staged data can be read back before activation, activation moves `{previousVersion,currentVersion}` together, failed staging leaves current unchanged, and rollback swaps back to the previous complete snapshot.
+- [ ] **Step 1: Write failing tests** proving a changed-file-only patch inherits unchanged assets, staged data can be read back before activation, activation moves `{previousVersion,currentVersion}` together, activation rejects when Current no longer matches `expectedCurrentVersion`, concurrent imports cannot activate a stale candidate over a newer patch, failed staging leaves current unchanged, and rollback swaps back to the previous complete snapshot.
 
 - [ ] **Step 2: Push RED and confirm the new tests fail because the store module is missing.**
 
-- [ ] **Step 3: Implement the memory store first**, then the IndexedDB store using database `lighthouse-patches-v1`, object stores `snapshots` and `meta`, with activation/rollback metadata writes done inside one read-write transaction.
+- [ ] **Step 3: Implement the memory store first**, then the IndexedDB store using database `lighthouse-patches-v1`, object stores `snapshots` and `meta`, with activation/rollback metadata writes done inside one read-write transaction. Activation must compare `currentVersion` with `expectedCurrentVersion` inside that same metadata transaction before changing either pointer.
 
 - [ ] **Step 4: Verify GREEN** on exact HEAD.
 
@@ -94,7 +95,7 @@
 
 - [ ] **Step 3: Add packaged base assets** preserving the current Foundation Proof content as the base UI while moving presentation/logic into the logical asset structure.
 
-- [ ] **Step 4: Implement runtime bootstrap**: on import, parse JSON, call `verifyPatchBundle` against current version and pinned trust key, compose candidate, `stage`, readback, `activate`, readback current, then reload/remount. On any exception, report rejection without activation. Rollback invokes store rollback then reload/remount.
+- [ ] **Step 4: Implement runtime bootstrap**: on import, parse JSON, call `verifyPatchBundle` against current version and pinned trust key, compose candidate, `stage`, readback, `activate(candidate.version, {expectedCurrentVersion: verifiedCurrentVersion})`, readback current, then reload/remount. If another import advances Current before activation, reject the stale candidate without moving pointers. On any exception, report rejection without activation. Rollback invokes store rollback then reload/remount.
 
 - [ ] **Step 5: Verify GREEN** including Capacitor generation/sync and debug APK build.
 
