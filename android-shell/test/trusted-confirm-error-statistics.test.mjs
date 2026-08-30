@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
 import { JSDOM } from 'jsdom';
 
-import { mount } from '../release/front-door-0.0.3/logic.mjs';
 import { createTrustedBrainGate } from '../www/trusted/brain-gate.mjs';
 import {
   initializeTrustedFirstRun,
@@ -17,6 +16,14 @@ function tick() {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+async function loadFrontDoor004() {
+  try {
+    return await import('../release/front-door-0.0.4/logic.mjs');
+  } catch (error) {
+    assert.fail(`Front Door 0.0.4 logic is required: ${error?.code ?? error?.message ?? error}`);
+  }
+}
+
 function frontDoorDom() {
   return new JSDOM(`<!doctype html><html><body><main id="app">
     <div data-chat-log></div>
@@ -26,7 +33,8 @@ function frontDoorDom() {
   </main></body></html>`, { url:'https://lighthouse.test/' });
 }
 
-test('Front Door asks for trusted execution immediately and never renders a second confirmation button', async () => {
+test('Front Door 0.0.4 asks for trusted execution immediately and never renders a second confirmation button', async () => {
+  const { mount } = await loadFrontDoor004();
   const dom = frontDoorDom();
   const root = dom.window.document.getElementById('app');
   let requestExecutionCalls = 0;
@@ -42,7 +50,7 @@ test('Front Door asks for trusted execution immediately and never renders a seco
     },
   };
 
-  const cleanup = await mount({ root, version:'0.0.3', brain });
+  const cleanup = await mount({ root, version:'0.0.4', brain });
   const form = root.querySelector('[data-chat-form]');
   const input = root.querySelector('[data-chat-input]');
   input.value = 'ข้าว 65';
@@ -104,7 +112,7 @@ test('trusted gate maps unsupported commands to public 404 and records the priva
     recordErrorEvent:async event => recorded.push(event),
   });
 
-  const result = await gate.send('วิ่ง 65', { appVersion:'0.0.3' });
+  const result = await gate.send('วิ่ง 65', { appVersion:'0.0.4' });
   assert.deepEqual(result, {
     status:'ERROR',
     publicCode:404,
@@ -119,7 +127,7 @@ test('trusted gate maps unsupported commands to public 404 and records the priva
     publicCode:404,
     internalReason:'INTERPRETED_CAPABILITY_NOT_CONNECTED',
     stage:'ROUTE',
-    appVersion:'0.0.3',
+    appVersion:'0.0.4',
   });
 });
 
@@ -144,7 +152,7 @@ test('actual trusted session keeps error statistics encrypted in the Greenfield 
   });
 
   const before = await session.runtime.readState();
-  const result = await session.brain.send('วิ่ง 65', { appVersion:'0.0.3' });
+  const result = await session.brain.send('วิ่ง 65', { appVersion:'0.0.4' });
   assert.deepEqual(result, {
     status:'ERROR',
     publicCode:404,
@@ -173,7 +181,7 @@ test('actual trusted session keeps error statistics encrypted in the Greenfield 
     publicCode:404,
     internalReason:'REMOTE_INTERPRETER_NOT_CONFIGURED',
     stage:'ROUTE',
-    appVersion:'0.0.3',
+    appVersion:'0.0.4',
   });
 
   const after = await session.runtime.readState();
