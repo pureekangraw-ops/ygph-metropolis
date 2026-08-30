@@ -40,6 +40,10 @@ function updateCommands(commands, groupIds, status, reason = null) {
     : command);
 }
 
+function retryableCommandStatus(status) {
+  return status === 'READY' || status === 'ERROR' || status === 'VERIFY';
+}
+
 export async function executeFrontdoorMultiGroupBoxes(runtime, routed) {
   if (!runtime || typeof runtime.readState !== 'function' || typeof runtime.executeMultiGroupCommands !== 'function') {
     throw new Error('MULTI_GROUP_FRONTDOOR_RUNTIME_INVALID');
@@ -54,7 +58,19 @@ export async function executeFrontdoorMultiGroupBoxes(runtime, routed) {
   for (const box of routed.boxes) {
     const groupIds = Array.isArray(box.commandIds) ? box.commandIds : [];
     const childStates = commands.filter(command => groupIds.includes(command.groupId));
-    if (childStates.length === 0 || childStates.some(command => command.status !== 'READY')) {
+
+    if (childStates.length > 0 && childStates.every(command => command.status === 'COMPLETE')) {
+      boxResults.push(frozen({
+        boxId:box.boxId,
+        relationship:box.relationship,
+        status:'COMPLETE',
+        reason:'BOX_ALREADY_COMPLETE',
+        preflightBaseRevision:null,
+      }));
+      continue;
+    }
+
+    if (childStates.length === 0 || childStates.some(command => !retryableCommandStatus(command.status))) {
       boxResults.push(frozen({
         boxId:box.boxId,
         relationship:box.relationship,
