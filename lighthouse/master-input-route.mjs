@@ -1,4 +1,5 @@
 import { prepareIntentPath } from './intent-path-adapter.mjs';
+import { compileNaturalLanguageMultiGroup } from './multi-group-frontdoor.mjs';
 import { FOUNDATION_PATTERN_EXPENSE_TERMS } from './pattern-input.mjs';
 import { decideInputRoute } from './intent-dual-route.mjs';
 import { interpretIntentInput } from './intent-interpret.mjs';
@@ -30,6 +31,10 @@ function routedResult(result, context) {
   return freeze({ ...result, ...context });
 }
 
+function firstStoppedCommand(compiled) {
+  return compiled?.commands?.find(command => command.status !== 'READY') || null;
+}
+
 async function providerRoute(rawText, interpretFallback, questionPrepared = null, context = {}) {
   if (typeof interpretFallback !== 'function') throw new TypeError('MASTER_INPUT_INTERPRET_FALLBACK_REQUIRED');
   const intent = await interpretFallback(rawText);
@@ -55,8 +60,34 @@ export async function routeMasterInputText(rawText, options = {}) {
   const hasQuestion = prepared.parsed?.groups?.some(group => group.intent === 'QUERY');
 
   if (decision.route === 'INTERPRET' && decision.reason === 'MULTI_GROUP') {
+    if (!Number.isSafeInteger(options.baseRevision) || options.baseRevision < 0) {
+      return routedResult({
+        route:'STOP', prepared, intent:null, status:'BLOCKED', reason:'MULTI_GROUP_BASE_REVISION_REQUIRED',
+      }, context);
+    }
+    let compiled;
+    try {
+      compiled = compileNaturalLanguageMultiGroup(prepared.parsed, {
+        baseRevision:options.baseRevision,
+        requestIdFactory:options.requestIdFactory,
+      });
+    } catch (error) {
+      return routedResult({
+        route:'STOP', prepared, intent:null, status:'BLOCKED', reason:String(error?.message || error || 'MULTI_GROUP_FRONTDOOR_FAILED'),
+      }, context);
+    }
+    if (compiled.boxes.length > 0) {
+      return routedResult({
+        route:'LOCAL_MULTI_GROUP', prepared, intent:null, status:compiled.status, reason:null,
+        boxes:compiled.boxes, commands:compiled.commands,
+      }, context);
+    }
+    const stopped = firstStoppedCommand(compiled);
     return routedResult({
-      route:'STOP', prepared, intent:null, status:'UNSUPPORTED', reason:'MULTI_GROUP_EXECUTION_NOT_CONNECTED',
+      route:'STOP', prepared, intent:null,
+      status:stopped?.status || compiled.status || 'BLOCKED',
+      reason:stopped?.reason || 'MULTI_GROUP_EXECUTION_NOT_CONNECTED',
+      boxes:compiled.boxes, commands:compiled.commands,
     }, context);
   }
 
