@@ -65,12 +65,12 @@ test('D16A polite single clear command uses one local path and never calls provi
   assert.equal(providerCalls, 0);
 });
 
-test('D16B multi-group input is interpreted but stopped before provider or execution', async () => {
+test('D16B multi-group route fails closed before provider when durable revision is absent', async () => {
   let providerCalls = 0;
   const routed = await route('ลงข้าว65 แล้วลงน้ำมัน500', async () => { providerCalls += 1; throw new Error('PROVIDER_MUST_NOT_RUN'); });
   assert.equal(routed.route, 'STOP');
   assert.equal(routed.decision.route, 'INTERPRET');
-  assert.equal(routed.reason, 'MULTI_GROUP_EXECUTION_NOT_CONNECTED');
+  assert.equal(routed.reason, 'MULTI_GROUP_BASE_REVISION_REQUIRED');
   assert.equal(routed.prepared.request, null);
   assert.equal(providerCalls, 0);
 });
