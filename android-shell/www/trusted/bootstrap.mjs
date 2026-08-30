@@ -18,6 +18,7 @@ import { createPathKernel } from './source/lighthouse/path-kernel.mjs';
 import { createExpenseCapability } from './source/lighthouse/capabilities/expense.mjs';
 import { createTrustedBrainAdapter } from './brain-adapter.mjs';
 import { createTrustedBrainGate } from './brain-gate.mjs';
+import { openTrustedErrorStatistics } from './error-statistics.mjs';
 
 globalThis.__LIGHTHOUSE_TRUSTED_BOOTSTRAP__ = true;
 
@@ -43,6 +44,10 @@ function errorText(error) {
   return message;
 }
 
+function emptyErrorStatistics() {
+  return { total:0, byCode:{}, events:[] };
+}
+
 export async function initializeTrustedFirstRun({
   recoveryCode,
   pin,
@@ -63,6 +68,8 @@ export async function openTrustedBrain({
   lockManager = globalThis.navigator?.locks ?? null,
   now = () => new Date().toISOString(),
   confirmImpl = null,
+  confirmTextImpl = null,
+  documentRef = globalThis.document,
 } = {}) {
   const runtime = await openGreenfieldRuntimeWithDevicePin({
     pin,
@@ -71,9 +78,16 @@ export async function openTrustedBrain({
     now,
   });
   let active = false;
+  let errorStatistics = null;
   try {
     activateRuntimeSession(runtime);
     active = true;
+
+    try {
+      errorStatistics = await openTrustedErrorStatistics({ pin, indexedDBImpl });
+    } catch (error) {
+      globalThis.console?.error?.('TRUSTED_ERROR_STATISTICS_OPEN_FAILED', error);
+    }
 
     const adapter = createTrustedBrainAdapter({
       routeMasterInputText,
@@ -87,15 +101,28 @@ export async function openTrustedBrain({
       receivedAt:now,
       timeZone:'Asia/Bangkok',
     });
-    const brain = createTrustedBrainGate({ brain:adapter, confirmImpl });
+    const brain = createTrustedBrainGate({
+      brain:adapter,
+      confirmImpl,
+      confirmTextImpl,
+      documentRef,
+      now,
+      recordErrorEvent:errorStatistics ? event => errorStatistics.record(event) : null,
+    });
     let closed = false;
 
     return frozen({
       runtime,
       brain,
+      async readErrorStatistics() {
+        if (!errorStatistics) return emptyErrorStatistics();
+        return errorStatistics.read();
+      },
       close() {
         if (closed) return;
         closed = true;
+        errorStatistics?.close();
+        errorStatistics = null;
         if (active) {
           deactivateRuntimeSession(runtime);
           active = false;
@@ -104,6 +131,7 @@ export async function openTrustedBrain({
       },
     });
   } catch (error) {
+    errorStatistics?.close();
     if (active) deactivateRuntimeSession(runtime);
     runtime.close();
     throw error;
@@ -161,6 +189,7 @@ export async function bootstrapTrustedApp({
   lockManager = globalThis.navigator?.locks ?? null,
   now = () => new Date().toISOString(),
   confirmImpl = null,
+  confirmTextImpl = null,
 } = {}) {
   if (!documentRef) throw new Error('TRUSTED_BOOTSTRAP_DOCUMENT_REQUIRED');
 
@@ -224,6 +253,8 @@ export async function bootstrapTrustedApp({
         lockManager,
         now,
         confirmImpl,
+        confirmTextImpl,
+        documentRef,
       });
       patchRuntime = await startTrustedPatchRuntime({
         documentRef,
