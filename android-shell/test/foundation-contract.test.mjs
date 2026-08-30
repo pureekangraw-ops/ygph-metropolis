@@ -24,6 +24,17 @@ test('foundation page stays local and excludes later-phase native scope', async 
   assert.doesNotMatch(html, /geolocation|google maps|api[_ -]?key|gps/i);
 });
 
+test('patch picker exposes all file types while runtime keeps patch validation', async () => {
+  const html = await read('android-shell/www/index.html');
+  const runtime = await read('android-shell/www/patch/patch-runtime.mjs');
+  const picker = html.match(/<input\b[^>]*\bid=["']patch-file["'][^>]*>/i)?.[0];
+
+  assert.ok(picker, 'patch file input must exist');
+  assert.doesNotMatch(picker, /\baccept\s*=/i, 'native picker must not pre-filter file types');
+  assert.match(runtime, /endsWith\(['"]\.lhpatch['"]\)/, 'runtime must still enforce .lhpatch extension');
+  assert.match(runtime, /verifyPatchBundle\(/, 'runtime must still call signed patch verification');
+});
+
 test('GitHub Actions builds a debug APK but never deploys or publishes it', async () => {
   const workflow = await read('.github/workflows/lighthouse-apk-debug.yml');
   assert.match(workflow, /node-version:\s*22/);
