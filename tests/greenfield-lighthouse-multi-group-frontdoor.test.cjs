@@ -27,7 +27,7 @@ async function durableRuntime() {
 test('FD01 compiler splits two proven direct expenses into independent READY boxes', async () => {
   const { parseIntentTask1 } = await import('../lighthouse/intent-parser.mjs');
   const { compileNaturalLanguageMultiGroup } = await import('../lighthouse/multi-group-frontdoor.mjs');
-  const parsed = parseIntentTask1('ข้าว65น้ำมัน500');
+  const parsed = parseIntentTask1('ข้าว65ข้าว500');
   assert.equal(parsed.status, 'PARSED');
   assert.equal(parsed.groups.length, 2);
 
@@ -73,7 +73,7 @@ test('MG01 natural-language multi-group remains stopped and durable state does n
   const before = await read();
   let providerCalls = 0;
 
-  const routed = await routeMasterInputText('ลงข้าว65 แล้วลงน้ำมัน500', {
+  const routed = await routeMasterInputText('ข้าว65ข้าว500', {
     receivedAt:'2026-08-29T10:30:00.000Z',
     timeZone:'Asia/Bangkok',
     requestIdFactory:() => 'MG01-REQ',
