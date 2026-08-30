@@ -127,15 +127,19 @@ test('mountSnapshot mounts verified HTML CSS data and logic through injected mod
   assert.deepEqual(revoked, ['blob:test-module']);
 });
 
-test('stable index exposes manual patch import and rollback without a remote update endpoint', async () => {
+test('stable index exposes unrestricted manual patch import and rollback without a remote update endpoint', async () => {
   const index = await read('www/index.html');
   assert.match(index, /id="app"/);
   assert.match(index, /id="patch-file"/);
-  assert.match(index, /accept="\.lhpatch/);
+  const picker = index.match(/<input\b[^>]*\bid=["']patch-file["'][^>]*>/i)?.[0];
+  assert.ok(picker, 'patch file input must exist');
+  assert.doesNotMatch(picker, /\baccept\s*=/i);
   assert.match(index, /id="patch-rollback"/);
   assert.match(index, /patch\/patch-runtime\.mjs/);
 
   const runtime = await read('www/patch/patch-runtime.mjs');
+  assert.match(runtime, /endsWith\(['"]\.lhpatch['"]\)/);
+  assert.match(runtime, /verifyPatchBundle\(/);
   assert.doesNotMatch(runtime, /https?:\/\//i);
   assert.doesNotMatch(runtime, /auto(?:matic)?[-_ ]?update|setInterval|WebSocket/i);
 });
