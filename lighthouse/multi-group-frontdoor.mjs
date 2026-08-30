@@ -21,7 +21,16 @@ function commandState(group, status, reason, extras = {}) {
   });
 }
 
-function compileDirectExpenseGroup(group, { baseRevision, requestIdFactory }) {
+function compileIdentity(options) {
+  const provided = typeof options?.compileId === 'string' ? options.compileId.trim() : '';
+  if (provided) return provided;
+  if (typeof options?.requestIdFactory !== 'function') throw new TypeError('MULTI_GROUP_FRONTDOOR_REQUEST_ID_FACTORY_REQUIRED');
+  const generated = String(options.requestIdFactory()).trim();
+  if (!generated) throw new Error('MULTI_GROUP_FRONTDOOR_REQUEST_ID_REQUIRED');
+  return generated;
+}
+
+function compileDirectExpenseGroup(group, { baseRevision, compileId }) {
   if (group?.prohibited) return { command:commandState(group, 'BLOCKED', 'PROHIBITED_GROUP'), box:null };
   if (group?.condition) return { command:commandState(group, 'BLOCKED', 'CONDITION_NOT_SUPPORTED'), box:null };
   if (group?.intent !== 'COMMAND') return { command:commandState(group, 'BLOCKED', 'GROUP_INTENT_NOT_EXECUTABLE'), box:null };
@@ -38,11 +47,9 @@ function compileDirectExpenseGroup(group, { baseRevision, requestIdFactory }) {
     return { command:commandState(group, 'BLOCKED', 'NO_CONNECTED_DIRECT_CAPABILITY'), box:null };
   }
 
-  const requestId = String(requestIdFactory()).trim();
-  if (!requestId) throw new Error('MULTI_GROUP_FRONTDOOR_REQUEST_ID_REQUIRED');
   const plan = validateMultiGroupPlan({
     version:'1',
-    planId:`FD-${requestId}-${group.groupId}`,
+    planId:`FD-${compileId}-${group.groupId}`,
     baseRevision,
     groups:[{
       groupId:group.groupId,
@@ -59,7 +66,7 @@ function compileDirectExpenseGroup(group, { baseRevision, requestIdFactory }) {
     }],
   });
 
-  const boxId = `BOX-${requestId}-${group.groupId}`;
+  const boxId = `BOX-${compileId}-${group.groupId}`;
   const command = commandState(group, 'READY', null, { boxId });
   const box = freeze({ boxId, relationship:'INDEPENDENT', commandIds:Object.freeze([group.groupId]), plan });
   return { command, box };
@@ -74,17 +81,18 @@ function overallStatus(commands) {
 export function compileNaturalLanguageMultiGroup(parsed, options = {}) {
   if (!parsed || !Array.isArray(parsed.groups)) throw new TypeError('MULTI_GROUP_FRONTDOOR_PARSED_REQUIRED');
   if (!Number.isSafeInteger(options.baseRevision) || options.baseRevision < 0) throw new TypeError('MULTI_GROUP_FRONTDOOR_BASE_REVISION_REQUIRED');
-  if (typeof options.requestIdFactory !== 'function') throw new TypeError('MULTI_GROUP_FRONTDOOR_REQUEST_ID_FACTORY_REQUIRED');
+  const compileId = compileIdentity(options);
 
   const commands = [];
   const boxes = [];
   for (const group of parsed.groups) {
-    const compiled = compileDirectExpenseGroup(group, options);
+    const compiled = compileDirectExpenseGroup(group, { baseRevision:options.baseRevision, compileId });
     commands.push(compiled.command);
     if (compiled.box) boxes.push(compiled.box);
   }
 
   return freeze({
+    compileId,
     status:overallStatus(commands),
     boxes:Object.freeze(boxes),
     commands:Object.freeze(commands),
