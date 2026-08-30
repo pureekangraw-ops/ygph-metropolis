@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
+import { JSDOM } from 'jsdom';
 
+import { mountSnapshot } from '../www/patch/patch-runtime.mjs';
 import { routeMasterInputText } from '../../lighthouse/master-input-route.mjs';
 import {
   createRecoverySession,
@@ -19,6 +21,7 @@ import {
 } from '../../greenfield/runtime-session.mjs';
 import { DB_NAME } from '../../greenfield/browser-store.mjs';
 import { createTrustedBrainAdapter } from '../www/trusted/brain-adapter.mjs';
+import { createTrustedBrainGate } from '../www/trusted/brain-gate.mjs';
 
 const RECOVERY_CODE = 'LH-trusted-gate-recovery-code';
 const DEVICE_PIN = '112233';
@@ -74,14 +77,6 @@ async function setupBrain() {
   return { runtime, brain };
 }
 
-async function loadGate() {
-  try {
-    return await import('../www/trusted/brain-gate.mjs');
-  } catch (error) {
-    assert.fail(`trusted confirmation gate is required: ${error?.code ?? error?.message ?? error}`);
-  }
-}
-
 test('patch capability never exposes execute and cannot write when trusted confirmation is denied', async (t) => {
   const { runtime, brain } = await setupBrain();
   t.after(async () => {
@@ -89,7 +84,6 @@ test('patch capability never exposes execute and cannot write when trusted confi
     runtime.close();
     await resetVault();
   });
-  const { createTrustedBrainGate } = await loadGate();
   let confirmations = 0;
   const capability = createTrustedBrainGate({
     brain,
@@ -125,7 +119,6 @@ test('trusted confirmation approval is the only path from READY to durable SUCCE
     runtime.close();
     await resetVault();
   });
-  const { createTrustedBrainGate } = await loadGate();
   let confirmations = 0;
   const capability = createTrustedBrainGate({
     brain,
@@ -151,4 +144,93 @@ test('trusted confirmation approval is the only path from READY to durable SUCCE
   assert.equal(replay.status, 'BLOCKED');
   assert.equal(replay.reason, 'TRUSTED_CONFIRMATION_NOT_READY');
   assert.equal(confirmations, 1, 'replay must not even open another confirmation prompt');
+});
+
+test('malicious Patch cannot bypass trusted confirmation or obtain raw execute authority', async (t) => {
+  const { runtime, brain } = await setupBrain();
+  t.after(async () => {
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    await resetVault();
+  });
+  let confirmations = 0;
+  const capability = createTrustedBrainGate({
+    brain,
+    confirmImpl:() => {
+      confirmations += 1;
+      return false;
+    },
+  });
+  const dom = new JSDOM('<!doctype html><html><head></head><body><div id="app"></div></body></html>', {
+    url:'https://lighthouse.test/',
+  });
+  t.after(() => dom.window.close());
+  const root = dom.window.document.getElementById('app');
+  const snapshot = {
+    version:'0.0.3-malicious-test',
+    assets:{
+      'ui.html':'<main data-malicious-result></main>',
+      'ui.css':'',
+      'rules.json':'{}',
+      'vocabulary.json':'{}',
+      'logic.mjs':`export async function mount({ root, brain }) {
+        root.dataset.rawExecute = typeof brain?.execute;
+        const ready = await brain.send('ข้าว 65');
+        root.dataset.ready = ready?.status || '';
+        root.dataset.direct = typeof brain?.execute === 'function' ? (await brain.execute())?.status : 'UNAVAILABLE';
+        root.dataset.requested = (await brain.requestExecution())?.status || '';
+      }`,
+    },
+  };
+
+  const before = await runtime.readState();
+  const cleanup = await mountSnapshot(snapshot, {
+    root,
+    documentRef:dom.window.document,
+    trustedBrain:capability,
+    createModuleUrl:(source) => `data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`,
+    importModule:(url) => import(url),
+    revokeModuleUrl:() => {},
+  });
+  t.after(cleanup);
+
+  assert.equal(root.dataset.rawExecute, 'undefined');
+  assert.equal(root.dataset.ready, 'READY');
+  assert.equal(root.dataset.direct, 'UNAVAILABLE');
+  assert.equal(root.dataset.requested, 'CANCELLED');
+  assert.equal(confirmations, 1);
+  const after = await runtime.readState();
+  assert.equal(after.revision, before.revision);
+  assert.equal(expenseRecords(after).length, 0);
+});
+
+test('trusted gate captures confirmation before Patch can replace the global function', async (t) => {
+  const { runtime, brain } = await setupBrain();
+  t.after(async () => {
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    await resetVault();
+  });
+
+  const original = globalThis.confirm;
+  let trustedCalls = 0;
+  let maliciousCalls = 0;
+  globalThis.confirm = () => {
+    trustedCalls += 1;
+    return false;
+  };
+  t.after(() => { globalThis.confirm = original; });
+
+  const capability = createTrustedBrainGate({ brain });
+  globalThis.confirm = () => {
+    maliciousCalls += 1;
+    return true;
+  };
+
+  assert.equal((await capability.send('ข้าว 65')).status, 'READY');
+  const denied = await capability.requestExecution();
+  assert.equal(denied.status, 'CANCELLED');
+  assert.equal(trustedCalls, 1);
+  assert.equal(maliciousCalls, 0);
+  assert.equal(expenseRecords(await runtime.readState()).length, 0);
 });
