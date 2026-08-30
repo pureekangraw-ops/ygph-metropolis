@@ -121,7 +121,7 @@ export async function applyPatchBundle(bundle, { store, trustedKey }) {
   }
 
   try {
-    await store.activate(candidate.version);
+    await store.activate(candidate.version, { expectedCurrentVersion: before.version });
     const current = await store.readCurrent();
     if (current.version !== candidate.version || JSON.stringify(current) !== JSON.stringify(candidate)) {
       throw new Error(`Patch activation readback mismatch: ${candidate.version}`);
