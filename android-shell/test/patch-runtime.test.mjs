@@ -145,7 +145,7 @@ test('mountSnapshot mounts verified HTML CSS data and logic through injected mod
   assert.deepEqual(revoked, ['blob:test-module']);
 });
 
-test('stable index exposes unrestricted manual patch import and rollback without a remote update endpoint', async () => {
+test('stable index keeps manual Patch/Rollback behind trusted bootstrap without a remote update endpoint', async () => {
   const index = await read('www/index.html');
   assert.match(index, /id="app"/);
   assert.match(index, /id="patch-file"/);
@@ -153,9 +153,14 @@ test('stable index exposes unrestricted manual patch import and rollback without
   assert.ok(picker, 'patch file input must exist');
   assert.doesNotMatch(picker, /\baccept\s*=/i);
   assert.match(index, /id="patch-rollback"/);
-  assert.match(index, /patch\/patch-runtime\.mjs/);
+  assert.match(index, /trusted\/bootstrap\.mjs/);
+  assert.doesNotMatch(index, /src=["'][^"']*patch\/patch-runtime\.mjs["']/i);
+
+  const bootstrap = await read('www/trusted/bootstrap.mjs');
+  assert.match(bootstrap, /import\(['"]\.\.\/patch\/patch-runtime\.mjs['"]\)/);
 
   const runtime = await read('www/patch/patch-runtime.mjs');
+  assert.match(runtime, /__LIGHTHOUSE_TRUSTED_BOOTSTRAP__/);
   assert.match(runtime, /endsWith\(['"]\.lhpatch['"]\)/);
   assert.match(runtime, /verifyPatchBundle\(/);
   assert.doesNotMatch(runtime, /https?:\/\//i);
