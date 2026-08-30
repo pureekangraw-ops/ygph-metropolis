@@ -3,6 +3,11 @@ import { prepareMasterExecution, executePreparedMasterIntent } from '../greenfie
 import { routeMasterInputText } from '../lighthouse/master-input-route.mjs';
 import { executeFrontdoorMultiGroupBoxes } from '../lighthouse/multi-group-frontdoor-runtime.mjs';
 import {
+  createFrontdoorMultiGroupRecoverySession,
+  updateFrontdoorMultiGroupRecoverySession,
+  rejoinFrontdoorMultiGroupRecoverySession,
+} from '../lighthouse/multi-group-frontdoor-recovery.mjs';
+import {
   createRecoverySession,
   applySessionOwnerInput,
   rejoinRecoverySession,
@@ -218,13 +223,16 @@ function renderWaitingDirective(directive) {
   }
 }
 
-function showWaitingSession({ title = 'รอข้อมูลเพิ่ม', copy = null } = {}) {
+function showWaitingSession({ title = 'รอข้อมูลเพิ่ม', copy = null, meta = null } = {}) {
   const directive = activeRecoverySession?.uiDirective ?? waitingDirectiveForSession(activeRecoverySession);
   const fallback = 'งานเดิมหยุดรอข้อมูลที่ยังขาดอยู่';
+  const defaultMeta = directive
+    ? `${directive.telemetryTag} · ${directive.type} · ยังไม่มีการเขียนข้อมูล`
+    : 'WAITING · ยังไม่มีการเขียนข้อมูล';
   setState('WAITING', {
     title,
     copy:copy || directive?.prompt || fallback,
-    meta:directive ? `${directive.telemetryTag} · ${directive.type} · ยังไม่มีการเขียนข้อมูล` : 'WAITING · ยังไม่มีการเขียนข้อมูล',
+    meta:meta || defaultMeta,
   });
   renderWaitingDirective(directive);
 }
@@ -401,6 +409,55 @@ async function interpretCurrentText() {
   if (recoveryInput.status === 'APPLIED') {
     setState('INTERPRETING', { title:'กำลังประกอบผลแก้ไข', copy:'ยังไม่มีการเขียนข้อมูล' });
     try {
+      if (recoveryInput.state?.mode === 'MULTI_GROUP') {
+        const rejoined = await withMasterRuntime((_runtime, state) => rejoinFrontdoorMultiGroupRecoverySession(recoveryInput.state, {
+          receivedAt:new Date().toISOString(),
+          timeZone:'Asia/Bangkok',
+          currentRevision:state.revision,
+        }));
+        text = rejoined.text;
+        $('masterInputText').value = text;
+        markQuestion(rejoined.routed);
+
+        if (rejoined.routed.route === 'LOCAL_MULTI_GROUP') {
+          preparedMultiGroupRoute = rejoined.routed;
+          const readyCommands = rejoined.routed.commands.filter(command => command.status === 'READY');
+          const waitingCommands = rejoined.routed.commands.filter(command => command.status === 'WAITING');
+          if (waitingCommands.length > 0) {
+            const refreshed = createFrontdoorMultiGroupRecoverySession(rejoined.routed, {
+              inputId:recoveryInput.state.inputId,
+              pauseId:recoveryInput.state.pauseId,
+              baseRevision:rejoined.revalidation.currentRevision,
+            });
+            activeRecoverySession = updateFrontdoorMultiGroupRecoverySession(refreshed, rejoined.routed.commands);
+            activeRecoverySelection = null;
+            if (readyCommands.length === 0) {
+              showWaitingSession({
+                title:'รออีกจุดก่อนทำงานต่อ',
+                copy:commandStatusText(rejoined.routed.commands),
+              });
+              return;
+            }
+          } else {
+            activeRecoverySession = null;
+            activeRecoverySelection = null;
+          }
+          const realityMeta = rejoined.revalidation.revisionChanged ? ' · ตรวจ durable revision ใหม่แล้ว' : '';
+          setState('READY', {
+            title:'ประกอบคำสั่งที่รอกลับแล้ว',
+            copy:commandStatusText(rejoined.routed.commands),
+            meta:`Resume กล่องเดิมด้วย compile identity เดิม${realityMeta} · COMPLETE เดิมจะไม่ถูกทำซ้ำ`,
+            execute:readyCommands.length > 0,
+          });
+          return;
+        }
+
+        activeRecoverySession = null;
+        activeRecoverySelection = null;
+        await showLocalStop(rejoined.routed);
+        return;
+      }
+
       const rejoined = await withMasterRuntime((_runtime, state) => rejoinRecoverySession(recoveryInput.state, {
         receivedAt:new Date().toISOString(),
         timeZone:'Asia/Bangkok',
@@ -481,6 +538,18 @@ async function interpretCurrentText() {
       const readyCount = routed.commands.filter(command => command.status === 'READY').length;
       const waitingCount = routed.commands.filter(command => command.status === 'WAITING').length;
       const blockedCount = routed.commands.filter(command => command.status === 'BLOCKED').length;
+      if (routed.commands.some(command => command.status === 'WAITING')) {
+        activeRecoverySession = createFrontdoorMultiGroupRecoverySession(routed, {
+          inputId:localInputId(),
+          pauseId:localPauseId(),
+          baseRevision:routeContext.baseRevision,
+        });
+        activeRecoverySelection = null;
+      }
+      if (readyCount === 0 && waitingCount > 0) {
+        showWaitingSession({ title:'รอข้อมูลของคำสั่งนี้', copy:commandStatusText(routed.commands) });
+        return;
+      }
       setState('READY', {
         title:'แยกคำสั่งเป็นกล่องแล้ว',
         copy:commandStatusText(routed.commands),
@@ -537,6 +606,9 @@ async function executePrepared() {
     try {
       const result = await withMasterRuntime(runtime => executeFrontdoorMultiGroupBoxes(runtime, preparedMultiGroupRoute));
       const copy = commandStatusText(result.commands);
+      if (activeRecoverySession?.mode === 'MULTI_GROUP') {
+        activeRecoverySession = updateFrontdoorMultiGroupRecoverySession(activeRecoverySession, result.commands);
+      }
       if (result.status === 'COMPLETE') {
         setState('SUCCESS', {
           title:'บันทึกและอ่านกลับแล้ว',
@@ -544,6 +616,8 @@ async function executePrepared() {
           meta:'แต่ละคำสั่งขึ้น COMPLETE หลัง durable readback เท่านั้น',
         });
         preparedMultiGroupRoute = null;
+        activeRecoverySession = null;
+        activeRecoverySelection = null;
         globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
         return;
       }
@@ -558,7 +632,11 @@ async function executePrepared() {
         return;
       }
       if (result.commands.some(command => command.status === 'WAITING')) {
-        setState('WAITING', { title:'ยังมีคำสั่งรอข้อมูล', copy, meta:'คำสั่งที่รอยังไม่ถูกทำ · สถานะแต่ละคำสั่งไม่ถูกยกทับ' });
+        showWaitingSession({
+          title:'ยังมีคำสั่งรอข้อมูล',
+          copy,
+          meta:'กล่องที่ COMPLETE ยืนยันจาก durable readback แล้ว · กล่อง WAITING ยังไม่ถูกทำ',
+        });
         return;
       }
       setState('READY', { title:'ยังยืนยันผลไม่ครบ', copy, meta:'ยังไม่ประกาศ COMPLETE จนกว่า durable readback จะพิสูจน์ได้', execute:true });
