@@ -200,7 +200,12 @@ function parseGroup(rawText, range, groupIndex) {
     }
   }
 
-  if (numbers.length === 0) needsRecovery = true;
+  if (numbers.length === 0) {
+    needsRecovery = true;
+    if (target.end > target.start) {
+      slots.push(makeSlot(groupId, slotIndex++, 'MONEY', rawText, command.end, command.end, null, 'WAITING'));
+    }
+  }
   if (question) {
     slots.push(makeSlot(groupId, slotIndex++, 'QUESTION', rawText,
       question.rawSpan.start, question.rawSpan.end, 'QUERY', 'RESOLVED'));
