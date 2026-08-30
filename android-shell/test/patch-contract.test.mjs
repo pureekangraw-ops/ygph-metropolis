@@ -22,6 +22,14 @@ async function loadStore() {
   }
 }
 
+async function loadRuntime() {
+  try {
+    return await import('../www/patch/patch-runtime.mjs');
+  } catch (error) {
+    assert.fail(`patch runtime module is required: ${error?.code ?? error?.message ?? error}`);
+  }
+}
+
 function base64url(bytes) {
   return Buffer.from(bytes)
     .toString('base64')
@@ -265,13 +273,58 @@ test('activation moves current and previous pointers together', async () => {
   };
 
   await store.stage(candidate);
-  await store.activate('0.0.2');
+  await store.activate('0.0.2', { expectedCurrentVersion: '0.0.1' });
 
   assert.deepEqual(await store.readMeta(), {
     currentVersion: '0.0.2',
     previousVersion: '0.0.1',
   });
   assert.deepEqual(await store.readCurrent(), candidate);
+});
+
+test('activation requires the current version used during verification', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+  const candidate = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>patched</main>' },
+  };
+
+  await store.stage(candidate);
+  await assert.rejects(
+    store.activate('0.0.2'),
+    /expected.*current|current.*required/i,
+  );
+  assert.deepEqual(await store.readCurrent(), base);
+});
+
+test('stale activation is rejected after current advances', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+  const older = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>older patch</main>' },
+  };
+  const newer = {
+    version: '0.0.3',
+    assets: { ...base.assets, 'ui.html': '<main>newer patch</main>' },
+  };
+
+  await store.stage(older);
+  await store.stage(newer);
+  await store.activate('0.0.3', { expectedCurrentVersion: '0.0.1' });
+
+  await assert.rejects(
+    store.activate('0.0.2', { expectedCurrentVersion: '0.0.1' }),
+    /current.*changed|stale|expected/i,
+  );
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.3',
+    previousVersion: '0.0.1',
+  });
+  assert.deepEqual(await store.readCurrent(), newer);
 });
 
 test('failed staging leaves the active snapshot untouched', async () => {
@@ -301,7 +354,7 @@ test('rollback atomically swaps back to the previous complete snapshot', async (
   };
 
   await store.stage(candidate);
-  await store.activate('0.0.2');
+  await store.activate('0.0.2', { expectedCurrentVersion: '0.0.1' });
   await store.rollback();
 
   assert.deepEqual(await store.readMeta(), {
@@ -328,7 +381,7 @@ test('IndexedDB store persists the active pointer and supports rollback after re
     databaseName,
   });
   await first.stage(candidate);
-  await first.activate('0.0.2');
+  await first.activate('0.0.2', { expectedCurrentVersion: '0.0.1' });
   assert.deepEqual(await first.readCurrent(), candidate);
 
   const reopened = createIndexedDbPatchStore({
@@ -348,4 +401,65 @@ test('IndexedDB store persists the active pointer and supports rollback after re
     previousVersion: '0.0.2',
   });
   assert.deepEqual(await reopened.readCurrent(), base);
+});
+
+test('concurrent imports cannot activate a stale patch over a newer patch', async () => {
+  const { createIndexedDbPatchStore } = await loadStore();
+  const { applyPatchBundle } = await loadRuntime();
+  const base = baseSnapshot();
+  const databaseName = `lighthouse-patches-concurrency-${Date.now()}-${Math.random()}`;
+  const store = createIndexedDbPatchStore({
+    indexedDB: fakeIndexedDB,
+    baseSnapshot: base,
+    databaseName,
+  });
+  const { pair, trustedKey } = await keyPair();
+  const olderBundle = await signedBundle({
+    privateKey: pair.privateKey,
+    version: '0.0.2',
+    files: { 'ui.html': '<main>older patch</main>' },
+  });
+  const newerBundle = await signedBundle({
+    privateKey: pair.privateKey,
+    version: '0.0.3',
+    files: { 'ui.html': '<main>newer patch</main>' },
+  });
+
+  let releaseOlderActivation;
+  const olderActivationRelease = new Promise((resolve) => { releaseOlderActivation = resolve; });
+  let signalOlderActivation;
+  const olderActivationReached = new Promise((resolve) => { signalOlderActivation = resolve; });
+  const gatedStore = {
+    stage: (...args) => store.stage(...args),
+    readSnapshot: (...args) => store.readSnapshot(...args),
+    readMeta: (...args) => store.readMeta(...args),
+    readCurrent: (...args) => store.readCurrent(...args),
+    rollback: (...args) => store.rollback(...args),
+    async activate(version, options) {
+      if (version === '0.0.2') {
+        signalOlderActivation();
+        await olderActivationRelease;
+      }
+      return store.activate(version, options);
+    },
+  };
+
+  const olderApply = applyPatchBundle(olderBundle, { store: gatedStore, trustedKey });
+  await olderActivationReached;
+  const newerApply = await applyPatchBundle(newerBundle, { store: gatedStore, trustedKey });
+  assert.equal(newerApply.current.version, '0.0.3');
+
+  releaseOlderActivation();
+  await assert.rejects(
+    olderApply,
+    /current.*changed|stale|expected/i,
+  );
+
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.3',
+    previousVersion: '0.0.1',
+  });
+  const current = await store.readCurrent();
+  assert.equal(current.version, '0.0.3');
+  assert.equal(current.assets['ui.html'], '<main>newer patch</main>');
 });
