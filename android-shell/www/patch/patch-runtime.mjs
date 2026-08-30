@@ -222,7 +222,7 @@ export async function startPatchRuntime({
   return { store, getCurrent: () => store.readCurrent() };
 }
 
-if (typeof document !== 'undefined') {
+if (typeof document !== 'undefined' && globalThis.__LIGHTHOUSE_TRUSTED_BOOTSTRAP__ !== true) {
   const launch = () => startPatchRuntime().catch((error) => {
     const status = document.getElementById('patch-status');
     if (status) status.textContent = `LIGHTHOUSE เริ่มไม่สำเร็จ: ${error.message}`;
