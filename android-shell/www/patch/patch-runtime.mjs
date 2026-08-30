@@ -52,6 +52,7 @@ function defaultImportModule(url) {
 export async function mountSnapshot(snapshot, {
   root,
   documentRef = globalThis.document,
+  trustedBrain = null,
   createModuleUrl = defaultCreateModuleUrl,
   importModule = defaultImportModule,
   revokeModuleUrl = (url) => URL.revokeObjectURL(url),
@@ -94,6 +95,7 @@ export async function mountSnapshot(snapshot, {
       rules,
       vocabulary,
       version: snapshot.version,
+      brain: trustedBrain,
     });
   } catch (error) {
     revokeModuleUrl(moduleUrl);
@@ -147,6 +149,7 @@ export async function startPatchRuntime({
   documentRef = globalThis.document,
   fetchImpl = globalThis.fetch,
   indexedDB = globalThis.indexedDB,
+  trustedBrain = null,
 } = {}) {
   if (!documentRef) throw new Error('Document is required');
 
@@ -164,7 +167,7 @@ export async function startPatchRuntime({
 
   const render = async (snapshot) => {
     await cleanup();
-    cleanup = await mountSnapshot(snapshot, { root, documentRef });
+    cleanup = await mountSnapshot(snapshot, { root, documentRef, trustedBrain });
     status.textContent = `Web snapshot ${snapshot.version}`;
   };
 
