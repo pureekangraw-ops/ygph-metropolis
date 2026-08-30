@@ -58,7 +58,7 @@ test('FD06 CREATE/EXPENSE multi-group capability commits deterministic ledger tr
   const record = durable.domains.LEDGER.records[transactionId]?.record;
   assert.equal(record.recordId, transactionId);
   assert.equal(record.direction, 'OUT');
-  assert.equal(record.subtype, 'EXPENSE');
+  assert.equal(record.detail, 'OUT:EXPENSE');
   assert.equal(record.title, 'ข้าว');
   assert.equal(record.amountSatang, 6500);
   assert.equal(record.sourceRef, 'LEDGER/MANUAL');
@@ -70,7 +70,7 @@ test('FD07 later expense command failure leaves a related atomic plan durable st
   const { runtime, read } = await durableRuntime(state => {
     state.domains.LEDGER.records['TX-DUP'] = imported({
       recordId:'TX-DUP', type:'TRANSACTION', direction:'IN', amountSatang:1,
-      title:'existing', subtype:'OTHER_INCOME', sourceRef:'LEDGER/MANUAL', status:'POSTED',
+      title:'existing', detail:'IN:OTHER_INCOME', sourceRef:'LEDGER/MANUAL', status:'POSTED',
     });
   });
   const before = await read();
