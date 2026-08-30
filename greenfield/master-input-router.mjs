@@ -1,3 +1,5 @@
+const DEFAULT_EXPENSE_TITLE = 'รายจ่ายทั่วไป';
+
 function defaultIdFactory(prefix) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${suffix}`;
@@ -29,6 +31,19 @@ export function prepareMasterExecution(intent, { projection, idFactory = default
   if (typeof idFactory !== 'function') throw new Error('MASTER_INPUT_ID_FACTORY_INVALID');
 
   if (intent.action === 'QUERY') {
+    if (intent.object === 'EXPENSE') {
+      const { title, amountSatang, businessDate } = intent.fields || {};
+      if (typeof title !== 'string' || !title.trim()
+          || !Number.isSafeInteger(amountSatang) || amountSatang <= 0
+          || (businessDate != null && !/^\d{4}-\d{2}-\d{2}$/.test(businessDate))) {
+        throw new Error('MASTER_INPUT_QUERY_FIELDS_INVALID');
+      }
+      return Object.freeze({
+        kind:'QUERY', action:'QUERY', object:'EXPENSE', method:null, input:null,
+        verify:Object.freeze({ type:'EXPENSE_RECORDED', title:title.trim(), amountSatang,
+          ...(businessDate ? { businessDate } : {}) }),
+      });
+    }
     if (intent.object !== 'RIDE_TODAY_SUMMARY') throw new Error('MASTER_INPUT_QUERY_NOT_ALLOWED');
     return Object.freeze({ kind:'QUERY', action:'QUERY', object:'RIDE_TODAY_SUMMARY', method:null, input:null, verify:Object.freeze({ type:'RIDE_TODAY_SUMMARY' }) });
   }
@@ -37,9 +52,10 @@ export function prepareMasterExecution(intent, { projection, idFactory = default
   if (intent.object === 'EXPENSE') {
     const workflowId = id(idFactory, 'WF-MASTER');
     const ledgerTransactionId = id(idFactory, 'TX-MASTER');
+    const title = fields.title || DEFAULT_EXPENSE_TITLE;
     return createPrepared('EXPENSE', 'expense', {
-      workflowId, ledgerTransactionId, title:fields.title, amountSatang:fields.amountSatang,
-    }, { type:'LEDGER_TRANSACTION', recordId:ledgerTransactionId, direction:'OUT', subtype:'EXPENSE', amountSatang:fields.amountSatang });
+      workflowId, ledgerTransactionId, title, amountSatang:fields.amountSatang,
+    }, { type:'LEDGER_TRANSACTION', recordId:ledgerTransactionId, direction:'OUT', subtype:'EXPENSE', title, amountSatang:fields.amountSatang });
   }
 
   if (intent.object === 'OTHER_INCOME') {
@@ -88,18 +104,29 @@ function record(state, domain, recordId) {
   return state?.domains?.[domain]?.records?.[recordId]?.record || null;
 }
 
+function ledgerSubtype(found) {
+  const explicit = String(found?.subtype || '').trim();
+  if (explicit) return explicit;
+  const detail = String(found?.detail || '');
+  const separator = detail.indexOf(':');
+  return separator >= 0 ? detail.slice(separator + 1) : '';
+}
+
 function verifyReadback(state, projection, prepared) {
   const check = prepared.verify;
   if (check.type === 'LEDGER_TRANSACTION') {
     const found = record(state, 'LEDGER', check.recordId);
-    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || String(found.subtype || '') !== check.subtype) {
+    const subtype = ledgerSubtype(found);
+    const titleMismatch = Object.hasOwn(check, 'title') && found?.title !== check.title;
+    if (!found || found.type !== 'TRANSACTION' || found.direction !== check.direction || Number(found.amountSatang) !== check.amountSatang || subtype !== check.subtype || titleMismatch) {
       throw new Error('MASTER_INPUT_READBACK_MISMATCH');
     }
     return {
       recordId:found.recordId,
       direction:found.direction,
+      title:found.title ?? null,
       amountSatang:Number(found.amountSatang),
-      subtype:found.subtype,
+      subtype,
       revision:state?.revision ?? null,
       ledgerBalanceSatang:Number(projection?.ledgerBalanceSatang ?? 0),
     };
@@ -141,7 +168,49 @@ function verifyReadback(state, projection, prepared) {
   throw new Error('MASTER_INPUT_READBACK_RULE_UNKNOWN');
 }
 
-function queryReadback(projection, prepared) {
+function expenseRecordDate(record) {
+  if (record.businessDate) return record.businessDate;
+  if (!Number.isFinite(Date.parse(record.createdAt))) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit',
+  }).formatToParts(new Date(record.createdAt));
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function expenseQueryReadback(state, check) {
+  if (!state?.domains?.LEDGER?.records) throw new Error('MASTER_INPUT_RUNTIME_INVALID');
+  let candidates = Object.values(state.domains.LEDGER.records).map(entry => entry.record)
+    .filter(found => found?.type === 'TRANSACTION' && found.direction === 'OUT'
+      && ledgerSubtype(found) === 'EXPENSE' && found.status !== 'CANCELLED');
+  const steps = [{ role:'ACTION', value:'ลง', count:candidates.length }];
+  candidates = candidates.filter(found => found.title === check.title);
+  steps.push({ role:'TARGET', value:check.title, count:candidates.length });
+  candidates = candidates.filter(found => found.amountSatang === check.amountSatang);
+  steps.push({ role:'MONEY', value:check.amountSatang, count:candidates.length });
+  if (check.businessDate) {
+    candidates = candidates.filter(found => expenseRecordDate(found) === check.businessDate);
+    steps.push({ role:'TIME', value:check.businessDate, count:candidates.length });
+  }
+  // Latest means recording time, not businessDate or array/insertion order.
+  const latestUnknown = candidates.length > 1 && candidates.some(found => !Number.isFinite(Date.parse(found.createdAt)));
+  if (!latestUnknown) {
+    candidates.sort((a, b) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || String(a.recordId).localeCompare(String(b.recordId)));
+  }
+  const found = latestUnknown ? null : candidates[0];
+  return {
+    type:'EXPENSE_RECORDED', found:candidates.length > 0, matchCount:candidates.length, steps,
+    selectionReason:latestUnknown ? 'LATEST_RECORD_TIME_UNKNOWN' : null,
+    revision:state.revision,
+    record:found ? {
+      recordId:found.recordId, title:found.title, amountSatang:found.amountSatang,
+      createdAt:found.createdAt ?? null, businessDate:found.businessDate ?? null, status:found.status,
+    } : null,
+  };
+}
+
+function queryReadback(state, projection, prepared) {
+  if (prepared.verify?.type === 'EXPENSE_RECORDED') return expenseQueryReadback(state, prepared.verify);
   if (prepared.verify?.type !== 'RIDE_TODAY_SUMMARY') throw new Error('MASTER_INPUT_QUERY_NOT_ALLOWED');
   const ride = projection?.ride || {};
   return {
@@ -163,8 +232,8 @@ export async function executePreparedMasterIntent(runtime, prepared) {
   if (!prepared || (prepared.kind !== 'CREATE' && prepared.kind !== 'QUERY')) throw new Error('MASTER_INPUT_EXECUTION_INVALID');
 
   if (prepared.kind === 'QUERY') {
-    await runtime.readState();
-    return { status:'SUCCESS', action:'QUERY', object:prepared.object, recovered:false, readback:queryReadback(runtime.project(), prepared) };
+    const state = await runtime.readState();
+    return { status:'SUCCESS', action:'QUERY', object:prepared.object, recovered:false, readback:queryReadback(state, runtime.project(), prepared) };
   }
 
   if (typeof runtime[prepared.method] !== 'function') throw new Error('MASTER_INPUT_RUNTIME_METHOD_REJECTED');

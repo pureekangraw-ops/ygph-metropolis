@@ -2,13 +2,18 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
 
 function expenseRequiredResult(request) {
   const effect = request?.requiredResult?.effect;
+  const businessDate = request?.fields?.businessDate;
+  const businessDateMatches = businessDate == null
+    ? effect?.businessDate == null
+    : effect?.businessDate === businessDate;
   return request?.action === 'CREATE' &&
     request?.object === 'EXPENSE' &&
     request?.requiredResult?.kind === 'LEDGER_TRANSACTION' &&
     effect?.direction === 'OUT' &&
     effect?.subtype === 'EXPENSE' &&
     effect?.title === request?.fields?.title &&
-    effect?.amountSatang === request?.fields?.amountSatang;
+    effect?.amountSatang === request?.fields?.amountSatang &&
+    businessDateMatches;
 }
 
 function operationIds(requestId) {
@@ -52,12 +57,14 @@ export function createExpenseCapability() {
       }
 
       const { workflowId, ledgerTransactionId } = operationIds(request.requestId);
+      const hasBusinessDate = request.fields.businessDate != null;
       try {
         await runtime.expense({
           workflowId,
           ledgerTransactionId,
           title:request.fields.title,
           amountSatang:request.fields.amountSatang,
+          ...(hasBusinessDate ? { businessDate:request.fields.businessDate } : {}),
         });
       } catch (error) {
         if (!duplicateError(error)) throw error;
@@ -79,7 +86,8 @@ export function createExpenseCapability() {
         found.direction !== 'OUT' ||
         subtype !== 'EXPENSE' ||
         found.title !== request.fields.title ||
-        found.amountSatang !== request.fields.amountSatang
+        found.amountSatang !== request.fields.amountSatang ||
+        (hasBusinessDate && found.businessDate !== request.fields.businessDate)
       ) {
         return Object.freeze({ evidenceStatus:'MISMATCH', reason:'LEDGER_READBACK_MISMATCH' });
       }
@@ -92,6 +100,7 @@ export function createExpenseCapability() {
           subtype,
           title:found.title,
           amountSatang:found.amountSatang,
+          ...(hasBusinessDate ? { businessDate:found.businessDate } : {}),
           revision:state?.revision ?? null,
         }),
       });

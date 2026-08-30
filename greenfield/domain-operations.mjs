@@ -29,6 +29,15 @@ function safeIsoDate(value) {
   return input;
 }
 
+function safeBusinessDate(value) {
+  const input = requiredText(value, 'INVALID_BUSINESS_DATE');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!match) throw new Error('INVALID_BUSINESS_DATE');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3])) throw new Error('INVALID_BUSINESS_DATE');
+  return input;
+}
+
 function provenance(command, at) {
   return { origin: 'LIVE_COMMAND', commandId: command.commandId, idempotencyKey: command.idempotencyKey, domain: command.domain, at };
 }
@@ -119,7 +128,9 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
       recordId: requiredText(payload.recordId, 'INVALID_RECORD_ID'), source: 'LEDGER', type: 'TRANSACTION',
       title: requiredText(payload.title, 'INVALID_LEDGER_TITLE'), detail: `${direction}:${subtype}`, direction,
       amountSatang: safeSatang(payload.amountSatang, { allowZero: false, code: 'INVALID_LEDGER_AMOUNT' }), status: 'COMPLETED',
-      sourceRef: payload.sourceRef ? String(payload.sourceRef) : null, createdAt: payload.createdAt || at, updatedAt: at,
+      sourceRef: payload.sourceRef ? String(payload.sourceRef) : null,
+      ...(payload.businessDate != null ? { businessDate:safeBusinessDate(payload.businessDate) } : {}),
+      createdAt: payload.createdAt || at, updatedAt: at,
     };
     createEntry(domainState, record, command, at);
   });

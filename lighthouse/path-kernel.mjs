@@ -29,6 +29,20 @@ function validCapability(capability) {
     typeof capability.execute === 'function';
 }
 
+function findCapability(registry, validated) {
+  const candidateRequest = routingRequest(validated);
+  return registry.find(candidate => candidate.matches(candidateRequest)) ?? null;
+}
+
+function preflightResult(registry, validated) {
+  const source = validated.source;
+  const capability = findCapability(registry, validated);
+  if (!capability) {
+    return Object.freeze({ status:'BLOCKED', route:null, source, reason:'NO_LEGAL_PATH' });
+  }
+  return Object.freeze({ status:'READY', route:'DIRECT', capabilityId:capability.id, source });
+}
+
 export function createPathKernel({ capabilities = [], gemProcessor = null } = {}) {
   if (!Array.isArray(capabilities)) throw new Error('PATH_CAPABILITIES_INVALID');
   const registry = capabilities.map(capability => {
@@ -38,13 +52,17 @@ export function createPathKernel({ capabilities = [], gemProcessor = null } = {}
   if (gemProcessor !== null && typeof gemProcessor !== 'function') throw new Error('PATH_GEM_PROCESSOR_INVALID');
 
   return Object.freeze({
+    preflight(input) {
+      const validated = validatePathRequest(input);
+      return preflightResult(registry, validated);
+    },
+
     async run(input, { runtime } = {}) {
       const validated = validatePathRequest(input);
       const source = validated.source;
-      const candidateRequest = routingRequest(validated);
+      const capability = findCapability(registry, validated);
       const runRequest = executionRequest(validated);
 
-      const capability = registry.find(candidate => candidate.matches(candidateRequest));
       if (!capability) {
         return Object.freeze({ status:'BLOCKED', route:null, source, reason:'NO_LEGAL_PATH' });
       }

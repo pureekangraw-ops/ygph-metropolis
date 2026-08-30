@@ -1,0 +1,55 @@
+name: Dual Vocab Integrated Verify
+
+on:
+  push:
+    branches:
+      - feature/lighthouse-dual-vocab-integrated-20260829
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Integrated dual + vocab verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run repaired S01-S12 parser gate
+        run: node --test tests/greenfield-lighthouse-intent-parser.test.cjs
+      - name: Run dual vocab D01-D15 gate
+        run: node --test tests/greenfield-lighthouse-dual-vocab.test.cjs
+      - name: Run D16 front-door integration gate
+        run: node --test tests/greenfield-lighthouse-dual-vocab-integration.test.cjs
+      - name: Pair Lighthouse + Master Input
+        continue-on-error: true
+        run: node --test --test-concurrency=1 tests/greenfield-lighthouse-*.test.cjs tests/greenfield-master-input*.test.cjs
+      - name: Pair Lighthouse + Remaining
+        continue-on-error: true
+        shell: bash
+        run: |
+          files=(tests/greenfield-lighthouse-*.test.cjs)
+          while IFS= read -r -d '' file; do files+=("$file"); done < <(find tests -maxdepth 1 -name 'greenfield-*.test.cjs' ! -name 'greenfield-lighthouse-*' ! -name 'greenfield-master-input*' -print0)
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: Pair Master Input + Remaining
+        continue-on-error: true
+        shell: bash
+        run: |
+          files=(tests/greenfield-master-input*.test.cjs)
+          while IFS= read -r -d '' file; do files+=("$file"); done < <(find tests -maxdepth 1 -name 'greenfield-*.test.cjs' ! -name 'greenfield-lighthouse-*' ! -name 'greenfield-master-input*' -print0)
+          node --test --test-concurrency=1 "${files[@]}"
+      - name: Run serial full test suite
+        run: node --test --test-concurrency=1 tests/greenfield-*.test.cjs
+      - name: Run normal full test suite
+        run: npm test
+      - name: Check syntax
+        run: npm run check:syntax
+      - name: Check UTF-8
+        run: npm run check:utf8

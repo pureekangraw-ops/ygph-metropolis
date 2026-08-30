@@ -31,6 +31,15 @@ function isoDate(value) {
   return input;
 }
 
+function isoBusinessDate(value) {
+  const input = text(value, 'INVALID_BUSINESS_DATE');
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if (!match) throw new Error('INVALID_BUSINESS_DATE');
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1 || date.getUTCDate() !== Number(match[3])) throw new Error('INVALID_BUSINESS_DATE');
+  return input;
+}
+
 function command(workflowId, index, domain, type, payload, suffix = type) {
   return { commandId: `${workflowId}:${index}`, idempotencyKey: `${workflowId}:${suffix}`, domain, type, payload };
 }
@@ -201,12 +210,14 @@ export function buildOtherIncomeWorkflow({ workflowId, ledgerTransactionId, titl
   }, `LEDGER:${ledgerTransactionId}`)] };
 }
 
-export function buildExpenseWorkflow({ workflowId, ledgerTransactionId, title, amountSatang }) {
+export function buildExpenseWorkflow({ workflowId, ledgerTransactionId, title, amountSatang, businessDate = null }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
+  const normalizedBusinessDate = businessDate == null ? null : isoBusinessDate(businessDate);
   return { workflowId, commands: [command(workflowId, 1, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
     recordId: ledgerTransactionId, direction: 'OUT', amountSatang: satang(amountSatang, { code: 'INVALID_EXPENSE_AMOUNT' }),
     title: text(title, 'INVALID_EXPENSE_TITLE'), subtype: 'EXPENSE', sourceRef: 'LEDGER/MANUAL',
+    ...(normalizedBusinessDate ? { businessDate:normalizedBusinessDate } : {}),
   }, `LEDGER:${ledgerTransactionId}`)] };
 }
 
