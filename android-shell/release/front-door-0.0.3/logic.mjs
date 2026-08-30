@@ -18,7 +18,7 @@ function baht(amountSatang) {
 
 function readyText(result) {
   const title = String(result?.preview?.title ?? 'รายการ').trim() || 'รายการ';
-  return `พร้อมบันทึก ${title} ${baht(result?.preview?.amountSatang)} บาท · ยืนยันก่อนบันทึก`;
+  return `พร้อมบันทึก ${title} ${baht(result?.preview?.amountSatang)} บาท · ต้องยืนยันผ่านระบบที่เชื่อถือได้ก่อนบันทึก`;
 }
 
 function successText(result) {
@@ -94,7 +94,7 @@ export async function mount({ root, version, brain = null }) {
     confirm.type = 'button';
     confirm.className = 'primary-button';
     confirm.dataset.brainConfirm = '';
-    confirm.textContent = 'ยืนยันบันทึก';
+    confirm.textContent = 'เปิดการยืนยัน';
     bubble.append(documentRef.createElement('br'), confirm);
     pendingConfirm = confirm;
 
@@ -103,11 +103,16 @@ export async function mount({ root, version, brain = null }) {
       busy = true;
       confirm.disabled = true;
       try {
-        const executed = await brain.execute();
+        const executed = await brain.requestExecution();
         if (executed?.status === 'SUCCESS') {
           clearPendingConfirm();
           appendMessage(log, 'lighthouse', successText(executed), documentRef);
           showTransientNotice('บันทึกแล้ว');
+          return;
+        }
+        if (executed?.status === 'CANCELLED') {
+          appendMessage(log, 'lighthouse', 'ยกเลิกการบันทึกแล้ว · ยังไม่มีการเขียนข้อมูล', documentRef);
+          confirm.disabled = false;
           return;
         }
         if (executed?.status === 'VERIFY' || executed?.status === 'ERROR' || executed?.status === 'LOCKED') {
@@ -167,7 +172,7 @@ export async function mount({ root, version, brain = null }) {
     appendMessage(log, 'user', message, documentRef);
     input.value = '';
 
-    if (!brain || typeof brain.send !== 'function' || typeof brain.execute !== 'function') {
+    if (!brain || typeof brain.send !== 'function' || typeof brain.requestExecution !== 'function') {
       appendMessage(
         log,
         'lighthouse',
