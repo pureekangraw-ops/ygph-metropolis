@@ -1,7 +1,7 @@
 import { validateMultiGroupPlan } from './multi-group-contract.mjs';
-import { buildSaleWorkflow, buildReceiveCustomerPaymentWorkflow } from '../greenfield/business-workflows.mjs';
+import { buildSaleWorkflow, buildReceiveCustomerPaymentWorkflow, buildExpenseWorkflow } from '../greenfield/business-workflows.mjs';
 
-const SUPPORTED = new Set(['CREATE/SALE', 'APPLY/CUSTOMER_PAYMENT']);
+const SUPPORTED = new Set(['CREATE/SALE', 'APPLY/CUSTOMER_PAYMENT', 'CREATE/EXPENSE']);
 
 function frozen(value) {
   return Object.freeze(value);
@@ -14,6 +14,13 @@ function stop(status, reason, extras = {}) {
 function token(value) {
   const output = String(value ?? '').trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
   return output || 'X';
+}
+
+function validIsoDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ''));
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
 
 function allocatedOutputs(planId, group) {
@@ -30,6 +37,12 @@ function allocatedOutputs(planId, group) {
     return frozen({
       workflowId:group.fields.workflowId || `${prefix}-WF`,
       ledgerTransactionId:group.fields.ledgerTransactionId || `${prefix}-TX-PAYMENT`,
+    });
+  }
+  if (group.action === 'CREATE' && group.object === 'EXPENSE') {
+    return frozen({
+      workflowId:group.fields.workflowId || `${prefix}-WF`,
+      ledgerTransactionId:group.fields.ledgerTransactionId || `${prefix}-TX-EXPENSE`,
     });
   }
   return frozen({});
@@ -51,6 +64,20 @@ function capabilityFields(group) {
     const amount = Number(group.fields.amountSatang);
     if (!Number.isSafeInteger(amount) || amount <= 0) return 'REQUIRED_FIELD_INVALID';
     if (!group.references.saleId || !group.references.queueId) return 'REFERENCE_REQUIRED';
+    return null;
+  }
+  if (group.action === 'CREATE' && group.object === 'EXPENSE') {
+    const title = String(group.fields.title ?? '').trim();
+    const amount = Number(group.fields.amountSatang);
+    const businessDate = group.fields.businessDate == null ? null : String(group.fields.businessDate);
+    if (!title || !Number.isSafeInteger(amount) || amount <= 0 || (businessDate != null && !validIsoDate(businessDate))) return 'REQUIRED_FIELD_INVALID';
+    const required = group.requiredResult;
+    const effect = required?.effect;
+    if (required?.kind !== 'LEDGER_TRANSACTION' || !effect || effect.direction !== 'OUT' || effect.subtype !== 'EXPENSE' || effect.title !== title || effect.amountSatang !== amount) {
+      return 'REQUIRED_RESULT_MISMATCH';
+    }
+    const effectBusinessDate = effect.businessDate == null ? null : String(effect.businessDate);
+    if (effectBusinessDate !== businessDate) return 'REQUIRED_RESULT_MISMATCH';
     return null;
   }
   return 'CAPABILITY_NOT_CONNECTED';
@@ -213,6 +240,14 @@ function compilePreparedGroups(prepared) {
         ledgerTransactionId:outputs.ledgerTransactionId,
         amountSatang:group.fields.amountSatang,
       });
+    } else if (group.action === 'CREATE' && group.object === 'EXPENSE') {
+      workflow = buildExpenseWorkflow({
+        workflowId:outputs.workflowId,
+        ledgerTransactionId:outputs.ledgerTransactionId,
+        title:group.fields.title,
+        amountSatang:group.fields.amountSatang,
+        businessDate:group.fields.businessDate ?? null,
+      });
     } else {
       throw new Error(`MULTI_GROUP_COMPILER_CAPABILITY_NOT_CONNECTED:${group.groupId}`);
     }
@@ -275,6 +310,19 @@ function buildExpectedReadback(prepared, fallbackState) {
       continue;
     }
 
+    if (group.action === 'CREATE' && group.object === 'EXPENSE') {
+      transactions.set(outputs.ledgerTransactionId, {
+        recordId:outputs.ledgerTransactionId,
+        amountSatang:Number(group.fields.amountSatang),
+        direction:'OUT',
+        detail:'OUT:EXPENSE',
+        sourceRef:'LEDGER/MANUAL',
+        title:String(group.fields.title),
+        ...(group.fields.businessDate != null ? { businessDate:String(group.fields.businessDate) } : {}),
+      });
+      continue;
+    }
+
     if (group.action === 'APPLY' && group.object === 'CUSTOMER_PAYMENT') {
       const saleId = resolvedReferences.saleId;
       const queueId = resolvedReferences.queueId;
@@ -323,7 +371,10 @@ function proveDurableReadback(durable, expected) {
   }
   for (const [recordId, transaction] of expected.transactions) {
     const actual = domainRecord(durable, 'LEDGER', recordId);
-    compareFields(actual, transaction, ['recordId','amountSatang','direction','detail','sourceRef'], `LEDGER/${recordId}`, mismatches);
+    const fields = ['recordId','amountSatang','direction','detail','sourceRef'];
+    if (transaction.title != null) fields.push('title');
+    if (Object.hasOwn(transaction, 'businessDate')) fields.push('businessDate');
+    compareFields(actual, transaction, fields, `LEDGER/${recordId}`, mismatches);
     groups.push({ domain:'LEDGER', recordId, record:actual ? structuredClone(actual) : null });
   }
   if (mismatches.length > 0) return stop('VERIFY', 'MULTI_GROUP_DURABLE_READBACK_MISMATCH', { mismatches:Object.freeze(mismatches), groups:Object.freeze(groups) });
