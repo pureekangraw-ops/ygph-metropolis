@@ -11,7 +11,8 @@ test('FD10 production Master Input carries LOCAL_MULTI_GROUP boxes separately an
   const ui = source('ui/master-input.mjs');
   assert.match(ui, /multi-group-frontdoor-runtime\.mjs/);
   assert.match(ui, /let\s+preparedMultiGroupRoute\s*=\s*null/);
-  assert.match(ui, /routeMasterInputText\(text,[\s\S]{0,1000}baseRevision\s*:\s*state\.revision/);
+  assert.match(ui, /withMasterRuntime\([\s\S]{0,500}state\.revision/);
+  assert.match(ui, /routeMasterInputText\(text,[\s\S]{0,1000}baseRevision\s*:\s*routeContext\.baseRevision/);
   assert.match(ui, /routed\.route\s*===\s*['"]LOCAL_MULTI_GROUP['"]/);
   assert.match(ui, /preparedMultiGroupRoute\s*=\s*routed/);
   assert.match(ui, /routed\.commands[\s\S]{0,500}status/);
