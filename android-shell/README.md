@@ -36,7 +36,27 @@ Create an input JSON shaped like `test/fixtures/sample-update-input.json`, then 
 npm run patch:sign -- <input-json> <private-key.pem> <output.lhpatch>
 ```
 
-The signing tool computes the file hashes and signs the canonical patch metadata. The APK contains only the pinned debug public key at `www/patch/trusted-key.json`; the private key is never committed to the repo. Keep the debug private key outside source control. A future release/store key requires separate key custody and release policy.
+Before the CLI writes an output file, it reads the pinned trusted key at `www/patch/trusted-key.json`, derives the public key from the supplied private PEM, and refuses to sign if the EC P-256 public coordinates do not match the trusted JWK. After signing, the CLI runs the normal patch verifier against the produced bundle and only then writes the `.lhpatch` file.
+
+The APK contains only the pinned public key; the private key is never committed to the repo. Keep the existing debug private key outside source control. Do not create a replacement key or change the trusted public key to unblock a release.
+
+## Front Door 0.0.3 release candidate
+
+The reviewed pre-sign input for the chat-first Front Door is:
+
+`test/fixtures/front-door-0.0.3-input.json`
+
+It targets `0.0.1 -> 0.0.3` and changes only `ui.html`, `ui.css`, and `logic.mjs`.
+
+Once custody of the existing private key matching `lighthouse-debug-patch-1` is proven, produce the release candidate with:
+
+```sh
+npm run patch:release:0.0.3 -- <existing-private-key.pem> <output.lhpatch>
+```
+
+This command uses the same trusted-key match gate, hash/signature generation, and verifier readback described above. If the existing matching private key is unavailable, signing is **BLOCKED**; do not generate a new key and do not alter `www/patch/trusted-key.json`.
+
+After a signed 0.0.3 patch exists, the release evidence still requires a physical Android check: select and apply the patch, confirm `0.0.3`, fully close/reopen and confirm `0.0.3` persists, then Rollback and confirm the previous version is restored.
 
 ## Boundary
 
