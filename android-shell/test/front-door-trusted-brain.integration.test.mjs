@@ -103,11 +103,11 @@ async function createRuntimeAndBrain(confirmTextImpl = async () => 'ยืนย
 async function patchSnapshot() {
   const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
   return {
-    version:input.version,
+    version:'0.0.4',
     assets:{
       'ui.html':input.files['ui.html'],
       'ui.css':input.files['ui.css'],
-      'logic.mjs':await read('release/front-door-0.0.3/logic.mjs'),
+      'logic.mjs':await read('release/front-door-0.0.4/logic.mjs'),
       'rules.json':await read('www/app/rules.json'),
       'vocabulary.json':await read('www/app/vocabulary.json'),
     },
@@ -151,7 +151,7 @@ async function submit(dom, app, value) {
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
 }
 
-test('actual patched Front Door writes only after one trusted typed confirmation', async (t) => {
+test('actual patched Front Door 0.0.4 writes only after one trusted typed confirmation', async (t) => {
   const confirmation = deferredConfirmation();
   const { runtime, brain } = await createRuntimeAndBrain(confirmation.ask);
   const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
@@ -188,7 +188,7 @@ test('actual patched Front Door writes only after one trusted typed confirmation
   assert.match(app.querySelector('[data-chat-log]').textContent, /65\.00|65,00|65 บาท/);
 });
 
-test('actual patched Front Door shows WAITING, accepts correction, then uses one trusted typed confirmation', async (t) => {
+test('actual patched Front Door 0.0.4 shows WAITING, accepts correction, then uses one trusted typed confirmation', async (t) => {
   const confirmation = deferredConfirmation();
   const { runtime, brain } = await createRuntimeAndBrain(confirmation.ask);
   const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
