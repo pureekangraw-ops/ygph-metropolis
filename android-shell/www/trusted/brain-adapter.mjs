@@ -10,6 +10,13 @@ function errorReason(error) {
   return String(error?.message || error || 'TRUSTED_BRAIN_ERROR');
 }
 
+function routedReason(routed, fallback = 'TRUSTED_BRAIN_ROUTE_STOPPED') {
+  return routed?.reason
+    ?? routed?.intent?.reason
+    ?? routed?.prepared?.reason
+    ?? fallback;
+}
+
 function previewFromRequest(request) {
   return frozen({
     title:String(request?.fields?.title ?? ''),
@@ -99,7 +106,7 @@ export function createTrustedBrainAdapter({
       return waitingResult(recoverySession);
     }
     preparedRequest = null;
-    return stoppedResult(routed?.status ?? 'BLOCKED', routed?.reason ?? 'TRUSTED_BRAIN_ROUTE_STOPPED');
+    return stoppedResult(routed?.status ?? 'BLOCKED', routedReason(routed));
   }
 
   async function routeFresh(rawText) {
@@ -162,7 +169,7 @@ export function createTrustedBrainAdapter({
     recoverySession = null;
     return stoppedResult(
       rejoined?.routed?.status ?? 'BLOCKED',
-      rejoined?.routed?.reason ?? 'RECOVERY_REJOIN_STOPPED',
+      routedReason(rejoined?.routed, 'RECOVERY_REJOIN_STOPPED'),
     );
   }
 
