@@ -70,6 +70,7 @@ export async function routeMasterInputText(rawText, options = {}) {
       compiled = compileNaturalLanguageMultiGroup(prepared.parsed, {
         baseRevision:options.baseRevision,
         requestIdFactory:options.requestIdFactory,
+        ...(options.compileId != null ? { compileId:options.compileId } : {}),
       });
     } catch (error) {
       return routedResult({
@@ -79,7 +80,7 @@ export async function routeMasterInputText(rawText, options = {}) {
     if (compiled.boxes.length > 0) {
       return routedResult({
         route:'LOCAL_MULTI_GROUP', prepared, intent:null, status:compiled.status, reason:null,
-        boxes:compiled.boxes, commands:compiled.commands,
+        compileId:compiled.compileId, boxes:compiled.boxes, commands:compiled.commands,
       }, context);
     }
     const stopped = firstStoppedCommand(compiled);
@@ -87,7 +88,7 @@ export async function routeMasterInputText(rawText, options = {}) {
       route:'STOP', prepared, intent:null,
       status:stopped?.status || compiled.status || 'BLOCKED',
       reason:stopped?.reason || 'MULTI_GROUP_EXECUTION_NOT_CONNECTED',
-      boxes:compiled.boxes, commands:compiled.commands,
+      compileId:compiled.compileId, boxes:compiled.boxes, commands:compiled.commands,
     }, context);
   }
 
