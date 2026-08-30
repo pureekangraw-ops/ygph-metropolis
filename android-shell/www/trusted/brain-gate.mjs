@@ -11,20 +11,21 @@ function formatBaht(amountSatang) {
   return Number.isSafeInteger(amount) ? (amount / 100).toFixed(2) : '—';
 }
 
-function defaultConfirm(message) {
+function captureConfirm(confirmImpl) {
+  if (typeof confirmImpl === 'function') return confirmImpl;
   const confirmFn = globalThis.confirm;
   if (typeof confirmFn !== 'function') throw new Error('TRUSTED_CONFIRMATION_UI_UNAVAILABLE');
-  return confirmFn.call(globalThis, message);
+  return confirmFn.bind(globalThis);
 }
 
 export function createTrustedBrainGate({
   brain,
-  confirmImpl = defaultConfirm,
+  confirmImpl = null,
 } = {}) {
   if (!brain || typeof brain.send !== 'function' || typeof brain.execute !== 'function') {
     throw new TypeError('TRUSTED_BRAIN_GATE_BRAIN_REQUIRED');
   }
-  if (typeof confirmImpl !== 'function') throw new TypeError('TRUSTED_BRAIN_GATE_CONFIRM_REQUIRED');
+  const trustedConfirm = captureConfirm(confirmImpl);
 
   let readyPreview = null;
   let confirmationInFlight = false;
@@ -44,7 +45,7 @@ export function createTrustedBrainGate({
     const preview = readyPreview;
     try {
       const title = String(preview?.title ?? 'รายการ').trim() || 'รายการ';
-      const approved = await confirmImpl(`ยืนยันบันทึก ${title} ${formatBaht(preview?.amountSatang)} บาท?`);
+      const approved = await trustedConfirm(`ยืนยันบันทึก ${title} ${formatBaht(preview?.amountSatang)} บาท?`);
       if (!approved) return stopped('CANCELLED', 'TRUSTED_CONFIRMATION_DECLINED');
 
       const result = await brain.execute();
