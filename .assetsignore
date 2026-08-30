@@ -73,4 +73,5 @@
 !/lighthouse/multi-group-execution.mjs
 !/lighthouse/multi-group-frontdoor.mjs
 !/lighthouse/multi-group-frontdoor-runtime.mjs
+!/lighthouse/multi-group-frontdoor-recovery.mjs
 !/lighthouse/capabilities/expense.mjs
