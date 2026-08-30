@@ -82,9 +82,47 @@ test('signPatchSource creates a bundle verifiable by the matching public key', a
   assert.equal(verified.files['ui.html'].content, source.files['ui.html']);
 });
 
-test('package exposes manual patch signing and repository web/tool files contain no private PEM', async () => {
+test('release signing gate proves the private key matches the trusted public key before signing', async () => {
+  const { assertPrivateKeyMatchesTrustedKey } = await loadSigner();
+  assert.equal(typeof assertPrivateKeyMatchesTrustedKey, 'function');
+
+  const matchingPair = await webcrypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign', 'verify'],
+  );
+  const wrongPair = await webcrypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign', 'verify'],
+  );
+
+  const matchingPrivate = pem('PRIVATE KEY', await webcrypto.subtle.exportKey('pkcs8', matchingPair.privateKey));
+  const wrongPrivate = pem('PRIVATE KEY', await webcrypto.subtle.exportKey('pkcs8', wrongPair.privateKey));
+  const publicJwk = await webcrypto.subtle.exportKey('jwk', matchingPair.publicKey);
+  const trustedKey = {
+    keyId: 'release-test-key',
+    alg: 'ECDSA-P256-SHA256',
+    jwk: publicJwk,
+  };
+
+  await assert.doesNotReject(() => assertPrivateKeyMatchesTrustedKey({
+    privateKeyPem: matchingPrivate,
+    trustedKey,
+  }));
+  await assert.rejects(
+    () => assertPrivateKeyMatchesTrustedKey({ privateKeyPem: wrongPrivate, trustedKey }),
+    /does not match trusted public key/i,
+  );
+});
+
+test('package exposes generic signing plus the exact 0.0.3 release command and contains no private PEM', async () => {
   const pkg = JSON.parse(await read('package.json'));
   assert.equal(pkg.scripts['patch:sign'], 'node tools/sign-patch.mjs');
+  assert.equal(
+    pkg.scripts['patch:release:0.0.3'],
+    'node tools/sign-patch.mjs test/fixtures/front-door-0.0.3-input.json',
+  );
 
   const roots = [new URL('www/', root), new URL('tools/', root)];
   for (const directory of roots) {

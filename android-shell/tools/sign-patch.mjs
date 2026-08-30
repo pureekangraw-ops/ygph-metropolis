@@ -1,11 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { webcrypto } from 'node:crypto';
+import { createPrivateKey, createPublicKey, webcrypto } from 'node:crypto';
 import {
   PATCH_ALLOWED_FILES,
   PATCH_MAX_BYTES,
   PATCH_SCHEMA,
   canonicalPatchPayload,
+  verifyPatchBundle,
 } from '../www/patch/patch-contract.mjs';
 
 const encoder = new TextEncoder();
@@ -13,6 +14,7 @@ const allowedFiles = new Set(PATCH_ALLOWED_FILES);
 const PATCH_ALGORITHM = 'ECDSA-P256-SHA256';
 const DEFAULT_KEY_ID = 'lighthouse-debug-patch-1';
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+const trustedKeyUrl = new URL('../www/patch/trusted-key.json', import.meta.url);
 
 function asObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -56,6 +58,34 @@ function base64url(bytes) {
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replace(/=+$/u, '');
+}
+
+export async function assertPrivateKeyMatchesTrustedKey({ privateKeyPem, trustedKey }) {
+  const trust = asObject(trustedKey, 'Trusted patch key');
+  const jwk = asObject(trust.jwk, 'Trusted public JWK');
+  if (trust.alg !== PATCH_ALGORITHM) throw new Error(`Trusted patch key algorithm must be ${PATCH_ALGORITHM}`);
+  if (typeof trust.keyId !== 'string' || trust.keyId.length === 0) throw new Error('Trusted patch keyId is required');
+  if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || !jwk.x || !jwk.y) {
+    throw new Error('Trusted public JWK must be an EC P-256 public key');
+  }
+
+  let derivedJwk;
+  try {
+    const privateKey = createPrivateKey(privateKeyPem);
+    const publicKey = createPublicKey(privateKey);
+    derivedJwk = publicKey.export({ format: 'jwk' });
+  } catch {
+    throw new Error('Private patch signing key is invalid');
+  }
+
+  const matches = derivedJwk.kty === jwk.kty
+    && derivedJwk.crv === jwk.crv
+    && derivedJwk.x === jwk.x
+    && derivedJwk.y === jwk.y;
+  if (!matches) {
+    throw new Error(`Private patch signing key does not match trusted public key ${trust.keyId}`);
+  }
+  return true;
 }
 
 export async function signPatchSource({ source, privateKeyPem, keyId = DEFAULT_KEY_ID }) {
@@ -125,12 +155,24 @@ async function main(argv) {
     throw new Error('Usage: npm run patch:sign -- <input-json> <private-key.pem> <output.lhpatch>');
   }
 
-  const [sourceText, privateKeyPem] = await Promise.all([
+  const [sourceText, privateKeyPem, trustedKeyText] = await Promise.all([
     readFile(inputPath, 'utf8'),
     readFile(privateKeyPath, 'utf8'),
+    readFile(trustedKeyUrl, 'utf8'),
   ]);
   const source = JSON.parse(sourceText);
-  const bundle = await signPatchSource({ source, privateKeyPem });
+  const trustedKey = JSON.parse(trustedKeyText);
+
+  await assertPrivateKeyMatchesTrustedKey({ privateKeyPem, trustedKey });
+  const bundle = await signPatchSource({
+    source,
+    privateKeyPem,
+    keyId: trustedKey.keyId,
+  });
+  await verifyPatchBundle(bundle, {
+    currentVersion: source.baseVersion,
+    trustedKey,
+  });
   await writeFile(outputPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8');
 }
 
