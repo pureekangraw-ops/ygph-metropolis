@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
+import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 
 const { subtle } = webcrypto;
 const encoder = new TextEncoder();
@@ -308,4 +309,43 @@ test('rollback atomically swaps back to the previous complete snapshot', async (
     previousVersion: '0.0.2',
   });
   assert.deepEqual(await store.readCurrent(), base);
+});
+
+test('IndexedDB store persists the active pointer and supports rollback after reopen', async () => {
+  const { createIndexedDbPatchStore } = await loadStore();
+  assert.equal(typeof createIndexedDbPatchStore, 'function');
+
+  const base = baseSnapshot();
+  const candidate = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>persistent patch</main>' },
+  };
+  const databaseName = `lighthouse-patches-test-${Date.now()}-${Math.random()}`;
+
+  const first = createIndexedDbPatchStore({
+    indexedDB: fakeIndexedDB,
+    baseSnapshot: base,
+    databaseName,
+  });
+  await first.stage(candidate);
+  await first.activate('0.0.2');
+  assert.deepEqual(await first.readCurrent(), candidate);
+
+  const reopened = createIndexedDbPatchStore({
+    indexedDB: fakeIndexedDB,
+    baseSnapshot: base,
+    databaseName,
+  });
+  assert.deepEqual(await reopened.readMeta(), {
+    currentVersion: '0.0.2',
+    previousVersion: '0.0.1',
+  });
+  assert.deepEqual(await reopened.readCurrent(), candidate);
+
+  await reopened.rollback();
+  assert.deepEqual(await reopened.readMeta(), {
+    currentVersion: '0.0.1',
+    previousVersion: '0.0.2',
+  });
+  assert.deepEqual(await reopened.readCurrent(), base);
 });
