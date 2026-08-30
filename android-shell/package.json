@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "patch:sign": "node tools/sign-patch.mjs",
+    "patch:release:0.0.3": "node tools/sign-patch.mjs test/fixtures/front-door-0.0.3-input.json",
     "android:add": "npx cap add android",
     "android:sync": "npx cap sync android",
     "android:debug": "cd android && ./gradlew assembleDebug"
