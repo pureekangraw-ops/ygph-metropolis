@@ -87,7 +87,7 @@ async function patchSnapshot() {
     assets:{
       'ui.html':input.files['ui.html'],
       'ui.css':input.files['ui.css'],
-      'logic.mjs':input.files['logic.mjs'],
+      'logic.mjs':await read('release/front-door-0.0.3/logic.mjs'),
       'rules.json':await read('www/app/rules.json'),
       'vocabulary.json':await read('www/app/vocabulary.json'),
     },
@@ -99,8 +99,7 @@ async function flushUi() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-test('actual patched Front Door calls trusted brain and writes only after visible explicit confirmation', async (t) => {
-  const { runtime, brain } = await createRuntimeAndBrain();
+async function mountIntegratedFrontDoor(brain) {
   const dom = new JSDOM(`<!doctype html><html><head></head><body>
     <div id="app"></div>
     <aside class="patch-controls">
@@ -110,14 +109,6 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
     </aside>
   </body></html>`, { url:'https://lighthouse.test/' });
   const app = dom.window.document.getElementById('app');
-
-  t.after(async () => {
-    deactivateRuntimeSession(runtime);
-    runtime.close();
-    dom.window.close();
-    await resetVault();
-  });
-
   const cleanup = await mountSnapshot(await patchSnapshot(), {
     root:app,
     documentRef:dom.window.document,
@@ -126,14 +117,31 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
     importModule:(url) => import(url),
     revokeModuleUrl:() => {},
   });
-  t.after(cleanup);
+  return { dom, app, cleanup };
+}
 
-  const initial = await runtime.readState();
+async function submit(dom, app, value) {
   const composer = app.querySelector('[data-chat-form]');
   const input = app.querySelector('[data-chat-input]');
-  input.value = 'ข้าว 65';
+  input.value = value;
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
   await flushUi();
+}
+
+test('actual patched Front Door calls trusted brain and writes only after visible explicit confirmation', async (t) => {
+  const { runtime, brain } = await createRuntimeAndBrain();
+  const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
+
+  t.after(async () => {
+    await cleanup();
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    dom.window.close();
+    await resetVault();
+  });
+
+  const initial = await runtime.readState();
+  await submit(dom, app, 'ข้าว 65');
 
   const beforeConfirm = await runtime.readState();
   assert.equal(beforeConfirm.revision, initial.revision);
@@ -154,4 +162,39 @@ test('actual patched Front Door calls trusted brain and writes only after visibl
   assert.equal(records[0].title, 'ข้าว');
   assert.equal(records[0].amountSatang, 6500);
   assert.match(app.querySelector('[data-chat-log]').textContent, /65\.00|65,00|65 บาท/);
+});
+
+test('actual patched Front Door shows WAITING, accepts correction, then confirms the corrected durable amount', async (t) => {
+  const { runtime, brain } = await createRuntimeAndBrain();
+  const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
+
+  t.after(async () => {
+    await cleanup();
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    dom.window.close();
+    await resetVault();
+  });
+
+  const initial = await runtime.readState();
+  await submit(dom, app, 'ข้าว 1,50');
+  assert.equal(expenseRecords(await runtime.readState()).length, 0);
+  assert.match(app.querySelector('[data-chat-log]').textContent, /กรอก|ข้อมูล|ระบุ|ยืนยัน/);
+  assert.equal(app.querySelector('[data-brain-confirm]'), null);
+
+  await submit(dom, app, '150');
+  const readyState = await runtime.readState();
+  assert.equal(readyState.revision, initial.revision);
+  assert.equal(expenseRecords(readyState).length, 0);
+
+  const confirm = app.querySelector('[data-brain-confirm]');
+  assert.ok(confirm, 'corrected READY response must expose confirmation');
+  assert.match(app.querySelector('[data-chat-log]').textContent, /150\.00|150,00|150 บาท/);
+  confirm.click();
+  await flushUi();
+
+  const records = expenseRecords(await runtime.readState());
+  assert.equal(records.length, 1);
+  assert.equal(records[0].title, 'ข้าว');
+  assert.equal(records[0].amountSatang, 15000);
 });
