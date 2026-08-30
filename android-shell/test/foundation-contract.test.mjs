@@ -24,11 +24,25 @@ test('foundation page stays local and excludes later-phase native scope', async 
   assert.doesNotMatch(html, /geolocation|google maps|api[_ -]?key|gps/i);
 });
 
-test('GitHub Actions builds from the Android project and uploads a debug APK', async () => {
+test('GitHub Actions builds a debug APK but never deploys or publishes it', async () => {
   const workflow = await read('.github/workflows/lighthouse-apk-debug.yml');
   assert.match(workflow, /node-version:\s*22/);
   assert.match(workflow, /npx cap add android/);
   assert.match(workflow, /run:\s*npm run android:debug/);
   assert.match(workflow, /android-shell\/android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.doesNotMatch(workflow, /\bdeploy\b|google[-_ ]?play|play[-_ ]?console|\bpublish\b/i);
+});
+
+test('operator README documents manual signed patch flow, rollback, and native APK boundary', async () => {
+  const readme = await read('android-shell/README.md');
+  assert.match(readme, /Manual Patch/i);
+  assert.match(readme, /\.lhpatch/);
+  assert.match(readme, /SHA-256/);
+  assert.match(readme, /ECDSA/);
+  assert.match(readme, /IndexedDB/);
+  assert.match(readme, /Rollback/i);
+  assert.match(readme, /native.*APK|APK.*native/i);
+  assert.match(readme, /private key.*never.*repo|never.*private key.*repo/i);
+  assert.match(readme, /automatic.*out of scope|out of scope.*automatic/i);
 });
