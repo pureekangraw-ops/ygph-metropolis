@@ -13,6 +13,14 @@ async function loadContract() {
   }
 }
 
+async function loadStore() {
+  try {
+    return await import('../www/patch/patch-store.mjs');
+  } catch (error) {
+    assert.fail(`patch store module is required: ${error?.code ?? error?.message ?? error}`);
+  }
+}
+
 function base64url(bytes) {
   return Buffer.from(bytes)
     .toString('base64')
@@ -86,6 +94,19 @@ async function signedBundle({
   );
   bundle.signature.value = base64url(signature);
   return bundle;
+}
+
+function baseSnapshot() {
+  return {
+    version: '0.0.1',
+    assets: {
+      'ui.html': '<main>base</main>',
+      'ui.css': 'main { display: block; }',
+      'logic.mjs': 'export async function mount() {}',
+      'rules.json': '{"mode":"base"}',
+      'vocabulary.json': '{"hello":"สวัสดี"}',
+    },
+  };
 }
 
 test('accepts a valid signed patch for the current version', async () => {
@@ -191,4 +212,100 @@ test('rejects patches larger than the 2 MiB content limit', async () => {
     verifyPatchBundle(bundle, { currentVersion: '0.0.1', trustedKey }),
     /too large|size/i,
   );
+});
+
+test('changed-file-only patch composes a complete snapshot', async () => {
+  const { composeSnapshot } = await loadStore();
+  const base = baseSnapshot();
+  const snapshot = composeSnapshot({
+    currentSnapshot: base,
+    baseAssets: base.assets,
+    verifiedPatch: {
+      version: '0.0.2',
+      files: {
+        'ui.html': { sha256: '0'.repeat(64), content: '<main>patched</main>' },
+      },
+    },
+  });
+
+  assert.equal(snapshot.version, '0.0.2');
+  assert.equal(snapshot.assets['ui.html'], '<main>patched</main>');
+  assert.equal(snapshot.assets['ui.css'], base.assets['ui.css']);
+  assert.equal(snapshot.assets['logic.mjs'], base.assets['logic.mjs']);
+  assert.equal(snapshot.assets['rules.json'], base.assets['rules.json']);
+  assert.equal(snapshot.assets['vocabulary.json'], base.assets['vocabulary.json']);
+});
+
+test('staging is readable before activation and does not move current', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+  const candidate = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>patched</main>' },
+  };
+
+  await store.stage(candidate);
+
+  assert.deepEqual(await store.readSnapshot('0.0.2'), candidate);
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.1',
+    previousVersion: null,
+  });
+});
+
+test('activation moves current and previous pointers together', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+  const candidate = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>patched</main>' },
+  };
+
+  await store.stage(candidate);
+  await store.activate('0.0.2');
+
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.2',
+    previousVersion: '0.0.1',
+  });
+  assert.deepEqual(await store.readCurrent(), candidate);
+});
+
+test('failed staging leaves the active snapshot untouched', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+
+  await assert.rejects(
+    store.stage({ version: '0.0.2', assets: { 'ui.html': '<main>partial</main>' } }),
+    /complete snapshot|missing asset/i,
+  );
+
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.1',
+    previousVersion: null,
+  });
+  assert.deepEqual(await store.readCurrent(), base);
+});
+
+test('rollback atomically swaps back to the previous complete snapshot', async () => {
+  const { createMemoryPatchStore } = await loadStore();
+  const base = baseSnapshot();
+  const store = createMemoryPatchStore({ baseSnapshot: base });
+  const candidate = {
+    version: '0.0.2',
+    assets: { ...base.assets, 'ui.html': '<main>patched</main>' },
+  };
+
+  await store.stage(candidate);
+  await store.activate('0.0.2');
+  await store.rollback();
+
+  assert.deepEqual(await store.readMeta(), {
+    currentVersion: '0.0.1',
+    previousVersion: '0.0.2',
+  });
+  assert.deepEqual(await store.readCurrent(), base);
 });
