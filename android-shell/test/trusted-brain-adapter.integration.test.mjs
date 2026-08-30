@@ -10,12 +10,8 @@ import {
 } from '../../lighthouse/master-input-recovery-session.mjs';
 import { createPathKernel } from '../../lighthouse/path-kernel.mjs';
 import { createExpenseCapability } from '../../lighthouse/capabilities/expense.mjs';
-import {
-  initializeFirstRun,
-} from '../../greenfield/first-run.mjs';
-import {
-  openGreenfieldRuntimeWithDevicePin,
-} from '../../greenfield/runtime.mjs';
+import { initializeFirstRun } from '../../greenfield/first-run.mjs';
+import { openGreenfieldRuntimeWithDevicePin } from '../../greenfield/runtime.mjs';
 import {
   activateRuntimeSession,
   deactivateRuntimeSession,
@@ -174,4 +170,36 @@ test('ข้าว 1,50 waits for owner correction, returns READY without writin
   const records = expenseRecords(await runtime.readState());
   assert.equal(records.length, 1);
   assert.equal(records[0].amountSatang, 15000);
+});
+
+test('concurrent execute writes once and replay after SUCCESS is blocked', async (t) => {
+  const runtime = await createUnlockedRuntime();
+  t.after(async () => {
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    await resetVault();
+  });
+  const brain = await createBrain('CONCURRENT');
+
+  const ready = await brain.send('ข้าว 65');
+  assert.equal(ready.status, 'READY');
+  assert.equal(expenseRecords(await runtime.readState()).length, 0);
+
+  const [first, second] = await Promise.all([
+    brain.execute(),
+    brain.execute(),
+  ]);
+  const statuses = [first.status, second.status].sort();
+  assert.deepEqual(statuses, ['BLOCKED', 'SUCCESS']);
+  const blocked = first.status === 'BLOCKED' ? first : second;
+  assert.equal(blocked.reason, 'TRUSTED_BRAIN_EXECUTION_IN_FLIGHT');
+
+  const records = expenseRecords(await runtime.readState());
+  assert.equal(records.length, 1);
+  assert.equal(records[0].amountSatang, 6500);
+
+  const replay = await brain.execute();
+  assert.equal(replay.status, 'BLOCKED');
+  assert.equal(replay.reason, 'TRUSTED_BRAIN_NOT_READY');
+  assert.equal(expenseRecords(await runtime.readState()).length, 1);
 });
