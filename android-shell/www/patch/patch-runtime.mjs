@@ -95,7 +95,7 @@ export async function mountSnapshot(snapshot, {
       rules,
       vocabulary,
       version: snapshot.version,
-      brain: trustedBrain,
+      ...(trustedBrain ? { brain: trustedBrain } : {}),
     });
   } catch (error) {
     revokeModuleUrl(moduleUrl);
