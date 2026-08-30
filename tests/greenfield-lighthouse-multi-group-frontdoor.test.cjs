@@ -67,23 +67,28 @@ test('FD02 understood condition is BLOCKED rather than guessed or reported as ru
   assert.equal(compiled.commands[0].reason, 'CONDITION_NOT_SUPPORTED');
 });
 
-test('MG01 natural-language multi-group remains stopped and durable state does not change', async () => {
+test('FD03 natural-language multi-group reaches proven local boxes with zero provider or durable mutation at route time', async () => {
   const { routeMasterInputText } = await import('../lighthouse/master-input-route.mjs');
   const { runtime, read } = await durableRuntime();
   const before = await read();
   let providerCalls = 0;
+  let nextId = 0;
 
   const routed = await routeMasterInputText('ข้าว65ข้าว500', {
     receivedAt:'2026-08-29T10:30:00.000Z',
     timeZone:'Asia/Bangkok',
-    requestIdFactory:() => 'MG01-REQ',
+    baseRevision:before.revision,
+    requestIdFactory:() => `FD03-${++nextId}`,
     interpretFallback:async () => { providerCalls += 1; throw new Error('PROVIDER_MUST_NOT_RUN'); },
   });
 
-  assert.equal(routed.route, 'STOP');
+  assert.equal(routed.route, 'LOCAL_MULTI_GROUP');
+  assert.equal(routed.status, 'READY');
   assert.equal(routed.decision.route, 'INTERPRET');
-  assert.equal(routed.reason, 'MULTI_GROUP_EXECUTION_NOT_CONNECTED');
-  assert.equal(routed.prepared.request, null);
+  assert.equal(routed.reason, null);
+  assert.equal(routed.boxes.length, 2);
+  assert.deepEqual(routed.commands.map(item => item.status), ['READY','READY']);
+  assert.ok(routed.boxes.every(box => box.plan.baseRevision === before.revision));
   assert.equal(providerCalls, 0);
   assert.deepEqual(await read(), before);
   runtime.close();
