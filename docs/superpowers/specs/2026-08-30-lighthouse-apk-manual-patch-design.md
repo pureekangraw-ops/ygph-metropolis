@@ -101,15 +101,17 @@ Stores:
 Flow:
 
 1. Read imported `.lhpatch`.
-2. Validate structure, version, supported paths, size, hashes, and signature.
-3. Resolve the current complete snapshot (or packaged base assets when no patch is active).
+2. Validate structure, version, supported paths, size, hashes, and signature against the currently active version.
+3. Resolve and remember that exact current complete snapshot (or packaged base assets when no patch is active).
 4. Overlay only changed patch files to materialize a complete candidate snapshot.
 5. Write candidate to `snapshots` as **staged** data.
 6. Read the stored candidate back and verify its version/assets match the candidate.
-7. In one IndexedDB read-write transaction, set `previousVersion = currentVersion` and `currentVersion = candidate.version`.
+7. In one IndexedDB read-write metadata transaction, compare `currentVersion` with the exact version remembered in step 3. If they differ, reject the candidate as stale without changing either pointer. If they match, set `previousVersion = currentVersion` and `currentVersion = candidate.version` in that same transaction.
 8. Read current metadata and snapshot back. Only then report activation success.
 
-If any step before pointer commit fails, the current pointer is untouched.
+This compare-and-swap boundary is required because two manual imports can overlap asynchronously. A candidate verified against an older Current may not activate after another import has already advanced Current.
+
+If any step before pointer commit fails, including the compare-and-swap check, the current pointer is untouched.
 
 ## Rollback
 
@@ -138,6 +140,8 @@ The JavaScript patch module exports:
 export async function mount({ root, rules, vocabulary, version }) {}
 ```
 
+`applyPatchBundle()` passes the version used during verification to the store as `expectedCurrentVersion` during activation. The store, not the UI, enforces the compare-and-swap check. UI locking may be added as defense-in-depth, but correctness must not depend on it.
+
 This keeps the patch surface explicit and lets the future integrated LIGHTHOUSE app reuse the same bootstrap without replacing the patch engine.
 
 ## Failure semantics
@@ -155,9 +159,10 @@ The following are hard reject / no-activation outcomes:
 - unknown key id/algorithm
 - invalid signature
 - staged snapshot write/readback mismatch
+- current version changed between verification and activation
 - missing rollback snapshot
 
-A rejected patch must not change `currentVersion`.
+A rejected patch must not change `currentVersion`. In particular, a stale concurrent candidate must never overwrite a newer active patch.
 
 ## Verification
 
@@ -172,6 +177,8 @@ Node 22 contract tests cover:
 - size limit rejection
 - staging readback before activation
 - atomic current/previous pointer behavior
+- compare-and-swap rejection when Current changes before activation
+- deterministic concurrent-import regression where a delayed older candidate cannot overwrite a newer active patch
 - rollback
 - no current-pointer change on failed verification
 
