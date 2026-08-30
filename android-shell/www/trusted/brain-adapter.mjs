@@ -65,6 +65,7 @@ export function createTrustedBrainAdapter({
 
   let preparedRequest = null;
   let recoverySession = null;
+  let executionInFlight = false;
 
   async function runtimeState() {
     return withRuntimeSession(async runtime => {
@@ -167,6 +168,7 @@ export function createTrustedBrainAdapter({
 
   return frozen({
     async send(rawText) {
+      if (executionInFlight) return stoppedResult('BLOCKED', 'TRUSTED_BRAIN_EXECUTION_IN_FLIGHT');
       const input = text(rawText);
       if (!input) return stoppedResult('BLOCKED', 'TRUSTED_BRAIN_TEXT_REQUIRED');
       try {
@@ -181,8 +183,10 @@ export function createTrustedBrainAdapter({
     },
 
     async execute() {
+      if (executionInFlight) return stoppedResult('BLOCKED', 'TRUSTED_BRAIN_EXECUTION_IN_FLIGHT');
       if (!preparedRequest) return stoppedResult('BLOCKED', 'TRUSTED_BRAIN_NOT_READY');
       const request = preparedRequest;
+      executionInFlight = true;
       try {
         const result = await withRuntimeSession(runtime => pathKernel.run(request, { runtime }));
         if (result?.status === 'COMPLETE') {
@@ -199,6 +203,8 @@ export function createTrustedBrainAdapter({
         const reason = errorReason(error);
         if (reason === 'RUNTIME_SESSION_LOCKED') return stoppedResult('LOCKED', reason);
         return stoppedResult('ERROR', reason);
+      } finally {
+        executionInFlight = false;
       }
     },
   });
