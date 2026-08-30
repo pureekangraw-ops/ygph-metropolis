@@ -35,6 +35,13 @@ function validateSnapshot(snapshot) {
   };
 }
 
+function requireExpectedCurrentVersion(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Expected current patch version is required for activation');
+  }
+  return value;
+}
+
 function snapshotsEqual(left, right) {
   if (!left || !right || left.version !== right.version) return false;
   return PATCH_ALLOWED_FILES.every((path) => left.assets?.[path] === right.assets?.[path]);
@@ -139,8 +146,12 @@ export function createMemoryPatchStore({ baseSnapshot }) {
       return clone(snapshot);
     },
 
-    async activate(version) {
+    async activate(version, { expectedCurrentVersion } = {}) {
+      const expected = requireExpectedCurrentVersion(expectedCurrentVersion);
       if (!snapshots.has(version)) throw new Error(`Staged patch snapshot is missing: ${version}`);
+      if (meta.currentVersion !== expected) {
+        throw new Error(`Patch current version changed before activation: expected ${expected}, found ${meta.currentVersion}`);
+      }
       if (version === meta.currentVersion) return clone(meta);
       meta = {
         currentVersion: version,
@@ -256,11 +267,15 @@ export function createIndexedDbPatchStore({
       return snapshot;
     },
 
-    async activate(version) {
+    async activate(version, { expectedCurrentVersion } = {}) {
+      const expected = requireExpectedCurrentVersion(expectedCurrentVersion);
       const candidate = await readSnapshot(version);
       if (!candidate) throw new Error(`Staged patch snapshot is missing: ${version}`);
 
       const nextMeta = await mutateMeta((meta) => {
+        if (meta.currentVersion !== expected) {
+          throw new Error(`Patch current version changed before activation: expected ${expected}, found ${meta.currentVersion}`);
+        }
         if (meta.currentVersion === version) return meta;
         return { currentVersion: version, previousVersion: meta.currentVersion };
       });
