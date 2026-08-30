@@ -6,9 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
+    "pretest": "node tools/sync-trusted-brain.mjs",
     "test": "node --test test/*.test.mjs",
     "patch:sign": "node tools/sign-patch.mjs",
     "android:add": "npx cap add android",
+    "preandroid:sync": "node tools/sync-trusted-brain.mjs",
     "android:sync": "npx cap sync android",
     "android:debug": "cd android && ./gradlew assembleDebug"
   },
