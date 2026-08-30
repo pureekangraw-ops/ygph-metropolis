@@ -21,6 +21,24 @@ function response(body, { json = false } = {}) {
   };
 }
 
+test('runtime rejects a wrong selected file type before reading content', async () => {
+  const { parseSelectedPatchFile } = await loadRuntime();
+  let reads = 0;
+  const file = {
+    name: 'sample-update.bin',
+    async text() {
+      reads += 1;
+      return '{"schema":"lighthouse.patch.v1"}';
+    },
+  };
+
+  await assert.rejects(
+    parseSelectedPatchFile(file),
+    /must use \.lhpatch/i,
+  );
+  assert.equal(reads, 0, 'wrong file types must be rejected before content is read');
+});
+
 test('packaged base snapshot contains every patchable logical asset at version 0.0.1', async () => {
   const version = JSON.parse(await read('www/app/version.json'));
   assert.equal(version.version, '0.0.1');
