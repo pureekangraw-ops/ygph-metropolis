@@ -1,17 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { IDBFactory } from 'fake-indexeddb';
 import { JSDOM } from 'jsdom';
 
 import { mount } from '../release/front-door-0.0.3/logic.mjs';
 import { createTrustedBrainGate } from '../www/trusted/brain-gate.mjs';
-import { createGreenfieldState } from '../../greenfield/core.mjs';
 import {
-  commitEncryptedState,
-  createMemoryVaultStore,
-} from '../../greenfield/persistence.mjs';
-import { createGreenfieldRuntime } from '../../greenfield/runtime.mjs';
-
-const PASSPHRASE = 'trusted-error-statistics-passphrase';
+  initializeTrustedFirstRun,
+  openTrustedBrain,
+} from '../www/trusted/bootstrap.mjs';
 
 function tick() {
   return new Promise(resolve => setTimeout(resolve, 0));
@@ -123,47 +120,51 @@ test('trusted gate maps unsupported commands to public 404 and records the priva
   });
 });
 
-test('Greenfield stores error statistics inside the encrypted durable state', async () => {
-  const store = createMemoryVaultStore();
-  const state = createGreenfieldState({ now:'2026-08-31T15:20:00.000Z' });
-  await commitEncryptedState({
-    store,
-    passphrase:PASSPHRASE,
-    state,
-    expectedDurableRevision:null,
+test('actual trusted session keeps error statistics encrypted in the Greenfield vault without changing business revision', async () => {
+  const indexedDBImpl = new IDBFactory();
+  const pin = '778899';
+  const recoveryCode = 'trusted-error-journal-recovery-code';
+  const now = () => '2026-08-31T15:26:30.000Z';
+
+  await initializeTrustedFirstRun({
+    recoveryCode,
+    pin,
+    indexedDBImpl,
+    now,
   });
-  const runtime = createGreenfieldRuntime({
-    store,
-    passphrase:PASSPHRASE,
+  const session = await openTrustedBrain({
+    pin,
+    indexedDBImpl,
     lockManager:null,
-    now:() => '2026-08-31T15:26:31.000Z',
+    now,
+    confirmImpl:() => true,
   });
 
-  assert.equal(typeof runtime.recordErrorEvent, 'function');
-  await runtime.recordErrorEvent({
+  const before = await session.runtime.readState();
+  const result = await session.brain.send('วิ่ง 65', { appVersion:'0.0.3' });
+  assert.deepEqual(result, {
+    status:'ERROR',
+    publicCode:404,
+    message:'Sorry — error code 404',
+  });
+
+  assert.equal(typeof session.readErrorStatistics, 'function');
+  const statistics = await session.readErrorStatistics();
+  assert.equal(statistics.total, 1);
+  assert.equal(statistics.byCode['404'], 1);
+  assert.equal(statistics.events.length, 1);
+  assert.deepEqual(statistics.events[0], {
     occurredAt:'2026-08-31T15:26:30.000Z',
     localDate:'2026-08-31',
     localTime:'22:26:30',
     command:'วิ่ง 65',
     publicCode:404,
-    internalReason:'INTERPRETED_CAPABILITY_NOT_CONNECTED',
+    internalReason:'REMOTE_INTERPRETER_NOT_CONFIGURED',
     stage:'ROUTE',
     appVersion:'0.0.3',
   });
 
-  const readback = await runtime.readState();
-  assert.equal(readback.meta.errorStatistics.total, 1);
-  assert.equal(readback.meta.errorStatistics.byCode['404'], 1);
-  assert.equal(readback.meta.errorStatistics.events.length, 1);
-  assert.deepEqual(readback.meta.errorStatistics.events[0], {
-    occurredAt:'2026-08-31T15:26:30.000Z',
-    localDate:'2026-08-31',
-    localTime:'22:26:30',
-    command:'วิ่ง 65',
-    publicCode:404,
-    internalReason:'INTERPRETED_CAPABILITY_NOT_CONNECTED',
-    stage:'ROUTE',
-    appVersion:'0.0.3',
-  });
-  runtime.close();
+  const after = await session.runtime.readState();
+  assert.equal(after.revision, before.revision, 'error journal must not mutate business revision');
+  session.close();
 });
