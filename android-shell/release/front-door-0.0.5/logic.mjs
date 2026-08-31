@@ -25,7 +25,7 @@ function publicErrorText(result, fallbackCode = 500) {
   return `Sorry — error code ${Number.isSafeInteger(code) ? code : fallbackCode}`;
 }
 
-export async function mount({ root, version, brain = null, patchUpdater = null }) {
+export async function mount({ root, version, brain = null }) {
   const documentRef = root?.ownerDocument ?? globalThis.document;
   if (!root || !documentRef) throw new Error('LIGHTHOUSE front door requires a document');
   const versionNode = element(root, '[data-lighthouse-version]');
@@ -58,21 +58,10 @@ export async function mount({ root, version, brain = null, patchUpdater = null }
     noticeTimer = setTimeout(() => { transientNotice.hidden = true; transientNotice.textContent = ''; noticeTimer = null; }, 2400);
   };
   const showSystemAlert = (message) => { if (!systemAlert || !systemAlertCopy) return; systemAlertCopy.textContent = message; systemAlert.hidden = false; };
-
   const renderBrainResult = (result) => {
-    if (result?.status === 'CONFIRMATION_REQUIRED') {
-      appendMessage(log, 'lighthouse', String(result.question ?? 'พิมพ์ ยืนยัน หรือ ยกเลิก'), documentRef);
-      return;
-    }
-    if (result?.status === 'SUCCESS') {
-      appendMessage(log, 'lighthouse', successText(result), documentRef);
-      showTransientNotice('บันทึกแล้ว');
-      return;
-    }
-    if (result?.status === 'CANCELLED') {
-      appendMessage(log, 'lighthouse', 'ยกเลิกการบันทึกแล้ว · ยังไม่มีการเขียนข้อมูล', documentRef);
-      return;
-    }
+    if (result?.status === 'CONFIRMATION_REQUIRED') { appendMessage(log, 'lighthouse', String(result.question ?? 'พิมพ์ ยืนยัน หรือ ยกเลิก'), documentRef); return; }
+    if (result?.status === 'SUCCESS') { appendMessage(log, 'lighthouse', successText(result), documentRef); showTransientNotice('บันทึกแล้ว'); return; }
+    if (result?.status === 'CANCELLED') { appendMessage(log, 'lighthouse', 'ยกเลิกการบันทึกแล้ว · ยังไม่มีการเขียนข้อมูล', documentRef); return; }
     if (result?.status === 'WAITING') { appendMessage(log, 'lighthouse', waitingText(result), documentRef); return; }
     if (result?.status === 'BLOCKED' && result?.question) { appendMessage(log, 'lighthouse', `${result.question} · กรุณาตอบ “ยืนยัน” หรือ “ยกเลิก”`, documentRef); return; }
     if (result?.status === 'ERROR') { appendMessage(log, 'lighthouse', publicErrorText(result), documentRef); return; }
@@ -85,36 +74,26 @@ export async function mount({ root, version, brain = null, patchUpdater = null }
   on(systemAlertClose, 'click', () => { if (systemAlert) systemAlert.hidden = true; });
   on(settingsOpen, 'click', () => { settingsPanel.hidden = false; });
   on(settingsClose, 'click', () => { settingsPanel.hidden = true; });
-
-  on(form, 'submit', async (event) => {
+  on(form, 'submit', async event => {
     event.preventDefault();
     const message = input.value.trim();
     if (!message || busy) return;
     if (empty) empty.hidden = true;
     appendMessage(log, 'user', message, documentRef);
     input.value = '';
-    if (!brain || typeof brain.send !== 'function') {
-      appendMessage(log, 'lighthouse', 'ตอนนี้หน้าแชทพร้อมแล้ว แต่ระบบตีความยังไม่เชื่อมในเวอร์ชันนี้ จึงยังไม่มีการบันทึกหรือดำเนินการใด ๆ', documentRef);
-      return;
-    }
+    if (!brain || typeof brain.send !== 'function') { appendMessage(log, 'lighthouse', 'ตอนนี้หน้าแชทพร้อมแล้ว แต่ระบบตีความยังไม่เชื่อมในเวอร์ชันนี้ จึงยังไม่มีการบันทึกหรือดำเนินการใด ๆ', documentRef); return; }
     busy = true;
     try { renderBrainResult(await brain.send(message, { appVersion:version })); }
     catch (error) { globalThis.console?.error?.('LIGHTHOUSE_FRONT_DOOR_FAILED', error); appendMessage(log, 'lighthouse', 'Sorry — error code 500', documentRef); }
     finally { busy = false; input.focus?.(); }
   });
 
-  on(patchUpdate, 'click', async () => {
-    if (!patchUpdater || typeof patchUpdater.updateLatest !== 'function') { showSystemAlert('ไม่พบ trusted updater ของระบบ'); return; }
-    patchUpdate.disabled = true;
-    try {
-      const result = await patchUpdater.updateLatest();
-      if (result?.status === 'LATEST') showTransientNotice('เป็นเวอร์ชันล่าสุดแล้ว');
-      else if (result?.status === 'ACTIVATED') showTransientNotice(`Patch ${result.current?.version ?? ''} ใช้งานแล้ว`);
-    } catch (error) { showSystemAlert(`Patch ถูกปฏิเสธ: ${error.message}`); }
-    finally { patchUpdate.disabled = false; }
+  on(patchUpdate, 'click', () => {
+    const foundationPatch = documentRef.getElementById('patch-latest');
+    if (!foundationPatch) { showSystemAlert('ไม่พบ trusted updater ของระบบ'); return; }
+    foundationPatch.click();
   });
   on(patchImport, 'click', () => {
-    if (patchUpdater?.openManualPicker) { patchUpdater.openManualPicker(); return; }
     const foundationFileInput = documentRef.getElementById('patch-file');
     if (!foundationFileInput) { showSystemAlert('ไม่พบช่องนำเข้า Patch ของระบบ'); return; }
     foundationFileInput.click();
