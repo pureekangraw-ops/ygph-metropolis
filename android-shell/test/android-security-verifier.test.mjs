@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { applyAndroidSecurityBaseline } from '../tools/apply-android-security.mjs';
-import { inspectAndroidSecurity, verifyAndroidSecurity } from '../tools/verify-android-security.mjs';
+import { inspectAndroidSecurity, verifyAndroidSecurity, verifyGeneratedAndroidSecurity } from '../tools/verify-android-security.mjs';
 
 const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
@@ -87,4 +87,18 @@ test('security applicator hardens generated Capacitor manifest without changing 
   assert.match(hardened, /android:usesCleartextTraffic="false"/);
   const after = inspectAndroidSecurity({ manifestText:hardened, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } });
   assert.deepEqual(after.components, beforeComponents);
+});
+
+test('generated verifier accepts the current AGP merged_manifest release layout', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lh-security-agp-'));
+  const manifestPath = join(root, 'app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml');
+  const configPath = join(root, 'app/src/main/assets/capacitor.config.json');
+  await mkdir(join(root, 'app/build/intermediates/merged_manifest/release/processReleaseMainManifest'), { recursive:true });
+  await mkdir(join(root, 'app/src/main/assets'), { recursive:true });
+  await writeFile(manifestPath, SAFE_MANIFEST, 'utf8');
+  await writeFile(configPath, JSON.stringify({ appId:'com.yggdrasil.lighthouse', plugins:{ CapacitorHttp:{ enabled:true } } }), 'utf8');
+
+  const evidence = await verifyGeneratedAndroidSecurity(root);
+  assert.equal(evidence.status, 'PROVEN');
+  assert.equal(evidence.manifestPath.replaceAll('\\', '/'), 'app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml');
 });
