@@ -12,6 +12,8 @@
     "android:add": "npx cap add android",
     "preandroid:sync": "node tools/sync-trusted-brain.mjs",
     "android:sync": "npx cap sync android",
+    "android:security:apply": "node tools/apply-android-security.mjs android",
+    "android:security:verify": "node tools/verify-android-security.mjs android release/android-security-evidence.json",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:release": "cd android && ./gradlew assembleRelease"
   },
