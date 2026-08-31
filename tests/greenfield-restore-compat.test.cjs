@@ -18,7 +18,7 @@ async function seededStore(title = 'legacy-backup-sale') {
   return { store, state };
 }
 
-test('backup without embedded recoveryKey can be prepared using the user-supplied recovery code', async () => {
+test('current backup uses separate recovery material without becoming a legacy backup', async () => {
   const { createMemoryVaultStore, readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { exportGreenfieldBackup, restorePortableGreenfieldBackup } = await import('../greenfield/backup.mjs');
   const { prepareBackupForRestore } = await import('../greenfield/restore-compat.mjs');
@@ -28,18 +28,19 @@ test('backup without embedded recoveryKey can be prepared using the user-supplie
   assert.equal(backup.recoveryKey, undefined);
 
   const prepared = prepareBackupForRestore(backup, RECOVERY_CODE);
+  assert.equal(prepared.backup, backup, 'current backup object stays unchanged');
   assert.equal(prepared.recoveryKey, RECOVERY_CODE);
-  assert.equal(prepared.usedLegacyRecoveryCode, true);
-  assert.equal(backup.recoveryKey, undefined, 'source file object must not be mutated');
-  assert.equal(prepared.backup.recoveryKey, RECOVERY_CODE);
+  assert.equal(prepared.usedLegacyRecoveryCode, false);
+  assert.equal(prepared.recoverySource, 'SEPARATE_RECOVERY_MATERIAL');
+  assert.equal(prepared.backup.recoveryKey, undefined);
 
   const target = createMemoryVaultStore();
-  const result = await restorePortableGreenfieldBackup({ store:target, backup:prepared.backup });
+  const result = await restorePortableGreenfieldBackup({ store:target, backup:prepared.backup, recoveryKey:prepared.recoveryKey });
   assert.equal(result.status, 'VERIFIED');
   assert.deepEqual(await readEncryptedState({ store:target, passphrase:RECOVERY_CODE }), source.state);
 });
 
-test('historical portable backup with embedded recoveryKey remains restorable for compatibility', async () => {
+test('historical portable backup with embedded recoveryKey is explicitly legacy and remains restorable', async () => {
   const { createMemoryVaultStore, readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { exportGreenfieldBackup, restorePortableGreenfieldBackup } = await import('../greenfield/backup.mjs');
   const { prepareBackupForRestore } = await import('../greenfield/restore-compat.mjs');
@@ -50,15 +51,16 @@ test('historical portable backup with embedded recoveryKey remains restorable fo
   const prepared = prepareBackupForRestore(historical, '');
   assert.equal(prepared.backup, historical);
   assert.equal(prepared.recoveryKey, RECOVERY_CODE);
-  assert.equal(prepared.usedLegacyRecoveryCode, false);
+  assert.equal(prepared.usedLegacyRecoveryCode, true);
+  assert.equal(prepared.recoverySource, 'LEGACY_EMBEDDED_KEY');
 
   const target = createMemoryVaultStore();
-  const result = await restorePortableGreenfieldBackup({ store:target, backup:historical });
+  const result = await restorePortableGreenfieldBackup({ store:target, backup:prepared.backup });
   assert.equal(result.status, 'VERIFIED');
   assert.deepEqual(await readEncryptedState({ store:target, passphrase:RECOVERY_CODE }), source.state);
 });
 
-test('backup without a valid user-supplied recovery code fails before restore', async () => {
+test('current backup without valid separately supplied recovery material fails before restore', async () => {
   const { exportGreenfieldBackup } = await import('../greenfield/backup.mjs');
   const { prepareBackupForRestore } = await import('../greenfield/restore-compat.mjs');
   const source = await seededStore();
