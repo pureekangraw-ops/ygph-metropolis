@@ -23,21 +23,30 @@ export async function openGreenfieldVaultStore({ indexedDBImpl = globalThis.inde
       const result = openRequest.result;
       if (!result.objectStoreNames.contains(DB_STORE)) result.createObjectStore(DB_STORE);
     };
+    openRequest.onblocked = () => reject(new Error('GREENFIELD_DB_OPEN_BLOCKED'));
     openRequest.onsuccess = () => resolve(openRequest.result);
     openRequest.onerror = () => reject(openRequest.error || new Error('GREENFIELD_DB_OPEN_FAILED'));
   });
+  db.onversionchange = () => db.close();
 
-  function objectStore(mode) {
-    return db.transaction(DB_STORE, mode).objectStore(DB_STORE);
+  function transactionStore(mode) {
+    const transaction = db.transaction(DB_STORE, mode);
+    return { transaction, store:transaction.objectStore(DB_STORE) };
   }
 
   return {
-    get(key) { return requestResult(objectStore('readonly').get(key), 'GREENFIELD_DB_READ_FAILED'); },
-    put(key, value) { return requestResult(objectStore('readwrite').put(value, key), 'GREENFIELD_DB_WRITE_FAILED'); },
+    get(key) {
+      const { store } = transactionStore('readonly');
+      return requestResult(store.get(key), 'GREENFIELD_DB_READ_FAILED');
+    },
+    put(key, value) {
+      const { transaction, store } = transactionStore('readwrite');
+      store.put(value, key);
+      return transactionResult(transaction, 'GREENFIELD_DB_WRITE_FAILED');
+    },
     putMany(entries) {
       if (!Array.isArray(entries) || entries.length === 0) return Promise.reject(new TypeError('INVALID_GREENFIELD_STORE_ENTRIES'));
-      const transaction = db.transaction(DB_STORE, 'readwrite');
-      const store = transaction.objectStore(DB_STORE);
+      const { transaction, store } = transactionStore('readwrite');
       for (const entry of entries) {
         if (!Array.isArray(entry) || entry.length !== 2) {
           transaction.abort();
@@ -49,8 +58,8 @@ export async function openGreenfieldVaultStore({ indexedDBImpl = globalThis.inde
       return transactionResult(transaction, 'GREENFIELD_DB_WRITE_FAILED');
     },
     resetAll() {
-      const transaction = db.transaction(DB_STORE, 'readwrite');
-      transaction.objectStore(DB_STORE).clear();
+      const { transaction, store } = transactionStore('readwrite');
+      store.clear();
       return transactionResult(transaction, 'GREENFIELD_DB_RESET_FAILED');
     },
     close() { db.close(); },
