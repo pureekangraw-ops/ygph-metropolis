@@ -12,7 +12,8 @@
     "android:add": "npx cap add android",
     "preandroid:sync": "node tools/sync-trusted-brain.mjs",
     "android:sync": "npx cap sync android",
-    "android:debug": "cd android && ./gradlew assembleDebug"
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:release": "cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/core": "8.5.0"

@@ -40,12 +40,13 @@ test('patch picker exposes all file types while runtime keeps patch validation',
   assert.match(runtime, /verifyPatchBundle\(/, 'runtime must still call signed patch verification');
 });
 
-test('GitHub Actions builds a debug APK but never deploys or publishes it', async () => {
+test('GitHub Actions builds a canonical verified APK but never deploys or publishes it', async () => {
   const workflow = await read('.github/workflows/lighthouse-apk-debug.yml');
   assert.match(workflow, /node-version:\s*22/);
   assert.match(workflow, /npx cap add android/);
-  assert.match(workflow, /run:\s*npm run android:debug/);
-  assert.match(workflow, /android-shell\/android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
+  assert.match(workflow, /run:\s*npm run android:release/);
+  assert.match(workflow, /android-shell\/android\/app\/build\/outputs\/apk\/release\/lighthouse-release\.apk/);
+  assert.match(workflow, /Verify final APK identity/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
   assert.doesNotMatch(workflow, /\bdeploy\b|google[-_ ]?play|play[-_ ]?console|\bpublish\b/i);
 });
