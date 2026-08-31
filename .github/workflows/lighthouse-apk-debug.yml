@@ -117,8 +117,14 @@ jobs:
         run: npx cap add android
       - name: Sync web assets
         run: npx cap sync android
+      - name: Apply generated Android security baseline
+        run: npm run android:security:apply
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
+      - name: Materialize merged release manifest
+        run: cd android && ./gradlew :app:processReleaseMainManifest
+      - name: Verify generated Android security
+        run: npm run android:security:verify
       - name: Build unsigned release APK
         run: npm run android:release
       - name: Materialize canonical APK signer
@@ -167,5 +173,6 @@ jobs:
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
+            android-shell/release/android-security-evidence.json
           if-no-files-found: error
           retention-days: 14
