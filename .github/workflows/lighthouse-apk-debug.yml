@@ -59,6 +59,74 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Sign and verify Front Door 0.0.4 with trusted Patch key
+        env:
+          LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM: ${{ secrets.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM }}
+          LIGHTHOUSE_PATCH_KEY_PASSPHRASE: ${{ secrets.LIGHTHOUSE_PATCH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM:-}" ]; then
+            echo "LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM is not configured"
+            exit 1
+          fi
+          if [ -z "${LIGHTHOUSE_PATCH_KEY_PASSPHRASE:-}" ]; then
+            echo "LIGHTHOUSE_PATCH_KEY_PASSPHRASE is not configured"
+            exit 1
+          fi
+
+          umask 077
+          encrypted_key="$RUNNER_TEMP/lighthouse-patch-key.encrypted.pem"
+          private_key="$RUNNER_TEMP/lighthouse-patch-key.pem"
+          passphrase_file="$RUNNER_TEMP/lighthouse-patch-key.passphrase"
+          trap 'rm -f "$encrypted_key" "$private_key" "$passphrase_file"' EXIT
+
+          printf '%s\n' "$LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM" > "$encrypted_key"
+          printf '%s' "$LIGHTHOUSE_PATCH_KEY_PASSPHRASE" > "$passphrase_file"
+          openssl pkey \
+            -in "$encrypted_key" \
+            -passin "file:$passphrase_file" \
+            -out "$private_key"
+
+          expected_fingerprint="83d724014b111fb35253b78414f197f3936e2ea092abba4fd352c4800eb1b834"
+          actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+          if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then
+            echo "Patch private key does not match current trusted key-2 anchor. Public fingerprint: $actual_fingerprint"
+            exit 1
+          fi
+
+          npm run patch:sign -- \
+            release/front-door-0.0.4/input.generated.json \
+            "$private_key" \
+            release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch
+
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
+
+          const patchPath = './release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch';
+          const [patchText, trustedKeyText] = await Promise.all([
+            readFile(patchPath, 'utf8'),
+            readFile('./www/patch/trusted-key.json', 'utf8'),
+          ]);
+          const patch = JSON.parse(patchText);
+          const trustedKey = JSON.parse(trustedKeyText);
+          const verified = await verifyPatchBundle(patch, {
+            currentVersion:'0.0.3',
+            trustedKey,
+          });
+          if (verified.version !== '0.0.4') throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
+          if (patch.signature?.keyId !== 'lighthouse-debug-patch-2') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
+          console.log('Verified signed Patch 0.0.4 with lighthouse-debug-patch-2');
+          NODE
+
+      - name: Upload verified Front Door 0.0.4 signed Patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-front-door-0.0.4-signed-patch
+          path: android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Generate Android project
         run: npx cap add android
 
