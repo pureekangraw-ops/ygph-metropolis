@@ -46,8 +46,11 @@ async function createRuntimeAndBrain() {
 async function patchSnapshot() {
   const fixture = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
   return { version:'0.0.5', assets:{
-    'ui.html':await read('release/front-door-0.0.5/ui.html'), 'ui.css':fixture.files['ui.css'],
-    'logic.mjs':await read('release/front-door-0.0.5/logic.mjs'), 'rules.json':fixture.files['rules.json'], 'vocabulary.json':fixture.files['vocabulary.json'],
+    'ui.html':await read('release/front-door-0.0.5/ui.html'),
+    'ui.css':fixture.files['ui.css'],
+    'logic.mjs':await read('release/front-door-0.0.5/logic.mjs'),
+    'rules.json':await read('www/app/rules.json'),
+    'vocabulary.json':await read('www/app/vocabulary.json'),
   } };
 }
 async function waitFor(predicate, label, timeoutMs = 5000) {
@@ -58,19 +61,39 @@ async function waitFor(predicate, label, timeoutMs = 5000) {
 async function mountIntegratedFrontDoor(brain) {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="app"></div><aside class="patch-controls"><button id="patch-latest">Patch</button><input id="patch-file" type="file"><button id="patch-rollback">Rollback</button><p id="patch-status"></p></aside></body></html>', { url:'https://lighthouse.test/' });
   const app = dom.window.document.getElementById('app');
-  const cleanup = await mountSnapshot(await patchSnapshot(), { root:app, documentRef:dom.window.document, trustedBrain:brain, patchUpdater:{ updateLatest:async () => ({ status:'LATEST' }), openManualPicker(){} },
-    createModuleUrl:source => `data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`, importModule:url => import(url), revokeModuleUrl:() => {} });
-  return { dom, app, cleanup };
+  let cleanup = async () => {};
+  try {
+    cleanup = await mountSnapshot(await patchSnapshot(), { root:app, documentRef:dom.window.document, trustedBrain:brain, patchUpdater:{ updateLatest:async () => ({ status:'LATEST' }), openManualPicker(){} },
+      createModuleUrl:source => `data:text/javascript;base64,${Buffer.from(source, 'utf8').toString('base64')}`, importModule:url => import(url), revokeModuleUrl:() => {} });
+    return { dom, app, cleanup };
+  } catch (error) {
+    dom.window.close();
+    throw error;
+  }
 }
 async function submit(dom, app, value) {
   const composer = app.querySelector('[data-chat-form]'); const input = app.querySelector('[data-chat-input]'); input.value = value;
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
 }
 
-test('Front Door 0.0.5 asks and confirms entirely through the same chat composer', async (t) => {
+async function setupMounted(t) {
   const { runtime, brain } = await createRuntimeAndBrain();
-  const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
+  let mounted;
+  try {
+    mounted = await mountIntegratedFrontDoor(brain);
+  } catch (error) {
+    deactivateRuntimeSession(runtime);
+    runtime.close();
+    await resetVault();
+    throw error;
+  }
+  const { dom, app, cleanup } = mounted;
   t.after(async () => { await cleanup(); deactivateRuntimeSession(runtime); runtime.close(); dom.window.close(); await resetVault(); });
+  return { runtime, brain, dom, app };
+}
+
+test('Front Door 0.0.5 asks and confirms entirely through the same chat composer', async (t) => {
+  const { runtime, brain, dom, app } = await setupMounted(t);
   const initial = await runtime.readState();
   await submit(dom, app, 'ข้าว 65');
   await waitFor(() => app.querySelector('[data-chat-log]').textContent.includes('จะบันทึก ข้าว 65 บาทไหม'), 'chat confirmation question');
@@ -88,9 +111,7 @@ test('Front Door 0.0.5 asks and confirms entirely through the same chat composer
 });
 
 test('Front Door 0.0.5 cancel and unrelated answer fail closed without mutation', async (t) => {
-  const { runtime, brain } = await createRuntimeAndBrain();
-  const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
-  t.after(async () => { await cleanup(); deactivateRuntimeSession(runtime); runtime.close(); dom.window.close(); await resetVault(); });
+  const { runtime, dom, app } = await setupMounted(t);
   const initial = await runtime.readState();
   await submit(dom, app, 'ข้าว 65');
   await waitFor(() => app.querySelector('[data-chat-log]').textContent.includes('จะบันทึก ข้าว 65 บาทไหม'), 'question');
@@ -103,9 +124,7 @@ test('Front Door 0.0.5 cancel and unrelated answer fail closed without mutation'
 });
 
 test('Front Door 0.0.5 WAITING correction returns to chat-native confirmation', async (t) => {
-  const { runtime, brain } = await createRuntimeAndBrain();
-  const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
-  t.after(async () => { await cleanup(); deactivateRuntimeSession(runtime); runtime.close(); dom.window.close(); await resetVault(); });
+  const { runtime, dom, app } = await setupMounted(t);
   await submit(dom, app, 'ข้าว 1,50');
   await waitFor(() => /กรอก|ข้อมูล|ระบุ|ยืนยัน/.test(app.querySelector('[data-chat-log]').textContent), 'WAITING prompt');
   assert.equal(expenseRecords(await runtime.readState()).length, 0);
