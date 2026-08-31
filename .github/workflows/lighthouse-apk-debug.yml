@@ -117,12 +117,53 @@ jobs:
         run: npx cap add android
       - name: Sync web assets
         run: npx cap sync android
-      - name: Build debug APK
-        run: npm run android:debug
-      - name: Upload debug APK
+      - name: Apply canonical Android version
+        run: node tools/set-android-version.mjs
+      - name: Build unsigned release APK
+        run: npm run android:release
+      - name: Materialize canonical APK signer
+        env:
+          LIGHTHOUSE_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
+          LIGHTHOUSE_APK_STORE_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_STORE_PASSWORD }}
+          LIGHTHOUSE_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
+          LIGHTHOUSE_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "$name is not configured"; exit 1; fi
+          done
+          umask 077
+          keystore="$RUNNER_TEMP/lighthouse-apk-release.p12"
+          aligned_apk="$RUNNER_TEMP/lighthouse-release-aligned.apk"
+          unsigned_apk="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          signed_apk="android/app/build/outputs/apk/release/lighthouse-release.apk"
+          trap 'rm -f "$keystore" "$aligned_apk"' EXIT
+          printf '%s' "$LIGHTHOUSE_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          apksigner="$build_tools/apksigner"
+          aapt="$build_tools/aapt"
+          zipalign="$build_tools/zipalign"
+          test -x "$apksigner" && test -x "$aapt" && test -x "$zipalign"
+          "$zipalign" -f -p 4 "$unsigned_apk" "$aligned_apk"
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-pass "env:LIGHTHOUSE_APK_STORE_PASSWORD" \
+            --ks-key-alias "$LIGHTHOUSE_APK_KEY_ALIAS" \
+            --key-pass "env:LIGHTHOUSE_APK_KEY_PASSWORD" \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          "$apksigner" verify "$signed_apk"
+          echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
+          echo "AAPT=$aapt" >> "$GITHUB_ENV"
+      - name: Verify final APK identity
+        run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
+      - name: Upload canonical APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-debug-apk
-          path: android-shell/android/app/build/outputs/apk/debug/app-debug.apk
+          name: lighthouse-canonical-apk
+          path: |
+            android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
+            android-shell/release/apk-identity-evidence.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
