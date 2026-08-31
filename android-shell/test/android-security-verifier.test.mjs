@@ -8,6 +8,8 @@ import { applyAndroidSecurityBaseline } from '../tools/apply-android-security.mj
 import { inspectAndroidSecurity, verifyAndroidSecurity, verifyGeneratedAndroidSecurity } from '../tools/verify-android-security.mjs';
 
 const DYNAMIC_PERMISSION = 'com.yggdrasil.lighthouse.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION';
+const PROFILE_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
+const PROFILE_ACTION = 'androidx.profileinstaller.action.INSTALL_PROFILE';
 const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
   <permission android:name="${DYNAMIC_PERMISSION}" android:protectionLevel="signature" />
@@ -20,6 +22,11 @@ const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
+    <receiver android:name="${PROFILE_RECEIVER}" android:permission="android.permission.DUMP" android:exported="true">
+      <intent-filter>
+        <action android:name="${PROFILE_ACTION}" />
+      </intent-filter>
+    </receiver>
     <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.fileprovider" android:exported="false" android:grantUriPermissions="true" />
   </application>
 </manifest>`;
@@ -42,8 +49,10 @@ test('security inspector accepts only the current LIGHTHOUSE native surface and 
   assert.equal(evidence.networkPolicy.usesCleartextTraffic, false);
   assert.equal(evidence.debuggable, false);
   assert.deepEqual(evidence.enabledNativePluginSurface, ['CapacitorHttp']);
-  assert.equal(evidence.exportedComponents.length, 1);
-  assert.equal(evidence.exportedComponents[0].launcher, true);
+  assert.equal(evidence.exportedComponents.length, 2);
+  const profile = evidence.exportedComponents.find(component => component.name === PROFILE_RECEIVER);
+  assert.equal(profile.permission, 'android.permission.DUMP');
+  assert.deepEqual(profile.actions, [PROFILE_ACTION]);
   assert.equal(evidence.status, 'PROVEN');
 });
 
@@ -53,6 +62,22 @@ test('package-scoped dynamic receiver permission is allowed only with signature 
   assert.throws(() => verifyAndroidSecurity({ manifestText:weak, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_DYNAMIC_PERMISSION_NOT_SIGNATURE_PROTECTED/);
   const missingDeclaration = SAFE_MANIFEST.replace(`  <permission android:name="${DYNAMIC_PERMISSION}" android:protectionLevel="signature" />\n`, '');
   assert.throws(() => verifyAndroidSecurity({ manifestText:missingDeclaration, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_DYNAMIC_PERMISSION_DECLARATION_MISSING/);
+});
+
+test('ProfileInstaller receiver is accepted only behind DUMP and known actions', () => {
+  assert.doesNotThrow(() => verifyAndroidSecurity({ manifestText:SAFE_MANIFEST, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }));
+
+  const noPermission = replace(SAFE_MANIFEST, ' android:permission="android.permission.DUMP"', '');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:noPermission, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_PROFILE_RECEIVER_PERMISSION:UNKNOWN/);
+
+  const weakPermission = replace(SAFE_MANIFEST, 'android:permission="android.permission.DUMP"', 'android:permission="android.permission.INTERNET"');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:weakPermission, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_PROFILE_RECEIVER_PERMISSION:android.permission.INTERNET/);
+
+  const unknownAction = replace(SAFE_MANIFEST, PROFILE_ACTION, 'com.yggdrasil.lighthouse.UNSAFE_PROFILE_ACTION');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:unknownAction, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_PROFILE_RECEIVER_ACTION:com.yggdrasil.lighthouse.UNSAFE_PROFILE_ACTION/);
+
+  const noFilter = SAFE_MANIFEST.replace(`      <intent-filter>\n        <action android:name="${PROFILE_ACTION}" />\n      </intent-filter>\n`, '');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:noFilter, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_PROFILE_RECEIVER_INTENT_FILTER_MISSING/);
 });
 
 test('unexpected Android permission fails closed', () => {
