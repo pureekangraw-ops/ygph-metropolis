@@ -44,3 +44,12 @@ test('APK publication is downstream of final-byte identity verification', async 
   assert.ok(verifyIndex >= 0, 'missing final APK verification step');
   assert.ok(uploadIndex > verifyIndex, 'APK upload must happen after identity verification');
 });
+
+test('identity evidence binds to the PR head source commit instead of the synthetic PR merge SHA', async () => {
+  const text = await workflowText();
+  assert.match(text, /APK_SOURCE_COMMIT/);
+  assert.match(text, /github\.event\.pull_request\.head\.sha/);
+  const verifyStart = text.indexOf('Verify final APK identity');
+  const verifyBlock = text.slice(verifyStart, text.indexOf('Upload canonical APK'));
+  assert.match(verifyBlock, /APK_SOURCE_COMMIT/);
+});
