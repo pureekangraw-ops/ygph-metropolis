@@ -7,10 +7,14 @@ on:
       - 'feature/lighthouse-apk-foundation-proof-*'
     paths:
       - 'android-shell/**'
+      - 'lighthouse/**'
+      - 'greenfield/**'
       - '.github/workflows/lighthouse-apk-debug.yml'
   pull_request:
     paths:
       - 'android-shell/**'
+      - 'lighthouse/**'
+      - 'greenfield/**'
       - '.github/workflows/lighthouse-apk-debug.yml'
 
 permissions:
