@@ -44,16 +44,27 @@ test('wrong passphrase or corrupt backup writes nothing to target store', async 
   assert.equal(await readEncryptedState({ store:target2, passphrase:'correct horse battery staple' }), null);
 });
 
-test('portable backup carries its restore key so the file can verify itself without asking the user', async () => {
+test('current backup never embeds a usable plaintext recovery secret', async () => {
+  const { exportGreenfieldBackup } = await import('../greenfield/backup.mjs');
+  const { store } = await seededStore();
+  const backup = await exportGreenfieldBackup({ store, recoveryKey:'correct horse battery staple' });
+  assert.equal(backup.recoveryKey, undefined);
+  assert.equal(JSON.stringify(backup).includes('correct horse battery staple'), false);
+});
+
+test('current backup requires separately supplied recovery material to restore', async () => {
   const { createMemoryVaultStore, readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { exportGreenfieldBackup, restorePortableGreenfieldBackup } = await import('../greenfield/backup.mjs');
   const { store, state } = await seededStore();
-  const backup = await exportGreenfieldBackup({ store, recoveryKey:'correct horse battery staple' });
-  assert.equal(backup.recoveryKey, 'correct horse battery staple');
+  const backup = await exportGreenfieldBackup({ store });
   const target = createMemoryVaultStore();
-  const result = await restorePortableGreenfieldBackup({ store:target, backup });
+  await assert.rejects(
+    restorePortableGreenfieldBackup({ store:target, backup }),
+    /GREENFIELD_BACKUP_RECOVERY_KEY_MISSING/,
+  );
+  const result = await restorePortableGreenfieldBackup({ store:target, backup, recoveryKey:'correct horse battery staple' });
   assert.equal(result.status, 'VERIFIED');
-  assert.deepEqual(await readEncryptedState({ store:target, passphrase:backup.recoveryKey }), state);
+  assert.deepEqual(await readEncryptedState({ store:target, passphrase:'correct horse battery staple' }), state);
 });
 
 test('valid backup is verified before replacement and existing data requires one explicit overwrite decision', async () => {
@@ -62,22 +73,28 @@ test('valid backup is verified before replacement and existing data requires one
   const source = await seededStore('replacement-sale');
   const target = await seededStore('existing-sale');
   const original = await readEncryptedState({ store:target.store, passphrase:'correct horse battery staple' });
-  const backup = await exportGreenfieldBackup({ store:source.store, recoveryKey:'correct horse battery staple' });
-  await assert.rejects(restorePortableGreenfieldBackup({ store:target.store, backup }), /GREENFIELD_RESTORE_CONFIRM_REQUIRED/);
+  const backup = await exportGreenfieldBackup({ store:source.store });
+  await assert.rejects(
+    restorePortableGreenfieldBackup({ store:target.store, backup, recoveryKey:'correct horse battery staple' }),
+    /GREENFIELD_RESTORE_CONFIRM_REQUIRED/,
+  );
   assert.deepEqual(await readEncryptedState({ store:target.store, passphrase:'correct horse battery staple' }), original);
-  const result = await restorePortableGreenfieldBackup({ store:target.store, backup, allowOverwrite:true });
+  const result = await restorePortableGreenfieldBackup({ store:target.store, backup, recoveryKey:'correct horse battery staple', allowOverwrite:true });
   assert.equal(result.replacedExisting, true);
   assert.deepEqual(await readEncryptedState({ store:target.store, passphrase:'correct horse battery staple' }), source.state);
 });
 
-test('corrupt portable backup cannot replace an initialized store', async () => {
+test('corrupt backup cannot replace an initialized store', async () => {
   const { readEncryptedState } = await import('../greenfield/persistence.mjs');
   const { exportGreenfieldBackup, restorePortableGreenfieldBackup } = await import('../greenfield/backup.mjs');
   const source = await seededStore('replacement-sale');
   const target = await seededStore('existing-sale');
   const original = await readEncryptedState({ store:target.store, passphrase:'correct horse battery staple' });
-  const backup = await exportGreenfieldBackup({ store:source.store, recoveryKey:'correct horse battery staple' });
+  const backup = await exportGreenfieldBackup({ store:source.store });
   backup.vault.ciphertext = backup.vault.ciphertext.slice(0, -4) + 'AAAA';
-  await assert.rejects(restorePortableGreenfieldBackup({ store:target.store, backup, allowOverwrite:true }), /GREENFIELD_VAULT_DECRYPT_FAILED/);
+  await assert.rejects(
+    restorePortableGreenfieldBackup({ store:target.store, backup, recoveryKey:'correct horse battery staple', allowOverwrite:true }),
+    /GREENFIELD_VAULT_DECRYPT_FAILED/,
+  );
   assert.deepEqual(await readEncryptedState({ store:target.store, passphrase:'correct horse battery staple' }), original);
 });
