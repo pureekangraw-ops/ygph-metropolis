@@ -16,6 +16,11 @@ function baht(amountSatang) {
   return Number.isSafeInteger(amount) ? (amount / 100).toFixed(2) : '—';
 }
 
+function readyText(result) {
+  const title = String(result?.preview?.title ?? 'รายการ').trim() || 'รายการ';
+  return `พร้อมบันทึก ${title} ${baht(result?.preview?.amountSatang)} บาท · ต้องยืนยันผ่านระบบที่เชื่อถือได้ก่อนบันทึก`;
+}
+
 function successText(result) {
   const title = String(result?.readback?.title ?? 'รายการ').trim() || 'รายการ';
   return `บันทึกและอ่านกลับแล้ว · ${title} ${baht(result?.readback?.amountSatang)} บาท`;
@@ -23,13 +28,6 @@ function successText(result) {
 
 function waitingText(result) {
   return String(result?.directive?.prompt ?? 'ต้องการข้อมูลเพิ่มก่อนทำรายการ');
-}
-
-function publicErrorText(result, fallbackCode = 500) {
-  const message = String(result?.message ?? '').trim();
-  if (message) return message;
-  const code = Number(result?.publicCode);
-  return `Sorry — error code ${Number.isSafeInteger(code) ? code : fallbackCode}`;
 }
 
 export async function mount({ root, version, brain = null }) {
@@ -57,6 +55,7 @@ export async function mount({ root, version, brain = null }) {
 
   const cleanups = [];
   let noticeTimer = null;
+  let pendingConfirm = null;
   let busy = false;
 
   const on = (node, type, listener) => {
@@ -83,65 +82,74 @@ export async function mount({ root, version, brain = null }) {
     systemAlert.hidden = false;
   };
 
-  const renderExecutionResult = (executed) => {
-    if (executed?.confirmationText) {
-      appendMessage(log, 'user', executed.confirmationText, documentRef);
-    }
-    if (executed?.status === 'SUCCESS') {
-      appendMessage(log, 'lighthouse', successText(executed), documentRef);
-      showTransientNotice('บันทึกแล้ว');
-      return;
-    }
-    if (executed?.status === 'CANCELLED') {
-      appendMessage(log, 'lighthouse', 'ยกเลิกการบันทึกแล้ว · ยังไม่มีการเขียนข้อมูล', documentRef);
-      return;
-    }
-    if (executed?.status === 'ERROR') {
-      appendMessage(log, 'lighthouse', publicErrorText(executed), documentRef);
-      return;
-    }
-    if (executed?.status === 'LOCKED') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 423', documentRef);
-      return;
-    }
-    if (executed?.status === 'VERIFY') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 422', documentRef);
-      return;
-    }
-    if (executed?.status === 'BLOCKED') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 409', documentRef);
-      return;
-    }
-    appendMessage(log, 'lighthouse', 'Sorry — error code 500', documentRef);
+  const clearPendingConfirm = () => {
+    if (pendingConfirm) pendingConfirm.remove();
+    pendingConfirm = null;
   };
 
-  const renderBrainResult = async (result) => {
+  const appendReady = (result) => {
+    clearPendingConfirm();
+    const bubble = appendMessage(log, 'lighthouse', readyText(result), documentRef);
+    const confirm = documentRef.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'primary-button';
+    confirm.dataset.brainConfirm = '';
+    confirm.textContent = 'เปิดการยืนยัน';
+    bubble.append(documentRef.createElement('br'), confirm);
+    pendingConfirm = confirm;
+
+    on(confirm, 'click', async () => {
+      if (busy || confirm.disabled) return;
+      busy = true;
+      confirm.disabled = true;
+      try {
+        const executed = await brain.requestExecution();
+        if (executed?.status === 'SUCCESS') {
+          clearPendingConfirm();
+          appendMessage(log, 'lighthouse', successText(executed), documentRef);
+          showTransientNotice('บันทึกแล้ว');
+          return;
+        }
+        if (executed?.status === 'CANCELLED') {
+          appendMessage(log, 'lighthouse', 'ยกเลิกการบันทึกแล้ว · ยังไม่มีการเขียนข้อมูล', documentRef);
+          confirm.disabled = false;
+          return;
+        }
+        if (executed?.status === 'VERIFY' || executed?.status === 'ERROR' || executed?.status === 'LOCKED') {
+          showSystemAlert(executed?.reason || 'ยังยืนยันผลการบันทึกไม่ได้');
+          confirm.disabled = false;
+          return;
+        }
+        appendMessage(log, 'lighthouse', executed?.reason || 'ยังดำเนินการไม่ได้', documentRef);
+        confirm.disabled = false;
+      } catch (error) {
+        showSystemAlert(String(error?.message || error || 'ไม่สามารถบันทึกได้'));
+        confirm.disabled = false;
+      } finally {
+        busy = false;
+      }
+    });
+  };
+
+  const renderBrainResult = (result) => {
     if (result?.status === 'READY') {
-      const executed = await brain.requestExecution({ appVersion:version });
-      renderExecutionResult(executed);
+      appendReady(result);
       return;
     }
+    clearPendingConfirm();
     if (result?.status === 'WAITING') {
       appendMessage(log, 'lighthouse', waitingText(result), documentRef);
       return;
     }
-    if (result?.status === 'ERROR') {
-      appendMessage(log, 'lighthouse', publicErrorText(result), documentRef);
-      return;
-    }
     if (result?.status === 'LOCKED') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 423', documentRef);
+      showSystemAlert('LIGHTHOUSE ยังไม่ได้ปลดล็อกข้อมูลบนเครื่องนี้');
       return;
     }
-    if (result?.status === 'VERIFY') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 422', documentRef);
+    if (result?.status === 'ERROR' || result?.status === 'VERIFY') {
+      showSystemAlert(result?.reason || 'LIGHTHOUSE ยังยืนยันผลไม่ได้');
       return;
     }
-    if (result?.status === 'BLOCKED') {
-      appendMessage(log, 'lighthouse', 'Sorry — error code 409', documentRef);
-      return;
-    }
-    appendMessage(log, 'lighthouse', 'Sorry — error code 500', documentRef);
+    appendMessage(log, 'lighthouse', result?.reason || 'ยังทำคำสั่งนี้ไม่ได้', documentRef);
   };
 
   on(systemAlertClose, 'click', () => {
@@ -160,6 +168,7 @@ export async function mount({ root, version, brain = null }) {
     const message = input.value.trim();
     if (!message || busy) return;
     if (empty) empty.hidden = true;
+    clearPendingConfirm();
     appendMessage(log, 'user', message, documentRef);
     input.value = '';
 
@@ -175,14 +184,12 @@ export async function mount({ root, version, brain = null }) {
 
     busy = true;
     try {
-      const result = await brain.send(message, { appVersion:version });
-      await renderBrainResult(result);
+      const result = await brain.send(message);
+      renderBrainResult(result);
     } catch (error) {
-      globalThis.console?.error?.('LIGHTHOUSE_FRONT_DOOR_FAILED', error);
-      appendMessage(log, 'lighthouse', 'Sorry — error code 500', documentRef);
+      showSystemAlert(String(error?.message || error || 'LIGHTHOUSE ทำงานไม่สำเร็จ'));
     } finally {
       busy = false;
-      input.focus?.();
     }
   });
 
@@ -206,6 +213,7 @@ export async function mount({ root, version, brain = null }) {
 
   return async () => {
     if (noticeTimer) clearTimeout(noticeTimer);
+    clearPendingConfirm();
     while (cleanups.length) cleanups.pop()();
   };
 }
