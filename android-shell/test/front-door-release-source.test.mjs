@@ -20,6 +20,14 @@ async function load004Builder() {
   }
 }
 
+async function load004BootstrapBuilder() {
+  try {
+    return await import('../tools/build-front-door-0.0.4-bootstrap-source.mjs');
+  } catch (error) {
+    assert.fail(`0.0.4 bootstrap source builder is required: ${error?.code ?? error?.message ?? error}`);
+  }
+}
+
 test('released 0.0.3 logic remains byte-identical to the key-2 signed evidence', async () => {
   const patch = JSON.parse(await readFile(new URL('test/fixtures/front-door-0.0.3-key2.lhpatch', root), 'utf8'));
   const releasedLogic = await readFile(new URL('release/front-door-0.0.3/logic.mjs', root), 'utf8');
@@ -52,15 +60,30 @@ test('0.0.4 signing source advances from 0.0.3 and changes only Front Door logic
   assert.doesNotMatch(logic, /data\.brainConfirm|เปิดการยืนยัน/u);
 });
 
-test('APK workflow publishes the 0.0.4 signing source and a verified key-3 signed patch', async () => {
+test('0.0.4 bootstrap signing source can recover a clean 0.0.1 APK directly to current Front Door', async () => {
+  const { buildFrontDoor004BootstrapSource } = await load004BootstrapBuilder();
+  const source = await buildFrontDoor004BootstrapSource();
+  const fixture = JSON.parse(await readFile(new URL('test/fixtures/front-door-0.0.3-input.json', root), 'utf8'));
+  const logic = await readFile(new URL('release/front-door-0.0.4/logic.mjs', root), 'utf8');
+
+  assert.equal(source.baseVersion, '0.0.1');
+  assert.equal(source.version, '0.0.4');
+  assert.deepEqual(Object.keys(source.files).sort(), ['logic.mjs', 'ui.css', 'ui.html']);
+  assert.equal(source.files['ui.html'], fixture.files['ui.html']);
+  assert.equal(source.files['ui.css'], fixture.files['ui.css']);
+  assert.equal(source.files['logic.mjs'], logic);
+});
+
+test('APK workflow publishes verified incremental and bootstrap key-3 signed patches', async () => {
   const workflow = await readFile(new URL('../.github/workflows/lighthouse-apk-debug.yml', root), 'utf8');
   assert.match(workflow, /build-front-door-0\.0\.4-source\.mjs/u);
-  assert.match(workflow, /lighthouse-front-door-0\.0\.4-signing-source/u);
+  assert.match(workflow, /build-front-door-0\.0\.4-bootstrap-source\.mjs/u);
   assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM/u);
   assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_KEY_PASSPHRASE/u);
   assert.match(workflow, /openssl pkey/u);
   assert.match(workflow, /patch:sign/u);
   assert.match(workflow, /verifyPatchBundle/u);
   assert.match(workflow, /lighthouse-front-door-0\.0\.4-key3\.lhpatch/u);
-  assert.match(workflow, /lighthouse-front-door-0\.0\.4-signed-patch/u);
+  assert.match(workflow, /lighthouse-front-door-0\.0\.4-from-0\.0\.1-key3\.lhpatch/u);
+  assert.match(workflow, /lighthouse-front-door-0\.0\.4-signed-patches/u);
 });
