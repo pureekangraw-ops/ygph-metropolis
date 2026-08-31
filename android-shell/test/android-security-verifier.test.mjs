@@ -36,7 +36,7 @@ test('security inspector accepts only the current LIGHTHOUSE native surface and 
     manifestPath:'fixture/AndroidManifest.xml',
   });
   assert.equal(evidence.applicationId, 'com.yggdrasil.lighthouse');
-  assert.deepEqual(evidence.requestedPermissions, [DYNAMIC_PERMISSION, 'android.permission.INTERNET']);
+  assert.deepEqual(evidence.requestedPermissions, ['android.permission.INTERNET', DYNAMIC_PERMISSION]);
   assert.deepEqual(evidence.declaredPermissions, [{ name:DYNAMIC_PERMISSION, protectionLevel:'signature' }]);
   assert.equal(evidence.backupPolicy.allowBackup, false);
   assert.equal(evidence.networkPolicy.usesCleartextTraffic, false);
