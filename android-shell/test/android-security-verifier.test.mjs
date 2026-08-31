@@ -7,8 +7,12 @@ import { join } from 'node:path';
 import { applyAndroidSecurityBaseline } from '../tools/apply-android-security.mjs';
 import { inspectAndroidSecurity, verifyAndroidSecurity, verifyGeneratedAndroidSecurity } from '../tools/verify-android-security.mjs';
 
+const DYNAMIC_PERMISSION = 'com.yggdrasil.lighthouse.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION';
 const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
+  <permission android:name="${DYNAMIC_PERMISSION}" android:protectionLevel="signature" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="${DYNAMIC_PERMISSION}" />
   <application android:allowBackup="false" android:usesCleartextTraffic="false" android:label="LIGHTHOUSE">
     <activity android:name="com.yggdrasil.lighthouse.MainActivity" android:exported="true">
       <intent-filter>
@@ -18,7 +22,6 @@ const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
     </activity>
     <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.fileprovider" android:exported="false" android:grantUriPermissions="true" />
   </application>
-  <uses-permission android:name="android.permission.INTERNET" />
 </manifest>`;
 
 function replace(source, before, after) {
@@ -33,7 +36,8 @@ test('security inspector accepts only the current LIGHTHOUSE native surface and 
     manifestPath:'fixture/AndroidManifest.xml',
   });
   assert.equal(evidence.applicationId, 'com.yggdrasil.lighthouse');
-  assert.deepEqual(evidence.requestedPermissions, ['android.permission.INTERNET']);
+  assert.deepEqual(evidence.requestedPermissions, [DYNAMIC_PERMISSION, 'android.permission.INTERNET']);
+  assert.deepEqual(evidence.declaredPermissions, [{ name:DYNAMIC_PERMISSION, protectionLevel:'signature' }]);
   assert.equal(evidence.backupPolicy.allowBackup, false);
   assert.equal(evidence.networkPolicy.usesCleartextTraffic, false);
   assert.equal(evidence.debuggable, false);
@@ -41,6 +45,14 @@ test('security inspector accepts only the current LIGHTHOUSE native surface and 
   assert.equal(evidence.exportedComponents.length, 1);
   assert.equal(evidence.exportedComponents[0].launcher, true);
   assert.equal(evidence.status, 'PROVEN');
+});
+
+test('package-scoped dynamic receiver permission is allowed only with signature protection', () => {
+  assert.doesNotThrow(() => verifyAndroidSecurity({ manifestText:SAFE_MANIFEST, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }));
+  const weak = replace(SAFE_MANIFEST, 'android:protectionLevel="signature"', 'android:protectionLevel="normal"');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:weak, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_DYNAMIC_PERMISSION_NOT_SIGNATURE_PROTECTED/);
+  const missingDeclaration = SAFE_MANIFEST.replace(`  <permission android:name="${DYNAMIC_PERMISSION}" android:protectionLevel="signature" />\n`, '');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:missingDeclaration, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_DYNAMIC_PERMISSION_DECLARATION_MISSING/);
 });
 
 test('unexpected Android permission fails closed', () => {
