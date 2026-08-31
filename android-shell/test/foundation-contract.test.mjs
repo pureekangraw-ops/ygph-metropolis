@@ -18,6 +18,11 @@ test('Capacitor shell contract is pinned to LIGHTHOUSE Android foundation', asyn
   assert.equal(pkg.scripts['android:debug'], 'cd android && ./gradlew assembleDebug');
 });
 
+test('remote patch traffic is routed through Capacitor native HTTP', async () => {
+  const config = JSON.parse(await read('android-shell/capacitor.config.json'));
+  assert.equal(config.plugins?.CapacitorHttp?.enabled, true);
+});
+
 test('foundation page stays local and excludes later-phase native scope', async () => {
   const html = await read('android-shell/www/index.html');
   assert.match(html, /LIGHTHOUSE APK Foundation Proof/);
