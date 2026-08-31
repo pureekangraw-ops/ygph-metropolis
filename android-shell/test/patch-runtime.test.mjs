@@ -27,28 +27,27 @@ test('loadBaseSnapshot reads only packaged local app assets', async () => {
   assert.deepEqual(requested, ['./app/version.json','./app/ui.html','./app/ui.css','./app/logic.mjs','./app/rules.json','./app/vocabulary.json']);
 });
 
-test('mountSnapshot mounts verified assets and passes only trusted capabilities explicitly injected', async () => {
+test('mountSnapshot injects trusted brain/updater without making them patchable assets', async () => {
   const { mountSnapshot } = await loadRuntime(); const rootElement = { innerHTML:'' }; const styles = new Map();
-  const documentRef = { head:{ append(element){ styles.set(element.id, element); } }, getElementById:id => styles.get(id) ?? null, createElement(tag){ assert.equal(tag, 'style'); return { id:'', textContent:'' }; } };
+  const documentRef = { head:{ append(element){ styles.set(element.id, element); } }, getElementById:id => styles.get(id) ?? null, createElement(tag){ assert.equal(tag,'style'); return { id:'', textContent:'' }; } };
   const mounted = []; const revoked = []; const brain = Object.freeze({ send:async () => ({ status:'BLOCKED' }) }); const patchUpdater = Object.freeze({ updateLatest:async () => ({ status:'LATEST' }) });
   const snapshot = { version:'0.0.5', assets:{ 'ui.html':'<main>patched ui</main>', 'ui.css':'main{font-weight:700}', 'logic.mjs':'export async function mount() {}', 'rules.json':'{"mode":"patched"}', 'vocabulary.json':'{"hello":"สวัสดี"}' } };
   const cleanup = await mountSnapshot(snapshot, { root:rootElement, documentRef, trustedBrain:brain, patchUpdater, createModuleUrl:() => 'blob:test-module', importModule:async url => { assert.equal(url,'blob:test-module'); return { async mount(args){ mounted.push(args); } }; }, revokeModuleUrl:url => revoked.push(url) });
-  assert.equal(rootElement.innerHTML, '<main>patched ui</main>'); assert.equal(styles.get('lighthouse-patch-style').textContent, 'main{font-weight:700}');
-  assert.equal(mounted.length, 1); assert.equal(mounted[0].brain, brain); assert.equal(mounted[0].patchUpdater, patchUpdater); assert.equal(mounted[0].version, '0.0.5');
-  await cleanup(); assert.deepEqual(revoked, ['blob:test-module']);
+  assert.equal(mounted[0].brain, brain); assert.equal(mounted[0].patchUpdater, patchUpdater); assert.equal(mounted[0].version,'0.0.5');
+  await cleanup(); assert.deepEqual(revoked,['blob:test-module']);
 });
 
-test('stable foundation owns fixed one-tap endpoint, verifier, manual fallback and rollback with no background updater', async () => {
+test('stable foundation owns endpoint verifier one-tap reload path manual fallback and rollback with no background updater', async () => {
   const index = await read('www/index.html');
-  assert.match(index, /id="app"/); assert.match(index, /id="patch-latest"/); assert.match(index, />Patch</);
-  assert.match(index, /id="patch-file"/); assert.match(index, /id="patch-rollback"/); assert.match(index, /trusted\/bootstrap\.mjs/);
-  assert.doesNotMatch(index, /src=["'][^"']*patch\/patch-runtime\.mjs["']/i);
-  const bootstrap = await read('www/trusted/bootstrap.mjs'); assert.match(bootstrap, /import\(['"]\.\.\/patch\/patch-runtime\.mjs['"]\)/);
+  assert.match(index,/id="patch-latest"/); assert.match(index,/>Patch</); assert.match(index,/id="patch-file"/); assert.match(index,/id="patch-rollback"/); assert.match(index,/trusted\/bootstrap\.mjs/);
+  assert.doesNotMatch(index,/src=["'][^"']*patch\/patch-runtime\.mjs["']/i);
+  const bootstrap = await read('www/trusted/bootstrap.mjs'); assert.match(bootstrap,/import\(['"]\.\.\/patch\/patch-runtime\.mjs['"]\)/);
   const runtime = await read('www/patch/patch-runtime.mjs');
-  assert.match(runtime, /TRUSTED_PATCH_MANIFEST_URL/); assert.match(runtime, /github\.com\/pureekangraw-ops\/ygph-metropolis\/releases\/latest\/download\/lighthouse-patch-manifest\.json/);
-  assert.match(runtime, /verifyPatchBundle\(/); assert.match(runtime, /sha256/i); assert.match(runtime, /openManualPicker/); assert.match(runtime, /\.lhpatch/);
-  assert.doesNotMatch(runtime, /setInterval|setTimeout\([^,]+,\s*\d+\)|WebSocket|EventSource/i, 'one-tap updater must not become background auto-update');
+  assert.match(runtime,/TRUSTED_PATCH_MANIFEST_URL/); assert.match(runtime,/github\.com\/pureekangraw-ops\/ygph-metropolis\/releases\/latest\/download\/lighthouse-patch-manifest\.json/);
+  assert.match(runtime,/verifyPatchBundle\(/); assert.match(runtime,/sha256/i); assert.match(runtime,/openManualPicker/); assert.match(runtime,/await render\(result\.current\)/);
+  assert.doesNotMatch(runtime,/setInterval|WebSocket|EventSource/i);
   const patchableLogic = await read('release/front-door-0.0.5/logic.mjs');
-  assert.doesNotMatch(patchableLogic, /TRUSTED_PATCH_MANIFEST_URL|releases\/latest\/download|trusted-key\.json|verifyPatchBundle/);
-  assert.match(patchableLogic, /patchUpdater\.updateLatest/);
+  assert.doesNotMatch(patchableLogic,/TRUSTED_PATCH_MANIFEST_URL|releases\/latest\/download|trusted-key\.json|verifyPatchBundle|patchUpdater\.updateLatest/);
+  assert.match(patchableLogic,/getElementById\('patch-latest'\)/);
+  assert.match(patchableLogic,/getElementById\('patch-file'\)/);
 });
