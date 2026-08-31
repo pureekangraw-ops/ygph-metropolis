@@ -48,14 +48,14 @@ jobs:
       - name: Verify foundation contract
         run: npm test
 
-      - name: Build integrated 0.0.3 signing source
-        run: node tools/build-front-door-0.0.3-source.mjs release/front-door-0.0.3/input.generated.json
+      - name: Build integrated 0.0.4 signing source
+        run: node tools/build-front-door-0.0.4-source.mjs release/front-door-0.0.4/input.generated.json
 
-      - name: Upload integrated 0.0.3 signing source
+      - name: Upload integrated 0.0.4 signing source
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-front-door-0.0.3-signing-source
-          path: android-shell/release/front-door-0.0.3/input.generated.json
+          name: lighthouse-front-door-0.0.4-signing-source
+          path: android-shell/release/front-door-0.0.4/input.generated.json
           if-no-files-found: error
           retention-days: 7
 
