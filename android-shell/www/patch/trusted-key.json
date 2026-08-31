@@ -1,12 +1,12 @@
 {
-  "keyId": "lighthouse-debug-patch-2",
+  "keyId": "lighthouse-debug-patch-3",
   "alg": "ECDSA-P256-SHA256",
   "jwk": {
     "key_ops": ["verify"],
     "ext": true,
     "kty": "EC",
-    "x": "RusBRQN5tqxVlKcFBc2ILvcPDrHZX_sONU-ZuG-482w",
-    "y": "T5ydXpR4kgP5_KQxwGAmdtM9oXN9uWoOwtSGIiA9uew",
+    "x": "FMkr-DB3LgnluzecC6qqyEGUqoVNZgmiXPDgRM6Fahk",
+    "y": "3dJJRoGWzM6G0ENqHxaRwN1Oh6HEGzwb8MXUOA78ygw",
     "crv": "P-256"
   }
 }

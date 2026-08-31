@@ -31,11 +31,11 @@ async function loadSigner() {
   }
 }
 
-test('historical key-1 sample remains evidence but is not trusted by current key-2 APK', async () => {
+test('historical key-1 sample remains evidence but is not trusted by current key-3 APK', async () => {
   const trustedKey = JSON.parse(await read('www/patch/trusted-key.json'));
   const sample = JSON.parse(await read('test/fixtures/sample-update.lhpatch'));
 
-  assert.equal(trustedKey.keyId, 'lighthouse-debug-patch-2');
+  assert.equal(trustedKey.keyId, 'lighthouse-debug-patch-3');
   assert.equal(trustedKey.alg, 'ECDSA-P256-SHA256');
   assert.equal(trustedKey.jwk.kty, 'EC');
   assert.equal(trustedKey.jwk.crv, 'P-256');

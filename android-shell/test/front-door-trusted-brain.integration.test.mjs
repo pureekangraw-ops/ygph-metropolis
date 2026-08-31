@@ -40,6 +40,20 @@ function expenseRecords(state) {
     .filter(record => record?.type === 'TRANSACTION' && record?.direction === 'OUT' && String(record?.detail ?? '').includes('EXPENSE'));
 }
 
+function deferredConfirmation() {
+  let resolve;
+  let calls = 0;
+  const promise = new Promise(done => { resolve = done; });
+  return {
+    ask:async () => {
+      calls += 1;
+      return promise;
+    },
+    resolve,
+    get calls() { return calls; },
+  };
+}
+
 async function resetVault() {
   deactivateRuntimeSession();
   await new Promise((resolve, reject) => {
@@ -50,7 +64,7 @@ async function resetVault() {
   });
 }
 
-async function createRuntimeAndBrain() {
+async function createRuntimeAndBrain(confirmTextImpl = async () => 'ยืนยัน') {
   await resetVault();
   await initializeFirstRun({
     recoveryCode:RECOVERY_CODE,
@@ -81,6 +95,7 @@ async function createRuntimeAndBrain() {
   const brain = createTrustedBrainGate({
     brain:adapter,
     confirmImpl:() => true,
+    confirmTextImpl,
   });
   return { runtime, brain };
 }
@@ -88,11 +103,11 @@ async function createRuntimeAndBrain() {
 async function patchSnapshot() {
   const input = JSON.parse(await read('test/fixtures/front-door-0.0.3-input.json'));
   return {
-    version:input.version,
+    version:'0.0.4',
     assets:{
       'ui.html':input.files['ui.html'],
       'ui.css':input.files['ui.css'],
-      'logic.mjs':await read('release/front-door-0.0.3/logic.mjs'),
+      'logic.mjs':await read('release/front-door-0.0.4/logic.mjs'),
       'rules.json':await read('www/app/rules.json'),
       'vocabulary.json':await read('www/app/vocabulary.json'),
     },
@@ -136,8 +151,9 @@ async function submit(dom, app, value) {
   composer.dispatchEvent(new dom.window.Event('submit', { bubbles:true, cancelable:true }));
 }
 
-test('actual patched Front Door calls trusted brain and writes only after trusted confirmation', async (t) => {
-  const { runtime, brain } = await createRuntimeAndBrain();
+test('actual patched Front Door 0.0.4 writes only after one trusted typed confirmation', async (t) => {
+  const confirmation = deferredConfirmation();
+  const { runtime, brain } = await createRuntimeAndBrain(confirmation.ask);
   const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
 
   t.after(async () => {
@@ -150,19 +166,15 @@ test('actual patched Front Door calls trusted brain and writes only after truste
 
   const initial = await runtime.readState();
   await submit(dom, app, 'ข้าว 65');
-  await waitFor(() => app.querySelector('[data-brain-confirm]'), 'READY confirmation control');
+  await waitFor(() => confirmation.calls === 1, 'single trusted typed confirmation');
 
   const beforeConfirm = await runtime.readState();
   assert.equal(beforeConfirm.revision, initial.revision);
   assert.equal(expenseRecords(beforeConfirm).length, 0);
-
-  const messages = [...app.querySelectorAll('.message')];
-  assert.equal(messages[0].textContent, 'ข้าว 65');
-  assert.match(messages.at(-1).textContent, /พร้อม|ยืนยัน/);
+  assert.equal(app.querySelector('[data-brain-confirm]'), null, 'Front Door must not render a second confirmation button');
   assert.equal(brain.execute, undefined, 'mounted patch capability must not expose execute');
 
-  const confirm = app.querySelector('[data-brain-confirm]');
-  confirm.click();
+  confirmation.resolve('ยืนยัน');
   await waitFor(
     () => app.querySelector('[data-chat-log]').textContent.includes('บันทึกและอ่านกลับแล้ว'),
     'durable SUCCESS readback in conversation',
@@ -176,8 +188,9 @@ test('actual patched Front Door calls trusted brain and writes only after truste
   assert.match(app.querySelector('[data-chat-log]').textContent, /65\.00|65,00|65 บาท/);
 });
 
-test('actual patched Front Door shows WAITING, accepts correction, then confirms the corrected durable amount', async (t) => {
-  const { runtime, brain } = await createRuntimeAndBrain();
+test('actual patched Front Door 0.0.4 shows WAITING, accepts correction, then uses one trusted typed confirmation', async (t) => {
+  const confirmation = deferredConfirmation();
+  const { runtime, brain } = await createRuntimeAndBrain(confirmation.ask);
   const { dom, app, cleanup } = await mountIntegratedFrontDoor(brain);
 
   t.after(async () => {
@@ -195,17 +208,16 @@ test('actual patched Front Door shows WAITING, accepts correction, then confirms
     'WAITING recovery prompt',
   );
   assert.equal(expenseRecords(await runtime.readState()).length, 0);
-  assert.equal(app.querySelector('[data-brain-confirm]'), null);
+  assert.equal(confirmation.calls, 0);
 
   await submit(dom, app, '150');
-  await waitFor(() => app.querySelector('[data-brain-confirm]'), 'corrected READY confirmation');
+  await waitFor(() => confirmation.calls === 1, 'corrected trusted typed confirmation');
   const readyState = await runtime.readState();
   assert.equal(readyState.revision, initial.revision);
   assert.equal(expenseRecords(readyState).length, 0);
+  assert.equal(app.querySelector('[data-brain-confirm]'), null);
 
-  const confirm = app.querySelector('[data-brain-confirm]');
-  assert.match(app.querySelector('[data-chat-log]').textContent, /150\.00|150,00|150 บาท/);
-  confirm.click();
+  confirmation.resolve('ยืนยัน');
   await waitFor(
     () => app.querySelector('[data-chat-log]').textContent.includes('บันทึกและอ่านกลับแล้ว'),
     'corrected durable SUCCESS readback in conversation',

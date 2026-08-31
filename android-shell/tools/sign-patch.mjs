@@ -11,7 +11,7 @@ import {
 const encoder = new TextEncoder();
 const allowedFiles = new Set(PATCH_ALLOWED_FILES);
 const PATCH_ALGORITHM = 'ECDSA-P256-SHA256';
-const DEFAULT_KEY_ID = 'lighthouse-debug-patch-2';
+const DEFAULT_KEY_ID = 'lighthouse-debug-patch-3';
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 
 function asObject(value, label) {
