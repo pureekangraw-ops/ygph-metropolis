@@ -61,3 +61,23 @@ test('clean 0.0.1 and patched 0.0.4 devices select different signed assets from 
   }
   assert.deepEqual(selected, [['0.0.1','https://example.invalid/bootstrap.lhpatch'],['0.0.4','https://example.invalid/incremental.lhpatch']]);
 });
+
+test('remote manifest and patch use the dedicated remote transport instead of browser fetch', async () => {
+  const body = Buffer.from(JSON.stringify({ schema:'lighthouse.patch.v1', baseVersion:'0.0.4', version:'0.0.5' }), 'utf8');
+  const { createHash } = await import('node:crypto');
+  const sha256 = createHash('sha256').update(body).digest('hex');
+  const remoteCalls = [];
+  const remoteFetchImpl = async url => {
+    remoteCalls.push(url);
+    if (url === TRUSTED_PATCH_MANIFEST_URL) return jsonResponse({ latestVersion:'0.0.5', patches:{ '0.0.4':manifestEntry('0.0.4', { sha256, size:body.length }) } });
+    return bytesResponse([...body]);
+  };
+  const result = await fetchLatestPatch({
+    currentVersion:'0.0.4',
+    fetchImpl:async () => { throw new Error('browser fetch must not be used for remote patch transport'); },
+    remoteFetchImpl,
+    verifyDownloadedBundle:async () => ({ ok:true }),
+  });
+  assert.equal(result.status, 'DOWNLOADED_VERIFIED');
+  assert.deepEqual(remoteCalls, [TRUSTED_PATCH_MANIFEST_URL, 'https://example.invalid/p.lhpatch']);
+});
