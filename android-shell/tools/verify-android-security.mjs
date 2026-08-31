@@ -151,13 +151,22 @@ async function findFiles(root, filename, out = []) {
 }
 
 async function findMergedReleaseManifest(androidRoot) {
-  const mergedRoot = join(androidRoot, 'app', 'build', 'intermediates', 'merged_manifests', 'release');
-  let matches;
-  try { matches = await findFiles(mergedRoot, 'AndroidManifest.xml'); }
+  const intermediatesRoot = join(androidRoot, 'app', 'build', 'intermediates');
+  let allManifests;
+  try { allManifests = await findFiles(intermediatesRoot, 'AndroidManifest.xml'); }
   catch (error) {
     if (error?.code === 'ENOENT') throw new Error('ANDROID_SECURITY_MERGED_MANIFEST_MISSING');
     throw error;
   }
+
+  // Android Gradle Plugin has used both merged_manifest and merged_manifests
+  // directory layouts. Inspect generated reality instead of pinning one AGP
+  // spelling, while still requiring one unambiguous release merged manifest.
+  const matches = allManifests.filter(path => {
+    const normalized = path.replaceAll('\\', '/');
+    return /\/merged_manifests?\/release\//.test(normalized);
+  });
+  if (matches.length === 0) throw new Error('ANDROID_SECURITY_MERGED_MANIFEST_MISSING');
   if (matches.length !== 1) throw new Error(`ANDROID_SECURITY_MERGED_MANIFEST_COUNT:${matches.length}`);
   return matches[0];
 }
