@@ -41,7 +41,7 @@ jobs:
       - name: Install Capacitor dependencies
         run: npm install --no-audit --no-fund
       - name: Verify foundation contract
-        run: npm test
+        run: timeout --signal=TERM 90s npm test
       - name: Build integrated 0.0.5 signing sources
         run: |
           node tools/build-front-door-0.0.5-source.mjs release/front-door-0.0.5/input.generated.json
