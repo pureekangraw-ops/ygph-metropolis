@@ -1,6 +1,6 @@
 export const LEDGER_CORE = Object.freeze({
   id: 'LEDGER',
-  manualRole: 'GATEWAY',
+  manualRole: 'HEAD',
   runtimeRoot: 'GREENFIELD_RUNTIME',
   truthDomain: 'LEDGER',
   storageOwner: 'GREENFIELD_VAULT',
