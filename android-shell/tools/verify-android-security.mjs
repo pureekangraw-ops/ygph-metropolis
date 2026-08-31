@@ -5,6 +5,14 @@ import { pathToFileURL } from 'node:url';
 const EXPECTED_APPLICATION_ID = 'com.yggdrasil.lighthouse';
 const ALLOWED_PERMISSIONS = new Set(['android.permission.INTERNET']);
 const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
+const PROFILE_INSTALL_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
+const PROFILE_INSTALL_PERMISSION = 'android.permission.DUMP';
+const PROFILE_INSTALL_ACTIONS = new Set([
+  'androidx.profileinstaller.action.INSTALL_PROFILE',
+  'androidx.profileinstaller.action.SAVE_PROFILE',
+  'androidx.profileinstaller.action.SKIP_FILE',
+  'androidx.profileinstaller.action.BENCHMARK_OPERATION',
+]);
 const COMPONENT_TAGS = ['activity', 'activity-alias', 'service', 'receiver', 'provider'];
 
 function attr(text, name) {
@@ -48,6 +56,12 @@ function declaredPermissions(manifestText) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function actions(body) {
+  return [...body.matchAll(/<action\b[^>]*android:name="([^"]+)"[^>]*\/?\s*>/gs)]
+    .map(match => match[1])
+    .sort();
+}
+
 function components(manifestText) {
   const found = [];
   for (const tagName of COMPONENT_TAGS) {
@@ -59,6 +73,8 @@ function components(manifestText) {
         type:tagName,
         name:attr(open, 'name') || '',
         exported:boolAttr(open, 'exported'),
+        permission:attr(open, 'permission') || null,
+        actions:actions(body),
         launcher:/android\.intent\.action\.MAIN/.test(body) && /android\.intent\.category\.LAUNCHER/.test(body),
         hasIntentFilter:/<intent-filter\b/.test(body),
       });
@@ -70,6 +86,8 @@ function components(manifestText) {
         type:tagName,
         name:attr(open, 'name') || '',
         exported:boolAttr(open, 'exported'),
+        permission:attr(open, 'permission') || null,
+        actions:[],
         launcher:false,
         hasIntentFilter:false,
       });
@@ -87,6 +105,13 @@ function enabledPluginSurface(capacitorConfig) {
     .filter(([, value]) => !(value && typeof value === 'object' && value.enabled === false))
     .map(([name]) => name)
     .sort();
+}
+
+function isTrustedExportedProfileReceiver(component) {
+  if (component.type !== 'receiver' || component.name !== PROFILE_INSTALL_RECEIVER) return false;
+  if (component.permission !== PROFILE_INSTALL_PERMISSION) return false;
+  if (!component.hasIntentFilter || component.actions.length === 0) return false;
+  return component.actions.every(action => PROFILE_INSTALL_ACTIONS.has(action));
 }
 
 export function inspectAndroidSecurity({ manifestText, capacitorConfig, manifestPath = null }) {
@@ -149,9 +174,15 @@ export function verifyAndroidSecurity(input) {
   const launcherExported = evidence.exportedComponents.filter(component => component.type === 'activity' && component.launcher);
   if (launcherExported.length !== 1) throw new Error(`ANDROID_SECURITY_LAUNCHER_EXPORT_COUNT:${launcherExported.length}`);
   for (const component of evidence.exportedComponents) {
-    if (!(component.type === 'activity' && component.launcher)) {
-      throw new Error(`ANDROID_SECURITY_UNEXPECTED_EXPORTED_COMPONENT:${component.type}/${component.name || 'UNKNOWN'}`);
+    if (component.type === 'activity' && component.launcher) continue;
+    if (isTrustedExportedProfileReceiver(component)) continue;
+    if (component.type === 'receiver' && component.name === PROFILE_INSTALL_RECEIVER) {
+      if (component.permission !== PROFILE_INSTALL_PERMISSION) throw new Error(`ANDROID_SECURITY_PROFILE_RECEIVER_PERMISSION:${component.permission || 'UNKNOWN'}`);
+      const unexpected = component.actions.filter(action => !PROFILE_INSTALL_ACTIONS.has(action));
+      if (unexpected.length) throw new Error(`ANDROID_SECURITY_PROFILE_RECEIVER_ACTION:${unexpected.join(',')}`);
+      throw new Error('ANDROID_SECURITY_PROFILE_RECEIVER_INTENT_FILTER_MISSING');
     }
+    throw new Error(`ANDROID_SECURITY_UNEXPECTED_EXPORTED_COMPONENT:${component.type}/${component.name || 'UNKNOWN'}`);
   }
   for (const component of evidence.components) {
     if (component.hasIntentFilter && component.exported === undefined) {
