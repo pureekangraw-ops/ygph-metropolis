@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 const EXPECTED_APPLICATION_ID = 'com.yggdrasil.lighthouse';
 const ALLOWED_PERMISSIONS = new Set(['android.permission.INTERNET']);
+const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
 const COMPONENT_TAGS = ['activity', 'activity-alias', 'service', 'receiver', 'provider'];
 
 function attr(text, name) {
@@ -35,6 +36,16 @@ function permissions(manifestText) {
   return [...manifestText.matchAll(/<uses-permission\b[^>]*android:name="([^"]+)"[^>]*\/?\s*>/gs)]
     .map(match => match[1])
     .sort();
+}
+
+function declaredPermissions(manifestText) {
+  return [...manifestText.matchAll(/<permission\b([^>]*)\/?\s*>/gs)]
+    .map(match => {
+      const tag = `<permission${match[1]}>`;
+      return { name:attr(tag, 'name') || '', protectionLevel:attr(tag, 'protectionLevel') || null };
+    })
+    .filter(permission => permission.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function components(manifestText) {
@@ -83,6 +94,7 @@ export function inspectAndroidSecurity({ manifestText, capacitorConfig, manifest
   const packageId = manifestPackage(manifestText);
   const appTag = applicationTag(manifestText);
   const requestedPermissions = permissions(manifestText);
+  const permissionDeclarations = declaredPermissions(manifestText);
   const componentInventory = components(manifestText);
   const exportedComponents = componentInventory.filter(component => component.exported === true);
   const allowBackup = boolAttr(appTag, 'allowBackup');
@@ -96,6 +108,7 @@ export function inspectAndroidSecurity({ manifestText, capacitorConfig, manifest
     applicationId:packageId || configAppId || null,
     capacitorAppId:configAppId || null,
     requestedPermissions,
+    declaredPermissions:permissionDeclarations,
     components:componentInventory,
     exportedComponents,
     backupPolicy:{ allowBackup:allowBackup ?? null },
@@ -113,9 +126,20 @@ export function verifyAndroidSecurity(input) {
   if (evidence.capacitorAppId && evidence.capacitorAppId !== EXPECTED_APPLICATION_ID) {
     throw new Error(`ANDROID_SECURITY_CAPACITOR_APP_ID_MISMATCH:${evidence.capacitorAppId}`);
   }
+
   for (const permission of evidence.requestedPermissions) {
-    if (!ALLOWED_PERMISSIONS.has(permission)) throw new Error(`ANDROID_SECURITY_UNEXPECTED_PERMISSION:${permission}`);
+    if (ALLOWED_PERMISSIONS.has(permission)) continue;
+    if (permission !== DYNAMIC_RECEIVER_PERMISSION) throw new Error(`ANDROID_SECURITY_UNEXPECTED_PERMISSION:${permission}`);
+    const declaration = evidence.declaredPermissions.find(item => item.name === permission);
+    if (!declaration) throw new Error('ANDROID_SECURITY_DYNAMIC_PERMISSION_DECLARATION_MISSING');
+    if (declaration.protectionLevel !== 'signature') throw new Error(`ANDROID_SECURITY_DYNAMIC_PERMISSION_NOT_SIGNATURE_PROTECTED:${declaration.protectionLevel || 'UNKNOWN'}`);
   }
+
+  for (const declaration of evidence.declaredPermissions) {
+    if (declaration.name !== DYNAMIC_RECEIVER_PERMISSION) throw new Error(`ANDROID_SECURITY_UNEXPECTED_DECLARED_PERMISSION:${declaration.name}`);
+    if (declaration.protectionLevel !== 'signature') throw new Error(`ANDROID_SECURITY_DYNAMIC_PERMISSION_NOT_SIGNATURE_PROTECTED:${declaration.protectionLevel || 'UNKNOWN'}`);
+  }
+
   if (evidence.backupPolicy.allowBackup === null) throw new Error('ANDROID_SECURITY_BACKUP_POLICY_UNKNOWN');
   if (evidence.backupPolicy.allowBackup !== false) throw new Error('ANDROID_SECURITY_BACKUP_NOT_DISABLED');
   if (evidence.networkPolicy.usesCleartextTraffic === null) throw new Error('ANDROID_SECURITY_CLEARTEXT_POLICY_UNKNOWN');
@@ -159,9 +183,6 @@ async function findMergedReleaseManifest(androidRoot) {
     throw error;
   }
 
-  // Android Gradle Plugin has used both merged_manifest and merged_manifests
-  // directory layouts. Inspect generated reality instead of pinning one AGP
-  // spelling, while still requiring one unambiguous release merged manifest.
   const matches = allManifests.filter(path => {
     const normalized = path.replaceAll('\\', '/');
     return /\/merged_manifests?\/release\//.test(normalized);
