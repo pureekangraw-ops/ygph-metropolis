@@ -1,0 +1,90 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { applyAndroidSecurityBaseline } from '../tools/apply-android-security.mjs';
+import { inspectAndroidSecurity, verifyAndroidSecurity } from '../tools/verify-android-security.mjs';
+
+const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
+  <application android:allowBackup="false" android:usesCleartextTraffic="false" android:label="LIGHTHOUSE">
+    <activity android:name="com.yggdrasil.lighthouse.MainActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.fileprovider" android:exported="false" android:grantUriPermissions="true" />
+  </application>
+  <uses-permission android:name="android.permission.INTERNET" />
+</manifest>`;
+
+function replace(source, before, after) {
+  assert.ok(source.includes(before), `fixture missing ${before}`);
+  return source.replace(before, after);
+}
+
+test('security inspector accepts only the current LIGHTHOUSE native surface and emits evidence', () => {
+  const evidence = inspectAndroidSecurity({
+    manifestText: SAFE_MANIFEST,
+    capacitorConfig: { appId:'com.yggdrasil.lighthouse', plugins:{ CapacitorHttp:{ enabled:true } } },
+    manifestPath:'fixture/AndroidManifest.xml',
+  });
+  assert.equal(evidence.applicationId, 'com.yggdrasil.lighthouse');
+  assert.deepEqual(evidence.requestedPermissions, ['android.permission.INTERNET']);
+  assert.equal(evidence.backupPolicy.allowBackup, false);
+  assert.equal(evidence.networkPolicy.usesCleartextTraffic, false);
+  assert.equal(evidence.debuggable, false);
+  assert.deepEqual(evidence.enabledNativePluginSurface, ['CapacitorHttp']);
+  assert.equal(evidence.exportedComponents.length, 1);
+  assert.equal(evidence.exportedComponents[0].launcher, true);
+  assert.equal(evidence.status, 'PROVEN');
+});
+
+test('unexpected Android permission fails closed', () => {
+  const manifest = SAFE_MANIFEST.replace('</manifest>', '  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n</manifest>');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:manifest, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_UNEXPECTED_PERMISSION:android.permission.ACCESS_FINE_LOCATION/);
+});
+
+test('non-launcher exported component fails closed', () => {
+  const manifest = replace(SAFE_MANIFEST, '</application>', '  <receiver android:name="com.yggdrasil.lighthouse.SecretReceiver" android:exported="true" />\n  </application>');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:manifest, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_UNEXPECTED_EXPORTED_COMPONENT/);
+});
+
+test('permissive or implicit backup policy fails closed', () => {
+  const permissive = replace(SAFE_MANIFEST, 'android:allowBackup="false"', 'android:allowBackup="true"');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:permissive, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_BACKUP_NOT_DISABLED/);
+  const implicit = replace(SAFE_MANIFEST, ' android:allowBackup="false"', '');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:implicit, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_BACKUP_POLICY_UNKNOWN/);
+});
+
+test('cleartext allowance or missing explicit policy fails closed', () => {
+  const permissive = replace(SAFE_MANIFEST, 'android:usesCleartextTraffic="false"', 'android:usesCleartextTraffic="true"');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:permissive, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_CLEARTEXT_ALLOWED/);
+  const implicit = replace(SAFE_MANIFEST, ' android:usesCleartextTraffic="false"', '');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:implicit, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_CLEARTEXT_POLICY_UNKNOWN/);
+});
+
+test('debuggable release posture fails closed when true', () => {
+  const manifest = replace(SAFE_MANIFEST, 'android:label="LIGHTHOUSE"', 'android:label="LIGHTHOUSE" android:debuggable="true"');
+  assert.throws(() => verifyAndroidSecurity({ manifestText:manifest, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }), /ANDROID_SECURITY_DEBUGGABLE_RELEASE/);
+});
+
+test('security applicator hardens generated Capacitor manifest without changing component topology', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lh-security-'));
+  const manifestPath = join(root, 'app/src/main/AndroidManifest.xml');
+  await mkdir(join(root, 'app/src/main'), { recursive:true });
+  const insecure = SAFE_MANIFEST
+    .replace('android:allowBackup="false"', 'android:allowBackup="true"')
+    .replace('android:usesCleartextTraffic="false" ', '');
+  await writeFile(manifestPath, insecure, 'utf8');
+  const beforeComponents = inspectAndroidSecurity({ manifestText:SAFE_MANIFEST, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } }).components;
+  await applyAndroidSecurityBaseline(root);
+  const hardened = await readFile(manifestPath, 'utf8');
+  assert.match(hardened, /android:allowBackup="false"/);
+  assert.match(hardened, /android:usesCleartextTraffic="false"/);
+  const after = inspectAndroidSecurity({ manifestText:hardened, capacitorConfig:{ appId:'com.yggdrasil.lighthouse', plugins:{} } });
+  assert.deepEqual(after.components, beforeComponents);
+});
