@@ -5,14 +5,16 @@ export async function buildFrontDoor005BootstrapSource() {
   const fixture = JSON.parse(await readFile(new URL('test/fixtures/front-door-0.0.3-input.json', root), 'utf8'));
   const ui = await readFile(new URL('release/front-door-0.0.5/ui.html', root), 'utf8');
   const logic = await readFile(new URL('release/front-door-0.0.5/logic.mjs', root), 'utf8');
+  const rules = await readFile(new URL('www/app/rules.json', root), 'utf8');
+  const vocabulary = await readFile(new URL('www/app/vocabulary.json', root), 'utf8');
   return {
     baseVersion:'0.0.1', version:'0.0.5',
     files:{
       'ui.html':ui,
       'ui.css':fixture.files['ui.css'],
       'logic.mjs':logic,
-      'rules.json':fixture.files['rules.json'],
-      'vocabulary.json':fixture.files['vocabulary.json'],
+      'rules.json':rules,
+      'vocabulary.json':vocabulary,
     },
   };
 }
