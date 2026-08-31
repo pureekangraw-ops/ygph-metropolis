@@ -47,7 +47,7 @@ export async function verifyApkIdentity({
   versionPath = new URL('../version.json', import.meta.url),
   apksigner = process.env.APKSIGNER || 'apksigner',
   aapt = process.env.AAPT || 'aapt',
-  sourceCommit = process.env.GITHUB_SHA || null,
+  sourceCommit = process.env.APK_SOURCE_COMMIT || process.env.GITHUB_SHA || null,
   evidencePath = null,
 } = {}) {
   if (!apkPath) throw new Error('APK_PATH_REQUIRED');
