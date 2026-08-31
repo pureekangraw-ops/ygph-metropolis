@@ -157,6 +157,8 @@ jobs:
           echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
           echo "AAPT=$aapt" >> "$GITHUB_ENV"
       - name: Verify final APK identity
+        env:
+          APK_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
       - name: Upload canonical APK
         uses: actions/upload-artifact@v4
