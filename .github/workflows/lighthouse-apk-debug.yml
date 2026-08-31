@@ -59,7 +59,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Sign and verify Front Door 0.0.4 with trusted Patch key
+      - name: Sign and verify Front Door 0.0.4 with key-3
         env:
           LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM: ${{ secrets.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM }}
           LIGHTHOUSE_PATCH_KEY_PASSPHRASE: ${{ secrets.LIGHTHOUSE_PATCH_KEY_PASSPHRASE }}
@@ -87,41 +87,23 @@ jobs:
             -passin "file:$passphrase_file" \
             -out "$private_key"
 
-          export LIGHTHOUSE_PRIVATE_KEY_PATH="$private_key"
-          node --input-type=module <<'NODE'
-          import { createPublicKey } from 'node:crypto';
-          import { readFile, writeFile } from 'node:fs/promises';
-
-          const privatePem = await readFile(process.env.LIGHTHOUSE_PRIVATE_KEY_PATH, 'utf8');
-          const jwk = createPublicKey(privatePem).export({ format:'jwk' });
-          await writeFile(
-            './release/front-door-0.0.4/key3-public-candidate.json',
-            `${JSON.stringify({
-              keyId:'lighthouse-debug-patch-3',
-              alg:'ECDSA-P256-SHA256',
-              publicKey:{ kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y },
-            }, null, 2)}\n`,
-            'utf8',
-          );
-          NODE
-
-          expected_fingerprint="83d724014b111fb35253b78414f197f3936e2ea092abba4fd352c4800eb1b834"
+          expected_fingerprint="9486f41ebb5c43f5e2dd88050cb9033b69eeb099c06bde183001752d2a6b33b1"
           actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
           if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then
-            echo "Patch private key does not match current trusted key-2 anchor. Public fingerprint: $actual_fingerprint"
+            echo "Patch private key does not match current trusted key-3 anchor. Public fingerprint: $actual_fingerprint"
             exit 1
           fi
 
           npm run patch:sign -- \
             release/front-door-0.0.4/input.generated.json \
             "$private_key" \
-            release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch
+            release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch
 
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
           import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
 
-          const patchPath = './release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch';
+          const patchPath = './release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch';
           const [patchText, trustedKeyText] = await Promise.all([
             readFile(patchPath, 'utf8'),
             readFile('./www/patch/trusted-key.json', 'utf8'),
@@ -133,24 +115,15 @@ jobs:
             trustedKey,
           });
           if (verified.version !== '0.0.4') throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
-          if (patch.signature?.keyId !== 'lighthouse-debug-patch-2') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
-          console.log('Verified signed Patch 0.0.4 with lighthouse-debug-patch-2');
+          if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
+          console.log('Verified signed Patch 0.0.4 with lighthouse-debug-patch-3');
           NODE
-
-      - name: Upload candidate public key for intentional rotation
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lighthouse-patch-key-3-public-candidate
-          path: android-shell/release/front-door-0.0.4/key3-public-candidate.json
-          if-no-files-found: ignore
-          retention-days: 1
 
       - name: Upload verified Front Door 0.0.4 signed Patch
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-front-door-0.0.4-signed-patch
-          path: android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-key2.lhpatch
+          path: android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch
           if-no-files-found: error
           retention-days: 7
 
