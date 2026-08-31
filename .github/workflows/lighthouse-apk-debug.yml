@@ -87,6 +87,24 @@ jobs:
             -passin "file:$passphrase_file" \
             -out "$private_key"
 
+          export LIGHTHOUSE_PRIVATE_KEY_PATH="$private_key"
+          node --input-type=module <<'NODE'
+          import { createPublicKey } from 'node:crypto';
+          import { readFile, writeFile } from 'node:fs/promises';
+
+          const privatePem = await readFile(process.env.LIGHTHOUSE_PRIVATE_KEY_PATH, 'utf8');
+          const jwk = createPublicKey(privatePem).export({ format:'jwk' });
+          await writeFile(
+            './release/front-door-0.0.4/key3-public-candidate.json',
+            `${JSON.stringify({
+              keyId:'lighthouse-debug-patch-3',
+              alg:'ECDSA-P256-SHA256',
+              publicKey:{ kty:jwk.kty, crv:jwk.crv, x:jwk.x, y:jwk.y },
+            }, null, 2)}\n`,
+            'utf8',
+          );
+          NODE
+
           expected_fingerprint="83d724014b111fb35253b78414f197f3936e2ea092abba4fd352c4800eb1b834"
           actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
           if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then
@@ -118,6 +136,15 @@ jobs:
           if (patch.signature?.keyId !== 'lighthouse-debug-patch-2') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
           console.log('Verified signed Patch 0.0.4 with lighthouse-debug-patch-2');
           NODE
+
+      - name: Upload candidate public key for intentional rotation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-patch-key-3-public-candidate
+          path: android-shell/release/front-door-0.0.4/key3-public-candidate.json
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Upload verified Front Door 0.0.4 signed Patch
         uses: actions/upload-artifact@v4
