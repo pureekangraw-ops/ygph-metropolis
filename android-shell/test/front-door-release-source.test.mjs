@@ -52,7 +52,7 @@ test('0.0.4 signing source advances from 0.0.3 and changes only Front Door logic
   assert.doesNotMatch(logic, /data\.brainConfirm|เปิดการยืนยัน/u);
 });
 
-test('APK workflow publishes the 0.0.4 signing source and a verified key-2 signed patch', async () => {
+test('APK workflow publishes the 0.0.4 signing source and a verified key-3 signed patch', async () => {
   const workflow = await readFile(new URL('../.github/workflows/lighthouse-apk-debug.yml', root), 'utf8');
   assert.match(workflow, /build-front-door-0\.0\.4-source\.mjs/u);
   assert.match(workflow, /lighthouse-front-door-0\.0\.4-signing-source/u);
@@ -61,6 +61,6 @@ test('APK workflow publishes the 0.0.4 signing source and a verified key-2 signe
   assert.match(workflow, /openssl pkey/u);
   assert.match(workflow, /patch:sign/u);
   assert.match(workflow, /verifyPatchBundle/u);
-  assert.match(workflow, /lighthouse-front-door-0\.0\.4-key2\.lhpatch/u);
+  assert.match(workflow, /lighthouse-front-door-0\.0\.4-key3\.lhpatch/u);
   assert.match(workflow, /lighthouse-front-door-0\.0\.4-signed-patch/u);
 });
