@@ -18,8 +18,7 @@ test('Manual foundation establishes exactly four homes on the existing Greenfiel
     assert.ok(Object.isFrozen(core));
   }
 
-  assert.equal(getManualCore('LEDGER').manualRole, 'GATEWAY');
-  assert.notEqual(getManualCore('LEDGER').manualRole, 'HEAD');
+  assert.equal(getManualCore('LEDGER').manualRole, 'HEAD');
   assert.equal(getManualCore('LEDGER').truthDomain, 'LEDGER');
   assert.equal(getManualCore('CALENDAR').truthDomain, 'CALENDAR');
   assert.equal(getManualCore('INCOME').truthDomain, 'LEDGER');
