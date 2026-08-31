@@ -48,14 +48,18 @@ jobs:
       - name: Verify foundation contract
         run: npm test
 
-      - name: Build integrated 0.0.4 signing source
-        run: node tools/build-front-door-0.0.4-source.mjs release/front-door-0.0.4/input.generated.json
+      - name: Build integrated 0.0.4 signing sources
+        run: |
+          node tools/build-front-door-0.0.4-source.mjs release/front-door-0.0.4/input.generated.json
+          node tools/build-front-door-0.0.4-bootstrap-source.mjs release/front-door-0.0.4/input.bootstrap.generated.json
 
-      - name: Upload integrated 0.0.4 signing source
+      - name: Upload integrated 0.0.4 signing sources
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-front-door-0.0.4-signing-source
-          path: android-shell/release/front-door-0.0.4/input.generated.json
+          name: lighthouse-front-door-0.0.4-signing-sources
+          path: |
+            android-shell/release/front-door-0.0.4/input.generated.json
+            android-shell/release/front-door-0.0.4/input.bootstrap.generated.json
           if-no-files-found: error
           retention-days: 7
 
@@ -99,31 +103,46 @@ jobs:
             "$private_key" \
             release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch
 
+          npm run patch:sign -- \
+            release/front-door-0.0.4/input.bootstrap.generated.json \
+            "$private_key" \
+            release/front-door-0.0.4/lighthouse-front-door-0.0.4-from-0.0.1-key3.lhpatch
+
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
           import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
 
-          const patchPath = './release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch';
-          const [patchText, trustedKeyText] = await Promise.all([
-            readFile(patchPath, 'utf8'),
-            readFile('./www/patch/trusted-key.json', 'utf8'),
-          ]);
-          const patch = JSON.parse(patchText);
-          const trustedKey = JSON.parse(trustedKeyText);
-          const verified = await verifyPatchBundle(patch, {
-            currentVersion:'0.0.3',
-            trustedKey,
-          });
-          if (verified.version !== '0.0.4') throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
-          if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
-          console.log('Verified signed Patch 0.0.4 with lighthouse-debug-patch-3');
+          const trustedKey = JSON.parse(await readFile('./www/patch/trusted-key.json', 'utf8'));
+          const cases = [
+            {
+              path:'./release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch',
+              currentVersion:'0.0.3',
+            },
+            {
+              path:'./release/front-door-0.0.4/lighthouse-front-door-0.0.4-from-0.0.1-key3.lhpatch',
+              currentVersion:'0.0.1',
+            },
+          ];
+
+          for (const item of cases) {
+            const patch = JSON.parse(await readFile(item.path, 'utf8'));
+            const verified = await verifyPatchBundle(patch, {
+              currentVersion:item.currentVersion,
+              trustedKey,
+            });
+            if (verified.version !== '0.0.4') throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
+            if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
+          }
+          console.log('Verified incremental and bootstrap Patch 0.0.4 with lighthouse-debug-patch-3');
           NODE
 
-      - name: Upload verified Front Door 0.0.4 signed Patch
+      - name: Upload verified Front Door 0.0.4 signed Patches
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-front-door-0.0.4-signed-patch
-          path: android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch
+          name: lighthouse-front-door-0.0.4-signed-patches
+          path: |
+            android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-key3.lhpatch
+            android-shell/release/front-door-0.0.4/lighthouse-front-door-0.0.4-from-0.0.1-key3.lhpatch
           if-no-files-found: error
           retention-days: 7
 
