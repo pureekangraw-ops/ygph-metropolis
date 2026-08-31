@@ -31,23 +31,24 @@ async function loadSigner() {
   }
 }
 
-test('pinned debug public key validates the committed benign sample patch', async () => {
+test('historical key-1 sample remains evidence but is not trusted by current key-2 APK', async () => {
   const trustedKey = JSON.parse(await read('www/patch/trusted-key.json'));
   const sample = JSON.parse(await read('test/fixtures/sample-update.lhpatch'));
 
-  assert.equal(trustedKey.keyId, 'lighthouse-debug-patch-1');
+  assert.equal(trustedKey.keyId, 'lighthouse-debug-patch-2');
   assert.equal(trustedKey.alg, 'ECDSA-P256-SHA256');
   assert.equal(trustedKey.jwk.kty, 'EC');
   assert.equal(trustedKey.jwk.crv, 'P-256');
   assert.equal('d' in trustedKey.jwk, false);
+  assert.equal(sample.signature.keyId, 'lighthouse-debug-patch-1');
 
-  const verified = await verifyPatchBundle(sample, {
-    currentVersion: '0.0.1',
-    trustedKey,
-  });
-  assert.equal(verified.version, '0.0.2');
-  assert.deepEqual(Object.keys(verified.files), ['ui.html']);
-  assert.match(verified.files['ui.html'].content, /LIGHTHOUSE Patch Proof 0\.0\.2/);
+  await assert.rejects(
+    verifyPatchBundle(sample, {
+      currentVersion: '0.0.1',
+      trustedKey,
+    }),
+    /signature key is not trusted/i,
+  );
 });
 
 test('signPatchSource creates a bundle verifiable by the matching public key', async () => {

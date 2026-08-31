@@ -48,6 +48,17 @@ jobs:
       - name: Verify foundation contract
         run: npm test
 
+      - name: Build integrated 0.0.3 signing source
+        run: node tools/build-front-door-0.0.3-source.mjs release/front-door-0.0.3/input.generated.json
+
+      - name: Upload integrated 0.0.3 signing source
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-front-door-0.0.3-signing-source
+          path: android-shell/release/front-door-0.0.3/input.generated.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Generate Android project
         run: npx cap add android
 
