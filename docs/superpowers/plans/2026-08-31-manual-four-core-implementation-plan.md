@@ -30,6 +30,32 @@
 - TDD is mandatory: write failing test → run and prove RED → minimal implementation → run and prove GREEN → full relevant suite → commit.
 - No merge or production deploy during implementation.
 
+## Research Guardrails — Evidence-Backed Only
+
+Research supports this implementation in two parallel modes without changing the task order or creating a new authority layer:
+
+1. **Blind-spot / Risk Guardrail** — identify a demonstrated gap, failure mode, mismatch, or unproven boundary in code/tests/CI/device evidence that could break an already-agreed contract.
+2. **Enhancement Opportunity** — strengthen something that already exists and is proven, but only when repository evidence plus external/platform evidence shows a concrete improvement path.
+
+Before a research note enters execution guidance, apply this admission filter:
+
+- **Proven base first.** Ground the note in something already real: current source, tests, CI, physical-device proof, accepted design decision, or verified platform behavior. Pure invention is not execution guidance.
+- **Duplicate-contract check.** Re-read the current spec and this plan first. If the point is already explicit and there is no new implementation evidence, treat it as a `KNOWN CONTRACT`, not a new blind spot or enhancement.
+- **Do not re-sell settled design as research.** Examples already explicit here/spec include: Chat/Intent history and Ledger business history are separate truths; Ledger is a gateway rather than a God Object; planned money is not actual money; posted historical truth is not silently rewritten; `Complete` semantics branch by owning Core; Intent is derived from proven capability.
+- **Prefer narrow mitigation over redesign.** Research guidance should normally add a proof, guardrail, compatibility rule, or focused test. It must not reorder the active plan unless later evidence proves the plan itself invalid.
+- **Classify uncertainty honestly.** `PROVEN` = behavior/evidence exists; `OBSERVED` = directly seen but not yet fully generalized; `VERIFY` = important evidence still missing; `BLOCKED` = required condition is absent or contradicted.
+
+Current vetted research guidance to carry beside the relevant tasks:
+
+- **Income / Report semantics — Blind-spot guardrail.** Current Ride behavior can recognize generated/earned value before corresponding cash reaches Ledger, while later credit withdrawal creates the cash event. When Task 2/7 reaches Ride-aware totals, explicitly prove the reporting basis (`earned/generated` vs `cash received`) and prove that a later withdrawal is not double-counted as new income. Do not infer one universal meaning of “income” from transaction direction alone.
+- **Ledger classification — Enhancement opportunity.** Reuse the existing source/subtype/reference metadata and projections, but keep cash effect (`IN`/`OUT`) distinct from business meaning (for example income, settlement, adjustment, reversal). Unknown or legacy classifications should surface as `VERIFY/UNKNOWN` rather than silently falling into a convenient category.
+- **Business date — Enhancement opportunity.** Where existing records already expose explicit business dates or Bangkok-aware temporal resolution, converge projections on one canonical effective-business-date rule instead of letting each reader derive “today” independently.
+- **Calendar implementation readiness — Blind-spot guardrail.** The target Calendar behavior in the spec is already clear; the research question is only whether the current source/model can represent that target cleanly. At Task 4, prove current record/time capabilities against appointment and To-do requirements before extending them. If the proven model cannot express the contract, record the concrete gap rather than squeezing new semantics into an incompatible legacy field shape.
+- **Confirmation freshness — Blind-spot guardrail.** The Runtime already has revision/idempotency machinery. When Task 8/9 adds mutation confirmation across Chat and Manual surfaces, bind execution to the intended target/effect and re-check durable state before commit; if the underlying state changed after preview, fail stale and re-preview instead of executing an old proposal.
+- **APK upgrade / data survival — Blind-spot guardrail.** Close/reopen persistence is not the same proof as an in-place APK upgrade. Before any Task 10 path that requires native/APK delivery is called safe, require stable Android signing identity, valid monotonic upgrade metadata, and a physical `APK A with durable data → install APK B over A → migrate/read back same data` proof. Backup/restore remains recovery, not the normal upgrade path.
+
+These guardrails are advisory evidence gates attached to the existing tasks. They do not create extra Core ownership, do not change Brain behavior, and do not override the agreed spec when the spec already answers the question.
+
 ---
 
 ## File Structure Map
