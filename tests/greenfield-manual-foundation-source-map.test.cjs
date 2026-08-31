@@ -45,7 +45,8 @@ test('Manual foundation exposes exactly four houses on one Greenfield truth root
     assert.equal(core.storageOwner, 'GREENFIELD_VAULT', `${id} storage owner drifted`);
   }
 
-  assert.equal(foundation.getManualCore('LEDGER').manualRole, 'HEAD');
+  assert.equal(foundation.getManualCore('LEDGER').manualRole, 'GATEWAY');
+  assert.notEqual(foundation.getManualCore('LEDGER').manualRole, 'HEAD');
   assert.equal(foundation.getManualCore('INCOME').truthDomain, 'LEDGER');
   assert.equal(foundation.getManualCore('OUTCOME').truthDomain, 'LEDGER');
   assert.equal(foundation.getManualCore('LEDGER').truthDomain, 'LEDGER');
