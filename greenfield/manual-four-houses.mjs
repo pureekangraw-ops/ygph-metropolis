@@ -205,8 +205,8 @@ export function createManualFourHouses(runtime, { today = new Date().toISOString
     return { status:'VERIFIED', readback:await getRecord('LEDGER', recordId) };
   }
 
-  async function viewIncome() { return actualTransactions(await runtime.readState(), 'IN').map(structuredClone); }
-  async function viewExpense() { return actualTransactions(await runtime.readState(), 'OUT').map(structuredClone); }
+  async function viewIncome() { return actualTransactions(await runtime.readState(), 'IN').map(item => structuredClone(item)); }
+  async function viewExpense() { return actualTransactions(await runtime.readState(), 'OUT').map(item => structuredClone(item)); }
   async function searchIncome({ text:query = '' } = {}) { const q=String(query).trim().toLowerCase(); return (await viewIncome()).filter(r=>!q || `${r.title} ${r.detail}`.toLowerCase().includes(q)); }
   async function searchExpense({ text:query = '' } = {}) { const q=String(query).trim().toLowerCase(); return (await viewExpense()).filter(r=>!q || `${r.title} ${r.detail}`.toLowerCase().includes(q)); }
 
@@ -237,7 +237,7 @@ export function createManualFourHouses(runtime, { today = new Date().toISOString
       if (kind === 'today') return due === today;
       if (kind === 'upcoming') return due > today;
       return due < today;
-    }).sort((a,b)=>dateKey(a).localeCompare(dateKey(b))).map(structuredClone);
+    }).sort((a,b)=>dateKey(a).localeCompare(dateKey(b))).map(item => structuredClone(item));
   }
 
   const calendarToday = () => calendarList('today');
@@ -252,7 +252,7 @@ export function createManualFourHouses(runtime, { today = new Date().toISOString
       if (type && record.type !== type) return false;
       if (status && record.status !== status) return false;
       return true;
-    }).map(structuredClone);
+    }).map(item => structuredClone(item));
   }
 
   const filterLedger = searchLedger;
@@ -276,7 +276,7 @@ export function createManualFourHouses(runtime, { today = new Date().toISOString
   async function related(domain, recordId) {
     const state = await runtime.readState();
     const all = ['STORE','LEDGER','CALENDAR','RIDE'].flatMap(owner => records(state, owner));
-    return all.filter(record => record.recordId !== recordId && relatedTo(record, domain, recordId)).map(structuredClone);
+    return all.filter(record => record.recordId !== recordId && relatedTo(record, domain, recordId)).map(item => structuredClone(item));
   }
 
   async function analyze() {
