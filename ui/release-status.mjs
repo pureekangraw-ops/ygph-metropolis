@@ -1,4 +1,5 @@
 import './theme-shell.mjs';
+import './settings-ui.mjs';
 import './reset-all-ui.mjs';
 import './obligation-import-ui.mjs';
 
@@ -15,31 +16,33 @@ export const UPDATE_LOG=Object.freeze([
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
+let serviceWorkerRegistration=null;
 
 function ensureServiceWorkerNode(){
-  const version=$('systemVersion');
-  if(!version)return null;
+  const technical=document.querySelector('[data-settings-technical]');
+  if(!technical)return null;
   let node=$('systemServiceWorker');
   if(node)return node;
-  const parent=version.parentElement;
-  if(!parent)return null;
+  const row=document.createElement('div');
+  row.className='system-fact';
   const label=document.createElement('span');
   label.textContent='Service Worker';
   node=document.createElement('b');
   node.id='systemServiceWorker';
-  parent.append(label,node);
+  row.append(label,node);
+  technical.append(row);
   return node;
 }
 
 function ensureUpdateLog(){
-  const systemSection=$('systemVersion')?.closest?.('.settings-section');
-  if(!systemSection)return null;
+  const technical=document.querySelector('[data-settings-technical]');
+  if(!technical)return null;
   let section=$('systemUpdateLog');
   if(section)return section;
 
   section=document.createElement('details');
   section.id='systemUpdateLog';
-  section.className='settings-section update-log';
+  section.className='settings-advanced-block update-log';
 
   const summary=document.createElement('summary');
   summary.className='update-log-summary';
@@ -62,31 +65,37 @@ function ensureUpdateLog(){
     body.append(list);
   }
   section.append(body);
-
-  const dataSection=$('settingsImportFile')?.closest?.('.settings-section');
-  if(dataSection && dataSection.parentElement===systemSection.parentElement)dataSection.after(section);
-  else systemSection.before(section);
+  technical.append(section);
   return section;
 }
 
 function renderReleaseStatus(){
-  const version=$('systemVersion');
-  if(version)version.textContent=APP_RELEASE;
+  const version=$('systemVersion');if(version)version.textContent=APP_RELEASE;
+  const aboutVersion=$('settingsAboutVersion');if(aboutVersion)aboutVersion.textContent=APP_RELEASE;
+  const updateStatus=$('settingsUpdateStatus');if(updateStatus)updateStatus.textContent=serviceWorkerState;
   ensureUpdateLog();
-  const worker=ensureServiceWorkerNode();
-  if(worker)worker.textContent=serviceWorkerState;
+  const worker=ensureServiceWorkerNode();if(worker)worker.textContent=serviceWorkerState;
 }
 
-function setServiceWorkerState(next){
-  serviceWorkerState=next;
-  renderReleaseStatus();
-}
+function setServiceWorkerState(next){serviceWorkerState=next;renderReleaseStatus();}
 
 function syncRegistration(registration){
+  serviceWorkerRegistration=registration;
   if(registration.waiting){setServiceWorkerState('มีอัปเดตพร้อมใช้');return;}
   if(registration.installing){setServiceWorkerState('กำลังอัปเดต');return;}
   if(registration.active||navigator.serviceWorker.controller){setServiceWorkerState('พร้อมใช้');return;}
   setServiceWorkerState('กำลังเริ่มระบบ');
+}
+
+async function checkForUpdate(){
+  if(!('serviceWorker' in navigator)){setServiceWorkerState('ไม่รองรับ');return;}
+  try{
+    setServiceWorkerState('กำลังตรวจสอบ');
+    const registration=serviceWorkerRegistration||await navigator.serviceWorker.getRegistration();
+    if(!registration){setServiceWorkerState('กำลังเริ่มระบบ');return;}
+    await registration.update();
+    syncRegistration(registration);
+  }catch{setServiceWorkerState('ตรวจหาอัปเดตไม่สำเร็จ');}
 }
 
 async function observeServiceWorker(){
@@ -94,6 +103,7 @@ async function observeServiceWorker(){
   if(!('serviceWorker' in navigator)){setServiceWorkerState('ไม่รองรับ');return;}
   try{
     const registration=await navigator.serviceWorker.register('./sw.js');
+    serviceWorkerRegistration=registration;
     syncRegistration(registration);
     registration.addEventListener('updatefound',()=>{
       setServiceWorkerState('กำลังอัปเดต');
@@ -101,10 +111,9 @@ async function observeServiceWorker(){
     });
     navigator.serviceWorker.addEventListener('controllerchange',()=>setServiceWorkerState('อัปเดตแล้ว'));
     try{await registration.update();syncRegistration(registration);}catch{syncRegistration(registration);}
-  }catch{
-    setServiceWorkerState('มีปัญหา');
-  }
+  }catch{setServiceWorkerState('มีปัญหา');}
 }
 
+$('settingsCheckUpdateBtn')?.addEventListener('click',()=>void checkForUpdate());
 renderReleaseStatus();
 void observeServiceWorker();

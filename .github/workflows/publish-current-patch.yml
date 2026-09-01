@@ -1,0 +1,145 @@
+name: Publish Current LIGHTHOUSE Patch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/app-existence-hardening-20260901'
+    paths:
+      - '.github/workflows/publish-current-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-current-patch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-shell
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify foundation contract
+        run: timeout --signal=TERM 90s npm test
+
+      - name: Load current Patch contract
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile } from 'node:fs/promises';
+          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
+          const contract = await loadCurrentPatchContract();
+          await appendFile(process.env.GITHUB_ENV, [
+            `PATCH_VERSION=${contract.version}`,
+            `PATCH_PRIMARY_BASE=${contract.primaryBaseVersion}`,
+            `PATCH_BOOTSTRAP_BASE=${contract.bootstrapBaseVersion}`,
+            `PATCH_RELEASE_DIR=${contract.releaseDirectory}`,
+          ].join('\n') + '\n', 'utf8');
+          NODE
+
+      - name: Build signing sources
+        run: |
+          rm -rf release/current-patch-work
+          mkdir -p release/current-patch-work
+          node tools/build-current-patch-source.mjs \
+            release/current-patch-work/input.generated.json \
+            release/current-patch-work/input.bootstrap.generated.json
+
+      - name: Sign verify and build manifest
+        env:
+          LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM: ${{ secrets.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM }}
+          LIGHTHOUSE_PATCH_KEY_PASSPHRASE: ${{ secrets.LIGHTHOUSE_PATCH_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "${LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM:-}" || { echo 'LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM is not configured'; exit 1; }
+          test -n "${LIGHTHOUSE_PATCH_KEY_PASSPHRASE:-}" || { echo 'LIGHTHOUSE_PATCH_KEY_PASSPHRASE is not configured'; exit 1; }
+          umask 077
+          encrypted_key="$RUNNER_TEMP/lighthouse-patch-key.encrypted.pem"
+          private_key="$RUNNER_TEMP/lighthouse-patch-key.pem"
+          passphrase_file="$RUNNER_TEMP/lighthouse-patch-key.passphrase"
+          trap 'rm -f "$encrypted_key" "$private_key" "$passphrase_file"' EXIT
+          printf '%s\n' "$LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM" > "$encrypted_key"
+          printf '%s' "$LIGHTHOUSE_PATCH_KEY_PASSPHRASE" > "$passphrase_file"
+          openssl pkey -in "$encrypted_key" -passin "file:$passphrase_file" -out "$private_key"
+          expected_fingerprint="9486f41ebb5c43f5e2dd88050cb9033b69eeb099c06bde183001752d2a6b33b1"
+          actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+          test "$actual_fingerprint" = "$expected_fingerprint" || { echo "Patch signer mismatch: $actual_fingerprint"; exit 1; }
+
+          primary_patch="release/current-patch-work/lighthouse-current-patch.lhpatch"
+          bootstrap_patch="release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch"
+          npm run patch:sign -- release/current-patch-work/input.generated.json "$private_key" "$primary_patch"
+          npm run patch:sign -- release/current-patch-work/input.bootstrap.generated.json "$private_key" "$bootstrap_patch"
+
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile, stat } from 'node:fs/promises';
+          import { createHash } from 'node:crypto';
+          import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
+          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
+          const contract = await loadCurrentPatchContract();
+          const trustedKey = JSON.parse(await readFile('./www/patch/trusted-key.json', 'utf8'));
+          const cases = [
+            { path:'./release/current-patch-work/lighthouse-current-patch.lhpatch', currentVersion:contract.primaryBaseVersion },
+            { path:'./release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch', currentVersion:contract.bootstrapBaseVersion },
+          ];
+          const entries = {};
+          for (const item of cases) {
+            const text = await readFile(item.path, 'utf8');
+            const patch = JSON.parse(text);
+            const verified = await verifyPatchBundle(patch, { currentVersion:item.currentVersion, trustedKey });
+            if (verified.version !== contract.version) throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
+            if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
+            const filename = item.path.split('/').pop();
+            entries[item.currentVersion] = {
+              baseVersion:item.currentVersion,
+              patchUrl:`https://github.com/pureekangraw-ops/ygph-metropolis/releases/latest/download/${filename}`,
+              sha256:createHash('sha256').update(text).digest('hex'),
+              size:(await stat(item.path)).size,
+            };
+          }
+          await writeFile('./release/current-patch-work/lighthouse-patch-manifest.json', `${JSON.stringify({ latestVersion:contract.version, patches:entries }, null, 2)}\n`, 'utf8');
+          NODE
+
+      - name: Publish verified Patch as latest GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="lighthouse-patch-v${PATCH_VERSION}"
+          assets=(
+            release/current-patch-work/lighthouse-current-patch.lhpatch
+            release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch
+            release/current-patch-work/lighthouse-patch-manifest.json
+          )
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$tag" --latest --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "LIGHTHOUSE Patch ${PATCH_VERSION}" \
+              --notes "Verified LIGHTHOUSE test Patch ${PATCH_VERSION}. Published by the trusted Patch rail." \
+              --latest
+          fi
+
+      - name: Verify public latest endpoints
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"
+          curl --fail --location --retry 3 "$base/lighthouse-patch-manifest.json" -o /tmp/manifest.json
+          curl --fail --location --retry 3 "$base/lighthouse-current-patch.lhpatch" -o /tmp/primary.lhpatch
+          curl --fail --location --retry 3 "$base/lighthouse-current-patch-bootstrap.lhpatch" -o /tmp/bootstrap.lhpatch
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const manifest = JSON.parse(await readFile('/tmp/manifest.json','utf8'));
+          if (manifest.latestVersion !== process.env.PATCH_VERSION) throw new Error('PUBLIC_PATCH_MANIFEST_VERSION_MISMATCH');
+          NODE

@@ -36,11 +36,15 @@ test('0.0.5 bootstrap source can take a clean 0.0.1 key-3 APK directly to curren
   assert.deepEqual(Object.keys(source.files).sort(), ['logic.mjs','rules.json','ui.css','ui.html','vocabulary.json']);
   assert.match(source.files['ui.html'], /data-patch-update/u); assert.match(source.files['logic.mjs'], /brain\.send\(message/u);
 });
-test('APK workflow builds signs verifies and uploads 0.0.5 key-3 patches plus manifest', async () => {
+test('standard APK workflow builds signs verifies and uploads the current key-3 Patch plus manifest', async () => {
   const workflow = await readFile(new URL('../.github/workflows/lighthouse-apk-debug.yml', root), 'utf8');
-  assert.match(workflow, /build-front-door-0\.0\.5-source\.mjs/u); assert.match(workflow, /build-front-door-0\.0\.5-bootstrap-source\.mjs/u);
+  const contract = JSON.parse(await readFile(new URL('release/current-patch.json', root), 'utf8'));
+  assert.match(contract.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(contract.releaseDirectory, `release/front-door-${contract.version}`);
+  assert.match(workflow, /build-current-patch-source\.mjs/u);
+  assert.doesNotMatch(workflow, /build-front-door-0\.0\.5-source\.mjs|build-front-door-0\.0\.5-bootstrap-source\.mjs/u);
   assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM/u); assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_KEY_PASSPHRASE/u);
   assert.match(workflow, /openssl pkey/u); assert.match(workflow, /patch:sign/u); assert.match(workflow, /verifyPatchBundle/u);
-  assert.match(workflow, /lighthouse-front-door-0\.0\.5-key3\.lhpatch/u); assert.match(workflow, /lighthouse-front-door-0\.0\.5-from-0\.0\.1-key3\.lhpatch/u);
-  assert.match(workflow, /lighthouse-patch-manifest\.json/u); assert.match(workflow, /lighthouse-front-door-0\.0\.5-signed-patches/u);
+  assert.match(workflow, /lighthouse-current-patch\.lhpatch/u); assert.match(workflow, /lighthouse-current-patch-bootstrap\.lhpatch/u);
+  assert.match(workflow, /lighthouse-patch-manifest\.json/u); assert.match(workflow, /name: lighthouse-current-patch/u);
 });

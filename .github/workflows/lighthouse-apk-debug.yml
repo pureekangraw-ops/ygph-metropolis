@@ -42,20 +42,38 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Verify foundation contract
         run: timeout --signal=TERM 90s npm test
-      - name: Build integrated 0.0.5 signing sources
+      - name: Load current Patch contract
         run: |
-          node tools/build-front-door-0.0.5-source.mjs release/front-door-0.0.5/input.generated.json
-          node tools/build-front-door-0.0.5-bootstrap-source.mjs release/front-door-0.0.5/input.bootstrap.generated.json
-      - name: Upload integrated 0.0.5 signing sources
+          node --input-type=module <<'NODE'
+          import { appendFile } from 'node:fs/promises';
+          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
+          const contract = await loadCurrentPatchContract();
+          const lines = [
+            `PATCH_VERSION=${contract.version}`,
+            `PATCH_PRIMARY_BASE=${contract.primaryBaseVersion}`,
+            `PATCH_BOOTSTRAP_BASE=${contract.bootstrapBaseVersion}`,
+            `PATCH_RELEASE_DIR=${contract.releaseDirectory}`,
+          ];
+          await appendFile(process.env.GITHUB_ENV, `${lines.join('\n')}\n`, 'utf8');
+          console.log(`Current Patch ${contract.version} from ${contract.releaseDirectory}`);
+          NODE
+      - name: Build current Patch signing sources
+        run: |
+          rm -rf release/current-patch-work
+          mkdir -p release/current-patch-work
+          node tools/build-current-patch-source.mjs \
+            release/current-patch-work/input.generated.json \
+            release/current-patch-work/input.bootstrap.generated.json
+      - name: Upload current Patch signing sources
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-front-door-0.0.5-signing-sources
+          name: lighthouse-current-patch-signing-sources
           path: |
-            android-shell/release/front-door-0.0.5/input.generated.json
-            android-shell/release/front-door-0.0.5/input.bootstrap.generated.json
+            android-shell/release/current-patch-work/input.generated.json
+            android-shell/release/current-patch-work/input.bootstrap.generated.json
           if-no-files-found: error
           retention-days: 7
-      - name: Sign verify and manifest Front Door 0.0.5 with key-3
+      - name: Sign verify and manifest current Patch
         env:
           LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM: ${{ secrets.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM }}
           LIGHTHOUSE_PATCH_KEY_PASSPHRASE: ${{ secrets.LIGHTHOUSE_PATCH_KEY_PASSPHRASE }}
@@ -74,23 +92,27 @@ jobs:
           expected_fingerprint="9486f41ebb5c43f5e2dd88050cb9033b69eeb099c06bde183001752d2a6b33b1"
           actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
           if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then echo "Patch private key does not match current trusted key-3 anchor. Public fingerprint: $actual_fingerprint"; exit 1; fi
-          npm run patch:sign -- release/front-door-0.0.5/input.generated.json "$private_key" release/front-door-0.0.5/lighthouse-front-door-0.0.5-key3.lhpatch
-          npm run patch:sign -- release/front-door-0.0.5/input.bootstrap.generated.json "$private_key" release/front-door-0.0.5/lighthouse-front-door-0.0.5-from-0.0.1-key3.lhpatch
+          primary_patch="release/current-patch-work/lighthouse-current-patch.lhpatch"
+          bootstrap_patch="release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch"
+          npm run patch:sign -- release/current-patch-work/input.generated.json "$private_key" "$primary_patch"
+          npm run patch:sign -- release/current-patch-work/input.bootstrap.generated.json "$private_key" "$bootstrap_patch"
           node --input-type=module <<'NODE'
           import { readFile, writeFile, stat } from 'node:fs/promises';
           import { createHash } from 'node:crypto';
           import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
+          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
+          const contract = await loadCurrentPatchContract();
           const trustedKey = JSON.parse(await readFile('./www/patch/trusted-key.json', 'utf8'));
           const cases = [
-            { path:'./release/front-door-0.0.5/lighthouse-front-door-0.0.5-key3.lhpatch', currentVersion:'0.0.4' },
-            { path:'./release/front-door-0.0.5/lighthouse-front-door-0.0.5-from-0.0.1-key3.lhpatch', currentVersion:'0.0.1' },
+            { path:'./release/current-patch-work/lighthouse-current-patch.lhpatch', currentVersion:contract.primaryBaseVersion },
+            { path:'./release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch', currentVersion:contract.bootstrapBaseVersion },
           ];
           const entries = {};
           for (const item of cases) {
             const text = await readFile(item.path, 'utf8');
             const patch = JSON.parse(text);
             const verified = await verifyPatchBundle(patch, { currentVersion:item.currentVersion, trustedKey });
-            if (verified.version !== '0.0.5') throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
+            if (verified.version !== contract.version) throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
             if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
             const filename = item.path.split('/').pop();
             entries[item.currentVersion] = {
@@ -100,25 +122,31 @@ jobs:
               size:(await stat(item.path)).size,
             };
           }
-          await writeFile('./release/front-door-0.0.5/lighthouse-patch-manifest.json', `${JSON.stringify({ latestVersion:'0.0.5', patches:entries }, null, 2)}\n`, 'utf8');
-          console.log('Verified 0.0.5 patches with lighthouse-debug-patch-3 and generated manifest');
+          await writeFile('./release/current-patch-work/lighthouse-patch-manifest.json', `${JSON.stringify({ latestVersion:contract.version, patches:entries }, null, 2)}\n`, 'utf8');
+          console.log(`Verified current Patch ${contract.version} with lighthouse-debug-patch-3 and generated manifest`);
           NODE
-      - name: Upload verified Front Door 0.0.5 signed Patches
+      - name: Upload verified current Patch
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-front-door-0.0.5-signed-patches
+          name: lighthouse-current-patch
           path: |
-            android-shell/release/front-door-0.0.5/lighthouse-front-door-0.0.5-key3.lhpatch
-            android-shell/release/front-door-0.0.5/lighthouse-front-door-0.0.5-from-0.0.1-key3.lhpatch
-            android-shell/release/front-door-0.0.5/lighthouse-patch-manifest.json
+            android-shell/release/current-patch-work/lighthouse-current-patch.lhpatch
+            android-shell/release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch
+            android-shell/release/current-patch-work/lighthouse-patch-manifest.json
           if-no-files-found: error
           retention-days: 7
       - name: Generate Android project
         run: npx cap add android
       - name: Sync web assets
         run: npx cap sync android
+      - name: Apply generated Android security baseline
+        run: npm run android:security:apply
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
+      - name: Materialize merged release manifest
+        run: cd android && ./gradlew :app:processReleaseMainManifest
+      - name: Verify generated Android security
+        run: npm run android:security:verify
       - name: Build unsigned release APK
         run: npm run android:release
       - name: Materialize canonical APK signer
@@ -167,5 +195,7 @@ jobs:
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
+            android-shell/release/android-security-evidence.json
+            android-shell/release/current-patch-work/lighthouse-patch-manifest.json
           if-no-files-found: error
           retention-days: 14

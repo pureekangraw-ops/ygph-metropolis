@@ -6,18 +6,20 @@ const { pathToFileURL } = require('node:url');
 
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'app.mjs'), 'utf8');
 const importer = fs.readFileSync(path.join(root, 'ui', 'obligation-import-ui.mjs'), 'utf8');
 const releaseStatus = fs.readFileSync(path.join(root, 'ui', 'release-status.mjs'), 'utf8');
 
-test('Settings exposes one normal import door without asking the user to choose an internal file type', () => {
+test('Settings exposes one additive import door without asking the user to choose an internal file type while Restore stays separate', () => {
   assert.match(html, /id="settingsDialog"/);
   assert.match(html, /id="backupBtn"/);
   assert.match(importer, /settingsImportFile/);
   assert.match(importer, /settingsImportBtn/);
-  assert.match(importer, /ข้อมูลของฉัน/);
+  assert.match(importer, /นำเข้าข้อมูล/);
   assert.match(importer, /สำรองข้อมูล/);
   assert.match(importer, /openRestoreRouteBtn/);
-  assert.match(importer, /classList\.add\(['"]hidden['"]\)/);
+  assert.match(importer, /classList\.remove\(['"]hidden['"]\)/);
+  assert.match(importer, /BACKUP_RESTORE_ROUTE_REQUIRED/);
   assert.doesNotMatch(importer, /data-city-action-open=[\\"']finance-actions/);
   assert.doesNotMatch(importer, /นำเข้าการเงินจากไฟล์/);
   assert.doesNotMatch(importer, /รองรับ YGPH_METRO_FINANCE_SEED/);
@@ -41,14 +43,16 @@ test('one import router detects backup, finance seed, and obligation payload and
   assert.throws(() => detectMetroImport({ hello:'world' }), /UNSUPPORTED_METRO_IMPORT/);
 });
 
-test('one import UI routes through existing mutation authorities and reads back after additive imports', () => {
+test('additive import uses existing mutation authorities while backup restore stays owned by the app recovery route', () => {
   assert.match(importer, /detectMetroImport/);
   assert.match(importer, /previewMetroImport/);
   assert.match(importer, /runtime\.importFinanceSeed/);
   assert.match(importer, /verifyFinanceSeedReadback/);
   assert.match(importer, /runtime\.obligation/);
   assert.match(importer, /verifyObligationImportReadback/);
-  assert.match(importer, /openGreenfieldRuntimeFromBackup/);
+  assert.doesNotMatch(importer, /openGreenfieldRuntimeFromBackup/);
+  assert.match(app, /openGreenfieldRuntimeFromBackup/);
+  assert.match(app, /performRestore/);
 });
 
 test('update log tells the device owner that one import door has shipped', () => {

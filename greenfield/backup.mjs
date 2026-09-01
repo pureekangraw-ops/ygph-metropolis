@@ -12,29 +12,33 @@ function validateBackupEnvelope(backup) {
   return backup;
 }
 
-function portablePassphrase(backup) {
-  const value = String(backup?.recoveryKey || '');
-  if (value.length < 12) throw new Error('GREENFIELD_BACKUP_RECOVERY_KEY_MISSING');
-  return value;
+function portablePassphrase(backup, recoveryKey) {
+  const supplied = String(recoveryKey || '');
+  if (supplied.length >= 12) return supplied;
+
+  // Compatibility only: historical portable backups may already contain an
+  // embedded key. Current exports never create this field.
+  const legacyEmbedded = String(backup?.recoveryKey || '');
+  if (legacyEmbedded.length >= 12) return legacyEmbedded;
+
+  throw new Error('GREENFIELD_BACKUP_RECOVERY_KEY_MISSING');
 }
 
 export async function exportGreenfieldBackup({ store, recoveryKey, exportedAt = new Date().toISOString() }) {
   const vault = await store.get(VAULT_KEY);
   if (!vault) throw new Error('GREENFIELD_NOT_INITIALIZED');
   if (vault.format !== VAULT_FORMAT || Number(vault.version) !== VAULT_VERSION) throw new Error('INVALID_GREENFIELD_VAULT');
-  const backup = {
+  if (recoveryKey !== undefined) {
+    const key = String(recoveryKey || '');
+    if (key.length < 12) throw new Error('PASSPHRASE_TOO_SHORT');
+  }
+  return {
     backupFormat: BACKUP_FORMAT,
     backupVersion: BACKUP_VERSION,
     exportedAt,
     database: { name: DB_NAME, version: DB_VERSION, store: DB_STORE, key: VAULT_KEY },
     vault: structuredClone(vault),
   };
-  if (recoveryKey !== undefined) {
-    const key = String(recoveryKey || '');
-    if (key.length < 12) throw new Error('PASSPHRASE_TOO_SHORT');
-    backup.recoveryKey = key;
-  }
-  return backup;
 }
 
 export async function verifyGreenfieldBackup({ backup, passphrase }) {
@@ -46,8 +50,8 @@ export async function verifyGreenfieldBackup({ backup, passphrase }) {
   return { status: 'VERIFIED', revision: state.revision, state };
 }
 
-export async function verifyPortableGreenfieldBackup({ backup }) {
-  return verifyGreenfieldBackup({ backup, passphrase: portablePassphrase(backup) });
+export async function verifyPortableGreenfieldBackup({ backup, recoveryKey }) {
+  return verifyGreenfieldBackup({ backup, passphrase: portablePassphrase(backup, recoveryKey) });
 }
 
 export async function restoreGreenfieldBackup({ store, backup, passphrase, allowOverwrite = false }) {
@@ -68,8 +72,8 @@ export async function restoreGreenfieldBackup({ store, backup, passphrase, allow
   }
 }
 
-export async function restorePortableGreenfieldBackup({ store, backup, allowOverwrite = false }) {
-  const passphrase = portablePassphrase(backup);
+export async function restorePortableGreenfieldBackup({ store, backup, recoveryKey, allowOverwrite = false }) {
+  const passphrase = portablePassphrase(backup, recoveryKey);
   const result = await restoreGreenfieldBackup({ store, backup, passphrase, allowOverwrite });
   return { ...result, passphrase };
 }

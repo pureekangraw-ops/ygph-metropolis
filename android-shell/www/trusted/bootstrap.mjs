@@ -48,6 +48,47 @@ function emptyErrorStatistics() {
   return { total:0, byCode:{}, events:[] };
 }
 
+function baht(amountSatang) {
+  const amount = Number(amountSatang);
+  if (!Number.isSafeInteger(amount)) return null;
+  const value = amount / 100;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+export function buildDurableRestoreNotice(state) {
+  const records = Object.values(state?.domains?.LEDGER?.records ?? {})
+    .map(entry => entry?.record)
+    .filter(record => record?.type === 'TRANSACTION' && record?.direction === 'OUT' && String(record?.detail ?? '').includes('EXPENSE'))
+    .sort((left, right) => String(left?.createdAt ?? '').localeCompare(String(right?.createdAt ?? '')));
+  const latest = records.at(-1);
+  if (!latest) return null;
+  const amount = baht(latest.amountSatang);
+  if (amount == null) return null;
+  const title = String(latest.title ?? 'รายการ').trim() || 'รายการ';
+  return `กู้คืนข้อมูลแล้ว · ${title} ${amount} บาท`;
+}
+
+export function renderDurableRestoreNotice(documentRef, notice) {
+  const message = String(notice ?? '').trim();
+  if (!documentRef || !message) return false;
+  const log = documentRef.querySelector?.('[data-chat-log]');
+  if (!log) return false;
+  const existing = log.querySelector?.('[data-durable-restore]');
+  if (existing) {
+    existing.textContent = message;
+    return true;
+  }
+  const empty = log.querySelector?.('[data-empty-state]');
+  if (empty) empty.hidden = true;
+  const node = documentRef.createElement('div');
+  node.className = 'message message-lighthouse';
+  node.setAttribute('data-durable-restore', '');
+  node.textContent = message;
+  log.append(node);
+  log.scrollTop = log.scrollHeight;
+  return true;
+}
+
 export async function initializeTrustedFirstRun({
   recoveryCode,
   pin,
@@ -261,6 +302,8 @@ export async function bootstrapTrustedApp({
         indexedDBImpl,
         brain:trustedSession.brain,
       });
+      const restoreNotice = buildDurableRestoreNotice(await trustedSession.runtime.readState());
+      renderDurableRestoreNotice(documentRef, restoreNotice);
       overlay.remove();
     } catch (error) {
       trustedSession?.close();

@@ -18,6 +18,7 @@ function ensureStylesheet({ marker, href }){
 function ensureThemeStylesheets(){
   ensureStylesheet({ marker:'graphite-lime', href:'./theme.css' });
   ensureStylesheet({ marker:'compact-mobile', href:'./compact-ui.css' });
+  ensureStylesheet({ marker:'settings-utility', href:'./styles/settings-utility.css' });
 }
 
 function applyDestinationIcons(){

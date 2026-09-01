@@ -2,6 +2,8 @@
 
 Status: PAUSED AT PHASE 6.2 — PHYSICAL DEVICE GATE. No production deploy/store publication.
 
+Physical evidence execution and retention for Phase 6.2 and later lifecycle/recovery/A→B checks is owned by `docs/android-app-existence-physical-proof.md`. This checkpoint remains the authority for APK identity lineage and does not rewrite that runbook's observations.
+
 ## Phase 0 — Reality Audit — READY
 
 The pre-fix APK chain was:

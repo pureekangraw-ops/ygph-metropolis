@@ -5,6 +5,8 @@
 !/styles.css
 !/theme.css
 !/compact-ui.css
+!/styles/
+!/styles/settings-utility.css
 !/manifest.webmanifest
 !/sw.js
 !/icon-192.png
@@ -13,6 +15,7 @@
 !/ui/action-popups.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
+!/ui/settings-ui.mjs
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
 !/ui/home-ui.mjs
@@ -20,6 +23,8 @@
 !/ui/finance-ui.mjs
 !/ui/ride-ui.mjs
 !/ui/obligation-import-ui.mjs
+!/ui/manual-finance-ui.mjs
+!/ui/manual-finance.css
 !/ui/ui-model.mjs
 !/ui/product-model.mjs
 !/ui/icons.mjs
@@ -42,6 +47,7 @@
 !/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/import-router.mjs
+!/greenfield/manual-four-houses.mjs
 !/greenfield/master-input-router.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/obligation-import.mjs

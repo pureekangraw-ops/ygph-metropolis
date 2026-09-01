@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { JSDOM } from 'jsdom';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { DB_NAME } from '../www/trusted/source/greenfield/browser-store.mjs';
 import { deactivateRuntimeSession } from '../www/trusted/source/greenfield/runtime-session.mjs';
@@ -32,6 +33,25 @@ test('trusted bootstrap exposes only chat-gated Brain capability and preserves d
   session.close();
   const reopened = await openTrustedBrain({ pin:'445566', indexedDBImpl:fakeIndexedDB, lockManager:null, now:() => '2026-08-31T00:31:00.000Z' });
   const records = expenseRecords(await reopened.runtime.readState()); assert.equal(records.length,1); assert.equal(records[0].amountSatang,6500); reopened.close();
+});
+
+test('cold reopen exposes a truthful durable restore witness without replaying chat history', async (t) => {
+  await resetVault(); t.after(resetVault);
+  const { initializeTrustedFirstRun, openTrustedBrain, buildDurableRestoreNotice, renderDurableRestoreNotice } = await loadBootstrap();
+  await initializeTrustedFirstRun({ recoveryCode:'LH-bootstrap-restore-code', pin:'445588', indexedDBImpl:fakeIndexedDB, now:() => '2026-08-31T00:50:00.000Z' });
+  const first = await openTrustedBrain({ pin:'445588', indexedDBImpl:fakeIndexedDB, lockManager:null, now:() => '2026-08-31T00:50:01.000Z' });
+  assert.equal((await first.brain.send('ข้าว 65')).status,'CONFIRMATION_REQUIRED');
+  assert.equal((await first.brain.send('ยืนยัน')).status,'SUCCESS');
+  first.close();
+  const reopened = await openTrustedBrain({ pin:'445588', indexedDBImpl:fakeIndexedDB, lockManager:null, now:() => '2026-08-31T00:51:00.000Z' });
+  const notice = buildDurableRestoreNotice(await reopened.runtime.readState());
+  assert.equal(notice, 'กู้คืนข้อมูลแล้ว · ข้าว 65 บาท');
+  const dom = new JSDOM('<div data-chat-log><div data-empty-state>empty</div></div>');
+  assert.equal(renderDurableRestoreNotice(dom.window.document, notice), true);
+  assert.equal(dom.window.document.querySelector('[data-empty-state]').hidden, true);
+  assert.equal(dom.window.document.querySelector('[data-durable-restore]').textContent, notice);
+  assert.equal(dom.window.document.querySelectorAll('.message-user').length, 0);
+  reopened.close();
 });
 
 test('reopen while confirmation is pending fails closed and cannot execute stale pending work', async (t) => {
