@@ -18,6 +18,12 @@ const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
 let serviceWorkerRegistration=null;
 
+function applyDisplayIdentity(){
+  document.title='LIGHTHOUSE';
+  const brand=document.querySelector('.brand-lockup strong');
+  if(brand)brand.textContent='LIGHTHOUSE';
+}
+
 function ensureServiceWorkerNode(){
   const technical=document.querySelector('[data-settings-technical]');
   if(!technical)return null;
@@ -70,6 +76,7 @@ function ensureUpdateLog(){
 }
 
 function renderReleaseStatus(){
+  applyDisplayIdentity();
   const version=$('systemVersion');if(version)version.textContent=APP_RELEASE;
   const aboutVersion=$('settingsAboutVersion');if(aboutVersion)aboutVersion.textContent=APP_RELEASE;
   const updateStatus=$('settingsUpdateStatus');if(updateStatus)updateStatus.textContent=serviceWorkerState;
