@@ -98,8 +98,12 @@ export async function verifyPatchBundle(bundle, { currentVersion, trustedKey } =
     const actualHash = await sha256Hex(entry.content);
     if (actualHash !== entry.sha256) throw new Error(`Patch file ${path} SHA-256 hash mismatch`);
     const verifiedEntry = { sha256:entry.sha256, content:entry.content };
-    verifiedFiles[canonicalPath] = verifiedEntry;
-    if (path !== canonicalPath) Object.defineProperty(verifiedFiles, path, { value:verifiedEntry, enumerable:false, configurable:false });
+    if (path === canonicalPath) {
+      verifiedFiles[canonicalPath] = verifiedEntry;
+    } else {
+      verifiedFiles[path] = verifiedEntry;
+      Object.defineProperty(verifiedFiles, canonicalPath, { value:verifiedEntry, enumerable:false, configurable:false });
+    }
   }
 
   const signature = asObject(source.signature, 'Patch signature');
