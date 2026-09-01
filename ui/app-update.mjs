@@ -40,13 +40,7 @@ export function verifyApkInspection({metadata,inspection,currentVersionCode}={})
   if(versionCode<=currentVersionCode||versionCode!==meta.versionCode)throw new Error('UPDATE_VERSION_NOT_NEWER');
   if(String(apk.versionName||'')!==meta.versionName)throw new Error('UPDATE_VERSION_NAME_MISMATCH');
   if(normalizeFingerprint(apk.signerSha256)!==LIGHTHOUSE_SIGNER_SHA256)throw new Error('UPDATE_SIGNER_MISMATCH');
-  return Object.freeze({
-    packageName:apk.packageName,
-    versionName:apk.versionName,
-    versionCode,
-    signerSha256:LIGHTHOUSE_SIGNER_SHA256,
-    verified:true,
-  });
+  return Object.freeze({packageName:apk.packageName,versionName:apk.versionName,versionCode,signerSha256:LIGHTHOUSE_SIGNER_SHA256,verified:true});
 }
 
 function requireBridge(bridge){
@@ -78,7 +72,6 @@ export function createAppUpdater({metadataUrl=DEFAULT_UPDATE_METADATA_URL,fetchI
       latest=validateUpdateMetadata(await response.json(),installed.versionCode);
       return Object.freeze({installed:{...installed},latest:{...latest},apkVerified:false});
     },
-
     async downloadAndInstall(){
       if(!installed||!latest)throw new Error('UPDATE_CHECK_REQUIRED');
       cancelled=false;
@@ -94,17 +87,11 @@ export function createAppUpdater({metadataUrl=DEFAULT_UPDATE_METADATA_URL,fetchI
       const backup=await requestBackup();
       if(backup===false||backup?.ok===false)throw new Error('UPDATE_BACKUP_FAILED');
       const permission=object(await bridge.canRequestInstalls(),'UPDATE_INSTALL_PERMISSION_REQUIRED');
-      if(permission.allowed!==true)return {status:'permission-required',apkVerified:true};
+      if(permission.allowed!==true)return {status:'permission-required'};
       await bridge.openInstaller();
-      return {status:'installer-opened',apkVerified:true};
+      return {status:'installer-opened'};
     },
-
-    async cancel(){
-      cancelled=true;
-      await bridge.cancelDownload();
-      return {status:'cancelled'};
-    },
-
+    async cancel(){cancelled=true;await bridge.cancelDownload();return {status:'cancelled'};},
     state(){return {installed:installed?{...installed}:null,latest:latest?{...latest}:null,cancelled,apkVerified};},
   });
 }
