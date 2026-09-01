@@ -9,6 +9,14 @@ test('existing-app Android staging packages sw.js used by the shipped UI', () =>
   assert.match(stage, /['"]sw\.js['"]/);
 });
 
+test('existing-app Android staging packages every local asset preloaded by sw.js', () => {
+  const stage = read('android-shell/tools/stage-existing-full-app.mjs');
+  const worker = read('sw.js');
+  assert.match(worker, /\.\/styles\/settings-utility\.css/);
+  assert.match(stage, /requiredDirectories\s*=\s*\[[\s\S]*['"]styles['"]/);
+  assert.ok(fs.existsSync('styles/settings-utility.css'));
+});
+
 test('display identity is LIGHTHOUSE without renaming compatibility storage identifiers', () => {
   const release = read('ui/release-status.mjs');
   assert.match(release, /document\.title\s*=\s*['"]LIGHTHOUSE['"]/);
