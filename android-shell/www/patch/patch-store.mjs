@@ -1,4 +1,5 @@
 import { PATCH_ALLOWED_FILES } from './patch-contract.mjs';
+import { verifyEffectiveSnapshot } from './effective-snapshot.mjs';
 
 const DEFAULT_DATABASE_NAME = 'lighthouse-patches-v1';
 const DATABASE_VERSION = 1;
@@ -18,7 +19,7 @@ function asObject(value, label) {
   return value;
 }
 
-function validateSnapshot(snapshot) {
+function normalizeSnapshot(snapshot) {
   const value = asObject(snapshot, 'Patch snapshot');
   if (typeof value.version !== 'string' || value.version.length === 0) {
     throw new Error('Patch snapshot version is required');
@@ -29,10 +30,18 @@ function validateSnapshot(snapshot) {
       throw new Error(`Complete snapshot is missing asset: ${path}`);
     }
   }
-  return {
+  const normalized = {
     version: value.version,
-    assets: Object.fromEntries(PATCH_ALLOWED_FILES.map((path) => [path, assets[path]])),
+    assets: Object.fromEntries(PATCH_ALLOWED_FILES.map(path => [path, assets[path]])),
   };
+  if (value.effectiveSnapshot != null) normalized.effectiveSnapshot = clone(value.effectiveSnapshot);
+  return normalized;
+}
+
+async function validateSnapshot(snapshot) {
+  const normalized = normalizeSnapshot(snapshot);
+  if (normalized.effectiveSnapshot) await verifyEffectiveSnapshot(normalized.effectiveSnapshot);
+  return normalized;
 }
 
 function requireExpectedCurrentVersion(value) {
@@ -44,11 +53,48 @@ function requireExpectedCurrentVersion(value) {
 
 function snapshotsEqual(left, right) {
   if (!left || !right || left.version !== right.version) return false;
-  return PATCH_ALLOWED_FILES.every((path) => left.assets?.[path] === right.assets?.[path]);
+  if (!PATCH_ALLOWED_FILES.every(path => left.assets?.[path] === right.assets?.[path])) return false;
+  return JSON.stringify(left.effectiveSnapshot ?? null) === JSON.stringify(right.effectiveSnapshot ?? null);
 }
 
 function snapshotConflictError(version) {
   return new Error(`Patch snapshot version is immutable and already exists with different content: ${version}`);
+}
+
+function snapshotId(snapshot) {
+  return snapshot?.effectiveSnapshot?.snapshotId ?? null;
+}
+
+function nextActivationMeta(meta, candidate, version) {
+  const candidateId = snapshotId(candidate);
+  if (candidate?.effectiveSnapshot?.previousSnapshotId != null
+    && candidate.effectiveSnapshot.previousSnapshotId !== (meta.currentSnapshotId ?? null)) {
+    throw new Error('Effective snapshot previous pointer does not match current snapshot');
+  }
+  return {
+    currentVersion: version,
+    previousVersion: meta.currentVersion,
+    currentSnapshotId: candidateId,
+    previousSnapshotId: meta.currentSnapshotId ?? null,
+  };
+}
+
+function nextRollbackMeta(meta) {
+  return {
+    currentVersion: meta.previousVersion,
+    previousVersion: meta.currentVersion,
+    currentSnapshotId: meta.previousSnapshotId ?? null,
+    previousSnapshotId: meta.currentSnapshotId ?? null,
+  };
+}
+
+function initialMeta(baseSnapshot) {
+  return {
+    currentVersion: baseSnapshot.version,
+    previousVersion: null,
+    currentSnapshotId: snapshotId(baseSnapshot),
+    previousSnapshotId: null,
+  };
 }
 
 function requestValue(request) {
@@ -71,12 +117,8 @@ function openDatabase(indexedDB, databaseName) {
     const request = indexedDB.open(databaseName, DATABASE_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
-      if (!database.objectStoreNames.contains(SNAPSHOTS_STORE)) {
-        database.createObjectStore(SNAPSHOTS_STORE);
-      }
-      if (!database.objectStoreNames.contains(META_STORE)) {
-        database.createObjectStore(META_STORE);
-      }
+      if (!database.objectStoreNames.contains(SNAPSHOTS_STORE)) database.createObjectStore(SNAPSHOTS_STORE);
+      if (!database.objectStoreNames.contains(META_STORE)) database.createObjectStore(META_STORE);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Unable to open patch database'));
@@ -95,7 +137,14 @@ async function initializeDatabase(database, baseSnapshot) {
 
   if (!existingBase) snapshots.put(clone(baseSnapshot), baseSnapshot.version);
   if (!existingMeta) {
-    metaStore.put({ currentVersion: baseSnapshot.version, previousVersion: null }, META_KEY);
+    metaStore.put(initialMeta(baseSnapshot), META_KEY);
+  } else if (!Object.prototype.hasOwnProperty.call(existingMeta, 'currentSnapshotId')) {
+    const current = await requestValue(snapshots.get(existingMeta.currentVersion));
+    metaStore.put({
+      ...existingMeta,
+      currentSnapshotId: snapshotId(current),
+      previousSnapshotId: null,
+    }, META_KEY);
   }
   await done;
 }
@@ -110,7 +159,7 @@ function stageIndexedDbSnapshot(database, candidate) {
     request.onsuccess = () => {
       try {
         if (request.result) {
-          const existing = validateSnapshot(request.result);
+          const existing = normalizeSnapshot(request.result);
           if (!snapshotsEqual(existing, candidate)) throw snapshotConflictError(candidate.version);
           return;
         }
@@ -132,35 +181,30 @@ function stageIndexedDbSnapshot(database, candidate) {
 
 export function composeSnapshot({ currentSnapshot, baseAssets, verifiedPatch }) {
   const patch = asObject(verifiedPatch, 'Verified patch');
-  if (typeof patch.version !== 'string' || patch.version.length === 0) {
-    throw new Error('Verified patch version is required');
-  }
+  if (typeof patch.version !== 'string' || patch.version.length === 0) throw new Error('Verified patch version is required');
   const files = asObject(patch.files, 'Verified patch files');
   const sourceAssets = currentSnapshot
-    ? validateSnapshot(currentSnapshot).assets
+    ? normalizeSnapshot(currentSnapshot).assets
     : asObject(baseAssets, 'Packaged base assets');
 
   const assets = {};
   for (const path of PATCH_ALLOWED_FILES) {
     const patched = files[path];
     const content = patched ? patched.content : sourceAssets[path];
-    if (typeof content !== 'string') {
-      throw new Error(`Complete snapshot is missing asset: ${path}`);
-    }
+    if (typeof content !== 'string') throw new Error(`Complete snapshot is missing asset: ${path}`);
     assets[path] = content;
   }
-
   return { version: patch.version, assets };
 }
 
 export function createMemoryPatchStore({ baseSnapshot }) {
-  const base = validateSnapshot(baseSnapshot);
+  const base = normalizeSnapshot(baseSnapshot);
   const snapshots = new Map([[base.version, clone(base)]]);
-  let meta = { currentVersion: base.version, previousVersion: null };
+  let meta = initialMeta(base);
 
   return {
     async stage(snapshot) {
-      const candidate = validateSnapshot(snapshot);
+      const candidate = await validateSnapshot(snapshot);
       const existing = snapshots.get(candidate.version);
       if (existing) {
         if (!snapshotsEqual(existing, candidate)) throw snapshotConflictError(candidate.version);
@@ -172,7 +216,8 @@ export function createMemoryPatchStore({ baseSnapshot }) {
 
     async readSnapshot(version) {
       const snapshot = snapshots.get(version);
-      return snapshot ? clone(snapshot) : null;
+      if (!snapshot) return null;
+      return validateSnapshot(snapshot);
     },
 
     async readMeta() {
@@ -182,52 +227,39 @@ export function createMemoryPatchStore({ baseSnapshot }) {
     async readCurrent() {
       const snapshot = snapshots.get(meta.currentVersion);
       if (!snapshot) throw new Error(`Current patch snapshot is missing: ${meta.currentVersion}`);
-      return clone(snapshot);
+      return validateSnapshot(snapshot);
     },
 
     async activate(version, { expectedCurrentVersion } = {}) {
       const expected = requireExpectedCurrentVersion(expectedCurrentVersion);
-      if (!snapshots.has(version)) throw new Error(`Staged patch snapshot is missing: ${version}`);
+      const candidateRaw = snapshots.get(version);
+      if (!candidateRaw) throw new Error(`Staged patch snapshot is missing: ${version}`);
+      const candidate = await validateSnapshot(candidateRaw);
       if (meta.currentVersion !== expected) {
         throw new Error(`Patch current version changed before activation: expected ${expected}, found ${meta.currentVersion}`);
       }
       if (version === meta.currentVersion) return clone(meta);
-      meta = {
-        currentVersion: version,
-        previousVersion: meta.currentVersion,
-      };
+      meta = nextActivationMeta(meta, candidate, version);
       return clone(meta);
     },
 
     async rollback() {
       if (!meta.previousVersion) throw new Error('No previous patch snapshot is available for rollback');
-      if (!snapshots.has(meta.previousVersion)) {
-        throw new Error(`Previous patch snapshot is missing: ${meta.previousVersion}`);
-      }
-      const leaving = meta.currentVersion;
-      meta = {
-        currentVersion: meta.previousVersion,
-        previousVersion: leaving,
-      };
+      const previous = snapshots.get(meta.previousVersion);
+      if (!previous) throw new Error(`Previous patch snapshot is missing: ${meta.previousVersion}`);
+      await validateSnapshot(previous);
+      meta = nextRollbackMeta(meta);
       return clone(meta);
     },
   };
 }
 
-export function createIndexedDbPatchStore({
-  indexedDB = globalThis.indexedDB,
-  baseSnapshot,
-  databaseName = DEFAULT_DATABASE_NAME,
-} = {}) {
-  if (!indexedDB || typeof indexedDB.open !== 'function') {
-    throw new Error('IndexedDB is required for persistent patch storage');
-  }
-  if (typeof databaseName !== 'string' || databaseName.length === 0) {
-    throw new Error('Patch database name is required');
-  }
+export function createIndexedDbPatchStore({ indexedDB = globalThis.indexedDB, baseSnapshot, databaseName = DEFAULT_DATABASE_NAME } = {}) {
+  if (!indexedDB || typeof indexedDB.open !== 'function') throw new Error('IndexedDB is required for persistent patch storage');
+  if (typeof databaseName !== 'string' || databaseName.length === 0) throw new Error('Patch database name is required');
 
-  const base = validateSnapshot(baseSnapshot);
-  const ready = openDatabase(indexedDB, databaseName).then(async (database) => {
+  const base = normalizeSnapshot(baseSnapshot);
+  const ready = openDatabase(indexedDB, databaseName).then(async database => {
     await initializeDatabase(database, base);
     return database;
   });
@@ -259,7 +291,6 @@ export function createIndexedDbPatchStore({
       const request = store.get(META_KEY);
       let nextMeta;
       let mutationError;
-
       request.onsuccess = () => {
         try {
           if (!request.result) throw new Error('Patch metadata is missing');
@@ -282,14 +313,11 @@ export function createIndexedDbPatchStore({
 
   return {
     async stage(snapshot) {
-      const candidate = validateSnapshot(snapshot);
+      const candidate = await validateSnapshot(snapshot);
       const database = await ready;
       await stageIndexedDbSnapshot(database, candidate);
-
       const readback = await readSnapshot(candidate.version);
-      if (!snapshotsEqual(candidate, readback)) {
-        throw new Error(`Staged patch snapshot readback mismatch: ${candidate.version}`);
-      }
+      if (!snapshotsEqual(candidate, readback)) throw new Error(`Staged patch snapshot readback mismatch: ${candidate.version}`);
       return readback;
     },
 
@@ -307,24 +335,22 @@ export function createIndexedDbPatchStore({
       const expected = requireExpectedCurrentVersion(expectedCurrentVersion);
       const candidate = await readSnapshot(version);
       if (!candidate) throw new Error(`Staged patch snapshot is missing: ${version}`);
-
-      const nextMeta = await mutateMeta((meta) => {
+      const nextMeta = await mutateMeta(meta => {
         if (meta.currentVersion !== expected) {
           throw new Error(`Patch current version changed before activation: expected ${expected}, found ${meta.currentVersion}`);
         }
         if (meta.currentVersion === version) return meta;
-        return { currentVersion: version, previousVersion: meta.currentVersion };
+        return nextActivationMeta(meta, candidate, version);
       });
-
       const metaReadback = await readMeta();
       const currentReadback = await readSnapshot(metaReadback.currentVersion);
       if (
         metaReadback.currentVersion !== nextMeta.currentVersion
         || metaReadback.previousVersion !== nextMeta.previousVersion
+        || metaReadback.currentSnapshotId !== nextMeta.currentSnapshotId
+        || metaReadback.previousSnapshotId !== nextMeta.previousSnapshotId
         || !snapshotsEqual(candidate, currentReadback)
-      ) {
-        throw new Error(`Patch activation readback mismatch: ${version}`);
-      }
+      ) throw new Error(`Patch activation readback mismatch: ${version}`);
       return metaReadback;
     },
 
@@ -333,26 +359,21 @@ export function createIndexedDbPatchStore({
       if (!before.previousVersion) throw new Error('No previous patch snapshot is available for rollback');
       const previous = await readSnapshot(before.previousVersion);
       if (!previous) throw new Error(`Previous patch snapshot is missing: ${before.previousVersion}`);
-
-      const nextMeta = await mutateMeta((meta) => {
+      const nextMeta = await mutateMeta(meta => {
         if (meta.currentVersion !== before.currentVersion || meta.previousVersion !== before.previousVersion) {
           throw new Error('Patch metadata changed during rollback');
         }
-        return {
-          currentVersion: meta.previousVersion,
-          previousVersion: meta.currentVersion,
-        };
+        return nextRollbackMeta(meta);
       });
-
       const metaReadback = await readMeta();
       const currentReadback = await readSnapshot(metaReadback.currentVersion);
       if (
         metaReadback.currentVersion !== nextMeta.currentVersion
         || metaReadback.previousVersion !== nextMeta.previousVersion
+        || metaReadback.currentSnapshotId !== nextMeta.currentSnapshotId
+        || metaReadback.previousSnapshotId !== nextMeta.previousSnapshotId
         || !snapshotsEqual(previous, currentReadback)
-      ) {
-        throw new Error('Patch rollback readback mismatch');
-      }
+      ) throw new Error('Patch rollback readback mismatch');
       return metaReadback;
     },
   };
