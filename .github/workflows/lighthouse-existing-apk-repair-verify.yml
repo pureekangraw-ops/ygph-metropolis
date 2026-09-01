@@ -11,6 +11,7 @@ on:
       - 'android-shell/test/canonical-loader.test.mjs'
       - 'android-shell/test/app-update.test.mjs'
       - 'android-shell/test/android-updater-tool.test.mjs'
+      - 'android-shell/test/android-security-updater-permission.test.mjs'
       - 'android-shell/test/update-metadata.test.mjs'
       - 'android-shell/www/patch/effective-snapshot.mjs'
       - 'android-shell/www/patch/effective-store.mjs'
@@ -21,6 +22,7 @@ on:
       - 'android-shell/tools/stage-existing-full-app.mjs'
       - 'android-shell/tools/apply-android-updater.mjs'
       - 'android-shell/tools/build-update-metadata.mjs'
+      - 'android-shell/tools/verify-android-security.mjs'
       - 'sw.js'
       - 'ui/app-update.mjs'
       - 'ui/settings-ui.mjs'
@@ -41,4 +43,4 @@ jobs:
         with:
           node-version: 22
       - run: node --test tests/lighthouse-existing-apk-repair.test.cjs
-      - run: node --test android-shell/test/effective-snapshot.test.mjs android-shell/test/patch-effective-snapshot-integration.test.mjs android-shell/test/effective-base-manifest.test.mjs android-shell/test/canonical-overlay.test.mjs android-shell/test/canonical-loader.test.mjs android-shell/test/app-update.test.mjs android-shell/test/android-updater-tool.test.mjs android-shell/test/update-metadata.test.mjs
+      - run: node --test android-shell/test/effective-snapshot.test.mjs android-shell/test/patch-effective-snapshot-integration.test.mjs android-shell/test/effective-base-manifest.test.mjs android-shell/test/canonical-overlay.test.mjs android-shell/test/canonical-loader.test.mjs android-shell/test/app-update.test.mjs android-shell/test/android-updater-tool.test.mjs android-shell/test/android-security-updater-permission.test.mjs android-shell/test/update-metadata.test.mjs
