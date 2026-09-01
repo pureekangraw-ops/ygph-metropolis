@@ -36,6 +36,9 @@ export async function loadBaseSnapshot({ fetchImpl = globalThis.fetch } = {}) {
     const response = await requireResponse(await fetchImpl(`./${path}`), `packaged asset ${path}`);
     assets[path] = await response.text();
   }
+  for (const [canonicalPath, legacyPath] of Object.entries(LEGACY_BY_CANONICAL)) {
+    Object.defineProperty(assets, legacyPath, { get:() => assets[canonicalPath], enumerable:false, configurable:false });
+  }
   return { version:versionData.version, assets };
 }
 
@@ -101,9 +104,7 @@ export async function mountSnapshot(snapshot, { root, documentRef = globalThis.d
   try {
     rules = JSON.parse(resolveSnapshotAsset(snapshot, 'app/rules.json'));
     vocabulary = JSON.parse(resolveSnapshotAsset(snapshot, 'app/vocabulary.json'));
-  } catch (error) {
-    throw new Error(`Canonical app data JSON is invalid: ${error.message}`);
-  }
+  } catch (error) { throw new Error(`Canonical app data JSON is invalid: ${error.message}`); }
   root.innerHTML = resolveSnapshotAsset(snapshot, 'app/ui.html');
   let style = documentRef.getElementById(APP_STYLE_ID);
   if (!style) { style = documentRef.createElement('style'); style.id = APP_STYLE_ID; documentRef.head.append(style); }
