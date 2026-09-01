@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "app:stage-existing": "node tools/stage-existing-full-app.mjs",
     "pretest": "node tools/sync-trusted-brain.mjs",
     "test": "node --test test/*.test.mjs",
     "patch:sign": "node tools/sign-patch.mjs",
