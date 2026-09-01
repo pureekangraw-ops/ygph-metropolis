@@ -111,6 +111,17 @@ jobs:
           APK_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
 
+      - name: Build candidate update manifest
+        run: >-
+          node tools/build-update-metadata.mjs
+          android/app/build/outputs/apk/release/lighthouse-release.apk
+          release/apk-identity-evidence.json
+          release/lighthouse-update.candidate.json
+          https://github.com/pureekangraw-ops/ygph-metropolis/releases/download/lighthouse-v1.0.4/LIGHTHOUSE-1.0.4.apk
+          "คืน direct startup, เก็บ Snapshot เป็น release evidence, และเพิ่ม Settings in-app APK updater"
+          1004
+          false
+
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
@@ -119,6 +130,7 @@ jobs:
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
+            android-shell/release/lighthouse-update.candidate.json
             android-shell/www/effective-base-manifest.json
           if-no-files-found: error
           retention-days: 14
