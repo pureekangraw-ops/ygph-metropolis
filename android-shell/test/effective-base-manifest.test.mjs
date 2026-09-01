@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -54,4 +54,12 @@ test('base manifest describes full staged web state and locks trust-engine files
   } finally {
     await rm(root, { recursive:true, force:true });
   }
+});
+
+test('existing-app staging emits effective-base-manifest.json from staged files, APK version and exact git commit', async () => {
+  const source = await readFile(new URL('../tools/stage-existing-full-app.mjs', import.meta.url), 'utf8');
+  assert.match(source, /buildEffectiveBaseManifest/);
+  assert.match(source, /version\.json/);
+  assert.match(source, /git\s+rev-parse\s+HEAD|rev-parse.*HEAD/s);
+  assert.match(source, /effective-base-manifest\.json/);
 });
