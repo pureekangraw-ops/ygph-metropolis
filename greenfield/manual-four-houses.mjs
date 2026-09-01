@@ -171,17 +171,17 @@ export function createManualFourHouses(runtime, { today = new Date().toISOString
   }
 
   async function rescheduleCalendar({ workflowId, recordId, dueDate } = {}) {
-    const result = await runtime.calendarReschedule({ workflowId, recordId, dueDate });
+    const result = await runtime.calendarReschedule({ workflowId, queueId:recordId, dueDate });
     return { ...result, status:'VERIFIED', readback:await getRecord('CALENDAR', recordId) };
   }
 
   async function completeCalendar({ workflowId, recordId } = {}) {
-    const result = await runtime.calendarStatus({ workflowId, recordId, status:'COMPLETED' });
+    const result = await runtime.calendarStatus({ workflowId, queueId:recordId, status:'COMPLETED' });
     return { ...result, status:'VERIFIED', readback:await getRecord('CALENDAR', recordId) };
   }
 
   async function cancelCalendar({ workflowId, recordId } = {}) {
-    const result = await runtime.calendarStatus({ workflowId, recordId, status:'CANCELLED' });
+    const result = await runtime.calendarStatus({ workflowId, queueId:recordId, status:'CANCELLED' });
     return { ...result, status:'VERIFIED', readback:await getRecord('CALENDAR', recordId) };
   }
 
