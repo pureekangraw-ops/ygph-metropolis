@@ -9,17 +9,18 @@ const read = path => readFile(join(root, path), 'utf8');
 
 test('MANUAL Finance surface exposes only the missing lifecycle controls while reusing existing income expense obligation flows', async () => {
   const html = await read('index.html');
+  const manualUi = await read('ui/manual-finance-ui.mjs');
   for (const id of [
     'incomeTargetForm','incomeTargetProgress','receivableForm','receivableList',
     'outcomeCeilingForm','outcomeCeilingProgress',
     'calendarItemForm','manualCalendarViews',
     'ledgerSearchForm','ledgerSearchResults','ledgerDetail',
-  ]) assert.match(html, new RegExp(`id=["']${id}["']`), `missing ${id}`);
+  ]) assert.match(manualUi, new RegExp(`["']${id}["']`), `missing mounted ${id}`);
 
   assert.match(html, /id="incomeForm"/);
   assert.match(html, /id="expenseForm"/);
   assert.match(html, /id="obligationForm"/);
-  assert.doesNotMatch(html, /id="manualIncomeForm"|id="manualExpenseForm"|id="manualObligationForm"/, 'must reuse existing actual-money forms');
+  assert.doesNotMatch(`${html}\n${manualUi}`, /id="manualIncomeForm"|id="manualExpenseForm"|id="manualObligationForm"/, 'must reuse existing actual-money forms');
 });
 
 test('MANUAL UI is wired through the shared four-house facade instead of a second mutation engine', async () => {
