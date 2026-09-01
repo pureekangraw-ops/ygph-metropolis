@@ -61,27 +61,6 @@ async function apkVersionName() {
   return version.versionName.trim();
 }
 
-async function installCanonicalBootstrapEntry() {
-  const indexPath = resolve(wwwRoot, 'index.html');
-  const before = await readFile(indexPath, 'utf8');
-  const master = '<script type="module" src="ui/master-input.mjs"></script>';
-  const app = '<script type="module" src="app.mjs"></script>';
-  if (!before.includes(master) || !before.includes(app)) {
-    throw new Error('EXISTING_APP_DIRECT_ENTRY_NOT_FOUND');
-  }
-  const after = before
-    .replace(`  ${master}\n`, '')
-    .replace(`  ${app}`, '  <script type="module" src="patch/canonical-bootstrap.mjs"></script>');
-  if (after.includes(master) || after.includes(app) || !after.includes('patch/canonical-bootstrap.mjs')) {
-    throw new Error('CANONICAL_BOOTSTRAP_ENTRY_REWRITE_FAILED');
-  }
-  await writeFile(indexPath, after, 'utf8');
-  const readback = await readFile(indexPath, 'utf8');
-  if (!readback.includes('patch/canonical-bootstrap.mjs') || readback.includes(master) || readback.includes(app)) {
-    throw new Error('CANONICAL_BOOTSTRAP_ENTRY_READBACK_MISMATCH');
-  }
-}
-
 await mkdir(wwwRoot, { recursive: true });
 
 // Remove only prior staged application assets. Trust/Patch infrastructure stays
@@ -113,8 +92,6 @@ for (const relative of optionalFiles) {
     await cp(resolve(repoRoot, relative), resolve(wwwRoot, relative), { recursive:true, force: true });
   }
 }
-
-await installCanonicalBootstrapEntry();
 
 const [apkVersion, sourceCommit] = await Promise.all([apkVersionName(), exactSourceCommit()]);
 const effectiveBaseManifest = await buildEffectiveBaseManifest({
