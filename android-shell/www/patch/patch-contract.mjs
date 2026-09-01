@@ -1,11 +1,11 @@
 export const PATCH_SCHEMA = 'lighthouse.patch.v1';
 export const PATCH_MAX_BYTES = 2 * 1024 * 1024;
 export const PATCH_ALLOWED_FILES = Object.freeze([
-  'ui.html',
-  'ui.css',
-  'logic.mjs',
-  'rules.json',
-  'vocabulary.json',
+  'app/ui.html',
+  'app/ui.css',
+  'app/logic.mjs',
+  'app/rules.json',
+  'app/vocabulary.json',
 ]);
 
 const PATCH_ALGORITHM = 'ECDSA-P256-SHA256';
