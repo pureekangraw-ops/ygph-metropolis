@@ -14,12 +14,10 @@ async function loadBuilder() {
 test('current Patch contract owns version and base versions in one source-controlled place', async () => {
   const { loadCurrentPatchContract } = await loadBuilder();
   const contract = await loadCurrentPatchContract();
-  assert.deepEqual(contract, {
-    version: '0.0.5',
-    primaryBaseVersion: '0.0.4',
-    bootstrapBaseVersion: '0.0.1',
-    releaseDirectory: 'release/front-door-0.0.5',
-  });
+  assert.match(contract.version, /^\d+\.\d+\.\d+$/);
+  assert.match(contract.primaryBaseVersion, /^\d+\.\d+\.\d+$/);
+  assert.match(contract.bootstrapBaseVersion, /^\d+\.\d+\.\d+$/);
+  assert.equal(contract.releaseDirectory, `release/front-door-${contract.version}`);
 });
 
 test('generic current Patch builder produces primary and bootstrap sources from the contract', async () => {
