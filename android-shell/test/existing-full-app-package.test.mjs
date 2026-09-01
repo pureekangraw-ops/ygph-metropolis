@@ -12,6 +12,7 @@ async function text(path) {
 }
 
 for (const relative of [
+  'index.html',
   'app.mjs',
   'ui/app.mjs',
   'ui/master-input.mjs',
@@ -25,19 +26,6 @@ for (const relative of [
     );
   });
 }
-
-test('staged index differs from existing app only by the protected canonical bootstrap entry', async () => {
-  const staged = await text(resolve(wwwRoot, 'index.html'));
-  const source = await text(resolve(repoRoot, 'index.html'));
-  assert.match(staged, /src="patch\/canonical-bootstrap\.mjs"/);
-  assert.doesNotMatch(staged, /src="ui\/master-input\.mjs"/);
-  assert.doesNotMatch(staged, /src="app\.mjs"/);
-  const restored = staged.replace(
-    '  <script type="module" src="patch/canonical-bootstrap.mjs"></script>',
-    '  <script type="module" src="ui/master-input.mjs"></script>\n  <script type="module" src="app.mjs"></script>',
-  );
-  assert.equal(restored, source);
-});
 
 test('existing Chat ↔ Manual bridge wiring is packaged', async () => {
   const source = await text(resolve(wwwRoot, 'ui/app.mjs'));
@@ -66,12 +54,11 @@ test('existing Settings utility is packaged', async () => {
   assert.match(source, /ความปลอดภัย/);
 });
 
-test('Android entry is the existing application behind canonical snapshot bootstrap, not replacement front-door UI', async () => {
+test('Android entry starts the existing application directly and never waits for snapshot bootstrap', async () => {
   const source = await text(resolve(wwwRoot, 'index.html'));
-  assert.match(source, /YGPH METROPOLIS/);
-  assert.match(source, /src="patch\/canonical-bootstrap\.mjs"/);
-  assert.doesNotMatch(source, /src="ui\/master-input\.mjs"/);
-  assert.doesNotMatch(source, /src="app\.mjs"/);
+  assert.match(source, /src="ui\/master-input\.mjs"/);
+  assert.match(source, /src="app\.mjs"/);
+  assert.doesNotMatch(source, /canonical-bootstrap|CURRENT_SNAPSHOT/);
   assert.doesNotMatch(source, /Foundation Proof/);
   assert.doesNotMatch(source, /trusted\/bootstrap\.mjs/);
 });
