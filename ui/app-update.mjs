@@ -14,14 +14,19 @@ export function validateUpdateMetadata(value,currentVersionCode){
   const input=object(value,'UPDATE_METADATA_REQUIRED');
   const versionCode=integer(input.versionCode,'UPDATE_VERSION_CODE_INVALID');
   if(Number.isSafeInteger(currentVersionCode)&&versionCode<=currentVersionCode)throw new Error('UPDATE_VERSION_NOT_NEWER');
+  const minVersionCode=Number.isSafeInteger(input.minVersionCode)?integer(input.minVersionCode,'UPDATE_MIN_VERSION_INVALID'):1;
+  if(Number.isSafeInteger(currentVersionCode)&&currentVersionCode<minVersionCode)throw new Error('UPDATE_BASE_NOT_SUPPORTED');
   const sha256=string(input.sha256,'UPDATE_SHA256_INVALID').toLowerCase();
   if(!SHA256.test(sha256))throw new Error('UPDATE_SHA256_INVALID');
   return Object.freeze({
     versionName:string(input.versionName,'UPDATE_VERSION_NAME_REQUIRED'),
     versionCode,
+    minVersionCode,
+    compatible:true,
     apkUrl:requireHttps(input.apkUrl,'UPDATE_APK_URL_HTTPS_REQUIRED'),
     sha256,
     required:input.required===true,
+    releaseVerified:input.releaseVerified===true,
     releaseNotes:string(input.releaseNotes,'UPDATE_RELEASE_NOTES_REQUIRED'),
     ...(Number.isFinite(input.sizeBytes)&&input.sizeBytes>=0?{sizeBytes:Number(input.sizeBytes)}:{}),
   });
@@ -40,6 +45,7 @@ export function verifyApkInspection({metadata,inspection,currentVersionCode}={})
     versionName:apk.versionName,
     versionCode,
     signerSha256:LIGHTHOUSE_SIGNER_SHA256,
+    verified:true,
   });
 }
 
@@ -59,34 +65,38 @@ export function createAppUpdater({metadataUrl=DEFAULT_UPDATE_METADATA_URL,fetchI
   let installed=null;
   let latest=null;
   let cancelled=false;
+  let apkVerified=false;
 
   return Object.freeze({
     async check(){
       cancelled=false;
+      apkVerified=false;
       installed=object(await bridge.getInstalledIdentity(),'UPDATE_INSTALLED_IDENTITY_REQUIRED');
       integer(installed.versionCode,'UPDATE_INSTALLED_VERSION_INVALID');
       const response=await fetchImpl(endpoint,{cache:'no-store'});
       if(!response?.ok||typeof response.json!=='function')throw new Error('UPDATE_METADATA_FETCH_FAILED');
       latest=validateUpdateMetadata(await response.json(),installed.versionCode);
-      return Object.freeze({installed:{...installed},latest:{...latest}});
+      return Object.freeze({installed:{...installed},latest:{...latest},apkVerified:false});
     },
 
     async downloadAndInstall(){
       if(!installed||!latest)throw new Error('UPDATE_CHECK_REQUIRED');
       cancelled=false;
+      apkVerified=false;
       const downloaded=object(await bridge.downloadApk({url:latest.apkUrl,sha256:latest.sha256,versionCode:latest.versionCode}),'UPDATE_DOWNLOAD_RESULT_REQUIRED');
       if(cancelled)throw new Error('UPDATE_CANCELLED');
       const actualHash=string(downloaded.sha256,'UPDATE_DOWNLOAD_HASH_REQUIRED').toLowerCase();
       if(actualHash!==latest.sha256)throw new Error('UPDATE_DOWNLOAD_HASH_MISMATCH');
       const inspection=await bridge.inspectApk();
       verifyApkInspection({metadata:latest,inspection,currentVersionCode:installed.versionCode});
+      apkVerified=true;
       if(cancelled)throw new Error('UPDATE_CANCELLED');
       const backup=await requestBackup();
       if(backup===false||backup?.ok===false)throw new Error('UPDATE_BACKUP_FAILED');
       const permission=object(await bridge.canRequestInstalls(),'UPDATE_INSTALL_PERMISSION_REQUIRED');
-      if(permission.allowed!==true)return {status:'permission-required'};
+      if(permission.allowed!==true)return {status:'permission-required',apkVerified:true};
       await bridge.openInstaller();
-      return {status:'installer-opened'};
+      return {status:'installer-opened',apkVerified:true};
     },
 
     async cancel(){
@@ -95,7 +105,7 @@ export function createAppUpdater({metadataUrl=DEFAULT_UPDATE_METADATA_URL,fetchI
       return {status:'cancelled'};
     },
 
-    state(){return {installed:installed?{...installed}:null,latest:latest?{...latest}:null,cancelled};},
+    state(){return {installed:installed?{...installed}:null,latest:latest?{...latest}:null,cancelled,apkVerified};},
   });
 }
 
@@ -110,5 +120,6 @@ export function capacitorUpdaterBridge(capacitor=globalThis.Capacitor){
     openUnknownSourcesSettings:()=>plugin.openUnknownSourcesSettings(),
     openInstaller:()=>plugin.openInstaller(),
     cancelDownload:()=>plugin.cancelDownload(),
+    addProgressListener:listener=>plugin.addListener?.('downloadProgress',listener),
   });
 }
