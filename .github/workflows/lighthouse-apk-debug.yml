@@ -2,153 +2,61 @@ name: LIGHTHOUSE APK Debug
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'feature/lighthouse-apk-foundation-proof-*'
-    paths:
-      - 'android-shell/**'
-      - 'lighthouse/**'
-      - 'greenfield/**'
-      - '.github/workflows/lighthouse-apk-debug.yml'
-  pull_request:
-    paths:
-      - 'android-shell/**'
-      - 'lighthouse/**'
-      - 'greenfield/**'
-      - '.github/workflows/lighthouse-apk-debug.yml'
 
 permissions:
   contents: read
 
 jobs:
-  build-debug-apk:
+  build-existing-full-app:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: android-shell
     steps:
-      - name: Checkout
+      - name: Checkout exact selected ref
         uses: actions/checkout@v4
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+
       - name: Install Capacitor dependencies
         run: npm install --no-audit --no-fund
-      - name: Verify foundation contract
-        run: timeout --signal=TERM 90s npm test
-      - name: Load current Patch contract
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFile } from 'node:fs/promises';
-          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
-          const contract = await loadCurrentPatchContract();
-          const lines = [
-            `PATCH_VERSION=${contract.version}`,
-            `PATCH_PRIMARY_BASE=${contract.primaryBaseVersion}`,
-            `PATCH_BOOTSTRAP_BASE=${contract.bootstrapBaseVersion}`,
-            `PATCH_RELEASE_DIR=${contract.releaseDirectory}`,
-          ];
-          await appendFile(process.env.GITHUB_ENV, `${lines.join('\n')}\n`, 'utf8');
-          console.log(`Current Patch ${contract.version} from ${contract.releaseDirectory}`);
-          NODE
-      - name: Build current Patch signing sources
-        run: |
-          rm -rf release/current-patch-work
-          mkdir -p release/current-patch-work
-          node tools/build-current-patch-source.mjs \
-            release/current-patch-work/input.generated.json \
-            release/current-patch-work/input.bootstrap.generated.json
-      - name: Upload current Patch signing sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: lighthouse-current-patch-signing-sources
-          path: |
-            android-shell/release/current-patch-work/input.generated.json
-            android-shell/release/current-patch-work/input.bootstrap.generated.json
-          if-no-files-found: error
-          retention-days: 7
-      - name: Sign verify and manifest current Patch
-        env:
-          LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM: ${{ secrets.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM }}
-          LIGHTHOUSE_PATCH_KEY_PASSPHRASE: ${{ secrets.LIGHTHOUSE_PATCH_KEY_PASSPHRASE }}
-        run: |
-          set -euo pipefail
-          if [ -z "${LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM:-}" ]; then echo "LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM is not configured"; exit 1; fi
-          if [ -z "${LIGHTHOUSE_PATCH_KEY_PASSPHRASE:-}" ]; then echo "LIGHTHOUSE_PATCH_KEY_PASSPHRASE is not configured"; exit 1; fi
-          umask 077
-          encrypted_key="$RUNNER_TEMP/lighthouse-patch-key.encrypted.pem"
-          private_key="$RUNNER_TEMP/lighthouse-patch-key.pem"
-          passphrase_file="$RUNNER_TEMP/lighthouse-patch-key.passphrase"
-          trap 'rm -f "$encrypted_key" "$private_key" "$passphrase_file"' EXIT
-          printf '%s\n' "$LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM" > "$encrypted_key"
-          printf '%s' "$LIGHTHOUSE_PATCH_KEY_PASSPHRASE" > "$passphrase_file"
-          openssl pkey -in "$encrypted_key" -passin "file:$passphrase_file" -out "$private_key"
-          expected_fingerprint="9486f41ebb5c43f5e2dd88050cb9033b69eeb099c06bde183001752d2a6b33b1"
-          actual_fingerprint="$(openssl pkey -in "$private_key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
-          if [ "$actual_fingerprint" != "$expected_fingerprint" ]; then echo "Patch private key does not match current trusted key-3 anchor. Public fingerprint: $actual_fingerprint"; exit 1; fi
-          primary_patch="release/current-patch-work/lighthouse-current-patch.lhpatch"
-          bootstrap_patch="release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch"
-          npm run patch:sign -- release/current-patch-work/input.generated.json "$private_key" "$primary_patch"
-          npm run patch:sign -- release/current-patch-work/input.bootstrap.generated.json "$private_key" "$bootstrap_patch"
-          node --input-type=module <<'NODE'
-          import { readFile, writeFile, stat } from 'node:fs/promises';
-          import { createHash } from 'node:crypto';
-          import { verifyPatchBundle } from './www/patch/patch-contract.mjs';
-          import { loadCurrentPatchContract } from './tools/build-current-patch-source.mjs';
-          const contract = await loadCurrentPatchContract();
-          const trustedKey = JSON.parse(await readFile('./www/patch/trusted-key.json', 'utf8'));
-          const cases = [
-            { path:'./release/current-patch-work/lighthouse-current-patch.lhpatch', currentVersion:contract.primaryBaseVersion },
-            { path:'./release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch', currentVersion:contract.bootstrapBaseVersion },
-          ];
-          const entries = {};
-          for (const item of cases) {
-            const text = await readFile(item.path, 'utf8');
-            const patch = JSON.parse(text);
-            const verified = await verifyPatchBundle(patch, { currentVersion:item.currentVersion, trustedKey });
-            if (verified.version !== contract.version) throw new Error('SIGNED_PATCH_VERSION_MISMATCH');
-            if (patch.signature?.keyId !== 'lighthouse-debug-patch-3') throw new Error('SIGNED_PATCH_KEY_ID_MISMATCH');
-            const filename = item.path.split('/').pop();
-            entries[item.currentVersion] = {
-              baseVersion:item.currentVersion,
-              patchUrl:`https://github.com/pureekangraw-ops/ygph-metropolis/releases/latest/download/${filename}`,
-              sha256:createHash('sha256').update(text).digest('hex'),
-              size:(await stat(item.path)).size,
-            };
-          }
-          await writeFile('./release/current-patch-work/lighthouse-patch-manifest.json', `${JSON.stringify({ latestVersion:contract.version, patches:entries }, null, 2)}\n`, 'utf8');
-          console.log(`Verified current Patch ${contract.version} with lighthouse-debug-patch-3 and generated manifest`);
-          NODE
-      - name: Upload verified current Patch
-        uses: actions/upload-artifact@v4
-        with:
-          name: lighthouse-current-patch
-          path: |
-            android-shell/release/current-patch-work/lighthouse-current-patch.lhpatch
-            android-shell/release/current-patch-work/lighthouse-current-patch-bootstrap.lhpatch
-            android-shell/release/current-patch-work/lighthouse-patch-manifest.json
-          if-no-files-found: error
-          retention-days: 7
+
+      - name: Stage existing repository application
+        run: npm run app:stage-existing
+
+      - name: Prove Android package is existing app, not replacement UI
+        run: node --test test/existing-full-app-package.test.mjs
+
       - name: Generate Android project
         run: npx cap add android
-      - name: Sync web assets
+
+      - name: Sync exact staged web assets
         run: npx cap sync android
-      - name: Apply generated Android security baseline
-        run: npm run android:security:apply
+
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
+
+      - name: Apply generated Android security baseline
+        run: npm run android:security:apply
+
       - name: Materialize merged release manifest
         run: cd android && ./gradlew :app:processReleaseMainManifest
+
       - name: Verify generated Android security
         run: npm run android:security:verify
+
       - name: Build unsigned release APK
         run: npm run android:release
+
       - name: Materialize canonical APK signer
         env:
           LIGHTHOUSE_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
@@ -184,18 +92,19 @@ jobs:
           "$apksigner" verify "$signed_apk"
           echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
           echo "AAPT=$aapt" >> "$GITHUB_ENV"
+
       - name: Verify final APK identity
         env:
-          APK_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          APK_SOURCE_COMMIT: ${{ github.sha }}
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
-      - name: Upload canonical APK
+
+      - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-canonical-apk
+          name: lighthouse-existing-full-app-1.0.3
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
-            android-shell/release/current-patch-work/lighthouse-patch-manifest.json
           if-no-files-found: error
           retention-days: 14
