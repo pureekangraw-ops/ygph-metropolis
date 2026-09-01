@@ -39,9 +39,11 @@ test('normal update view stays human-facing while technical status is advanced',
 });
 
 test('Reset All lives only in Advanced Danger Zone and clears local Settings metadata', () => {
+  const settings = read('ui/settings-ui.mjs');
   const reset = read('ui/reset-all-ui.mjs');
+  assert.match(settings, /settingsDangerZone/);
+  assert.match(settings, /Danger Zone/);
   assert.match(reset, /settingsDangerZone/);
-  assert.match(reset, /Danger Zone/);
   assert.match(reset, /confirm\(/);
   assert.match(reset, /ยืนยันอีกครั้ง/);
   assert.match(reset, /metro-settings-latest-backup/);
