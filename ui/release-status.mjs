@@ -39,19 +39,32 @@ function ensureUpdateLog(){
   if(!technical)return null;
   let section=$('systemUpdateLog');
   if(section)return section;
-  section=document.createElement('section');
+
+  section=document.createElement('details');
   section.id='systemUpdateLog';
   section.className='settings-advanced-block update-log';
-  const title=document.createElement('h4');
-  title.textContent='ประวัติอัปเดต';
-  section.append(title);
+
+  const summary=document.createElement('summary');
+  summary.className='update-log-summary';
+  const title=document.createElement('strong');
+  title.textContent='มีอะไรใหม่';
+  const latest=document.createElement('small');
+  latest.textContent=UPDATE_LOG[0]?.timestamp || '';
+  summary.append(title,latest);
+  section.append(summary);
+
+  const body=document.createElement('div');
+  body.className='update-log-body';
   for(const entry of UPDATE_LOG){
-    const timestamp=document.createElement('small');
-    timestamp.textContent=entry.timestamp;
     const list=document.createElement('ul');
-    for(const item of entry.items){const row=document.createElement('li');row.textContent=item;list.append(row);}
-    section.append(timestamp,list);
+    for(const item of entry.items){
+      const row=document.createElement('li');
+      row.textContent=item;
+      list.append(row);
+    }
+    body.append(list);
   }
+  section.append(body);
   technical.append(section);
   return section;
 }
