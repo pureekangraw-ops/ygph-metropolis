@@ -39,7 +39,8 @@ test('0.0.5 bootstrap source can take a clean 0.0.1 key-3 APK directly to curren
 test('standard APK workflow builds signs verifies and uploads the current key-3 Patch plus manifest', async () => {
   const workflow = await readFile(new URL('../.github/workflows/lighthouse-apk-debug.yml', root), 'utf8');
   const contract = JSON.parse(await readFile(new URL('release/current-patch.json', root), 'utf8'));
-  assert.equal(contract.version, '0.0.5');
+  assert.match(contract.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(contract.releaseDirectory, `release/front-door-${contract.version}`);
   assert.match(workflow, /build-current-patch-source\.mjs/u);
   assert.doesNotMatch(workflow, /build-front-door-0\.0\.5-source\.mjs|build-front-door-0\.0\.5-bootstrap-source\.mjs/u);
   assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM/u); assert.match(workflow, /secrets\.LIGHTHOUSE_PATCH_KEY_PASSPHRASE/u);
