@@ -3,15 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const workflowUrl = new URL('../../.github/workflows/lighthouse-apk-debug.yml', import.meta.url);
+const builderUrl = new URL('../tools/build-current-patch-source.mjs', import.meta.url);
 
 async function workflowText() {
   return readFile(workflowUrl, 'utf8');
 }
 
-test('standard APK flow reads one current Patch release contract instead of hard-coding a release number', async () => {
+test('standard APK flow delegates current Patch ownership instead of hard-coding a release number', async () => {
   const text = await workflowText();
-  assert.match(text, /release\/current-patch\.json/);
+  const builder = await readFile(builderUrl, 'utf8');
   assert.match(text, /build-current-patch-source\.mjs/);
+  assert.match(builder, /release\/current-patch\.json/);
+  assert.doesNotMatch(text, /build-front-door-0\.0\.5-source\.mjs|build-front-door-0\.0\.5-bootstrap-source\.mjs/);
   assert.doesNotMatch(text, /front-door-0\.0\.5|0\.0\.5-signing|0\.0\.5-signed/);
 });
 
