@@ -4,6 +4,13 @@ import { composeSnapshot, createIndexedDbPatchStore } from './patch-store.mjs';
 const BASE_VERSION_URL = './app/version.json';
 const TRUSTED_KEY_URL = './patch/trusted-key.json';
 const APP_STYLE_ID = 'lighthouse-canonical-app-style';
+const LEGACY_BY_CANONICAL = Object.freeze({
+  'app/ui.html':'ui.html',
+  'app/ui.css':'ui.css',
+  'app/logic.mjs':'logic.mjs',
+  'app/rules.json':'rules.json',
+  'app/vocabulary.json':'vocabulary.json',
+});
 export const TRUSTED_PATCH_MANIFEST_URL = 'https://github.com/pureekangraw-ops/ygph-metropolis/releases/latest/download/lighthouse-patch-manifest.json';
 
 async function requireResponse(response, label) {
@@ -13,7 +20,8 @@ async function requireResponse(response, label) {
 
 export function resolveSnapshotAsset(snapshot, path) {
   if (!PATCH_ALLOWED_FILES.includes(path)) throw new Error(`Unsupported canonical asset path: ${path}`);
-  const value = snapshot?.assets?.[path];
+  const assets = snapshot?.assets;
+  const value = assets?.[path] ?? assets?.[LEGACY_BY_CANONICAL[path]];
   if (typeof value !== 'string') throw new Error(`Snapshot is missing canonical asset: ${path}`);
   return value;
 }
