@@ -1,4 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = new URL('../', import.meta.url);
@@ -41,7 +42,7 @@ export async function loadCurrentPatchContract() {
 
 export async function buildCurrentPatchSources() {
   const contract = await loadCurrentPatchContract();
-  const releaseRoot = new URL(`${contract.releaseDirectory.replace(/^release\//, 'release/')}/`, root);
+  const releaseRoot = new URL(`${contract.releaseDirectory}/`, root);
   const ui = await readFile(new URL('ui.html', releaseRoot), 'utf8');
   const logic = await readFile(new URL('logic.mjs', releaseRoot), 'utf8');
   const fixture = JSON.parse(await readFile(new URL('test/fixtures/front-door-0.0.3-input.json', root), 'utf8'));
@@ -75,6 +76,8 @@ async function main(argv) {
     throw new Error('Usage: node tools/build-current-patch-source.mjs <primary-output-json> <bootstrap-output-json>');
   }
   const { primary, bootstrap } = await buildCurrentPatchSources();
+  await mkdir(dirname(primaryOutputPath), { recursive: true });
+  await mkdir(dirname(bootstrapOutputPath), { recursive: true });
   await writeFile(primaryOutputPath, `${JSON.stringify(primary, null, 2)}\n`, 'utf8');
   await writeFile(bootstrapOutputPath, `${JSON.stringify(bootstrap, null, 2)}\n`, 'utf8');
 }
