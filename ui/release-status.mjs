@@ -16,6 +16,7 @@ export const UPDATE_LOG=Object.freeze([
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
+let serviceWorkerRegistration=null;
 
 function ensureServiceWorkerNode(){
   const technical=document.querySelector('[data-settings-technical]');
@@ -38,23 +39,17 @@ function ensureUpdateLog(){
   if(!technical)return null;
   let section=$('systemUpdateLog');
   if(section)return section;
-
   section=document.createElement('section');
   section.id='systemUpdateLog';
   section.className='settings-advanced-block update-log';
   const title=document.createElement('h4');
   title.textContent='ประวัติอัปเดต';
   section.append(title);
-
   for(const entry of UPDATE_LOG){
     const timestamp=document.createElement('small');
     timestamp.textContent=entry.timestamp;
     const list=document.createElement('ul');
-    for(const item of entry.items){
-      const row=document.createElement('li');
-      row.textContent=item;
-      list.append(row);
-    }
+    for(const item of entry.items){const row=document.createElement('li');row.textContent=item;list.append(row);}
     section.append(timestamp,list);
   }
   technical.append(section);
@@ -62,27 +57,32 @@ function ensureUpdateLog(){
 }
 
 function renderReleaseStatus(){
-  const version=$('systemVersion');
-  if(version)version.textContent=APP_RELEASE;
-  const aboutVersion=$('settingsAboutVersion');
-  if(aboutVersion)aboutVersion.textContent=APP_RELEASE;
-  const updateStatus=$('settingsUpdateStatus');
-  if(updateStatus)updateStatus.textContent=serviceWorkerState;
+  const version=$('systemVersion');if(version)version.textContent=APP_RELEASE;
+  const aboutVersion=$('settingsAboutVersion');if(aboutVersion)aboutVersion.textContent=APP_RELEASE;
+  const updateStatus=$('settingsUpdateStatus');if(updateStatus)updateStatus.textContent=serviceWorkerState;
   ensureUpdateLog();
-  const worker=ensureServiceWorkerNode();
-  if(worker)worker.textContent=serviceWorkerState;
+  const worker=ensureServiceWorkerNode();if(worker)worker.textContent=serviceWorkerState;
 }
 
-function setServiceWorkerState(next){
-  serviceWorkerState=next;
-  renderReleaseStatus();
-}
+function setServiceWorkerState(next){serviceWorkerState=next;renderReleaseStatus();}
 
 function syncRegistration(registration){
+  serviceWorkerRegistration=registration;
   if(registration.waiting){setServiceWorkerState('มีอัปเดตพร้อมใช้');return;}
   if(registration.installing){setServiceWorkerState('กำลังอัปเดต');return;}
   if(registration.active||navigator.serviceWorker.controller){setServiceWorkerState('พร้อมใช้');return;}
   setServiceWorkerState('กำลังเริ่มระบบ');
+}
+
+async function checkForUpdate(){
+  if(!('serviceWorker' in navigator)){setServiceWorkerState('ไม่รองรับ');return;}
+  try{
+    setServiceWorkerState('กำลังตรวจสอบ');
+    const registration=serviceWorkerRegistration||await navigator.serviceWorker.getRegistration();
+    if(!registration){setServiceWorkerState('กำลังเริ่มระบบ');return;}
+    await registration.update();
+    syncRegistration(registration);
+  }catch{setServiceWorkerState('ตรวจหาอัปเดตไม่สำเร็จ');}
 }
 
 async function observeServiceWorker(){
@@ -90,6 +90,7 @@ async function observeServiceWorker(){
   if(!('serviceWorker' in navigator)){setServiceWorkerState('ไม่รองรับ');return;}
   try{
     const registration=await navigator.serviceWorker.register('./sw.js');
+    serviceWorkerRegistration=registration;
     syncRegistration(registration);
     registration.addEventListener('updatefound',()=>{
       setServiceWorkerState('กำลังอัปเดต');
@@ -97,10 +98,9 @@ async function observeServiceWorker(){
     });
     navigator.serviceWorker.addEventListener('controllerchange',()=>setServiceWorkerState('อัปเดตแล้ว'));
     try{await registration.update();syncRegistration(registration);}catch{syncRegistration(registration);}
-  }catch{
-    setServiceWorkerState('มีปัญหา');
-  }
+  }catch{setServiceWorkerState('มีปัญหา');}
 }
 
+$('settingsCheckUpdateBtn')?.addEventListener('click',()=>void checkForUpdate());
 renderReleaseStatus();
 void observeServiceWorker();
