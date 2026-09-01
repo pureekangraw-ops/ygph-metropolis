@@ -5,6 +5,8 @@
 !/styles.css
 !/theme.css
 !/compact-ui.css
+!/styles/
+!/styles/settings-utility.css
 !/manifest.webmanifest
 !/sw.js
 !/icon-192.png
@@ -13,6 +15,7 @@
 !/ui/action-popups.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
+!/ui/settings-ui.mjs
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
 !/ui/home-ui.mjs
