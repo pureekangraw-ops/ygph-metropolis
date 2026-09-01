@@ -35,6 +35,15 @@ test('short MANUAL actions use a bottom sheet and forms use progressive disclosu
   assert.match(css, /min-height:\s*44px|min-block-size:\s*44px/);
 });
 
+test('Outcome detail settles an existing obligation through its current installment queue and shared bottom sheet', async () => {
+  const ui = await read('ui/manual-finance-ui.mjs');
+  assert.match(ui, /installmentPlan/);
+  assert.match(ui, /payObligation/);
+  assert.match(ui, /เต็มจำนวน/);
+  assert.match(ui, /บางส่วน/);
+  assert.match(ui, /label:'จ่ายเงิน'/);
+});
+
 test('durable actions render refreshed truth only through existing mutation/readback callback', async () => {
   const ui = await read('ui/manual-finance-ui.mjs');
   assert.match(ui, /await task\(\);\s*await onChanged\(copy\)/);
