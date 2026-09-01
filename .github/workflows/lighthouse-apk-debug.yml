@@ -7,6 +7,7 @@ on:
       - 'android-shell/**'
       - 'ui/**'
       - 'lighthouse/**'
+      - 'styles/**'
       - 'sw.js'
       - '.github/workflows/lighthouse-apk-debug.yml'
 
@@ -50,6 +51,9 @@ jobs:
 
       - name: Sync exact staged web assets
         run: npx cap sync android
+
+      - name: Inject LIGHTHOUSE APK updater bridge
+        run: npm run android:updater:apply
 
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
@@ -110,10 +114,11 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-existing-full-app-1.0.3
+          name: lighthouse-existing-full-app-1.0.4
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
+            android-shell/www/effective-base-manifest.json
           if-no-files-found: error
           retention-days: 14
