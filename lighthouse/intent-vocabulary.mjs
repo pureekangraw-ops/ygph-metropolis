@@ -2,7 +2,7 @@ import { parseNumericText } from './intent-number.mjs';
 
 const WORDS = Object.freeze([
   { forms:['ปฏิทิน'], canonical:'ปฏิทิน', role:'TARGET', possibleRoles:['TARGET'] },
-  { forms:['ปติธิน','ปฏิธิน','ปติทิน'], canonical:'ปฏิทิน', role:'TARGET', possibleRoles:['TARGET'], correction:true },
+  { forms:['ปติธิน','ปฏิธิน','ปติทิน','ปฎิทิน'], canonical:'ปฏิทิน', role:'TARGET', possibleRoles:['TARGET'], correction:true },
   { forms:['น้ำมัน'], canonical:'น้ำมัน', role:'TARGET', possibleRoles:['TARGET'] },
   { forms:['น้ามัน'], canonical:'น้ำมัน', role:'TARGET', possibleRoles:['TARGET'], correction:true },
   { forms:['ไม่ต้อง'], canonical:'ไม่ต้อง', role:'PROHIBITION', possibleRoles:['PROHIBITION'] },
