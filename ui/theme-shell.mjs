@@ -1,4 +1,5 @@
 import { hydrateIcons } from './icons.mjs';
+import './lighthouse-shell.mjs';
 
 const DESTINATION_ICONS=Object.freeze({
   store:'shopping-cart-simple',
