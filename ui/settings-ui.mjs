@@ -90,7 +90,7 @@ function installSettingsUtility(){
   index.append(
     makeIndexRow('settingsUsage','การใช้งาน','ค่าที่ผู้ใช้เลือกเอง'),
     makeIndexRow('settingsPermissions','การแจ้งเตือนและสิทธิ์','สถานะจากเจ้าของระบบ'),
-    makeIndexRow('settingsData','ข้อมูลและการสำรอง','Backup · Import · Restore'),
+    makeIndexRow('settingsData','ข้อมูลและการสำรอง','Backup · นำเข้าข้อมูล · Restore'),
     makeIndexRow('settingsSecurity','ความปลอดภัย','รหัสผ่านและการล็อกแอป'),
     makeIndexRow('settingsAbout','เกี่ยวกับแอป','เวอร์ชันและสถานะอัปเดต'),
     makeIndexRow('settingsAdvanced','ขั้นสูง','Recovery · Technical · Danger Zone')
@@ -104,7 +104,7 @@ function installSettingsUtility(){
   permissionState.textContent='ยังไม่มี Android permission bridge ที่แอปใช้งานจริงในรุ่นนี้';
   permissions.append(permissionState);
 
-  const data=makeSection('settingsData','ข้อมูลและการสำรอง','Backup = สร้างสำเนาปัจจุบัน · Import = เพิ่มข้อมูลภายนอก · Restore = คืนสถานะจาก Backup');
+  const data=makeSection('settingsData','ข้อมูลและการสำรอง','Backup = สร้างสำเนาปัจจุบัน · นำเข้าข้อมูล = เพิ่มข้อมูลภายนอก · Restore = คืนสถานะจาก Backup');
   const latest=document.createElement('p');latest.id='settingsLatestBackup';latest.className='muted';data.append(latest,dataSection);
   dataSection.querySelector('h3')?.remove();
   const backup=$('backupBtn');if(backup)backup.textContent='สำรองข้อมูล';
