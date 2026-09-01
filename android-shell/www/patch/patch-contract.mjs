@@ -8,11 +8,23 @@ export const PATCH_ALLOWED_FILES = Object.freeze([
   'app/vocabulary.json',
 ]);
 
+const LEGACY_PATCH_PATHS = Object.freeze({
+  'ui.html':'app/ui.html',
+  'ui.css':'app/ui.css',
+  'logic.mjs':'app/logic.mjs',
+  'rules.json':'app/rules.json',
+  'vocabulary.json':'app/vocabulary.json',
+});
 const PATCH_ALGORITHM = 'ECDSA-P256-SHA256';
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const encoder = new TextEncoder();
 const allowedFileSet = new Set(PATCH_ALLOWED_FILES);
+
+export function canonicalPatchPath(path) {
+  if (allowedFileSet.has(path)) return path;
+  return LEGACY_PATCH_PATHS[path] ?? null;
+}
 
 function subtleCrypto() {
   const subtle = globalThis.crypto?.subtle;
@@ -103,7 +115,9 @@ export async function verifyPatchBundle(bundle, { currentVersion, trustedKey } =
   let totalBytes = 0;
   const verifiedFiles = {};
   for (const path of paths) {
-    if (!allowedFileSet.has(path)) throw new Error(`Unsupported patch asset path: ${path}`);
+    const canonicalPath = canonicalPatchPath(path);
+    if (!canonicalPath) throw new Error(`Unsupported patch asset path: ${path}`);
+    if (verifiedFiles[canonicalPath]) throw new Error(`Duplicate canonical patch asset path: ${canonicalPath}`);
     const entry = asObject(files[path], `Patch file ${path}`);
     if (typeof entry.content !== 'string') throw new Error(`Patch file ${path} content must be UTF-8 text`);
     if (typeof entry.sha256 !== 'string' || !SHA256_HEX.test(entry.sha256)) {
@@ -115,7 +129,7 @@ export async function verifyPatchBundle(bundle, { currentVersion, trustedKey } =
 
     const actualHash = await sha256Hex(entry.content);
     if (actualHash !== entry.sha256) throw new Error(`Patch file ${path} SHA-256 hash mismatch`);
-    verifiedFiles[path] = { sha256: entry.sha256, content: entry.content };
+    verifiedFiles[canonicalPath] = { sha256: entry.sha256, content: entry.content };
   }
 
   const signature = asObject(source.signature, 'Patch signature');
