@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEffectiveSnapshot } from '../www/patch/effective-snapshot.mjs';
-import { createMemoryPatchStore } from '../www/patch/patch-store.mjs';
+import { createMemoryPatchStore, createMemoryEffectiveSnapshotStore } from '../www/patch/patch-store.mjs';
 
 const patchAssets = (suffix = '') => ({
   'ui.html': `<main>${suffix}</main>`,
@@ -27,7 +27,7 @@ async function makeEffective({ version, content, patchId = null, previousSnapsho
   });
 }
 
-test('activation moves Current/Previous by immutable effective snapshot id', async () => {
+test('legacy patch wrapper also carries Current/Previous effective snapshot ids', async () => {
   const baseEffective = await makeEffective({ version: '0.0.6', content: 'base' });
   const store = createMemoryPatchStore({
     baseSnapshot: { version: '0.0.6', assets: patchAssets('base'), effectiveSnapshot: baseEffective },
@@ -70,4 +70,30 @@ test('store fails closed when staged effective snapshot content was tampered aft
     () => store.stage({ version: '0.0.7', assets: patchAssets('patched'), effectiveSnapshot: nextEffective }),
     /SNAPSHOT_FILE_HASH_MISMATCH/,
   );
+});
+
+test('canonical app store uses immutable effective snapshots directly with no Patch-owned ui assets', async () => {
+  const base = await makeEffective({ version: 'APK-1.0.3', content: 'base' });
+  const store = await createMemoryEffectiveSnapshotStore({ baseSnapshot: base });
+  assert.equal((await store.readCurrent()).snapshotId, base.snapshotId);
+
+  const next = await makeEffective({
+    version: 'APK-1.0.3+p1',
+    content: 'patched',
+    patchId: 'PATCH-A',
+    previousSnapshotId: base.snapshotId,
+  });
+  await store.stage(next);
+  await store.activate(next.snapshotId, { expectedCurrentSnapshotId: base.snapshotId });
+  assert.deepEqual(await store.readMeta(), {
+    currentSnapshotId: next.snapshotId,
+    previousSnapshotId: base.snapshotId,
+  });
+  assert.equal((await store.readCurrent()).files['ui/app.mjs'].content, 'patched');
+
+  await store.rollback();
+  assert.deepEqual(await store.readMeta(), {
+    currentSnapshotId: base.snapshotId,
+    previousSnapshotId: next.snapshotId,
+  });
 });
