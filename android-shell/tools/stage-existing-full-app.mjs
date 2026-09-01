@@ -28,6 +28,7 @@ const requiredDirectories = [
   'ui',
   'greenfield',
   'lighthouse',
+  'styles',
 ];
 
 async function exists(path) {
@@ -90,6 +91,7 @@ for (const relative of [
   'ui',
   'greenfield',
   'lighthouse',
+  'styles',
   'index.html',
   'app.mjs',
   'styles.css',
