@@ -1,165 +1,174 @@
 # LIGHTHOUSE App Existence Hardening Checkpoint
 
-Status: AUTOMATABLE HARDENING COMPLETE TO CURRENT EVIDENCE; PHYSICAL DEVICE CLAIMS REMAIN GATED. No production deploy/store publication. No APK B before PR #96 Phase 6.2 completes.
+Status: AUTOMATABLE HARDENING + CURRENT HARDWARE PATH VERIFIED TO AVAILABLE CAPABILITY. No production deploy/store publication. Backup/recovery remains a future physical VERIFY because the current APK does not expose a complete physical backup/restore path.
 
-This checkpoint records `Reality -> Evidence -> Gap -> Status` for the six App Existence roots. `PROVEN` applies only to the exact claim supported by evidence; a root remains `VERIFY` when required physical evidence is outstanding.
+This checkpoint records `Reality -> Evidence -> Gap -> Status` for the six App Existence roots. `PROVEN` applies only to the exact claim supported by evidence. Missing evidence does not authorize scope expansion.
 
-## 1. App Identity — VERIFY
+## 1. App Identity — PROVEN FOR CURRENT CANONICAL PATH
 
 **Reality**
 
 - Canonical application/package ID is `com.yggdrasil.lighthouse` across source identity contract and generated canonical APK rail.
-- Canonical APK generation now has a reusable Standard APK Test Flow: update Android version ownership, load the single current Patch release contract, build/sign/verify the Patch, generate/apply/verify Android security, build/sign the release APK, then verify package/signer/version/final bytes before upload.
-- The reusable rail is release-number agnostic at workflow level; current Patch release identity is owned by `android-shell/release/current-patch.json` rather than hard-coded in the workflow.
+- Standard APK Test Flow owns generated security, release build, canonical signing, and final package/signer/version verification.
+- APK B was produced as `versionCode 1002`, `versionName 1.0.1` from exact source head `295264c5aff46a9853cf14cfcdd84b3149a9b5ac`.
+- Android accepted APK B over the existing canonical APK A without uninstall or storage clear.
 
 **Evidence**
 
 - `android-shell/apk-identity.json`
 - `android-shell/version.json`
-- `android-shell/release/current-patch.json`
-- `android-shell/tools/build-current-patch-source.mjs`
 - `.github/workflows/lighthouse-apk-debug.yml`
-- exact head `658ea4fa0afe21085344d8acaafb49302340ad62`
-- LIGHTHOUSE APK Debug #208 run `33454225997` — SUCCESS, including final APK identity verification and canonical APK upload.
-- canonical artifact id `9780899901`, artifact digest `sha256:fe9bf40114c1c48a1e957092a61d09e4ec025985881a87677f0b5ff70267604f`, bound to exact head `658ea4fa...`.
+- LIGHTHOUSE APK Debug #219 run `33459149529` — SUCCESS.
+- canonical APK B artifact id `9782574017`
+- APK B digest `sha256:9bc4bcdcd73a4348e58d972ea0ba6e19180c62bc60ea747fa5d80e9477e71701`
+- physical in-place A→B acceptance on Android hardware with durable state retained.
 
 **Gap**
 
-- Canonical APK identity is not yet recorded from the physical target device required by Phase 6.2.
+- Exact physical device/model/Android-version metadata is not yet retained in-repo. Do not guess it.
 
-**Status:** `VERIFY` overall; source/final-artifact identity and reusable canonical generation contract are `PROVEN`, installed-device canonical identity remains `VERIFY`.
+**Status:** `PROVEN` for the current canonical source→artifact→installed update path. Device metadata is evidence enrichment, not a blocker to the observed behavior.
 
-## 2. Signing & Update Identity — VERIFY
+## 2. Signing & Update Identity — PROVEN FOR A→B PATH
 
 **Reality**
 
-- Canonical signer and monotonic Android version owner exist.
-- Standard APK Test Flow isolates Patch signing and APK signing trust domains and performs both automatically.
-- CI signs release APK bytes and verifies package, signer, versionCode, versionName, and APK SHA-256 before artifact upload.
-- Workflow fails closed if the current Patch contract cannot be loaded/built/signed/verified, generated security verification fails, APK signing material is invalid, or final APK identity/version does not match the canonical contracts.
-- Historical debug-signed installs are not the canonical signer lineage.
+- Canonical signer SHA-256 is `aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce`.
+- Android version ownership is monotonic and independent from Patch versioning.
+- Standard APK Test Flow isolates Patch and APK signing trust domains and fails closed on identity/security/signing mismatch.
+- APK B `1002/1.0.1` was installed over APK A without uninstall/storage clear and Android accepted it as an in-place update.
 
 **Evidence**
 
-- canonical signer SHA-256 `aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce`
 - `android-shell/tools/verify-apk-identity.mjs`
 - `android-shell/test/apk-ci-signing-contract.test.mjs`
-- LIGHTHOUSE APK Debug #208 run `33454225997` — SUCCESS on exact head `658ea4fa...`.
-- `Verify foundation contract`, `Load current Patch contract`, `Build current Patch signing sources`, `Sign verify and manifest current Patch`, `Verify generated Android security`, `Materialize canonical APK signer`, `Verify final APK identity`, and `Upload canonical APK` all completed successfully in that run.
+- LIGHTHOUSE APK Debug #219 run `33459149529` — SUCCESS through final APK identity verification/upload.
+- physical A→B update preserved durable `ข้าว 65` into APK B.
 
 **Gap**
 
-- Physical canonical APK A baseline must be established first.
-- APK A -> APK B same-signer, higher-version in-place update without uninstall/storage clear has not been physically proven.
+- Historical debug-signed installs remain outside canonical lineage and are not promoted into this claim.
 
-**Status:** `VERIFY`; signing/version/final-byte rail and reusable test-flow automation are `PROVEN`, physical update lineage remains gated.
+**Status:** `PROVEN` for the tested canonical A→B signer/version/update lineage.
 
-## 4. Data Survival — VERIFY
+## 4. Data Survival — PROVEN FOR TESTED DURABLE PATH
 
 **Reality**
 
 - Single IndexedDB writes resolve at transaction completion rather than request success.
-- Multi-entry writes and reset use transaction outcome semantics.
-- A blocked database open fails closed with `GREENFIELD_DB_OPEN_BLOCKED`.
-- Existing connections close on `versionchange` so a legitimate schema/database upgrade is not stranded by this connection.
-- Existing schema-1 -> schema-2 migration tests preserve existing durable truth.
-- Trusted bootstrap integration proves close/reopen over the same IndexedDB database preserves a committed `ข้าว 65` expense readback.
+- Multi-entry writes/reset use transaction outcome semantics.
+- Blocked DB open fails closed with `GREENFIELD_DB_OPEN_BLOCKED`.
+- Existing connections close on `versionchange`.
+- Existing schema migration preserves durable truth.
+- Trusted bootstrap reads durable state after reconstruction and exposes a truthful restore witness rather than pretending chat transcript history is durable.
+- Durable truth created under APK A survived A→B update.
+- New durable truth created under APK B survived normal close/reopen, Android Force Stop/relaunch, and full device reboot.
 
 **Evidence**
 
-- Data-survival tests commit `45293eac99607a7b96ce4039e175b9a32d2795b1`.
+- Data-survival RED commit `45293eac99607a7b96ce4039e175b9a32d2795b1`.
 - implementation commit `5198a9f5a61191d2be8e97655205b8f530896feb`.
-- exact-head Greenfield Deploy Gate #864 run `33454225972` — SUCCESS on `658ea4fa...`.
-- Greenfield suite includes transaction completion, `versionchange`, `blocked`, schema migration, encrypted durable readback, recovery, and lifecycle contracts.
-- `android-shell/test/trusted-bootstrap.integration.test.mjs` proves durable reopen/readback using IndexedDB.
+- restore-witness integration test/implementation verified by LIGHTHOUSE APK Debug #218 run `33458949065` — SUCCESS and Greenfield Deploy Gate #874 run `33458949038` — SUCCESS.
+- APK B head `295264c5aff46a9853cf14cfcdd84b3149a9b5ac`; Greenfield Deploy Gate #875 run `33459149489` — SUCCESS; LIGHTHOUSE APK Debug #219 run `33459149529` — SUCCESS.
+- physical observations:
+  - APK A `ข้าว 65` survived into APK B and rendered `กู้คืนข้อมูลแล้ว · ข้าว 65 บาท`.
+  - APK B `ข้าว 100` survived normal close/reopen.
+  - the same `ข้าว 100` survived Force Stop/relaunch.
+  - the same `ข้าว 100` survived device reboot.
 
 **Gap**
 
-- Browser/CI evidence cannot prove physical Android force-stop, process death, reboot, or post-APK-update persistence.
-- `strict durability` remains `VERIFY`; it is not promoted to a blocker without direct evidence requiring it.
+- `strict durability` remains an unpromoted standards nuance; no current evidence shows it is required to close this tested path.
+- A separately instrumented OS process-kill case is not retained beyond stronger practical Force Stop and reboot observations.
 
-**Status:** `VERIFY` overall; current automatable transaction/upgrade/reopen/schema claims are `PROVEN`, physical survival claims remain `VERIFY`.
+**Status:** `PROVEN` for the tested durable expense path across commit, reopen, canonical APK update, Force Stop, and reboot.
 
-## 3. Lifecycle & Restore — VERIFY
+## 3. Lifecycle & Restore — PROVEN FOR AVAILABLE TESTED PATH
 
 **Reality**
 
-- Trusted bootstrap closes a runtime/store and reconstructs a fresh runtime/store over the same IndexedDB state with the committed expense intact.
-- A confirmation that existed only in the old session cannot be executed after reopen; stale `ยืนยัน` fails closed without durable mutation.
-- Lifecycle/reopen behavior is now exercised under the same exact-head foundation that produces the canonical APK.
+- Trusted bootstrap reconstructs runtime from durable state after reopen.
+- Session-only pending confirmation is not resurrected as executable stale work.
+- Cold-start restore witness is derived from decrypted durable state, not persisted fake chat history.
+- Physical close/reopen, Force Stop/relaunch, and device reboot all reconstructed the latest durable truth.
 
 **Evidence**
 
-- `android-shell/test/trusted-bootstrap.integration.test.mjs`:
-  - durable `ข้าว 65` close/reopen readback
-  - reopen while confirmation pending rejects stale execution.
-- exact-head Greenfield Deploy Gate #864 run `33454225972` — SUCCESS.
-- exact-head LIGHTHOUSE APK Debug #208 run `33454225997` — SUCCESS.
+- `android-shell/test/trusted-bootstrap.integration.test.mjs` covers durable reopen/readback, stale pending rejection, and restore-witness behavior.
+- LIGHTHOUSE APK Debug #218 run `33458949065` — SUCCESS.
+- physical APK B restore witness:
+  - `กู้คืนข้อมูลแล้ว · ข้าว 65 บาท` after A→B update.
+  - `กู้คืนข้อมูลแล้ว · ข้าว 100 บาท` after a new B write and cold reopen.
+  - `ข้าว 100` retained after Force Stop/relaunch.
+  - `ข้าว 100` retained after full device reboot.
 
 **Gap**
 
-- Real Android force-stop/relaunch, genuine process death/relaunch, device reboot, and post-upgrade reconstruction require physical hardware.
+- No separately instrumented process-death test has been retained. Do not add duplicate ceremony unless a reviewer requires that exact distinct claim.
 
-**Status:** `VERIFY`; automatable reconstruction semantics are `PROVEN`, OS lifecycle claims remain `VERIFY`.
+**Status:** `PROVEN` for normal reconstruction, Force Stop/relaunch, reboot, and post-upgrade restore on the tested path; distinct instrumented process death remains `VERIFY` only as a narrower untested claim.
 
 ## 5. Security Boundary — PROVEN FOR GENERATED RELEASE SURFACE
 
 **Reality**
 
-- Security verification runs against the generated/merged Android release manifest after Capacitor native generation, not against an inferred static manifest.
-- Explicit baseline requires backup disabled, cleartext disabled, release not debuggable, expected permissions only, providers private, and exported components fail closed unless specifically proven.
-- AndroidX `ProfileInstallReceiver` is accepted only under its exact constrained contract: known class, exported receiver, `android.permission.DUMP`, and known ProfileInstaller actions. Drift fails closed.
-- Package-scoped dynamic receiver permission is allowed only with a signature-protected declaration.
-- Standard APK Test Flow applies and verifies this generated security baseline automatically before APK publication.
+- Security verification runs against generated/merged Android release output after Capacitor native generation.
+- Baseline requires backup disabled, cleartext disabled, release not debuggable, expected permissions only, providers private, and exported components fail closed unless explicitly proven.
+- AndroidX `ProfileInstallReceiver` is allowed only under the exact constrained contract already encoded by the verifier.
+- Package-scoped dynamic receiver permission is allowed only when signature-protected.
+- Standard APK Test Flow applies and verifies this security baseline before final APK publication.
 
 **Evidence**
 
 - verifier policy commit `e45113d27b638d7f3b9f5dcbf451ce664cc7dab0`
-- verifier negative/positive tests commit `5f5151498f874d54e66cf0da45fd0aae20b09569`
-- exact-head LIGHTHOUSE APK Debug #208 run `33454225997` — SUCCESS; generated Android security apply and verify steps completed before final APK identity verification/upload.
-- exact-head Greenfield Deploy Gate #864 run `33454225972` — SUCCESS.
+- verifier tests commit `5f5151498f874d54e66cf0da45fd0aae20b09569`
+- LIGHTHOUSE APK Debug #219 run `33459149529` — SUCCESS through generated Android security verification and final APK identity.
 
 **Gap**
 
-- This claim is limited to the generated release native surface and verifier contract. It does not manufacture physical runtime/device evidence.
+- Claim remains intentionally limited to generated release/native surface and verifier contract; it does not invent runtime exploit testing.
 
 **Status:** `PROVEN` for generated release security surface.
 
-## 6. Backup & Recovery — VERIFY
+## 6. Backup & Recovery — VERIFY, NO SCOPE EXPANSION
 
 **Reality**
 
-- Current backup export does not embed a usable plaintext recovery secret.
-- Current restore uses separately supplied recovery material.
-- Historical embedded-key backups remain explicitly identified as legacy compatibility.
-- Wrong recovery material/corruption fails closed before replacing valid target state; overwrite requires the existing explicit decision contract.
+- Underlying current-format backup contract does not embed a usable plaintext recovery secret.
+- Current restore contract uses separately supplied recovery material.
+- Historical embedded-key backups remain explicit legacy compatibility.
+- Wrong recovery material/corruption fails closed before replacing valid target state; overwrite requires explicit decision.
+- The current APK does not yet expose a complete physical backup→restore path suitable for end-to-end hardware proof.
 
 **Evidence**
 
-- current backup/recovery tests cover no embedded recovery secret, separate recovery material, wrong material/corruption no-write behavior, overwrite protection, verified restore readback, and legacy embedded-key compatibility.
-- exact-head Greenfield Deploy Gate #864 run `33454225972` — SUCCESS on `658ea4fa...`.
+- Greenfield backup/recovery tests cover no embedded recovery secret, separate recovery material, wrong-material/corruption no-write behavior, overwrite protection, verified restore readback, and legacy compatibility.
+- Greenfield Deploy Gate #875 run `33459149489` — SUCCESS on APK B source head.
 
 **Gap**
 
-- Required physical end-to-end proof remains: current backup -> controlled empty/loss target -> restore with separately held recovery material -> app reopen -> exact durable readback.
+- Physical current backup → controlled empty/loss target → restore → reopen/readback is not runnable from the current app surface.
 
-**Status:** `VERIFY`; secret boundary and automated recovery behavior are `PROVEN`, physical recovery remains `VERIFY`.
+**Status:** `VERIFY` for physical recovery. Automated secret-boundary/recovery contracts are `PROVEN`. Do **not** add a backup product capability solely to turn this row green; return when that capability is independently authorized and present.
 
-## Physical evidence owner / next gate
+## Physical evidence checkpoint
 
-Physical execution is defined in `docs/android-app-existence-physical-proof.md` and linked from `docs/android-apk-identity-checkpoint.md`.
+Current real-device proof is recorded in `docs/android-app-existence-physical-proof.md`.
 
-The first unresolved hard gate is PR #96 Phase 6.2: establish the canonical APK on real Android hardware, complete enrollment if applicable, record Patch state, create and read back representative durable truth (`ข้าว 65` minimum), fully close/reopen, and prove the truth/Patch state remain present.
+Closed physical claims for the tested path:
 
-After this baseline is captured, later test rounds use the reusable Standard APK Test Flow rather than manual signer/manifest/security/build assembly. Producing a canonical APK from that flow is not itself physical A -> B/state-survival proof.
+- canonical APK A→B in-place update without uninstall/storage clear
+- APK A durable truth surviving into APK B
+- APK B new durable write surviving normal close/reopen
+- APK B durable truth surviving Android Force Stop/relaunch
+- APK B durable truth surviving full device reboot
+- One-Tap Patch activation to `0.0.6` on hardware
 
-Until Phase 6.2 is complete:
+Still intentionally open:
 
-- do not produce APK B for the A -> B proof;
-- do not claim force-stop/process-death/reboot/post-upgrade survival as `PROVEN`;
-- do not claim physical backup/recovery as `PROVEN`;
-- do not substitute CI/emulator evidence for hardware.
+- separately instrumented process-death claim, only if later review requires it
+- physical backup/recovery, because the current app surface does not yet provide the complete capability
 
 ## Review boundary
 
-This branch stops at evidence preparation and physical-gate definition. BIG owns sending the work for external review. Do not mark PR #97 ready, request review, merge, deploy, or publish from this checkpoint.
+PR #97 remains Draft. BIG owns external review handoff. Do not mark ready, request review, merge, deploy, or publish from this checkpoint without explicit owner instruction.
