@@ -1,5 +1,7 @@
 const STORE_TYPES = new Set(['SALE', 'PURCHASE', 'STOCK_WITHDRAWAL', 'STOCK_ADJUSTMENT']);
 const CALENDAR_STATUSES = new Set(['OPEN', 'PARTIAL', 'COMPLETED', 'CANCELLED']);
+const EXPECTATION_TYPES = new Set(['TARGET', 'CEILING']);
+const CANCELLABLE_LEDGER_TYPES = new Set(['TARGET', 'CEILING', 'RECEIVABLE', 'OBLIGATION']);
 
 function requiredText(value, code) {
   const output = String(value ?? '').trim();
@@ -191,6 +193,100 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     createEntry(domainState, record, command, at);
   });
 
+  runtime.register('LEDGER', 'LEDGER_CREATE_EXPECTATION', ({ domainState, payload, command }) => {
+    const type = requiredText(payload.type, 'INVALID_EXPECTATION_TYPE');
+    if (!EXPECTATION_TYPES.has(type)) throw new Error(`INVALID_EXPECTATION_TYPE:${type}`);
+    const at = now();
+    createEntry(domainState, {
+      recordId:requiredText(payload.recordId, 'INVALID_RECORD_ID'), source:'LEDGER', type,
+      title:requiredText(payload.title, 'INVALID_EXPECTATION_TITLE'),
+      amountSatang:safeSatang(payload.amountSatang, { allowZero:false, code:'INVALID_EXPECTATION_AMOUNT' }),
+      status:'OPEN', createdAt:at, updatedAt:at,
+    }, command, at);
+  });
+
+  runtime.register('LEDGER', 'LEDGER_UPDATE_EXPECTATION', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    const type = requiredText(payload.type, 'INVALID_EXPECTATION_TYPE');
+    if (!entry || entry.record?.type !== type || !EXPECTATION_TYPES.has(type)) throw new Error(`LEDGER_EXPECTATION_NOT_FOUND:${id}`);
+    if (entry.record.status === 'CANCELLED') throw new Error(`LEDGER_EXPECTATION_CANCELLED:${id}`);
+    const amount = safeSatang(payload.amountSatang, { allowZero:false, code:'INVALID_EXPECTATION_AMOUNT' });
+    const title = requiredText(payload.title ?? entry.record.title, 'INVALID_EXPECTATION_TITLE');
+    if (amount === Number(entry.record.amountSatang) && title === entry.record.title) throw new Error(`LEDGER_EXPECTATION_UNCHANGED:${id}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => { record.amountSatang=amount; record.title=title; record.updatedAt=at; });
+  });
+
+  runtime.register('LEDGER', 'LEDGER_CREATE_RECEIVABLE', ({ domainState, payload, command }) => {
+    const at = now();
+    const total = safeSatang(payload.totalSatang, { allowZero:false, code:'INVALID_RECEIVABLE_TOTAL' });
+    createEntry(domainState, {
+      recordId:requiredText(payload.recordId, 'INVALID_RECORD_ID'), source:'LEDGER', type:'RECEIVABLE',
+      title:requiredText(payload.title, 'INVALID_RECEIVABLE_TITLE'), amountSatang:total, originalSatang:total,
+      receivedSatang:0, remainingSatang:total, dueDate:payload.dueDate ? safeIsoDate(payload.dueDate) : null,
+      status:'OPEN', createdAt:at, updatedAt:at,
+    }, command, at);
+  });
+
+  runtime.register('LEDGER', 'LEDGER_APPLY_RECEIVABLE_PAYMENT', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    if (!entry || entry.record?.type !== 'RECEIVABLE') throw new Error(`LEDGER_RECEIVABLE_NOT_FOUND:${id}`);
+    if (entry.record.status === 'COMPLETED' || entry.record.status === 'CANCELLED') throw new Error(`LEDGER_RECEIVABLE_CLOSED:${id}/${entry.record.status}`);
+    const amount = safeSatang(payload.amountSatang, { allowZero:false, code:'INVALID_RECEIVABLE_PAYMENT' });
+    const remaining = Number(entry.record.remainingSatang ?? entry.record.amountSatang);
+    const received = Number(entry.record.receivedSatang ?? 0);
+    const original = Number(entry.record.originalSatang ?? remaining + received);
+    if (![remaining, received, original].every(Number.isSafeInteger) || remaining < 0 || received < 0 || original < 0) throw new Error(`INVALID_RECEIVABLE_STATE:${id}`);
+    if (amount > remaining) throw new Error(`PAYMENT_OVER_RECEIVABLE:${id}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => {
+      record.originalSatang=original; record.receivedSatang=received+amount; record.remainingSatang=remaining-amount;
+      record.amountSatang=record.remainingSatang; record.status=record.remainingSatang===0?'COMPLETED':'PARTIAL'; record.updatedAt=at;
+    });
+  });
+
+  runtime.register('LEDGER', 'LEDGER_EDIT_METADATA', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    if (!entry) throw new Error(`DOMAIN_RECORD_NOT_FOUND:${id}`);
+    const title = payload.title == null ? entry.record.title : requiredText(payload.title, 'INVALID_LEDGER_TITLE');
+    const detail = payload.detail == null ? entry.record.detail : String(payload.detail);
+    if (title === entry.record.title && detail === entry.record.detail) throw new Error(`LEDGER_METADATA_UNCHANGED:${id}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => { record.title=title; if (detail != null) record.detail=detail; record.updatedAt=at; });
+  });
+
+  runtime.register('LEDGER', 'LEDGER_REFUND_TRANSACTION', ({ domainState, payload, command }) => {
+    const originalId = requiredText(payload.originalRecordId, 'INVALID_ORIGINAL_RECORD_ID');
+    const originalEntry = domainState.records[originalId];
+    if (!originalEntry || originalEntry.record?.type !== 'TRANSACTION') throw new Error(`LEDGER_TRANSACTION_NOT_FOUND:${originalId}`);
+    if (originalEntry.record.reversalOf) throw new Error(`REFUND_OF_REVERSAL_FORBIDDEN:${originalId}`);
+    if (Object.values(domainState.records).some(entry => entry?.record?.reversalOf === originalId)) throw new Error(`REFUND_AFTER_REVERSAL_FORBIDDEN:${originalId}`);
+    const amount = safeSatang(payload.amountSatang, { allowZero:false, code:'INVALID_REFUND_AMOUNT' });
+    const originalAmount = safeSatang(originalEntry.record.amountSatang, { allowZero:false, code:'INVALID_LEDGER_AMOUNT' });
+    const refunded = Object.values(domainState.records).reduce((sum, entry) => entry?.record?.refundOf === originalId ? sum + Number(entry.record.amountSatang || 0) : sum, 0);
+    if (refunded + amount > originalAmount) throw new Error(`REFUND_OVER_ORIGINAL:${originalId}`);
+    const at = now();
+    const opposite = transactionDirection(originalEntry.record) === 'IN' ? 'OUT' : 'IN';
+    createEntry(domainState, {
+      recordId:requiredText(payload.refundRecordId, 'INVALID_REFUND_RECORD_ID'), source:'LEDGER', type:'TRANSACTION',
+      title:`คืน ${String(originalEntry.record.title || originalId)}`, detail:`${opposite}:REFUND`, direction:opposite,
+      amountSatang:amount, status:'COMPLETED', refundOf:originalId, refundReason:requiredText(payload.reason, 'INVALID_REFUND_REASON'),
+      sourceRef:originalEntry.record.sourceRef ?? `LEDGER/${originalId}`, createdAt:at, updatedAt:at,
+    }, command, at);
+  });
+
+  runtime.register('LEDGER', 'LEDGER_CANCEL_EXPECTED_RECORD', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    if (!entry || !CANCELLABLE_LEDGER_TYPES.has(entry.record?.type)) throw new Error(`LEDGER_EXPECTED_RECORD_NOT_FOUND:${id}`);
+    if (entry.record.status === 'COMPLETED' || entry.record.status === 'CANCELLED') throw new Error(`LEDGER_EXPECTED_RECORD_CLOSED:${id}/${entry.record.status}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => { record.status='CANCELLED'; record.updatedAt=at; });
+  });
+
   runtime.register('CALENDAR', 'CALENDAR_CREATE_RECORD', ({ domainState, payload, command }) => {
     const input = payload?.record;
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('INVALID_CALENDAR_RECORD');
@@ -239,6 +335,18 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
       record.dueDate = dueDate;
       record.updatedAt = at;
     });
+  });
+
+  runtime.register('CALENDAR', 'CALENDAR_EDIT_RECORD', ({ domainState, payload, command }) => {
+    const id = requiredText(payload.recordId, 'INVALID_RECORD_ID');
+    const entry = domainState.records[id];
+    if (!entry) throw new Error(`DOMAIN_RECORD_NOT_FOUND:${id}`);
+    if (entry.record.status === 'COMPLETED' || entry.record.status === 'CANCELLED') throw new Error(`CALENDAR_RECORD_CLOSED:${id}/${entry.record.status}`);
+    const title = payload.title == null ? entry.record.title : requiredText(payload.title, 'INVALID_CALENDAR_TITLE');
+    const detail = payload.detail == null ? entry.record.detail : String(payload.detail);
+    if (title === entry.record.title && detail === entry.record.detail) throw new Error(`CALENDAR_RECORD_UNCHANGED:${id}`);
+    const at = now();
+    updateEntry(domainState, id, command, at, record => { record.title=title; if (detail != null) record.detail=detail; record.updatedAt=at; });
   });
 
   runtime.register('CALENDAR', 'CALENDAR_SET_STATUS', ({ domainState, payload, command }) => {
