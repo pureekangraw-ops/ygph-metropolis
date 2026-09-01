@@ -8,6 +8,13 @@ async function workflowText() {
   return readFile(workflowUrl, 'utf8');
 }
 
+test('standard APK flow reads one current Patch release contract instead of hard-coding a release number', async () => {
+  const text = await workflowText();
+  assert.match(text, /release\/current-patch\.json/);
+  assert.match(text, /build-current-patch-source\.mjs/);
+  assert.doesNotMatch(text, /front-door-0\.0\.5|0\.0\.5-signing|0\.0\.5-signed/);
+});
+
 test('APK distributable signing uses APK-specific secrets only', async () => {
   const text = await workflowText();
   for (const name of [
@@ -26,7 +33,11 @@ test('APK distributable signing uses APK-specific secrets only', async () => {
 
 test('Patch and APK signing trust domains stay isolated', async () => {
   const text = await workflowText();
-  const patchBlock = text.slice(text.indexOf('Sign verify and manifest Front Door 0.0.5 with key-3'), text.indexOf('Upload verified Front Door 0.0.5 signed Patches'));
+  const patchStart = text.indexOf('Sign verify and manifest current Patch');
+  const patchEnd = text.indexOf('Upload verified current Patch');
+  assert.notEqual(patchStart, -1, 'missing standard Patch signing step');
+  assert.ok(patchEnd > patchStart, 'missing standard Patch artifact step');
+  const patchBlock = text.slice(patchStart, patchEnd);
   assert.match(patchBlock, /LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM/);
   assert.match(patchBlock, /LIGHTHOUSE_PATCH_KEY_PASSPHRASE/);
   assert.doesNotMatch(patchBlock, /LIGHTHOUSE_APK_/);
@@ -37,11 +48,15 @@ test('Patch and APK signing trust domains stay isolated', async () => {
   assert.doesNotMatch(apkBlock, /LIGHTHOUSE_PATCH_PRIVATE_KEY_PEM|LIGHTHOUSE_PATCH_KEY_PASSPHRASE/);
 });
 
-test('APK publication is downstream of final-byte identity verification', async () => {
+test('APK publication is downstream of generated security and final-byte identity verification', async () => {
   const text = await workflowText();
+  const securityApplyIndex = text.indexOf('Apply generated Android security baseline');
+  const securityVerifyIndex = text.indexOf('Verify generated Android security');
   const verifyIndex = text.indexOf('Verify final APK identity');
   const uploadIndex = text.indexOf('Upload canonical APK');
-  assert.ok(verifyIndex >= 0, 'missing final APK verification step');
+  assert.ok(securityApplyIndex >= 0, 'missing generated security application step');
+  assert.ok(securityVerifyIndex > securityApplyIndex, 'security verification must follow application');
+  assert.ok(verifyIndex > securityVerifyIndex, 'final APK verification must follow generated security verification');
   assert.ok(uploadIndex > verifyIndex, 'APK upload must happen after identity verification');
 });
 
