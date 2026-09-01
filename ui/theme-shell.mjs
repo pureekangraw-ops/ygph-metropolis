@@ -42,3 +42,4 @@ export function applyGraphiteLimeTheme(){
 }
 
 applyGraphiteLimeTheme();
+void import('./lighthouse-shell.mjs');
