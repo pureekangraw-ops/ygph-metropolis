@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 
 const EFFECTIVE_EXTENSIONS = new Set(['.html','.css','.js','.mjs','.json','.webmanifest']);
-const ROOT_PATCHABLE = new Set(['index.html','app.mjs','styles.css','theme.css','compact-ui.css']);
+const ROOT_PATCHABLE = new Set(['app.mjs','styles.css','theme.css','compact-ui.css']);
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -24,6 +24,7 @@ function isEffectiveFile(path) {
 
 export function isPatchableEffectivePath(path) {
   if (typeof path !== 'string' || !path) return false;
+  if (path === 'index.html') return false;
   if (path === 'sw.js') return false;
   if (path.startsWith('greenfield/')) return false;
   if (path.startsWith('patch/')) return false;
