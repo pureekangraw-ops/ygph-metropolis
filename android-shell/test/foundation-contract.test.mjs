@@ -8,7 +8,6 @@ const read = (relative) => readFile(new URL(relative, root), 'utf8');
 test('Capacitor shell contract is pinned to LIGHTHOUSE Android foundation', async () => {
   const pkg = JSON.parse(await read('android-shell/package.json'));
   const config = JSON.parse(await read('android-shell/capacitor.config.json'));
-
   assert.equal(config.appId, 'com.yggdrasil.lighthouse');
   assert.equal(config.appName, 'LIGHTHOUSE');
   assert.equal(config.webDir, 'www');
@@ -23,9 +22,11 @@ test('remote patch traffic is routed through Capacitor native HTTP', async () =>
   assert.equal(config.plugins?.CapacitorHttp?.enabled, true);
 });
 
-test('foundation page stays local and excludes later-phase native scope', async () => {
+test('stable Android entry stays local, boots trusted LIGHTHOUSE, and excludes unrelated native scope', async () => {
   const html = await read('android-shell/www/index.html');
-  assert.match(html, /LIGHTHOUSE APK Foundation Proof/);
+  assert.match(html, /<title>LIGHTHOUSE<\/title>/);
+  assert.match(html, /trusted\/bootstrap\.mjs/);
+  assert.doesNotMatch(html, /Foundation Proof/i);
   assert.doesNotMatch(html, /geolocation|google maps|api[_ -]?key|gps/i);
 });
 
@@ -33,7 +34,6 @@ test('patch picker exposes all file types while runtime keeps patch validation',
   const html = await read('android-shell/www/index.html');
   const runtime = await read('android-shell/www/patch/patch-runtime.mjs');
   const picker = html.match(/<input\b[^>]*\bid=["']patch-file["'][^>]*>/i)?.[0];
-
   assert.ok(picker, 'patch file input must exist');
   assert.doesNotMatch(picker, /\baccept\s*=/i, 'native picker must not pre-filter file types');
   assert.match(runtime, /endsWith\(['"]\.lhpatch['"]\)/, 'runtime must still enforce .lhpatch extension');

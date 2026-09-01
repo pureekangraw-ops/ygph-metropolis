@@ -12,9 +12,9 @@ test('runtime rejects a wrong selected file type before reading content', async 
   await assert.rejects(parseSelectedPatchFile(file), /must use \.lhpatch/i); assert.equal(reads, 0);
 });
 
-test('packaged base snapshot contains every patchable logical asset at version 0.0.1', async () => {
-  const version = JSON.parse(await read('www/app/version.json')); assert.equal(version.version, '0.0.1');
-  assert.match(await read('www/app/ui.html'), /LIGHTHOUSE APK Foundation Proof/); assert.ok((await read('www/app/ui.css')).length > 0);
+test('packaged base snapshot contains every patchable logical asset at current full-app version', async () => {
+  const version = JSON.parse(await read('www/app/version.json')); assert.equal(version.version, '0.0.7');
+  const ui = await read('www/app/ui.html'); assert.match(ui, /data-chat-log/); assert.match(ui, /data-manual-panel/); assert.match(ui, /data-settings-panel/); assert.ok((await read('www/app/ui.css')).length > 0);
   assert.match(await read('www/app/logic.mjs'), /export\s+async\s+function\s+mount/);
   assert.equal(typeof JSON.parse(await read('www/app/rules.json')), 'object'); assert.equal(typeof JSON.parse(await read('www/app/vocabulary.json')), 'object');
 });
