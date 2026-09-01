@@ -1,0 +1,23 @@
+name: LIGHTHOUSE Existing APK Repair Verify
+
+on:
+  pull_request:
+    paths:
+      - 'tests/lighthouse-existing-apk-repair.test.cjs'
+      - 'android-shell/tools/stage-existing-full-app.mjs'
+      - 'ui/release-status.mjs'
+      - 'lighthouse/intent-vocabulary.mjs'
+      - '.github/workflows/lighthouse-existing-apk-repair-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/lighthouse-existing-apk-repair.test.cjs
