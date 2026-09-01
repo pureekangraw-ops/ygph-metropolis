@@ -20,17 +20,19 @@ test('current Patch contract owns version and base versions in one source-contro
   assert.equal(contract.releaseDirectory, `release/front-door-${contract.version}`);
 });
 
-test('generic current Patch builder produces primary and bootstrap sources from the contract', async () => {
+test('generic current Patch builder emits the canonical app bundle for primary and bootstrap', async () => {
   const { buildCurrentPatchSources } = await loadBuilder();
   const { contract, primary, bootstrap } = await buildCurrentPatchSources();
   assert.equal(primary.version, contract.version);
   assert.equal(primary.baseVersion, contract.primaryBaseVersion);
   assert.equal(bootstrap.version, contract.version);
   assert.equal(bootstrap.baseVersion, contract.bootstrapBaseVersion);
-  assert.equal(typeof primary.files['ui.html'], 'string');
-  assert.equal(typeof primary.files['logic.mjs'], 'string');
-  assert.equal(typeof bootstrap.files['rules.json'], 'string');
-  assert.equal(typeof bootstrap.files['vocabulary.json'], 'string');
+  for (const path of ['app/ui.html','app/ui.css','app/logic.mjs','app/rules.json','app/vocabulary.json']) {
+    assert.equal(typeof primary.files[path], 'string', `primary must include ${path}`);
+    assert.equal(typeof bootstrap.files[path], 'string', `bootstrap must include ${path}`);
+  }
+  assert.equal(primary.files['ui.html'], undefined);
+  assert.equal(primary.files['logic.mjs'], undefined);
 });
 
 test('current Patch contract fails closed on unsafe release directory traversal', async () => {

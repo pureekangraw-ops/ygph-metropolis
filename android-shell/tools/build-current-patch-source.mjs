@@ -4,6 +4,13 @@ import { pathToFileURL } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const contractUrl = new URL('release/current-patch.json', root);
+const CANONICAL_PATCH_FILES = Object.freeze([
+  'app/ui.html',
+  'app/ui.css',
+  'app/logic.mjs',
+  'app/rules.json',
+  'app/vocabulary.json',
+]);
 
 function parseVersion(value) {
   if (typeof value !== 'string' || !/^\d+\.\d+\.\d+$/.test(value)) throw new Error('CURRENT_PATCH_VERSION_INVALID');
@@ -40,32 +47,25 @@ export async function loadCurrentPatchContract() {
   return validateCurrentPatchContract(parsed);
 }
 
+async function readCanonicalAppBundle() {
+  const entries = await Promise.all(CANONICAL_PATCH_FILES.map(async path => [path, await readFile(new URL(`www/${path}`, root), 'utf8')]));
+  return Object.fromEntries(entries);
+}
+
 export async function buildCurrentPatchSources() {
   const contract = await loadCurrentPatchContract();
-  const releaseRoot = new URL(`${contract.releaseDirectory}/`, root);
-  const ui = await readFile(new URL('ui.html', releaseRoot), 'utf8');
-  const logic = await readFile(new URL('logic.mjs', releaseRoot), 'utf8');
-  const fixture = JSON.parse(await readFile(new URL('test/fixtures/front-door-0.0.3-input.json', root), 'utf8'));
-  const rules = await readFile(new URL('www/app/rules.json', root), 'utf8');
-  const vocabulary = await readFile(new URL('www/app/vocabulary.json', root), 'utf8');
-  if (typeof fixture?.files?.['ui.css'] !== 'string') throw new Error('CURRENT_PATCH_BOOTSTRAP_FIXTURE_INVALID');
+  const files = await readCanonicalAppBundle();
   return {
     contract,
     primary: {
       baseVersion: contract.primaryBaseVersion,
       version: contract.version,
-      files: { 'ui.html': ui, 'logic.mjs': logic },
+      files: { ...files },
     },
     bootstrap: {
       baseVersion: contract.bootstrapBaseVersion,
       version: contract.version,
-      files: {
-        'ui.html': ui,
-        'ui.css': fixture.files['ui.css'],
-        'logic.mjs': logic,
-        'rules.json': rules,
-        'vocabulary.json': vocabulary,
-      },
+      files: { ...files },
     },
   };
 }

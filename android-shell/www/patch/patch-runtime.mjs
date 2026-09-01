@@ -2,14 +2,28 @@ import { PATCH_ALLOWED_FILES, verifyPatchBundle } from './patch-contract.mjs';
 import { composeSnapshot, createIndexedDbPatchStore } from './patch-store.mjs';
 
 const BASE_VERSION_URL = './app/version.json';
-const BASE_ASSET_PREFIX = './app/';
 const TRUSTED_KEY_URL = './patch/trusted-key.json';
-const PATCH_STYLE_ID = 'lighthouse-patch-style';
+const APP_STYLE_ID = 'lighthouse-canonical-app-style';
+const LEGACY_BY_CANONICAL = Object.freeze({
+  'app/ui.html':'ui.html',
+  'app/ui.css':'ui.css',
+  'app/logic.mjs':'logic.mjs',
+  'app/rules.json':'rules.json',
+  'app/vocabulary.json':'vocabulary.json',
+});
 export const TRUSTED_PATCH_MANIFEST_URL = 'https://github.com/pureekangraw-ops/ygph-metropolis/releases/latest/download/lighthouse-patch-manifest.json';
 
 async function requireResponse(response, label) {
   if (!response?.ok) throw new Error(`Unable to load ${label}`);
   return response;
+}
+
+export function resolveSnapshotAsset(snapshot, path) {
+  if (!PATCH_ALLOWED_FILES.includes(path)) throw new Error(`Unsupported canonical asset path: ${path}`);
+  const assets = snapshot?.assets;
+  const value = assets?.[path] ?? assets?.[LEGACY_BY_CANONICAL[path]];
+  if (typeof value !== 'string') throw new Error(`Snapshot is missing canonical asset: ${path}`);
+  return value;
 }
 
 export async function loadBaseSnapshot({ fetchImpl = globalThis.fetch } = {}) {
@@ -19,8 +33,11 @@ export async function loadBaseSnapshot({ fetchImpl = globalThis.fetch } = {}) {
   if (!versionData || typeof versionData.version !== 'string' || versionData.version.length === 0) throw new Error('Packaged app version is invalid');
   const assets = {};
   for (const path of PATCH_ALLOWED_FILES) {
-    const response = await requireResponse(await fetchImpl(`${BASE_ASSET_PREFIX}${path}`), `packaged asset ${path}`);
+    const response = await requireResponse(await fetchImpl(`./${path}`), `packaged asset ${path}`);
     assets[path] = await response.text();
+  }
+  for (const [canonicalPath, legacyPath] of Object.entries(LEGACY_BY_CANONICAL)) {
+    Object.defineProperty(assets, legacyPath, { get:() => assets[canonicalPath], enumerable:false, configurable:false });
   }
   return { version:versionData.version, assets };
 }
@@ -82,19 +99,20 @@ function defaultImportModule(url) { return import(url); }
 export async function mountSnapshot(snapshot, { root, documentRef = globalThis.document, trustedBrain = null, patchUpdater = null, createModuleUrl = defaultCreateModuleUrl, importModule = defaultImportModule, revokeModuleUrl = url => URL.revokeObjectURL(url) } = {}) {
   if (!root || typeof root !== 'object') throw new Error('App root is required');
   if (!documentRef) throw new Error('Document is required');
-  const assets = snapshot?.assets;
-  if (!assets || typeof assets !== 'object') throw new Error('Snapshot assets are required');
-  for (const path of PATCH_ALLOWED_FILES) if (typeof assets[path] !== 'string') throw new Error(`Snapshot is missing asset: ${path}`);
+  for (const path of PATCH_ALLOWED_FILES) resolveSnapshotAsset(snapshot, path);
   let rules; let vocabulary;
-  try { rules = JSON.parse(assets['rules.json']); vocabulary = JSON.parse(assets['vocabulary.json']); } catch (error) { throw new Error(`Snapshot data JSON is invalid: ${error.message}`); }
-  root.innerHTML = assets['ui.html'];
-  let style = documentRef.getElementById(PATCH_STYLE_ID);
-  if (!style) { style = documentRef.createElement('style'); style.id = PATCH_STYLE_ID; documentRef.head.append(style); }
-  style.textContent = assets['ui.css'];
-  const moduleUrl = createModuleUrl(assets['logic.mjs']); let moduleCleanup;
+  try {
+    rules = JSON.parse(resolveSnapshotAsset(snapshot, 'app/rules.json'));
+    vocabulary = JSON.parse(resolveSnapshotAsset(snapshot, 'app/vocabulary.json'));
+  } catch (error) { throw new Error(`Canonical app data JSON is invalid: ${error.message}`); }
+  root.innerHTML = resolveSnapshotAsset(snapshot, 'app/ui.html');
+  let style = documentRef.getElementById(APP_STYLE_ID);
+  if (!style) { style = documentRef.createElement('style'); style.id = APP_STYLE_ID; documentRef.head.append(style); }
+  style.textContent = resolveSnapshotAsset(snapshot, 'app/ui.css');
+  const moduleUrl = createModuleUrl(resolveSnapshotAsset(snapshot, 'app/logic.mjs')); let moduleCleanup;
   try {
     const module = await importModule(moduleUrl);
-    if (typeof module.mount !== 'function') throw new Error('logic.mjs must export async function mount');
+    if (typeof module.mount !== 'function') throw new Error('app/logic.mjs must export async function mount');
     moduleCleanup = await module.mount({ root, rules, vocabulary, version:snapshot.version, ...(trustedBrain ? { brain:trustedBrain } : {}), ...(patchUpdater ? { patchUpdater } : {}) });
   } catch (error) { revokeModuleUrl(moduleUrl); throw error; }
   return async () => { try { if (typeof moduleCleanup === 'function') await moduleCleanup(); } finally { revokeModuleUrl(moduleUrl); } };
