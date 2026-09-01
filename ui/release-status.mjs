@@ -1,4 +1,5 @@
 import './theme-shell.mjs';
+import './settings-ui.mjs';
 import './reset-all-ui.mjs';
 import './obligation-import-ui.mjs';
 
@@ -17,61 +18,56 @@ const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
 
 function ensureServiceWorkerNode(){
-  const version=$('systemVersion');
-  if(!version)return null;
+  const technical=document.querySelector('[data-settings-technical]');
+  if(!technical)return null;
   let node=$('systemServiceWorker');
   if(node)return node;
-  const parent=version.parentElement;
-  if(!parent)return null;
+  const row=document.createElement('div');
+  row.className='system-fact';
   const label=document.createElement('span');
   label.textContent='Service Worker';
   node=document.createElement('b');
   node.id='systemServiceWorker';
-  parent.append(label,node);
+  row.append(label,node);
+  technical.append(row);
   return node;
 }
 
 function ensureUpdateLog(){
-  const systemSection=$('systemVersion')?.closest?.('.settings-section');
-  if(!systemSection)return null;
+  const technical=document.querySelector('[data-settings-technical]');
+  if(!technical)return null;
   let section=$('systemUpdateLog');
   if(section)return section;
 
-  section=document.createElement('details');
+  section=document.createElement('section');
   section.id='systemUpdateLog';
-  section.className='settings-section update-log';
+  section.className='settings-advanced-block update-log';
+  const title=document.createElement('h4');
+  title.textContent='ประวัติอัปเดต';
+  section.append(title);
 
-  const summary=document.createElement('summary');
-  summary.className='update-log-summary';
-  const title=document.createElement('strong');
-  title.textContent='มีอะไรใหม่';
-  const latest=document.createElement('small');
-  latest.textContent=UPDATE_LOG[0]?.timestamp || '';
-  summary.append(title,latest);
-  section.append(summary);
-
-  const body=document.createElement('div');
-  body.className='update-log-body';
   for(const entry of UPDATE_LOG){
+    const timestamp=document.createElement('small');
+    timestamp.textContent=entry.timestamp;
     const list=document.createElement('ul');
     for(const item of entry.items){
       const row=document.createElement('li');
       row.textContent=item;
       list.append(row);
     }
-    body.append(list);
+    section.append(timestamp,list);
   }
-  section.append(body);
-
-  const dataSection=$('settingsImportFile')?.closest?.('.settings-section');
-  if(dataSection && dataSection.parentElement===systemSection.parentElement)dataSection.after(section);
-  else systemSection.before(section);
+  technical.append(section);
   return section;
 }
 
 function renderReleaseStatus(){
   const version=$('systemVersion');
   if(version)version.textContent=APP_RELEASE;
+  const aboutVersion=$('settingsAboutVersion');
+  if(aboutVersion)aboutVersion.textContent=APP_RELEASE;
+  const updateStatus=$('settingsUpdateStatus');
+  if(updateStatus)updateStatus.textContent=serviceWorkerState;
   ensureUpdateLog();
   const worker=ensureServiceWorkerNode();
   if(worker)worker.textContent=serviceWorkerState;
