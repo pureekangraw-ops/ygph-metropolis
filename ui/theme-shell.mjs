@@ -1,5 +1,4 @@
 import { hydrateIcons } from './icons.mjs';
-import './lighthouse-shell.mjs';
 
 const DESTINATION_ICONS=Object.freeze({
   store:'shopping-cart-simple',
@@ -43,3 +42,4 @@ export function applyGraphiteLimeTheme(){
 }
 
 applyGraphiteLimeTheme();
+void import('./lighthouse-shell.mjs');
