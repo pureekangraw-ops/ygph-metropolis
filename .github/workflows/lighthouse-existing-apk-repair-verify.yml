@@ -7,7 +7,10 @@ on:
       - 'android-shell/test/effective-snapshot.test.mjs'
       - 'android-shell/test/patch-effective-snapshot-integration.test.mjs'
       - 'android-shell/test/effective-base-manifest.test.mjs'
+      - 'android-shell/test/canonical-overlay.test.mjs'
       - 'android-shell/www/patch/effective-snapshot.mjs'
+      - 'android-shell/www/patch/effective-store.mjs'
+      - 'android-shell/www/patch/canonical-overlay.mjs'
       - 'android-shell/www/patch/patch-store.mjs'
       - 'android-shell/tools/build-effective-base-manifest.mjs'
       - 'android-shell/tools/stage-existing-full-app.mjs'
@@ -27,4 +30,4 @@ jobs:
         with:
           node-version: 22
       - run: node --test tests/lighthouse-existing-apk-repair.test.cjs
-      - run: node --test android-shell/test/effective-snapshot.test.mjs android-shell/test/patch-effective-snapshot-integration.test.mjs android-shell/test/effective-base-manifest.test.mjs
+      - run: node --test android-shell/test/effective-snapshot.test.mjs android-shell/test/patch-effective-snapshot-integration.test.mjs android-shell/test/effective-base-manifest.test.mjs android-shell/test/canonical-overlay.test.mjs
