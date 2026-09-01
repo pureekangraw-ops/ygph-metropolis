@@ -24,6 +24,7 @@ function installResetAllUi(){
       store=await openGreenfieldVaultStore();
       await store.resetAll();
       sessionStorage.removeItem('metro-auto-unlock-pin');
+      localStorage.removeItem('metro-settings-latest-backup');
       location.reload();
     }catch(error){
       status.textContent=String(error?.message||error||'รีเซ็ตข้อมูลไม่สำเร็จ');
