@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createEffectiveSnapshot } from '../www/patch/effective-snapshot.mjs';
-import { createMemoryPatchStore, createMemoryEffectiveSnapshotStore } from '../www/patch/patch-store.mjs';
+import { createMemoryPatchStore } from '../www/patch/patch-store.mjs';
+import { createMemoryEffectiveSnapshotStore } from '../www/patch/effective-store.mjs';
 
 const patchAssets = (suffix = '') => ({
   'ui.html': `<main>${suffix}</main>`,
