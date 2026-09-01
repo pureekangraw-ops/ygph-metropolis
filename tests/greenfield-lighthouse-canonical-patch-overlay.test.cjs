@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.resolve(__dirname, '..');
 const read = relative => fs.readFileSync(path.join(ROOT, relative), 'utf8');
@@ -46,4 +47,28 @@ test('Android entry keeps one LIGHTHOUSE app root through trusted bootstrap', ()
   assert.match(index, /<title>LIGHTHOUSE<\/title>/);
   assert.match(index, /src=['\"]\.\/trusted\/bootstrap\.mjs['\"]/);
   assert.doesNotMatch(index, /YGPH METROPOLIS/i);
+});
+
+test('Patchable vocabulary contains only explicit known typo corrections', () => {
+  const vocabulary = JSON.parse(read('android-shell/www/app/vocabulary.json'));
+  assert.equal(vocabulary.appName, 'LIGHTHOUSE');
+  assert.deepEqual(vocabulary.intentCorrections, {
+    'ปติธิน':'ปฏิทิน',
+    'ปฏิธิน':'ปฏิทิน',
+    'ปติทิน':'ปฏิทิน',
+    'ปฎิทิน':'ปฏิทิน',
+    'ปฎิธิน':'ปฏิทิน',
+    'น้ามัน':'น้ำมัน',
+  });
+});
+
+test('Chat normalizes explicit known typos before Trusted Brain and leaves ambiguous text alone', async () => {
+  const logicPath = path.join(ROOT, 'android-shell/www/app/logic.mjs');
+  const logic = await import(`${pathToFileURL(logicPath).href}?test=${Date.now()}`);
+  const vocabulary = JSON.parse(read('android-shell/www/app/vocabulary.json'));
+
+  assert.equal(logic.normalizeChatInput('ลง ปติธิน พรุ่งนี้', vocabulary), 'ลง ปฏิทิน พรุ่งนี้');
+  assert.equal(logic.normalizeChatInput('น้ามัน 300', vocabulary), 'น้ำมัน 300');
+  assert.equal(logic.normalizeChatInput('ขาว 65', vocabulary), 'ขาว 65');
+  assert.equal(logic.normalizeChatInput('น้ำมัน 300', vocabulary), 'น้ำมัน 300');
 });
