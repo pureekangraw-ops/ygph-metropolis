@@ -68,9 +68,10 @@ function observeRealBackupSuccess(){
   const observer=new MutationObserver(()=>{
     if(!pending)return;
     const message=String(appStatus.textContent||'');
-    if(message.includes('สร้าง Encrypted Backup แล้ว')){recordLatestBackup();pending=false;}
+    if(message.includes('สร้าง Encrypted Backup แล้ว')){recordLatestBackup();pending=false;return;}
+    if(appStatus.classList.contains('error'))pending=false;
   });
-  observer.observe(appStatus,{childList:true,characterData:true,subtree:true});
+  observer.observe(appStatus,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['class']});
 }
 
 function installSettingsUtility(){
@@ -95,7 +96,7 @@ function installSettingsUtility(){
     makeIndexRow('settingsAdvanced','ขั้นสูง','Recovery · Technical · Danger Zone')
   );
 
-  const usage=makeSection('settingsUsage','การใช้งาน','รุ่นนี้ยังไม่มีค่าการแสดงผลที่ผู้ใช้ปรับเอง ระบบจึงไม่แสดงปุ่มจำลองหรือค่าหลอก');
+  const usage=makeSection('settingsUsage','การใช้งาน','ยังไม่มีค่าการแสดงผลที่ผู้ใช้ปรับเองในรุ่นนี้ จึงไม่มีสวิตช์จำลอง');
   const permissions=makeSection('settingsPermissions','การแจ้งเตือนและสิทธิ์','สิทธิ์ที่ Android เป็นเจ้าของต้องอ่านสถานะจริงจาก Android ก่อนจึงจะแสดงหรือจัดการได้');
   const permissionState=document.createElement('p');
   permissionState.dataset.permissionOwnerUnavailable='true';
@@ -115,7 +116,8 @@ function installSettingsUtility(){
   const about=makeSection('settingsAbout','เกี่ยวกับแอป','ข้อมูลที่ใช้บ่อยโดยไม่เปิดรายละเอียดระบบ');
   const facts=document.createElement('div');facts.className='system-facts';
   facts.innerHTML='<div class="system-fact"><span>เวอร์ชัน</span><b id="settingsAboutVersion">—</b></div><div class="system-fact"><span>สถานะอัปเดต</span><b id="settingsUpdateStatus">กำลังตรวจสอบ</b></div>';
-  about.append(facts);
+  const checkUpdate=document.createElement('button');checkUpdate.id='settingsCheckUpdateBtn';checkUpdate.type='button';checkUpdate.className='secondary';checkUpdate.textContent='ตรวจหาอัปเดต';
+  about.append(facts,checkUpdate);
 
   const advanced=makeSection('settingsAdvanced','ขั้นสูง','ห้องเครื่องสำหรับ Recovery, ประวัติอัปเดต และข้อมูลทางเทคนิค');
   const technical=document.createElement('section');technical.id='settingsTechnicalInfo';technical.dataset.settingsTechnical='true';technical.className='settings-advanced-block';
@@ -135,6 +137,8 @@ function installSettingsUtility(){
   body.insertBefore(advanced,anchor);
   renderLatestBackup();
   observeRealBackupSuccess();
+  $('settingsBtn')?.addEventListener('click',showIndex);
+  $('settingsDialog')?.addEventListener('close',showIndex);
   showIndex();
 }
 
