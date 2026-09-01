@@ -20,6 +20,8 @@
 !/ui/finance-ui.mjs
 !/ui/ride-ui.mjs
 !/ui/obligation-import-ui.mjs
+!/ui/manual-finance-ui.mjs
+!/ui/manual-finance.css
 !/ui/ui-model.mjs
 !/ui/product-model.mjs
 !/ui/icons.mjs
@@ -42,6 +44,7 @@
 !/greenfield/first-run.mjs
 !/greenfield/import-evidence.mjs
 !/greenfield/import-router.mjs
+!/greenfield/manual-four-houses.mjs
 !/greenfield/master-input-router.mjs
 !/greenfield/mutation-coordinator.mjs
 !/greenfield/obligation-import.mjs
