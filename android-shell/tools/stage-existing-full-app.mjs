@@ -10,6 +10,7 @@ const requiredFiles = [
   'app.mjs',
   'styles.css',
   'manifest.webmanifest',
+  'sw.js',
 ];
 
 const optionalFiles = [
@@ -52,6 +53,7 @@ for (const relative of [
   'app.mjs',
   'styles.css',
   'manifest.webmanifest',
+  'sw.js',
   'compact-ui.css',
   'icon-192.png',
   'icon-512.png',
