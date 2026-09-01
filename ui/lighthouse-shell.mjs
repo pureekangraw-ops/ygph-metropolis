@@ -51,7 +51,7 @@ function createManualHub(workspace) {
   const hub = document.createElement('section');
   hub.id = 'manualHub';
   hub.className = 'lighthouse-page lighthouse-manual-hub';
-  hub.dataset.lighthousePage = PAGE.MANUAL;
+  hub.setAttribute('data-lighthouse-page', PAGE.MANUAL);
   hub.innerHTML = `
     <div class="lighthouse-page-head">
       <small>MANUAL</small>
@@ -101,7 +101,7 @@ function prepareSettings() {
   const dialog = $('settingsDialog');
   if (!dialog) return;
   dialog.classList.add('lighthouse-settings-page');
-  dialog.dataset.lighthousePage = PAGE.SETTINGS;
+  dialog.setAttribute('data-lighthouse-page', PAGE.SETTINGS);
 }
 
 function openSettingsPage() {
@@ -134,7 +134,7 @@ function installShell() {
   if (!workspace || !masterInput) return false;
 
   document.body.classList.add('lighthouse-shell-active');
-  masterInput.dataset.lighthousePage = PAGE.CHAT;
+  masterInput.setAttribute('data-lighthouse-page', PAGE.CHAT);
   createManualHub(workspace);
   createManualBack(workspace);
   const nav = createBottomNav(workspace);
