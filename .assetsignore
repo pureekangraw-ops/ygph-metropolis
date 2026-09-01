@@ -5,6 +5,7 @@
 !/styles.css
 !/theme.css
 !/compact-ui.css
+!/lighthouse.css
 !/manifest.webmanifest
 !/sw.js
 !/icon-192.png
@@ -15,6 +16,7 @@
 !/ui/release-status.mjs
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
+!/ui/lighthouse-shell.mjs
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs
