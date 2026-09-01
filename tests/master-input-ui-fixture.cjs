@@ -64,8 +64,9 @@ class FakeElement {
   requestSubmit() {
     this.dispatchEvent({ type:'submit', preventDefault(){} });
   }
-  click() {
-    this.dispatchEvent({ type:'click', preventDefault(){} });
+  async click() {
+    const event = { type:'click', preventDefault(){} };
+    for (const handler of this.listeners.get('click') || []) await handler.call(this, event);
   }
   append(child) {
     child.parentNode = this;
@@ -161,8 +162,11 @@ async function setupProductionUi(caseId, options = {}) {
   const document = new FakeDocument();
   globalThis.document = document;
   let providerCalls = 0;
-  globalThis.fetch = async () => {
+  const requests = [];
+  globalThis.fetch = async (url, init = {}) => {
     providerCalls += 1;
+    requests.push({ url, init });
+    if (options.fetchResponse) return options.fetchResponse({ url, init });
     throw new Error('PROVIDER_SHOULD_NOT_RUN');
   };
   globalThis.dispatchEvent = () => true;
@@ -172,7 +176,7 @@ async function setupProductionUi(caseId, options = {}) {
 
   const uiUrl = new URL('../ui/master-input.mjs', pathToFileURL(__filename));
   uiUrl.searchParams.set('finalGate', `${caseId}-${++importCounter}`);
-  await import(uiUrl.href);
+  const ui = await import(uiUrl.href);
 
   async function submit(text) {
     document.getElementById('masterInputText').value = text;
@@ -197,6 +201,8 @@ async function setupProductionUi(caseId, options = {}) {
     document,
     submit,
     execute,
+    ui,
+    requests,
     providerCalls:() => providerCalls,
     cleanup:() => deactivateRuntimeSession(runtime),
   };

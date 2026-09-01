@@ -15,6 +15,7 @@ import {
 } from '../lighthouse/master-input-recovery-session.mjs';
 import { createPathKernel } from '../lighthouse/path-kernel.mjs';
 import { createExpenseCapability } from '../lighthouse/capabilities/expense.mjs';
+import { createRecordReference } from '../greenfield/context-reference.mjs';
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','WAITING','UNSUPPORTED','SUCCESS','ERROR']);
 const STATE_LABELS = Object.freeze({ WAITING:'รอ' });
@@ -26,6 +27,102 @@ let preparedMultiGroupRoute = null;
 let currentIntent = null;
 let activeRecoverySession = null;
 let activeRecoverySelection = null;
+let activeSubject = null;
+let bridgeActions = Object.freeze({ peek:null, open:null, back:null });
+
+export function configureMasterInputBridge({ peek = null, open = null, back = null } = {}) {
+  bridgeActions = Object.freeze({ peek, open, back });
+  renderSubject();
+}
+
+export function setMasterInputSubject({ subject, reference } = {}) {
+  const label = String(subject ?? '').trim();
+  if (!label) throw new Error('MASTER_INPUT_SUBJECT_REQUIRED');
+  activeSubject = Object.freeze({ subject:label, reference:createRecordReference(reference) });
+  renderSubject();
+  return activeSubject;
+}
+
+export function captureMasterInputContext() {
+  return Object.freeze({
+    subject:activeSubject,
+    text:$('masterInputText')?.value ?? '',
+    scrollY:Number(globalThis.scrollY || 0),
+  });
+}
+
+export function restoreMasterInputContext(context = {}) {
+  activeSubject = context.subject
+    ? Object.freeze({ subject:String(context.subject.subject || '').trim(), reference:createRecordReference(context.subject.reference) })
+    : null;
+  if ($('masterInputText') && typeof context.text === 'string') $('masterInputText').value = context.text;
+  renderSubject();
+  globalThis.scrollTo?.(0, Number(context.scrollY || 0));
+}
+
+function peekText(record = {}) {
+  const amount = Number(record.remainingSatang ?? record.amountSatang);
+  return [record.title || record.recordId || 'รายการ', record.status || '', Number.isSafeInteger(amount) ? `${formatSatang(amount)} บาท` : ''].filter(Boolean).join(' · ');
+}
+
+async function peekSubjectReference() {
+  if (!activeSubject || typeof bridgeActions.peek !== 'function') return;
+  try {
+    const resolved = await bridgeActions.peek(activeSubject.reference);
+    $('masterInputPeek').textContent = peekText(resolved?.record);
+    $('masterInputPeek').hidden = false;
+  } catch (error) {
+    $('masterInputPeek').textContent = 'ไม่พบรายการปัจจุบัน';
+    $('masterInputPeek').hidden = false;
+  }
+}
+
+function renderSubject() {
+  const bar = $('masterInputSubjectBar');
+  if (!bar) return;
+  bar.hidden = !activeSubject;
+  $('masterInputSubject').textContent = activeSubject?.subject || '';
+  $('masterInputSubjectPeek').hidden = !activeSubject || typeof bridgeActions.peek !== 'function';
+  $('masterInputSubjectOpen').hidden = !activeSubject || typeof bridgeActions.open !== 'function';
+  $('masterInputSubjectBack').hidden = !activeSubject || typeof bridgeActions.back !== 'function';
+  if (!activeSubject) {
+    $('masterInputPeek').hidden = true;
+    $('masterInputPeek').textContent = '';
+  }
+}
+
+function referenceFromReadback(readback) {
+  const recordId = readback?.recordId || readback?.record?.recordId || null;
+  return recordId ? createRecordReference({version:1, owner:'LEDGER', recordId}) : null;
+}
+
+function renderProvenReferenceActions(readback) {
+  const reference = referenceFromReadback(readback);
+  if (!reference) return;
+  const actions = $('masterInputActions');
+  if (typeof bridgeActions.peek === 'function') {
+    const peek = document.createElement('button');
+    peek.type = 'button';
+    peek.className = 'secondary';
+    peek.dataset.bridgeAction = 'peek';
+    peek.textContent = 'ดูสั้น ๆ';
+    peek.addEventListener('click', async () => {
+      const resolved = await bridgeActions.peek(reference);
+      $('masterInputPeek').textContent = peekText(resolved?.record);
+      $('masterInputPeek').hidden = false;
+    });
+    actions.append(peek);
+  }
+  if (typeof bridgeActions.open === 'function') {
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'secondary';
+    open.dataset.bridgeAction = 'open';
+    open.textContent = 'เปิด Manual';
+    open.addEventListener('click', () => bridgeActions.open(reference));
+    actions.append(open);
+  }
+}
 
 function installStyle() {
   if (document.querySelector('link[data-master-input-style]')) return;
@@ -119,6 +216,16 @@ function createShell() {
       <div><small>MASTER INPUT</small><h2>พิมพ์ตามที่พูดจริงได้เลย</h2></div>
       <span id="masterInputState" class="master-input-state">IDLE</span>
     </div>
+    <div id="masterInputSubjectBar" class="master-input-subject" hidden>
+      <div><small>กำลังคุยเรื่อง</small><strong id="masterInputSubject"></strong></div>
+      <div class="master-input-subject-actions">
+        <button id="masterInputSubjectPeek" type="button">ดูสั้น ๆ</button>
+        <button id="masterInputSubjectOpen" type="button">เปิด Manual</button>
+        <button id="masterInputSubjectBack" type="button">กลับรายการ</button>
+        <button id="masterInputSubjectClear" type="button" aria-label="เลิกอ้างอิงเรื่องนี้">×</button>
+      </div>
+    </div>
+    <p id="masterInputPeek" class="master-input-peek" hidden></p>
     <form id="masterInputForm" class="master-input-form">
       <textarea id="masterInputText" rows="1" maxlength="1200" placeholder="เช่น ข้าว 65 · งาน 380 เงินสด · วันนี้วิ่งได้เท่าไร" aria-label="ข้อความ Master Input" required></textarea>
       <button id="masterInputInterpret" class="primary-action" type="submit">ตีความ</button>
@@ -142,6 +249,18 @@ function createShell() {
       $('masterInputForm').requestSubmit();
     }
   });
+  $('masterInputSubjectPeek').addEventListener('click', () => void peekSubjectReference());
+  $('masterInputSubjectOpen').addEventListener('click', () => {
+    if (activeSubject) void bridgeActions.open?.(activeSubject.reference);
+  });
+  $('masterInputSubjectBack').addEventListener('click', () => {
+    if (activeSubject) void bridgeActions.back?.(activeSubject.reference);
+  });
+  $('masterInputSubjectClear').addEventListener('click', () => {
+    activeSubject = null;
+    renderSubject();
+  });
+  renderSubject();
 }
 
 function setState(state, { title = '', copy = '', meta = '', execute = false } = {}) {
@@ -241,7 +360,11 @@ async function requestInterpretation(text) {
   const response = await fetch('/api/v1/interpret', {
     method:'POST',
     headers:{ 'content-type':'application/json' },
-    body:JSON.stringify({ version:'1', text, context:{} }),
+    body:JSON.stringify({
+      version:'1',
+      text,
+      context:activeSubject ? { subject:activeSubject.subject, reference:activeSubject.reference } : {},
+    }),
   });
   let body;
   try { body = await response.json(); } catch { throw new Error('MASTER_INPUT_RESPONSE_INVALID'); }
@@ -662,6 +785,7 @@ async function executePrepared() {
         copy:readbackText(currentIntent.object, readback),
         meta:'ผลนี้ผ่าน PATH และมาจาก durable readback',
       });
+      renderProvenReferenceActions(readback);
       preparedPathRequest = null;
       globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
     } catch (error) {
@@ -678,6 +802,7 @@ async function executePrepared() {
       copy:readbackText(currentIntent.object, result.readback),
       meta:query ? 'QUERY ไม่ได้แก้ไขข้อมูล' : result.recovered ? 'ตรวจพบ retry และยืนยัน truth เดิมโดยไม่เขียนซ้ำ' : 'ผลนี้มาจาก durable readback',
     });
+    renderProvenReferenceActions(result.readback);
     preparedExecution = null;
     if (!query) globalThis.dispatchEvent(new CustomEvent('ygph:daily-lifecycle'));
   } catch (error) {

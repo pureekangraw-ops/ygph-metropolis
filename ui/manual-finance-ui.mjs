@@ -1,3 +1,5 @@
+import { createRecordReference, resolveRecordReference } from '../greenfield/context-reference.mjs';
+
 function node(documentRef, tag, attrs = {}, text = '') {
   const element = documentRef.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
@@ -137,13 +139,19 @@ function createSurface(documentRef) {
 function currentExpectationId(kind) { return kind === 'TARGET' ? 'MANUAL-TARGET-CURRENT' : 'MANUAL-CEILING-CURRENT'; }
 function makeId(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`; }
 
-export function createManualFinanceUi({ documentRef = globalThis.document, getManual, onChanged = async()=>{}, notify = ()=>{} } = {}) {
+export function createManualFinanceUi({ documentRef = globalThis.document, getManual, onChanged = async()=>{}, notify = ()=>{}, onAskAbout = ()=>{}, onBridgeBack = null, canBridgeBack = ()=>false } = {}) {
   if (!documentRef || typeof getManual !== 'function') throw new TypeError('MANUAL_FINANCE_UI_REQUIRED');
   createSurface(documentRef);
   let bound = false;
+  let activeReference = null;
 
   async function mutate(task, copy) {
-    try { await task(); await onChanged(copy); }
+    try {
+      const result = await task();
+      await onChanged(copy);
+      if (activeReference) await refreshActiveDetail();
+      return result;
+    }
     catch (error) { notify(String(error?.message || error), true); }
   }
 
@@ -177,6 +185,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
   }
 
   function detailShell(container, record, { truth = '', primary = null, secondary = [], history = [], related = [] } = {}) {
+    const detailReference = activeReference;
     container.textContent = '';
     container.hidden = false;
     container.dataset.recordDetail = record.recordId || 'record';
@@ -186,6 +195,19 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
     const facts = [record.type, record.dueDate ? `วันที่ ${String(record.dueDate).slice(0,10)}` : '', record.recordId ? `#${record.recordId}` : ''].filter(Boolean).join(' · ');
     if (facts) head.append(node(documentRef, 'div', { className:'muted' }, facts));
     container.append(head);
+
+    if (activeReference) {
+      const bridgeActions = node(documentRef, 'div', { className:'manual-detail-actions', dataset:{ bridgeActions:'true' } });
+      const ask = node(documentRef, 'button', { type:'button', className:'secondary', dataset:{ bridgeAction:'ask' } }, 'ถามเรื่องนี้');
+      ask.addEventListener('click', () => onAskAbout({ subject:record.title || record.recordId || 'รายการ', reference:detailReference }));
+      bridgeActions.append(ask);
+      if (typeof onBridgeBack === 'function' && canBridgeBack()) {
+        const back = node(documentRef, 'button', { type:'button', className:'secondary', dataset:{ bridgeAction:'back' } }, 'กลับไป Chat');
+        back.addEventListener('click', () => onBridgeBack(detailReference));
+        bridgeActions.append(back);
+      }
+      container.append(bridgeActions);
+    }
 
     if (primary) {
       const actions = node(documentRef, 'div', { className:'manual-detail-actions' });
@@ -252,7 +274,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
 
   async function openReceivableDetail(record) {
     const manual=getManual();
-    const current=await manual.getRecord('LEDGER',record.recordId) || record;
+    const current=record;
     const history=await manual.history('LEDGER',record.recordId);
     const related=await manual.related('LEDGER',record.recordId);
     const remaining=Number(current.remainingSatang ?? current.amountSatang ?? 0);
@@ -266,7 +288,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
 
   async function openOutcomeDetail(record) {
     const manual=getManual();
-    const current=await manual.getRecord('LEDGER',record.recordId) || record;
+    const current=record;
     const history=await manual.history('LEDGER',record.recordId);
     const related=await manual.related('LEDGER',record.recordId);
     const remaining=Number(current.remainingSatang ?? current.amountSatang ?? 0);
@@ -279,7 +301,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
 
   async function openCalendarDetail(record) {
     const manual=getManual();
-    const current=await manual.getRecord('CALENDAR',record.recordId) || record;
+    const current=record;
     const history=await manual.history('CALENDAR',record.recordId);
     const related=await manual.related('CALENDAR',record.recordId);
     const active=!['COMPLETED','CANCELLED'].includes(current.status);
@@ -310,12 +332,45 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
   async function openLedgerDetail(record) {
     const manual=getManual();
     const detail=documentRef.getElementById('ledgerDetail');
-    const current=await manual.getRecord('LEDGER',record.recordId) || record;
+    const current=record;
     const history=await manual.history('LEDGER',record.recordId);
     const related=await manual.related('LEDGER',record.recordId);
     const amount=Number(current.amountSatang);
     const truth=Number.isSafeInteger(amount)?`${current.direction==='IN'?'เงินเข้า':current.direction==='OUT'?'เงินออก':'ยอด'} ${moneyText(amount)} บาท`:statusText(current.status);
     detailShell(detail,current,{truth,secondary:ledgerSecondaryActions(manual,current),history,related});
+    return current;
+  }
+
+  async function openReference(input) {
+    const resolved = await resolveRecordReference(getManual(), input);
+    activeReference = resolved.reference;
+    for (const id of ['receivableDetail','outcomeDetail','manualCalendarDetail','ledgerDetail']) {
+      const detail = documentRef.getElementById(id);
+      if (detail) detail.hidden = true;
+    }
+    if (resolved.reference.owner === 'CALENDAR') await openCalendarDetail(resolved.record);
+    else if (resolved.type === 'RECEIVABLE') await openReceivableDetail(resolved.record);
+    else if (resolved.type === 'OBLIGATION') await openOutcomeDetail(resolved.record);
+    else await openLedgerDetail(resolved.record);
+    return resolved;
+  }
+
+  async function peekReference(input) {
+    return resolveRecordReference(getManual(), input);
+  }
+
+  async function refreshActiveDetail() {
+    if (!activeReference) return null;
+    return openReference(activeReference);
+  }
+
+  function captureContext() {
+    return Object.freeze({ reference:activeReference });
+  }
+
+  async function restoreContext(context) {
+    if (!context?.reference) return null;
+    return openReference(context.reference);
   }
 
   async function renderLedger(data = null) {
@@ -323,7 +378,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
     const options=data ? { text:data.get('text')||'', direction:data.get('direction')||null, type:data.get('type')||null, status:data.get('status')||null } : {};
     const results=await manual.searchLedger(options);
     const list=documentRef.getElementById('ledgerSearchResults'); list.textContent='';
-    for (const record of results) list.append(row(record,{onOpen:()=>openLedgerDetail(record)}));
+    for (const record of results) list.append(row(record,{onOpen:()=>openReference(createRecordReference({version:1,owner:'LEDGER',recordId:record.recordId}))}));
     if(!results.length) list.textContent='ไม่พบรายการ';
   }
 
@@ -341,12 +396,12 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
 
       const receivables=await manual.searchLedger({type:'RECEIVABLE'});
       const rList=documentRef.getElementById('receivableList'); rList.textContent='';
-      for(const record of receivables) rList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openReceivableDetail(record)}));
+      for(const record of receivables) rList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openReference(createRecordReference({version:1,owner:'LEDGER',recordId:record.recordId}))}));
       if(!receivables.length) rList.textContent='ยังไม่มี Receivable';
 
       const obligations=await manual.searchLedger({type:'OBLIGATION'});
       const oList=documentRef.getElementById('outcomeObligationList'); oList.textContent='';
-      for(const record of obligations) oList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openOutcomeDetail(record)}));
+      for(const record of obligations) oList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openReference(createRecordReference({version:1,owner:'LEDGER',recordId:record.recordId}))}));
       if(!obligations.length) oList.textContent='ยังไม่มี Obligation';
 
       const [todayItems,upcoming,overdue]=await Promise.all([manual.calendarToday(),manual.calendarUpcoming(),manual.calendarOverdue()]);
@@ -354,7 +409,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
       for(const [label,items] of [['Today',todayItems],['Upcoming',upcoming],['Overdue',overdue]]){
         const group=node(documentRef,'section',{className:'manual-list-group'});
         group.append(node(documentRef,'b',{},`${label} ${items.length}`));
-        for(const record of items) group.append(row(record,{onOpen:()=>openCalendarDetail(record)}));
+        for(const record of items) group.append(row(record,{onOpen:()=>openReference(createRecordReference({version:1,owner:'CALENDAR',recordId:record.recordId}))}));
         c.append(group);
       }
       await renderLedger();
@@ -362,5 +417,5 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
   }
 
   bind();
-  return Object.freeze({ render, renderLedger, showManualActionSheet });
+  return Object.freeze({ render, renderLedger, showManualActionSheet, openReference, peekReference, refreshActiveDetail, captureContext, restoreContext });
 }

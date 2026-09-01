@@ -9,10 +9,12 @@ import { createHomeUi } from './home-ui.mjs';
 import { createStoreUi } from './store-ui.mjs';
 import { createFinanceUi } from './finance-ui.mjs';
 import { createManualFinanceUi } from './manual-finance-ui.mjs';
+import { configureMasterInputBridge, setMasterInputSubject, captureMasterInputContext, restoreMasterInputContext } from './master-input.mjs';
 import { hydrateIcons } from './icons.mjs';
 
 const $=id=>document.getElementById(id);
 let runtime=null,state=null,activeArea='home',activeStoreView='overview';
+let bridgeReturnToChat=null,bridgeReturnToManual=null;
 function releaseRuntime(){const current=runtime;if(!current){runtime=null;return;}deactivateRuntimeSession(current);current.close();runtime=null;}
 function adoptRuntime(next){runtime=next;activateRuntimeSession(next);return runtime;}
 let selectedCalendarDate=dateKey(new Date()),monthCursor=monthFromDate(selectedCalendarDate),editingCalendarRecordId=null;
@@ -51,7 +53,14 @@ const rideUi=createRideUi({getRuntime:()=>runtime,getState:()=>state,run,status,
 const homeUi=createHomeUi({getById:$,bahtText,numberText,routeTo});
 const storeUi=createStoreUi({getById:$,getState:()=>state,getActiveStoreView:()=>activeStoreView,bahtText,simpleItem,setStoreView});
 const financeUi=createFinanceUi({getById:$,numberText,bahtText,simpleItem,routeTo});
-const manualUi=createManualFinanceUi({getManual:()=>runtime?createManualFourHouses(runtime,{today:todayKey()}):null,onChanged:message=>refresh(message),notify:status});
+function focusMasterInput({scroll=true}={}){requestAnimationFrame(()=>{const shell=document.querySelector('.master-input-shell');if(scroll)shell?.scrollIntoView({block:'start',behavior:'smooth'});shell?.querySelector('textarea')?.focus({preventScroll:true});});}
+function focusManualDetail(){requestAnimationFrame(()=>{const detail=Array.from(document.querySelectorAll('[data-record-detail]')).find(node=>!node.hidden);detail?.scrollIntoView({block:'start',behavior:'smooth'});detail?.focus?.({preventScroll:true});});}
+async function openManualFromChat(reference){bridgeReturnToChat=captureMasterInputContext();activateArea('finance');render();await manualUi.openReference(reference);focusManualDetail();}
+async function askFromManual(payload){bridgeReturnToManual={area:activeArea,manual:manualUi.captureContext(),scrollY:Number(globalThis.scrollY||0)};setMasterInputSubject(payload);focusMasterInput();}
+async function returnToManual(){if(!bridgeReturnToManual)return;const origin=bridgeReturnToManual;activateArea(origin.area);render();await manualUi.restoreContext(origin.manual);globalThis.scrollTo?.(0,origin.scrollY);focusManualDetail();}
+function returnToChat(){if(!bridgeReturnToChat)return;restoreMasterInputContext(bridgeReturnToChat);focusMasterInput({scroll:false});}
+const manualUi=createManualFinanceUi({getManual:()=>runtime?createManualFourHouses(runtime,{today:todayKey()}):null,onChanged:message=>refresh(message),notify:status,onAskAbout:payload=>void askFromManual(payload),onBridgeBack:()=>returnToChat(),canBridgeBack:()=>Boolean(bridgeReturnToChat)});
+configureMasterInputBridge({peek:reference=>manualUi.peekReference(reference),open:reference=>openManualFromChat(reference),back:()=>returnToManual()});
 function calendarRecordById(recordId){return recordsForDomain(state,'CALENDAR').find(record=>record.recordId===recordId)||null;}
 function openCalendarEdit(record){editingCalendarRecordId=record.recordId;$('calendarEditLabel').textContent=record.title||TYPE_LABEL[record.type]||'รายการ';$('calendarEditDueDate').value=dateKey(record.dueDate||record.date||record.scheduledDate);const dialog=$('calendarEditDialog');if(!dialog.open)dialog.showModal();}
 function actionReasonText(reason){return ({SOURCE_NOT_FOUND:'ต้องตรวจสอบแหล่งต้นทางก่อน',SOURCE_AMBIGUOUS:'ต้องตรวจสอบ · พบแหล่งต้นทางมากกว่า 1 รายการ',SOURCE_OWNER_CONFLICT:'ต้องตรวจสอบเจ้าของข้อมูล',SOURCE_RELATION_CONFLICT:'ต้องตรวจสอบความสัมพันธ์ของรายการ',SOURCE_AMOUNT_INVALID:'ต้องตรวจสอบยอดคงเหลือ',SOURCE_ALREADY_RECORDED:'มีเงินจริงเชื่อมรายการนี้แล้ว',ACTION_NOT_OPEN:'รายการนี้ยังทำ action ไม่ได้'})[reason]||'ต้องตรวจสอบรายการก่อนดำเนินการ';}

@@ -38,6 +38,7 @@
 !/greenfield/browser-store.mjs
 !/greenfield/business-workflows.mjs
 !/greenfield/command-runtime.mjs
+!/greenfield/context-reference.mjs
 !/greenfield/core.mjs
 !/greenfield/cutover.mjs
 !/greenfield/device-unlock.mjs
