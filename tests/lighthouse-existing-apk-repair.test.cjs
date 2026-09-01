@@ -36,10 +36,12 @@ test('bounded typo vocabulary expands only through explicit known aliases', () =
 
 test('full APK updater is a Settings-only feature and never replaces app startup', () => {
   const settings = read('ui/settings-ui.mjs');
+  const release = read('ui/release-status.mjs');
   const stage = read('android-shell/tools/stage-existing-full-app.mjs');
   assert.match(settings, /app-update\.mjs/);
   assert.match(settings, /settingsUpdatePanel/);
   assert.match(settings, /ตรวจหาอัปเดต/);
   assert.match(settings, /ดาวน์โหลดและติดตั้ง/);
+  assert.doesNotMatch(release, /settingsCheckUpdateBtn/);
   assert.doesNotMatch(stage, /app-update\.mjs|canonical-bootstrap\.mjs/);
 });
