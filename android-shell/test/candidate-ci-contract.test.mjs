@@ -36,6 +36,8 @@ test('candidate APK pipeline verifies final bytes before immutable publication a
   assert.ok(rawVerify > publishCandidate, 'download-back hash verification must follow immutable publication');
   assert.ok(activationLock > rawVerify, 'activation lock must be checked after download-back verification');
   assert.ok(ownerArtifact > activationLock, 'owner-test APK artifact must be downstream of the locked candidate gate');
+  assert.match(text, /ASSET_DIR="release\/candidates\/\$\{SOURCE_SHA\}\/\$\{VERSION_NAME\}"/u);
+  assert.match(text, /candidateSource/u);
   assert.match(text, /release\/lighthouse-update\.json is intentionally unchanged until real-device acceptance/u);
   assert.doesNotMatch(text, /name:\s*Publish update manifest/u);
   assert.doesNotMatch(text, /git add[^\n]*lighthouse-update\.json/u);
