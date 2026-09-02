@@ -128,6 +128,8 @@ jobs:
           VERSION_NAME="$(node -p "require('./android-shell/version.json').versionName")"
           VERSION_CODE="$(node -p "require('./android-shell/version.json').versionCode")"
           APK_SOURCE="android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk"
+          IDENTITY_SOURCE="android-shell/release/apk-identity-evidence.json"
+          SECURITY_SOURCE="android-shell/release/android-security-evidence.json"
           ASSET_DIR="release/assets/${VERSION_NAME}"
           APK_NAME="LIGHTHOUSE-${VERSION_NAME}-vc${VERSION_CODE}.apk"
           APK_PATH="${ASSET_DIR}/${APK_NAME}"
@@ -136,10 +138,20 @@ jobs:
           APK_SHA="$(sha256sum "$APK_SOURCE" | awk '{print $1}')"
           RELEASE_NOTES="คืน direct startup, เก็บ Snapshot เป็น release evidence, และเพิ่ม Settings in-app APK updater"
 
+          cp "$APK_SOURCE" "$RUNNER_TEMP/lighthouse-release.apk"
+          cp "$IDENTITY_SOURCE" "$RUNNER_TEMP/apk-identity-evidence.json"
+          cp "$SECURITY_SOURCE" "$RUNNER_TEMP/android-security-evidence.json"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git reset --hard HEAD
           git fetch origin "$TARGET_BRANCH"
           git rebase "origin/$TARGET_BRANCH"
+
+          mkdir -p "$(dirname "$APK_SOURCE")" "$(dirname "$IDENTITY_SOURCE")"
+          cp "$RUNNER_TEMP/lighthouse-release.apk" "$APK_SOURCE"
+          cp "$RUNNER_TEMP/apk-identity-evidence.json" "$IDENTITY_SOURCE"
+          cp "$RUNNER_TEMP/android-security-evidence.json" "$SECURITY_SOURCE"
 
           if [ -e "$APK_PATH" ]; then
             EXISTING_SHA="$(sha256sum "$APK_PATH" | awk '{print $1}')"
@@ -158,7 +170,7 @@ jobs:
             pushed=false
             for attempt in 1 2 3 4; do
               git fetch origin "$TARGET_BRANCH"
-              git rebase "origin/$TARGET_BRANCH"
+              git rebase --autostash "origin/$TARGET_BRANCH"
               if git push origin "HEAD:${TARGET_BRANCH}"; then pushed=true; break; fi
               sleep $((attempt * 2))
             done
@@ -204,7 +216,7 @@ jobs:
             pushed=false
             for attempt in 1 2 3 4; do
               git fetch origin "$TARGET_BRANCH"
-              git rebase "origin/$TARGET_BRANCH"
+              git rebase --autostash "origin/$TARGET_BRANCH"
               if git push origin "HEAD:${TARGET_BRANCH}"; then pushed=true; break; fi
               sleep $((attempt * 2))
             done
