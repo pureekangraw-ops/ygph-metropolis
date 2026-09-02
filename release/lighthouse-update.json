@@ -1,11 +1,11 @@
 {
-  "versionName": "1.0.4",
-  "versionCode": 1005,
-  "minVersionCode": 1004,
-  "apkUrl": "https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/e6e8d4067ff7bba032ff91eb114f807d9f23326b/release/assets/1.0.4/LIGHTHOUSE-1.0.4-vc1005.apk",
-  "sha256": "4ffa43a763b2082b2837c4d4fa28ebcd263a590d29a88afb9362005b9c9707c1",
-  "sizeBytes": 3435751,
+  "versionName": "1.0.6",
+  "versionCode": 1007,
+  "minVersionCode": 1006,
+  "apkUrl": "https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/a53fed054c30496ccda725b0559314dd5ad3d1db/release/candidates/94c49cb628f17c057775617077bee8f427a6d5f6/1.0.6/LIGHTHOUSE-1.0.6-vc1007.apk",
+  "sha256": "3130d23894adca2b3ce0405205ab4621e51bbbdad1c5e58712e2800cef3986d1",
+  "sizeBytes": 3539794,
   "required": false,
   "releaseVerified": true,
-  "releaseNotes": "คืน direct startup, เก็บ Snapshot เป็น release evidence, และเพิ่ม Settings in-app APK updater"
+  "releaseNotes": "TEST CANDIDATE — LIGHTHOUSE 1.0.6 สำหรับทดสอบอัปเดตบนเครื่องจริงจาก 1.0.5 เท่านั้น; ยังไม่ใช่ production release"
 }
