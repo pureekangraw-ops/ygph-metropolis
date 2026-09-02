@@ -1,34 +1,22 @@
 name: LIGHTHOUSE 1.0.5 Candidate
-
 on:
   push:
-    branches:
-      - feat/lighthouse-1.0.5-real-app
-    paths:
-      - 'android-shell/version.json'
-      - '.github/workflows/lighthouse-105-candidate.yml'
-
+    branches: [feat/lighthouse-1.0.5-real-app]
+    paths: ['android-shell/version.json', '.github/workflows/lighthouse-105-candidate.yml']
 permissions:
-  contents: read
-
+  contents: write
 jobs:
   build-signed-candidate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v7.0.0
-        with:
-          node-version: 22
+        with: { node-version: 22 }
       - uses: actions/setup-java@v5.0.0
-        with:
-          distribution: temurin
-          java-version: '21'
+        with: { distribution: temurin, java-version: '21' }
       - name: Verify root release gate
-        run: |
-          npm ci
-          npm run deploy:gate
+        run: npm ci && npm run deploy:gate
       - name: Install Android dependencies
         working-directory: android-shell
         run: npm install --no-audit --no-fund
@@ -43,31 +31,19 @@ jobs:
       - name: Verify staged application
         working-directory: android-shell
         run: node --test test/existing-full-app-package.test.mjs test/repository-release-contract.test.mjs
-      - name: Generate Android project
+      - name: Generate and prepare Android
         working-directory: android-shell
-        run: npx cap add android
-      - name: Sync staged assets
-        working-directory: android-shell
-        run: npx cap sync android
-      - name: Inject updater bridge
-        working-directory: android-shell
-        run: npm run android:updater:apply
-      - name: Apply canonical Android version
-        working-directory: android-shell
-        run: node tools/set-android-version.mjs
-      - name: Apply Android security baseline
-        working-directory: android-shell
-        run: npm run android:security:apply
-      - name: Materialize release manifest
-        working-directory: android-shell
-        run: cd android && ./gradlew :app:processReleaseMainManifest
-      - name: Verify Android security
-        working-directory: android-shell
-        run: npm run android:security:verify
-      - name: Build unsigned release APK
-        working-directory: android-shell
-        run: npm run android:release
-      - name: Sign with canonical LIGHTHOUSE signer
+        run: |
+          npx cap add android
+          npx cap sync android
+          npm run android:updater:apply
+          node tools/set-android-version.mjs
+          npm run android:security:apply
+          cd android && ./gradlew :app:processReleaseMainManifest
+          cd .. && npm run android:security:verify
+          npm run android:release
+      - name: Sign canonical candidate
+        id: sign
         working-directory: android-shell
         env:
           LIGHTHOUSE_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
@@ -75,8 +51,12 @@ jobs:
           LIGHTHOUSE_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
           LIGHTHOUSE_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
         run: |
-          set -euo pipefail
-          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do test -n "${!name:-}"; done
+          set -o pipefail
+          exec > >(tee /tmp/sign.log) 2>&1
+          set -eu
+          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "MISSING_SECRET:$name"; exit 31; fi
+          done
           umask 077
           keystore="$RUNNER_TEMP/lighthouse-apk-release.p12"
           aligned="$RUNNER_TEMP/lighthouse-105-aligned.apk"
@@ -84,19 +64,31 @@ jobs:
           signed="android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk"
           printf '%s' "$LIGHTHOUSE_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -f "$unsigned" || { echo MISSING_UNSIGNED_APK; exit 32; }
           "$build_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
           "$build_tools/apksigner" sign --ks "$keystore" --ks-pass "env:LIGHTHOUSE_APK_STORE_PASSWORD" --ks-key-alias "$LIGHTHOUSE_APK_KEY_ALIAS" --key-pass "env:LIGHTHOUSE_APK_KEY_PASSWORD" --out "$signed" "$aligned"
           "$build_tools/apksigner" verify "$signed"
           echo "APK_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Persist signing diagnostic
+        if: failure() && steps.sign.outcome == 'failure'
+        run: |
+          { echo '# LIGHTHOUSE 1.0.5 signing diagnostic'; echo '```text'; cat /tmp/sign.log 2>/dev/null || true; echo '```'; } > docs/lighthouse-105-signing-failure.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/lighthouse-105-signing-failure.md
+          git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 signing failure"
+          git push origin HEAD:feat/lighthouse-1.0.5-real-app
       - name: Verify final APK identity
+        if: success()
         working-directory: android-shell
-        env:
-          APK_SOURCE_COMMIT: ${{ env.APK_SOURCE_COMMIT }}
+        env: { APK_SOURCE_COMMIT: '${{ env.APK_SOURCE_COMMIT }}' }
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk release/apk-identity-evidence-1.0.5.json
       - name: Freeze candidate checksum
+        if: success()
         working-directory: android-shell
         run: sha256sum android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk > release/LIGHTHOUSE-1.0.5-vc1006.sha256
       - name: Upload clean-install candidate only
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: LIGHTHOUSE-1.0.5-vc1006-clean-install-candidate
