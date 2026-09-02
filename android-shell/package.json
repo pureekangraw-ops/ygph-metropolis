@@ -8,7 +8,8 @@
   "scripts": {
     "app:stage-existing": "node tools/stage-existing-full-app.mjs",
     "pretest": "node tools/sync-trusted-brain.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node tools/run-current-regression.mjs",
+    "test:candidate-root-cause": "node --test test/candidate-ci-contract.test.mjs",
     "patch:sign": "node tools/sign-patch.mjs",
     "patch:prepare-current": "node tools/build-current-patch-source.mjs release/current-patch-work/input.generated.json release/current-patch-work/input.bootstrap.generated.json",
     "android:add": "npx cap add android",
