@@ -14,6 +14,7 @@ function requireAndReplace(source,from,to,label){
 // Rebuild the affected tests from the known-good 494-test baseline first.
 // Then alter only assertions whose observable contract intentionally changed
 // from translated UI text to stable machine state/action identifiers.
+// This file is also the deterministic repair entrypoint for the 1.0.5 workbench.
 let questionSuite=stable('tests/greenfield-lighthouse-intent-question.test.cjs');
 questionSuite=requireAndReplace(
   questionSuite,
