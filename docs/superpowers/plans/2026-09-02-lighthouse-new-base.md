@@ -1,308 +1,184 @@
 # LIGHTHOUSE New Base Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** CURRENT PLAN ONLY
+**Owner:** BIG
+**Working branch:** `codex/lighthouse-new-base-20260902`
 
-**Goal:** Build the owner-approved LIGHTHOUSE experience on a clean product base inside the existing repository, then connect it to the proven APK delivery infrastructure without inheriting legacy UI/navigation.
-
-**Architecture:** Product source is isolated under `lighthouse-new-base/`. One central navigation state owns CHAT, MANUAL, SETTINGS and MANUAL house routing. Existing repo logic is migration-candidate material only. APK build/signing is downstream shared infrastructure, not proof of product correctness.
-
-**Tech Stack:** Node.js 22, native `node:test`, ES modules, browser DOM UI, Capacitor/Android packaging via existing `android-shell`, GitHub Actions.
+**Goal:** Build the current owner-approved LIGHTHOUSE NEW BASE without carrying forward superseded product structure.
 
 **Spec:** `docs/superpowers/specs/2026-09-02-lighthouse-new-base-design.md`
-**Screen/Route Contract:** `docs/superpowers/specs/2026-09-02-lighthouse-screen-route-acceptance.md`
+**Acceptance contract:** `docs/superpowers/specs/2026-09-02-lighthouse-screen-route-acceptance.md`
 
 ## Global Constraints
 - Work only on `codex/lighthouse-new-base-20260902`.
-- `reference/lighthouse-1.0.5` is read-only reference evidence.
-- Do not extend legacy `ui/` navigation or root `app.mjs` as NEW BASE product source.
-- Legacy `ui/lighthouse-shell.mjs` is rejected as product structure.
-- Calendar is a first-class MANUAL house and must not route through Finance.
-- One central navigation state owns all route transitions.
-- Preserve existing APK signer secret names.
-- Every migrated unit requires KEEP / ADAPT / REJECT and a failing behavior test before admission.
-- No NEW BASE production behavior without a failing test first.
-- Component existence and text labels are not acceptance evidence; route/action/readback are.
+- Active product shape is `CHAT | MANUAL | SETTINGS`.
+- MANUAL houses are exactly `Income | Outcome | Calendar | Ledger`.
+- STORE / RIDE / MONEY are not peer Manual houses in the current product shape.
+- Do not extend legacy UI/navigation as NEW BASE product source.
+- One central navigation owner controls every route.
+- Calendar is one presentation surface and does not clone owner data.
+- Ledger is readback/control/bridge and does not steal ownership.
+- CHAT is conversation; Master Input/interpreter is internal mechanism only.
+- Preserve signer/secrets and proven delivery mechanism where compatible.
+- Every migrated old unit requires KEEP / ADAPT / REJECT and a failing behavior contract before admission.
+- Real action + readback is acceptance evidence; labels and build success are not.
 - Product slice acceptance comes before Android packaging.
 
----
+## Task 0 — Owner UI / Route / Logic Gate
+- [x] Capture current owner direction in Notion.
+- [x] Remove superseded product shape from active design docs.
+- [ ] BIG reviews the current screen/route/logic contract.
 
-### Task 0: Owner Screen / Route Gate
+**STOP:** Product UI work does not begin until owner review passes.
 
-**Files:**
-- Existing: `docs/superpowers/specs/2026-09-02-lighthouse-screen-route-acceptance.md`
+## Task 1 — Clean NEW BASE Boundary
+- [x] Boundary test exists.
+- [x] Draft PR exists.
+- [ ] Record valid RED evidence for the missing NEW BASE boundary.
+- [ ] Create minimal `lighthouse-new-base/` boundary only after RED evidence.
+- [ ] Prove boundary GREEN.
+- [ ] Reject wholesale imports of legacy `ui/`, root app shell or old navigation.
 
-**Produces:** explicit screen and route contract for CHAT, MANUAL dashboard, MONEY, CALENDAR, STORE, RIDE and SETTINGS.
+## Task 2 — Central Navigation
+Target routes:
+- CHAT
+- MANUAL dashboard
+- MANUAL / Income
+- MANUAL / Outcome
+- MANUAL / Calendar
+- MANUAL / Ledger
+- SETTINGS
 
-- [x] **Step 1: Capture prior failure lessons as product gates.**
-- [x] **Step 2: Draw text wireframes for CHAT, MANUAL dashboard, house detail and SETTINGS.**
-- [x] **Step 3: Define canonical route model and Back behavior.**
-- [x] **Step 4: Define route matrix with `from -> action -> to -> back`.**
-- [ ] **Step 5: Owner reviews the screen/route contract before production UI code starts.**
+Acceptance:
+- [ ] one authoritative navigation state;
+- [ ] MANUAL opens dashboard;
+- [ ] each house opens directly from dashboard;
+- [ ] bottom `CHAT | MANUAL | SETTINGS` remains the only top-level nav;
+- [ ] no redundant Home/Back controls create a second navigation owner;
+- [ ] real history/back behavior works where needed;
+- [ ] unknown routes do not corrupt state.
 
-**STOP:** Tasks 2+ may not begin until Step 5 is satisfied.
+## Task 3 — Product Copy + Vocabulary Boundary
+- [ ] user-visible copy contains no raw internal state/event names;
+- [ ] vocabulary/typo knowledge helps interpretation without overriding user intent;
+- [ ] confirmations/problems/results are written as normal user language.
 
-### Task 1: Establish the NEW BASE filesystem boundary
+## Task 4 — CHAT Vertical Slice
+Behavior:
+- [ ] user types in normal conversation;
+- [ ] system shows interpreted result in the conversation;
+- [ ] confirmation/edit/cancel can continue in conversation without popup as primary flow;
+- [ ] Quick Capture stays in the thread;
+- [ ] write occurs only after required confirmation;
+- [ ] owner data is updated through the correct owner;
+- [ ] readback occurs before CHAT reports success;
+- [ ] keyboard does not hide input/actions.
 
-**Files:**
-- Existing: `tests/lighthouse-new-base-boundary.test.cjs`
-- Create after RED evidence: `lighthouse-new-base/README.md`
-- Create after RED evidence: `lighthouse-new-base/package.json`
+## Task 5 — MANUAL Dashboard + Income
+Dashboard:
+- [ ] shows today summary: money in, money out, due items and relevant events;
+- [ ] shows exactly four doors: Income / Outcome / Calendar / Ledger;
+- [ ] does not become a mega-menu.
 
-**Produces:** a test-enforced boundary requiring the NEW BASE directory and forbidding direct imports from legacy `ui/` and root `app.mjs`.
+Income:
+- [ ] add income;
+- [ ] receive debtor payment;
+- [ ] record Lalamove/ride income;
+- [ ] show recent entries;
+- [ ] set/adjust daily income target;
+- [ ] propagate real changes to Dashboard/Ledger/Calendar without cloning.
 
-- [x] **Step 1: Write the failing boundary test.**
-- [x] **Step 2: Open draft PR #108 so GitHub CI can execute the RED boundary test.**
-- [ ] **Step 3: Record CI RED evidence showing failure is caused by missing NEW BASE boundary.**
-- [ ] **Step 4: Create minimal README/package only after valid RED evidence.**
-- [ ] **Step 5: Run/observe boundary test GREEN in PR CI.**
+## Task 6 — Outcome
+- [ ] add expense;
+- [ ] add obligation;
+- [ ] record ride/work expense;
+- [ ] set/adjust spending ceiling;
+- [ ] distinguish unpaid obligation from real cash-out;
+- [ ] dated obligations appear in Calendar while Outcome remains owner;
+- [ ] pay/edit/cancel changes propagate by readback.
 
-### Task 2: Central Navigation Contract
+## Task 7 — Calendar
+- [ ] exactly one Calendar UI;
+- [ ] monthly default presentation;
+- [ ] show which days have items/events;
+- [ ] open a day/item and read real owner data;
+- [ ] complete from Calendar sends state change back to original owner;
+- [ ] edit/cancel changes original item, not a copy;
+- [ ] add obligation routes to Outcome;
+- [ ] Note/Task routes to its defined owner and displays by date;
+- [ ] Calendar remains presentation + time action surface, not a second truth store.
 
-**Files:**
-- Create: `lighthouse-new-base/test/navigation-state.test.mjs`
-- Create: `lighthouse-new-base/src/navigation-state.mjs`
-- Create: `lighthouse-new-base/src/routes.mjs`
+## Task 8 — Ledger / Manual Control
+- [ ] show real balance and transaction/history readback;
+- [ ] open details;
+- [ ] request edit/cancel through the original owner;
+- [ ] bridge CHAT requests to MANUAL owners;
+- [ ] read changed data back before returning results to CHAT/other surfaces;
+- [ ] keep cross-house control here without making Ledger a mega-menu;
+- [ ] never transfer Income/Outcome ownership to Ledger.
 
-**Produces:** one authoritative state:
+## Task 9 — SETTINGS
+- [ ] version;
+- [ ] check update;
+- [ ] rollback only when truly supported;
+- [ ] backup;
+- [ ] restore;
+- [ ] reset;
+- [ ] status/result copy reflects real operation state.
 
-```js
-{
-  top: 'chat' | 'manual' | 'settings',
-  manualHouse: null | 'money' | 'calendar' | 'store' | 'ride'
-}
-```
+## Task 10 — Whole-App Acceptance
+Required real walk:
+`CHAT -> MANUAL -> Income -> MANUAL -> Outcome -> MANUAL -> Calendar -> MANUAL -> Ledger -> CHAT -> SETTINGS`
 
-**Behavior tests must cover:**
-- initial route is CHAT;
-- CHAT -> MANUAL produces MANUAL dashboard (`manualHouse: null`);
-- MANUAL -> CALENDAR produces `{ top:'manual', manualHouse:'calendar' }` directly, never Finance;
-- Back from any Manual house resets `manualHouse` to null;
-- tapping MANUAL while in a house resets to dashboard;
-- SETTINGS and CHAT transitions clear house detail state;
-- unknown routes are rejected without mutating current state.
+Acceptance:
+- [ ] every visible control has the promised destination;
+- [ ] no dead ends;
+- [ ] single navigation owner remains intact;
+- [ ] no internal vocabulary leaks;
+- [ ] data changes read back consistently across related surfaces;
+- [ ] owner reviews the actual assembled experience, not CI output alone.
 
-- [ ] Write failing tests for every transition above.
-- [ ] Verify RED because navigation module does not exist.
-- [ ] Implement the smallest pure state transition API.
-- [ ] Verify all navigation tests GREEN.
-- [ ] Run repository boundary test to prove no legacy UI imports.
+**STOP:** Android packaging does not begin until this gate passes.
 
-### Task 3: Product Copy Boundary
+## Task 11 — Deterministic NEW BASE Staging
+- [ ] stage NEW BASE assets only;
+- [ ] legacy UI/navigation bundle is absent from staged product;
+- [ ] staging has its own failing-then-green contract;
+- [ ] build adapter points to NEW BASE instead of old `existing-full-app` assumptions.
 
-**Files:**
-- Create: `lighthouse-new-base/test/product-copy.test.mjs`
-- Create: `lighthouse-new-base/src/product-copy.mjs`
-
-**Produces:** one product-copy contract used by visible UI.
-
-**Tests:**
-- visible copy contains no `IDLE`, `WAITING`, `SUCCESS`, `READBACK`;
-- raw interpreter/routing labels are not exposed;
-- CHAT result states map only to user-level confirmation, actionable problem, or changed result.
-
-- [ ] Write failing copy tests.
-- [ ] Verify RED.
-- [ ] Implement minimum mapping.
-- [ ] Verify GREEN.
-
-### Task 4: MANUAL Dashboard Shell — Today + Four Doors
-
-**Files:**
-- Create: `lighthouse-new-base/test/manual-dashboard.test.mjs`
-- Create: `lighthouse-new-base/src/manual-dashboard.mjs`
-- Create: `lighthouse-new-base/src/app-shell.mjs`
-
-**Produces:** MANUAL dashboard with exactly four top-level doors:
-- MONEY
-- CALENDAR
-- STORE
-- RIDE
-
-**Behavior tests:**
-- dashboard presents today-status region before house doors;
-- four and only four house doors exist;
-- Income/Expense/Ledger do not appear as peer houses;
-- Calendar door targets `calendar`, not `finance`;
-- clicking each door requests central navigation transition; it does not mutate private page state.
-
-- [ ] Write failing tests first.
-- [ ] Verify RED.
-- [ ] Implement minimal dashboard shell.
-- [ ] Verify click behavior and rendered structure GREEN.
-- [ ] Review actual rendered/manual surface before Task 5.
-
-### Task 5: MONEY Vertical Slice
-
-**Migration gate:** inspect existing finance/core candidates and classify each used file as KEEP / ADAPT / REJECT before import.
-
-**Behavior:** one concrete user action must flow through MONEY and be read back from real state/data. A visible “success” word is not evidence.
-
-- [ ] Select the smallest concrete MONEY behavior needed for first slice.
-- [ ] Record candidate-file decisions and hidden dependencies.
-- [ ] Write failing contract/action/readback test independent of legacy DOM/navigation.
-- [ ] Migrate/reimplement smallest compatible logic.
-- [ ] Verify actual action + readback.
-- [ ] Verify Back -> MANUAL dashboard.
-- [ ] Review actual MONEY surface before Task 6.
-
-### Task 6: CALENDAR Vertical Slice — One Canonical UI
-
-**Files:** new-base Calendar files only; legacy Finance Calendar UI is reference-only.
-
-**Tests must prove:**
-- MANUAL -> CALENDAR route does not invoke Finance route;
-- exactly one Calendar UI is mounted for the canonical route;
-- Calendar items retain their own domain/source owner;
-- Back returns to MANUAL dashboard;
-- bottom navigation remains central owner.
-
-- [ ] Write failing route/UI tests.
-- [ ] Verify RED.
-- [ ] Implement minimal canonical Calendar surface.
-- [ ] Verify behavior/readback where Calendar mutation exists.
-- [ ] Review actual Calendar surface before Task 7.
-
-### Task 7: STORE Vertical Slice
-
-- [ ] Classify required old store/core candidates KEEP / ADAPT / REJECT.
-- [ ] Write failing real-behavior/readback test.
-- [ ] Implement smallest STORE path without importing legacy navigation.
-- [ ] Verify route/back/readback.
-- [ ] Review real surface.
-
-### Task 8: RIDE Vertical Slice
-
-- [ ] Classify required old ride/core candidates KEEP / ADAPT / REJECT.
-- [ ] Write failing real-behavior/readback test.
-- [ ] Implement smallest RIDE path without importing legacy navigation.
-- [ ] Verify route/back/readback.
-- [ ] Review real surface.
-
-### Task 9: CHAT + Quick Capture Vertical Slice
-
-**Rule:** Master Input / interpreter may be used only as an internal mechanism. It is not the CHAT page identity.
-
-**Tests must prove:**
-- CHAT owns conversation/result area and Quick Capture input;
-- interpreter/system event names are not rendered;
-- one concrete Quick Capture input causes an actual expected behavior and readback;
-- only confirmation, actionable problem, or changed result becomes user-visible;
-- CHAT/MANUAL/SETTINGS navigation remains central-state driven.
-
-- [ ] Inspect interpreter candidates; classify KEEP / ADAPT / REJECT.
-- [ ] Write failing user-behavior test first.
-- [ ] Implement minimal adapter without legacy CHAT shell.
-- [ ] Verify action + readback + visible copy.
-- [ ] Review actual CHAT surface.
-
-### Task 10: SETTINGS Vertical Slice
-
-**Rule:** SETTINGS is a top-level page, not a dialog with independent route ownership.
-
-- [ ] Write failing navigation/render tests.
-- [ ] Implement minimal SETTINGS surface.
-- [ ] Add Patch/Rollback only where already owner-authorized and contract-backed.
-- [ ] Verify bottom-nav transitions and no competing dialog state.
-- [ ] Review actual SETTINGS surface.
-
-### Task 11: Full Product Route Acceptance
-
-**Automated route walk must cover:**
-
-```text
-CHAT -> MANUAL -> CALENDAR -> Back -> SETTINGS
-```
-
-and MANUAL dashboard -> MONEY / CALENDAR / STORE / RIDE -> Back for every house.
-
-**Evidence:** rendered destination + central route state + actual data/readback for behavior routes.
-
-- [ ] Add route-matrix behavior test.
-- [ ] Add dead-end detection for every interactive route button.
-- [ ] Verify forbidden internal UI terms absent from rendered surfaces.
-- [ ] Review actual assembled web product as a user.
-
-**STOP:** Android integration does not begin until this gate passes.
-
-### Task 12: Deterministic NEW BASE Staging Contract
-
-**Files:**
-- Create: `lighthouse-new-base/test/stage.test.mjs`
-- Create: `lighthouse-new-base/tools/stage.mjs`
-- Modify: `lighthouse-new-base/package.json`
-
-**Tests:** staged package contains NEW BASE assets and contains no copied legacy `ui/` tree or root legacy app marker.
-
-- [ ] Write failing staging test.
-- [ ] Verify RED.
-- [ ] Implement deterministic staging.
-- [ ] Verify GREEN plus full NEW BASE tests.
-
-### Task 13: Android Packaging Adapter
-
-**Files:**
-- Create: `android-shell/test/new-base-package.test.mjs`
-- Modify smallest required `android-shell` package/tool adapter.
-
-- [ ] Write failing package test proving staged asset marker identifies NEW BASE and legacy bundle is absent.
-- [ ] Verify RED.
-- [ ] Implement `app:stage-new-base` adapter.
-- [ ] Verify package test + all NEW BASE tests GREEN.
-
-### Task 14: Adapt Owner Build Workflow — Preserve Signer
-
-**Files:**
-- Create: `tests/lighthouse-owner-build-new-base.test.cjs`
-- Modify: `.github/workflows/lighthouse-owner-build.yml`
-
-**Must preserve exactly:**
+## Task 12 — Owner Build Workflow
+Preserve signer secret contract exactly:
 - `LIGHTHOUSE_APK_KEYSTORE_BASE64`
 - `LIGHTHOUSE_APK_STORE_PASSWORD`
 - `LIGHTHOUSE_APK_KEY_ALIAS`
 - `LIGHTHOUSE_APK_KEY_PASSWORD`
 
-**Must change:**
-- staging command from `app:stage-existing` to `app:stage-new-base`;
-- legacy package-verification wording;
-- artifact name away from `existing-full-app-1.0.3`.
+Change only what NEW BASE needs:
+- [ ] staging command targets NEW BASE;
+- [ ] old artifact/staging wording removed;
+- [ ] APK identity verification retained.
 
-- [ ] Write failing workflow contract test.
-- [ ] Verify RED.
-- [ ] Make minimal workflow edits while preserving signing and APK identity verification.
-- [ ] Run repository deploy gate and workflow contract test GREEN.
+## Task 13 — Android Device Acceptance
+- [ ] build signed NEW BASE APK;
+- [ ] install on actual Android device;
+- [ ] verify correct app launches;
+- [ ] verify viewport, keyboard and tap targets;
+- [ ] execute full route walk;
+- [ ] verify real data action/readback on device;
+- [ ] fix device/product failures before updater acceptance.
 
-### Task 15: Android Device Acceptance
+## Task 14 — Updater Continuity
+- [ ] create next safe candidate;
+- [ ] sign with same canonical signer;
+- [ ] update over installed NEW BASE without clearing expected data;
+- [ ] read installed package/version back;
+- [ ] verify routes and retained expected state/data.
 
-**Acceptance is manual-on-device evidence, not CI.**
-
-Required checks:
-- fresh install launches correct NEW BASE;
-- CHAT input remains usable with keyboard open;
-- critical controls fit viewport;
-- tap targets work;
-- `CHAT -> MANUAL -> CALENDAR -> Back -> SETTINGS` matches route matrix;
-- all four houses open and Back correctly;
-- concrete action/readback still works on device.
-
-- [ ] Build owner-selected NEW BASE candidate.
-- [ ] Install on actual Android device.
-- [ ] Execute device checklist and record pass/fail evidence.
-- [ ] Fix product/device failures before updater test.
-
-### Task 16: Updater Continuity Acceptance
-
-Fresh install is not updater proof.
-
-- [ ] Create next candidate with a safe visible version/evidence change.
-- [ ] Build with same canonical signer.
-- [ ] Update over the installed first NEW BASE candidate without clearing app data.
-- [ ] Verify app identity, routes and retained expected data/state.
-- [ ] Record updater acceptance evidence.
-
-### Task 17: Completion Verification
-
-- [ ] Run all NEW BASE tests.
-- [ ] Run repository deploy gate.
-- [ ] Verify draft PR CI is green for branch-caused checks.
-- [ ] Confirm Screen/Route, Migration, Slice, Pre-APK, Device and Updater gates are all satisfied.
-- [ ] Only then change status from candidate to accepted release.
+## Definition of Done
+LIGHTHOUSE NEW BASE is accepted only when:
+1. product shape matches current owner truth;
+2. real behavior/readback works;
+3. no superseded product structure owns NEW BASE;
+4. signer continuity is preserved;
+5. Android device acceptance passes;
+6. real updater continuity passes.
