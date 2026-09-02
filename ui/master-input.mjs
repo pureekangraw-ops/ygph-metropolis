@@ -268,6 +268,7 @@ function setState(state, { title = '', copy = '', meta = '', execute = false } =
   $('masterInputState').dataset.state = state;
   $('masterInputState').dataset.state = state;
   $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
   $('masterInputState').textContent = STATE_LABELS[state] ?? state;
   const result = $('masterInputResult');
   result.classList.toggle('master-input-error', state === 'ERROR');
