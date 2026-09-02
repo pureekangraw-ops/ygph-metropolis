@@ -35,6 +35,14 @@ test('native updater uses unknown-source permission and FileProvider content URI
   assert.doesNotMatch(plugin, /file:\/\//);
 });
 
+test('native updater reconciles installed version after Android installer returns and cleans staged APK only on success', () => {
+  assert.match(plugin, /reconcileInstalledVersion/);
+  assert.match(plugin, /installAttempted/);
+  assert.match(plugin, /updated-successfully/);
+  assert.match(plugin, /install-not-completed/);
+  assert.match(plugin, /deleteStagedFile\(\)/);
+});
+
 test('generated Android patch adds REQUEST_INSTALL_PACKAGES and FileProvider without clearing app data', () => {
   assert.match(applyTool, /REQUEST_INSTALL_PACKAGES/);
   assert.match(applyTool, /androidx\.core\.content\.FileProvider/);
