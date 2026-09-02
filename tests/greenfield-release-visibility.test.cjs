@@ -42,7 +42,7 @@ test('System reports service-worker lifecycle as technical Web cache state only'
   assert.match(status, /systemServiceWorker/);
   assert.match(status, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
   assert.match(status, /Web cache/);
-  for (const label of ['กำลังตรวจสอบ','กำลังเตรียม cache','พร้อมใช้','มีปัญหา']) assert.match(status, new RegExp(label));
+  for (const label of ['กำลังตรวจสอบ','กำลังเตรียม cache','พร้อมใช้','ไม่พร้อม']) assert.match(status, new RegExp(label));
   assert.doesNotMatch(status, /settingsApkCheckBtn|settingsInstallUpdateBtn/);
 });
 
