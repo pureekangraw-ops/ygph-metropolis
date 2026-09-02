@@ -2,6 +2,8 @@ import { createBrowserApp } from './src/browser-app.mjs';
 import { createBrowserModel } from './src/browser-model.mjs';
 import { createMemoryDailyControls } from './src/daily-controls.mjs';
 import { createRuntimeBoot } from './src/runtime-boot.mjs';
+import { createAndroidUpdaterBridge } from './src/android-updater-bridge.mjs';
+import { createUpdateController } from './src/update-controller.mjs';
 import { initializeFirstRun } from '../greenfield/first-run.mjs';
 import {
   inspectGreenfieldDeviceUnlock,
@@ -14,6 +16,10 @@ import {
 
 const root = document.getElementById('app');
 if (!root) throw new Error('LIGHTHOUSE_APP_ROOT_MISSING');
+
+const APP_VERSION = '2.0.1';
+const APP_PACKAGE = 'com.yggdrasil.lighthouse';
+const TEST_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/codex/lighthouse-new-base-20260902/update-test/manifest.json';
 
 function bangkokParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -40,11 +46,28 @@ const boot = createRuntimeBoot({
   openWithPin:openGreenfieldRuntimeWithDevicePin,
   activateSession:activateRuntimeSession,
 });
+const updaterBridge = createAndroidUpdaterBridge();
+const updater = createUpdateController({
+  bridge:updaterBridge,
+  manifestUrl:TEST_UPDATE_MANIFEST_URL,
+  packageName:APP_PACKAGE,
+});
 const today = bangkokParts();
+let activeApp = null;
+
+function nativeUpdaterAvailable() {
+  return Boolean(globalThis?.Capacitor?.Plugins?.LighthouseUpdater);
+}
+
+async function readUpdaterStatus() {
+  if (!nativeUpdaterAvailable()) return null;
+  return updater.restore();
+}
 
 async function startProduct() {
   const projected = await browserModel.read(today);
   if (!projected.available) throw new Error('LIGHTHOUSE_RUNTIME_NOT_READY');
+  const updaterStatus = await readUpdaterStatus();
   const app = createBrowserApp({
     root,
     model:{
@@ -54,9 +77,15 @@ async function startProduct() {
       outcome:projected.outcome,
       calendar:projected.calendar,
       ledger:projected.ledger,
-      settings:{ version:'0.1.0-new-base', rollbackSupported:false },
+      settings:{
+        version:APP_VERSION,
+        rollbackSupported:false,
+        updaterStatus,
+        operations:nativeUpdaterAvailable() ? updater : {},
+      },
     },
   });
+  activeApp = app;
   app.start();
 }
 
@@ -96,6 +125,11 @@ function showFirstRunGate() {
     }
   });
 }
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !activeApp || !nativeUpdaterAvailable()) return;
+  activeApp.setUpdaterStatus(await updater.restore());
+});
 
 const bootState = await boot.inspect();
 if (bootState.state === 'locked') {
