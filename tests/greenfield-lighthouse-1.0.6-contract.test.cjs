@@ -10,9 +10,10 @@ test('CHAT is a conversation surface, not the visible Master Input workbench', (
   const chat = read('ui/chat-ui.mjs');
   const shell = read('ui/lighthouse-shell.mjs');
   assert.match(shell, /chat-ui\.mjs/);
-  assert.match(chat, /data-chat-message/);
-  assert.match(chat, /data-chat-role=["']user["']/);
-  assert.match(chat, /data-chat-role=["']assistant["']/);
+  assert.match(chat, /dataset\.chatMessage/);
+  assert.match(chat, /setAttribute\('data-chat-role',message\.role\)/);
+  assert.match(chat, /role:'user'/);
+  assert.match(chat, /role:'assistant'/);
   assert.match(chat, /localStorage/);
   assert.match(chat, /masterInputForm/);
   assert.doesNotMatch(chat, />\s*ตีความ\s*</);
@@ -21,13 +22,14 @@ test('CHAT is a conversation surface, not the visible Master Input workbench', (
 
 test('CHAT composer is mobile-safe and follows the visual viewport', () => {
   const chat = read('ui/chat-ui.mjs');
-  const css = read('lighthouse.css');
+  const shellCss = read('lighthouse.css');
+  const chatCss = read('ui/chat-ui.css');
   assert.match(chat, /visualViewport/);
-  assert.match(css, /100dvh/);
-  assert.match(css, /safe-area-inset-top/);
-  assert.match(css, /safe-area-inset-bottom/);
-  assert.match(css, /\.lighthouse-chat-composer/);
-  assert.match(css, /overflow-y:\s*auto/);
+  assert.match(shellCss, /100dvh/);
+  assert.match(shellCss, /safe-area-inset-top/);
+  assert.match(chatCss, /safe-area-inset-bottom/);
+  assert.match(chatCss, /\.lighthouse-chat-composer/);
+  assert.match(chatCss, /overflow-y:\s*auto/);
 });
 
 test('navigation owns one state and exposes Back and Home semantics', () => {
@@ -42,10 +44,17 @@ test('navigation owns one state and exposes Back and Home semantics', () => {
 
 test('MANUAL exposes one calendar home and category filters instead of duplicate calendars', () => {
   const shell = read('ui/lighthouse-shell.mjs');
+  assert.match(shell, /calendar:Object\.freeze/);
   assert.match(shell, /destination:'calendar'/);
   assert.match(shell, /data-calendar-filter/);
   const calendarTiles = shell.match(/title:'ปฏิทิน'/g) || [];
   assert.equal(calendarTiles.length, 1);
+});
+
+test('new chat assets are included in packaged app staging', () => {
+  const assets = read('.assetsignore');
+  assert.match(assets, /!\/ui\/chat-ui\.mjs/);
+  assert.match(assets, /!\/ui\/chat-ui\.css/);
 });
 
 test('Android release identity advances to 1.0.6 vc1007', () => {
