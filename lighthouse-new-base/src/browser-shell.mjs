@@ -12,6 +12,11 @@ function formatBaht(satang) {
   return new Intl.NumberFormat('th-TH', { minimumFractionDigits:0, maximumFractionDigits:2 }).format(amount);
 }
 
+const THAI_MONTHS = Object.freeze([
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
+]);
+
 function renderTopNavigation(route) {
   const items = [
     ['chat', 'CHAT'],
@@ -62,7 +67,83 @@ function renderManualDashboard(manual = {}) {
   </main>`;
 }
 
-function renderManualHouse(house) {
+function renderIncome(income = {}) {
+  const recent = Array.isArray(income.recent) ? income.recent : [];
+  const recentHtml = recent.length
+    ? `<ul class="record-list">${recent.map(item => (
+      `<li><span>${escapeHtml(item?.title || 'รายการเงินเข้า')}</span><strong>${formatBaht(item?.amountSatang)} บาท</strong></li>`
+    )).join('')}</ul>`
+    : '<p class="empty-state">ยังไม่มีรายการล่าสุด</p>';
+
+  return `<section data-house-body="income" aria-live="polite">
+    <div class="metric-grid">
+      <article><span>เงินเข้าจริง</span><strong>${formatBaht(income.cashInSatang)} บาท</strong></article>
+      <article><span>เครดิตวิ่งงานที่ยังไม่ถอน</span><strong>${formatBaht(income.pendingRideCreditSatang)} บาท</strong></article>
+    </div>
+    <h2>รายการล่าสุด</h2>
+    ${recentHtml}
+  </section>`;
+}
+
+function renderOutcome(outcome = {}) {
+  const spent = `<article><span>ใช้ไป</span><strong>${formatBaht(outcome.spentSatang)} บาท</strong></article>`;
+  if (outcome.allowanceSatang == null) {
+    return `<section data-house-body="outcome" aria-live="polite">
+      <p class="notice">ยังไม่ได้ตั้งวงเงินใช้จ่าย</p>
+      <div class="metric-grid">${spent}</div>
+    </section>`;
+  }
+
+  const balanceLabel = outcome.exceeded ? 'เกินวงเงิน' : 'เหลือ';
+  const balanceSatang = outcome.exceeded ? outcome.overSatang : outcome.remainingSatang;
+  return `<section data-house-body="outcome" aria-live="polite">
+    <div class="metric-grid">
+      <article><span>วงเงินใช้จ่าย</span><strong>${formatBaht(outcome.allowanceSatang)} บาท</strong></article>
+      ${spent}
+      <article><span>${balanceLabel}</span><strong>${formatBaht(balanceSatang)} บาท</strong></article>
+    </div>
+  </section>`;
+}
+
+function renderLedger(ledger = {}) {
+  const history = Array.isArray(ledger.history) ? ledger.history : [];
+  const historyHtml = history.length
+    ? `<ul class="record-list">${history.map(item => {
+      const movement = item?.direction === 'IN' ? 'เข้า' : item?.direction === 'OUT' ? 'ออก' : '';
+      return `<li data-ledger-record="${escapeHtml(item?.recordId || '')}"><span>${escapeHtml(item?.title || 'รายการ')}</span><span>${movement} ${formatBaht(item?.amountSatang)} บาท</span></li>`;
+    }).join('')}</ul>`
+    : '<p class="empty-state">ยังไม่มีประวัติรายการ</p>';
+
+  return `<section data-house-body="ledger" aria-live="polite">
+    <article class="balance-card"><span>ยอดเงินจริง</span><strong>${formatBaht(ledger.balanceSatang)} บาท</strong></article>
+    <h2>ประวัติรายการ</h2>
+    ${historyHtml}
+  </section>`;
+}
+
+function renderCalendar(calendar = {}) {
+  const year = Number(calendar.year || 0);
+  const month = Number(calendar.month || 0);
+  const monthName = THAI_MONTHS[month - 1] || '';
+  const cells = Array.isArray(calendar.cells) ? calendar.cells : [];
+  const cellsHtml = cells.map(cell => {
+    const items = Array.isArray(cell?.items) ? cell.items : [];
+    const itemsHtml = items.map(item => (
+      `<div data-calendar-item="${escapeHtml(item?.recordId || '')}"><span>${escapeHtml(item?.title || 'รายการ')}</span></div>`
+    )).join('');
+    return `<article data-calendar-date="${escapeHtml(cell?.date || '')}" data-in-month="${cell?.inMonth === true ? 'true' : 'false'}">
+      <time datetime="${escapeHtml(cell?.date || '')}">${escapeHtml(cell?.date || '')}</time>
+      ${itemsHtml}
+    </article>`;
+  }).join('');
+
+  return `<section data-house-body="calendar" aria-live="polite">
+    <h2>${escapeHtml(monthName)} ${year || ''}</h2>
+    <div class="calendar-grid">${cellsHtml}</div>
+  </section>`;
+}
+
+function renderManualHouse(house, data = {}) {
   const labels = {
     income:'Income',
     outcome:'Outcome',
@@ -71,9 +152,16 @@ function renderManualHouse(house) {
   };
   const label = labels[house];
   if (!label) return renderManualDashboard();
+  const body = house === 'income'
+    ? renderIncome(data)
+    : house === 'outcome'
+      ? renderOutcome(data)
+      : house === 'calendar'
+        ? renderCalendar(data)
+        : renderLedger(data);
   return `<main data-surface="manual" data-manual-surface="${house}" class="surface manual-house">
     <header><h1>${label}</h1></header>
-    <section data-house-body="${house}" aria-live="polite"></section>
+    ${body}
   </main>`;
 }
 
@@ -94,10 +182,28 @@ function renderSettings(settings = {}) {
   </main>`;
 }
 
-export function renderBrowserShell({ route = { top:'chat', manualHouse:null }, chat = {}, manual = {}, settings = {} } = {}) {
+export function renderBrowserShell({
+  route = { top:'chat', manualHouse:null },
+  chat = {},
+  manual = {},
+  income = {},
+  outcome = {},
+  calendar = {},
+  ledger = {},
+  settings = {},
+} = {}) {
   let body;
   if (route?.top === 'manual') {
-    body = route.manualHouse ? renderManualHouse(route.manualHouse) : renderManualDashboard(manual);
+    const houseData = route.manualHouse === 'income'
+      ? income
+      : route.manualHouse === 'outcome'
+        ? outcome
+        : route.manualHouse === 'calendar'
+          ? calendar
+          : route.manualHouse === 'ledger'
+            ? ledger
+            : {};
+    body = route.manualHouse ? renderManualHouse(route.manualHouse, houseData) : renderManualDashboard(manual);
   } else if (route?.top === 'settings') {
     body = renderSettings(settings);
   } else {
