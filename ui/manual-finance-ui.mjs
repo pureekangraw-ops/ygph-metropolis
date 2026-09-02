@@ -59,23 +59,23 @@ function createSurface(documentRef) {
   addManualStyles(documentRef);
 
   const root = node(documentRef, 'section', { id:'manualFourHouses', className:'manual-four-houses', 'aria-labelledby':'manualFourHousesTitle' });
-  root.append(node(documentRef, 'div', { className:'subhead' }, 'MANUAL · ชีวิตของรายการ'));
-  root.append(node(documentRef, 'h2', { id:'manualFourHousesTitle' }, 'Income · Outcome · Calendar · Ledger'));
-  root.append(node(documentRef, 'p', { className:'muted' }, 'มองสถานะ → แตะเข้าเรื่อง → ทำ Action → อ่าน Truth ใหม่'));
+  root.append(node(documentRef, 'div', { className:'subhead' }, 'จัดการรายการ'));
+  root.append(node(documentRef, 'h2', { id:'manualFourHousesTitle' }, 'จัดการเงินและรายการ'));
+  root.append(node(documentRef, 'p', { className:'muted' }, 'ดูสถานะ เลือกรายการ แล้วจัดการต่อได้ตรงนี้'));
 
   const income = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualIncomeTitle' });
-  income.append(node(documentRef, 'h3', { id:'manualIncomeTitle' }, 'Income — เงินเข้า'));
-  const target = storyCard(documentRef, 'incomeTargetForm', 'Target');
+  income.append(node(documentRef, 'h3', { id:'manualIncomeTitle' }, 'เงินเข้า'));
+  const target = storyCard(documentRef, 'incomeTargetForm', 'เป้ารายได้');
   const targetAmount = field(documentRef, 'เป้าหมาย (บาท) ', 'amount', { required:true, inputmode:'decimal' });
   const targetMore = disclosure(documentRef);
   const targetTitle = field(documentRef, 'ชื่อเป้า ', 'title', { required:true, value:'เป้ารายได้' });
   targetMore.append(targetTitle.label);
-  target.form.append(targetAmount.label, targetMore, node(documentRef, 'button', { type:'submit' }, 'ตั้ง / แก้ Target'));
-  target.card.append(node(documentRef, 'p', { id:'incomeTargetProgress', className:'muted' }, 'ยังไม่มี Target'));
+  target.form.append(targetAmount.label, targetMore, node(documentRef, 'button', { type:'submit' }, 'บันทึกเป้ารายได้'));
+  target.card.append(node(documentRef, 'p', { id:'incomeTargetProgress', className:'muted' }, 'ยังไม่ได้ตั้งเป้ารายได้'));
   income.append(target.card);
 
   const receivableCreate = node(documentRef, 'section', { className:'manual-list-section' });
-  const receivableDisclosure = disclosure(documentRef, '+ สร้าง Receivable');
+  const receivableDisclosure = disclosure(documentRef, '+ เพิ่มเงินที่ต้องรับ');
   const receivableForm = node(documentRef, 'form', { id:'receivableForm', className:'stack' });
   const rAmount = field(documentRef, 'ยอดที่ต้องรับ (บาท) ', 'amount', { required:true, inputmode:'decimal' });
   const rTitle = field(documentRef, 'รายการ ', 'title', { required:true });
@@ -88,39 +88,37 @@ function createSurface(documentRef) {
   income.append(receivableCreate);
 
   const outcome = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualOutcomeTitle' });
-  outcome.append(node(documentRef, 'h3', { id:'manualOutcomeTitle' }, 'Outcome — เงินออกและภาระ'));
-  const ceiling = storyCard(documentRef, 'outcomeCeilingForm', 'Ceiling');
+  outcome.append(node(documentRef, 'h3', { id:'manualOutcomeTitle' }, 'เงินออกและภาระ'));
+  const ceiling = storyCard(documentRef, 'outcomeCeilingForm', 'เพดานรายจ่าย');
   const ceilingAmount = field(documentRef, 'เพดาน (บาท) ', 'amount', { required:true, inputmode:'decimal' });
   const ceilingMore = disclosure(documentRef);
   const ceilingTitle = field(documentRef, 'ชื่อเพดาน ', 'title', { required:true, value:'เพดานรายจ่าย' });
   ceilingMore.append(ceilingTitle.label);
-  ceiling.form.append(ceilingAmount.label, ceilingMore, node(documentRef, 'button', { type:'submit' }, 'ตั้ง / แก้ Ceiling'));
-  ceiling.card.append(node(documentRef, 'p', { id:'outcomeCeilingProgress', className:'muted' }, 'ยังไม่มี Ceiling'));
+  ceiling.form.append(ceilingAmount.label, ceilingMore, node(documentRef, 'button', { type:'submit' }, 'บันทึกเพดานรายจ่าย'));
+  ceiling.card.append(node(documentRef, 'p', { id:'outcomeCeilingProgress', className:'muted' }, 'ยังไม่ได้ตั้งเพดานรายจ่าย'));
   outcome.append(ceiling.card, node(documentRef, 'div', { id:'outcomeObligationList', className:'manual-list' }), node(documentRef, 'div', { id:'outcomeDetail', className:'manual-record-detail', dataset:{ recordDetail:'outcome' }, hidden:true }));
 
-  const calendar = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualCalendarTitle' });
-  calendar.append(node(documentRef, 'h3', { id:'manualCalendarTitle' }, 'Calendar — อะไรต้องเกิดเมื่อไร'));
   const calDisclosure = disclosure(documentRef, '+ สร้างรายการ');
   const calForm = node(documentRef, 'form', { id:'calendarItemForm', className:'stack' });
   const cTitle = field(documentRef, 'รายการ ', 'title', { required:true });
   const cDue = field(documentRef, 'วันที่ ', 'dueDate', { required:true, type:'date' });
   const cMore = disclosure(documentRef);
-  const cType = field(documentRef, 'ชนิด ', 'type', { select:[['APPOINTMENT','Appointment'],['TODO','Todo'],['DEBT_FOLLOW_UP','Debt Follow-up']] });
+  const cType = field(documentRef, 'ชนิด ', 'type', { select:[['APPOINTMENT','นัดหมาย'],['TODO','สิ่งที่ต้องทำ'],['DEBT_FOLLOW_UP','ติดตามหนี้']] });
   const cDetail = field(documentRef, 'รายละเอียด ', 'detail');
   cMore.append(cType.label, cDetail.label);
   calForm.append(cTitle.label, cDue.label, cMore, node(documentRef, 'button', { type:'submit' }, 'สร้างรายการ'));
   calDisclosure.append(calForm);
-  calendar.append(calDisclosure, node(documentRef, 'div', { id:'manualCalendarViews', className:'manual-list' }), node(documentRef, 'div', { id:'manualCalendarDetail', className:'manual-record-detail', dataset:{ recordDetail:'calendar' }, hidden:true }));
+  const calendarDetail = node(documentRef, 'div', { id:'manualCalendarDetail', className:'manual-record-detail', dataset:{ recordDetail:'calendar' }, hidden:true });
 
   const ledger = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualLedgerTitle' });
-  ledger.append(node(documentRef, 'h3', { id:'manualLedgerTitle' }, 'Ledger — คุมความจริง'));
+  ledger.append(node(documentRef, 'h3', { id:'manualLedgerTitle' }, 'ประวัติเงินจริง'));
   const searchDisclosure = disclosure(documentRef, 'ค้นหา / กรอง');
   const searchForm = node(documentRef, 'form', { id:'ledgerSearchForm', className:'stack' });
   const q = field(documentRef, 'ค้นหา ', 'text', { placeholder:'ชื่อ / รหัส / รายละเอียด' });
   const searchMore = disclosure(documentRef);
   const direction = field(documentRef, 'ทิศทาง ', 'direction', { select:[['','ทั้งหมด'],['IN','เงินเข้า'],['OUT','เงินออก']] });
-  const type = field(documentRef, 'ชนิด ', 'type', { select:[['','ทั้งหมด'],['TRANSACTION','Transaction'],['TARGET','Target'],['CEILING','Ceiling'],['RECEIVABLE','Receivable'],['OBLIGATION','Obligation']] });
-  const life = field(documentRef, 'สถานะ ', 'status', { select:[['','ทั้งหมด'],['OPEN','Open'],['PARTIAL','Partial'],['COMPLETED','Complete'],['CANCELLED','Cancelled']] });
+  const type = field(documentRef, 'ชนิด ', 'type', { select:[['','ทั้งหมด'],['TRANSACTION','รายการเงินจริง'],['TARGET','เป้ารายได้'],['CEILING','เพดานรายจ่าย'],['RECEIVABLE','เงินที่ต้องรับ'],['OBLIGATION','ภาระ']] });
+  const life = field(documentRef, 'สถานะ ', 'status', { select:[['','ทั้งหมด'],['OPEN','เปิดอยู่'],['PARTIAL','บางส่วน'],['COMPLETED','เสร็จแล้ว'],['CANCELLED','ยกเลิก']] });
   searchMore.append(direction.label, type.label, life.label);
   searchForm.append(q.label, searchMore, node(documentRef, 'button', { type:'submit' }, 'ค้น'));
   searchDisclosure.append(searchForm);
@@ -128,12 +126,17 @@ function createSurface(documentRef) {
 
   const sheet = node(documentRef, 'div', { id:'manualActionSheet', className:'manual-action-sheet', hidden:true, role:'presentation' });
   const sheetPanel = node(documentRef, 'section', { className:'manual-action-sheet-panel', role:'dialog', 'aria-modal':'true', 'aria-labelledby':'manualActionSheetTitle' });
-  sheetPanel.append(node(documentRef, 'h3', { id:'manualActionSheetTitle' }, 'Action'), node(documentRef, 'div', { id:'manualActionSheetBody' }), node(documentRef, 'button', { id:'manualActionSheetClose', type:'button', className:'secondary' }, 'ปิด'));
+  sheetPanel.append(node(documentRef, 'h3', { id:'manualActionSheetTitle' }, 'จัดการ'), node(documentRef, 'div', { id:'manualActionSheetBody' }), node(documentRef, 'button', { id:'manualActionSheetClose', type:'button', className:'secondary' }, 'ปิด'));
   sheet.append(sheetPanel);
 
-  root.append(income, outcome, calendar, ledger, sheet);
+  root.append(income, outcome, ledger, sheet);
   const schedule = documentRef.getElementById('financeSchedule');
-  if (schedule) schedule.before(root); else financePage.append(root);
+  if (schedule) {
+    const firstScheduleChild = schedule.children?.[0] || null;
+    if (firstScheduleChild?.before) firstScheduleChild.before(calDisclosure); else schedule.append(calDisclosure);
+    schedule.append(calendarDetail);
+    schedule.before(root);
+  } else financePage.append(root);
 }
 
 function currentExpectationId(kind) { return kind === 'TARGET' ? 'MANUAL-TARGET-CURRENT' : 'MANUAL-CEILING-CURRENT'; }
@@ -211,7 +214,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
 
     if (primary) {
       const actions = node(documentRef, 'div', { className:'manual-detail-actions' });
-      const button = node(documentRef, 'button', { type:'button', className:'manual-primary-action', dataset:{ primaryAction:primary.label } }, primary.label);
+      const button = node(documentRef, 'button', { type:'button', className:'manual-primary-action', dataset:{ primaryAction:primary.actionId || primary.label } }, primary.label);
       button.addEventListener('click', primary.run);
       actions.append(button);
       container.append(actions);
@@ -313,7 +316,7 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
     }
     detailShell(documentRef.getElementById('manualCalendarDetail'),current,{
       truth:current.dueDate?`กำหนด ${String(current.dueDate).slice(0,10)}`:'ไม่มีกำหนดวัน',
-      primary:active?{label:'Complete',run:()=>mutate(()=>manual.completeCalendar({workflowId:makeId('WF-CAL-DONE'),recordId:current.recordId}),'Complete และอ่าน Truth ใหม่แล้ว')}:null,
+      primary:active?{actionId:'COMPLETED',label:'เสร็จแล้ว',run:()=>mutate(()=>manual.completeCalendar({workflowId:makeId('WF-CAL-DONE'),recordId:current.recordId}),'ทำรายการเสร็จแล้วและอ่านสถานะใหม่แล้ว')}:null,
       secondary,history,related,
     });
   }
@@ -404,14 +407,6 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
       for(const record of obligations) oList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openReference(createRecordReference({version:1,owner:'LEDGER',recordId:record.recordId}))}));
       if(!obligations.length) oList.textContent='ยังไม่มี Obligation';
 
-      const [todayItems,upcoming,overdue]=await Promise.all([manual.calendarToday(),manual.calendarUpcoming(),manual.calendarOverdue()]);
-      const c=documentRef.getElementById('manualCalendarViews'); c.textContent='';
-      for(const [label,items] of [['Today',todayItems],['Upcoming',upcoming],['Overdue',overdue]]){
-        const group=node(documentRef,'section',{className:'manual-list-group'});
-        group.append(node(documentRef,'b',{},`${label} ${items.length}`));
-        for(const record of items) group.append(row(record,{onOpen:()=>openReference(createRecordReference({version:1,owner:'CALENDAR',recordId:record.recordId}))}));
-        c.append(group);
-      }
       await renderLedger();
     } catch (error) { notify(String(error?.message || error), true); }
   }

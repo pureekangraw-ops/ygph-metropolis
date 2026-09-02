@@ -112,7 +112,7 @@ test('Manual action commits through Runtime, reads back, and refreshes the same 
   const reference = {version:1,owner:'CALENDAR',recordId:'CAL-HOME'};
   await ui.openReference(reference);
   const before = documentRef.getElementById('manualCalendarDetail');
-  const complete = before.walk().find(node => node.dataset.primaryAction === 'Complete');
+  const complete = before.walk().find(node => node.dataset.primaryAction === 'COMPLETED');
 
   await complete.click();
 
@@ -120,6 +120,6 @@ test('Manual action commits through Runtime, reads back, and refreshes the same 
   const after = documentRef.getElementById('manualCalendarDetail');
   assert.equal(after.dataset.recordDetail, 'CAL-HOME');
   assert.match(after.walk().map(node => node.textContent).join(' '), /เสร็จแล้ว/);
-  assert.equal(after.walk().some(node => node.dataset.primaryAction === 'Complete'), false);
+  assert.equal(after.walk().some(node => node.dataset.primaryAction === 'COMPLETED'), false);
   runtime.close();
 });

@@ -178,22 +178,24 @@ async function setupProductionUi(caseId, options = {}) {
   uiUrl.searchParams.set('finalGate', `${caseId}-${++importCounter}`);
   const ui = await import(uiUrl.href);
 
+  const rawState = () => document.getElementById('masterInputState').dataset.state || '';
+
   async function submit(text) {
     document.getElementById('masterInputText').value = text;
     document.getElementById('masterInputForm').requestSubmit();
     await waitFor(() => {
-      const state = document.getElementById('masterInputState').textContent;
+      const state = rawState();
       return state && state !== 'INTERPRETING' && state !== 'IDLE';
     }, `submit:${text}`);
-    return document.getElementById('masterInputState').textContent;
+    return rawState();
   }
 
   async function execute() {
     const actions = document.getElementById('masterInputActions');
     assert.equal(actions.children.length, 1, 'expected exactly one explicit execute action');
     actions.children[0].click();
-    await waitFor(() => ['SUCCESS','ERROR'].includes(document.getElementById('masterInputState').textContent), 'execute');
-    return document.getElementById('masterInputState').textContent;
+    await waitFor(() => ['SUCCESS','ERROR'].includes(rawState()), 'execute');
+    return rawState();
   }
 
   return {

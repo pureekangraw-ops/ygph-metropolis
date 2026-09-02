@@ -1,0 +1,87 @@
+name: LIGHTHOUSE 1.0.5 Candidate
+on:
+  push:
+    branches: [feat/lighthouse-1.0.5-real-app]
+    paths: ['android-shell/version.json', '.github/workflows/lighthouse-105-candidate.yml']
+permissions:
+  contents: read
+jobs:
+  build-signed-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v7.0.0
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v5.0.0
+        with: { distribution: temurin, java-version: '21' }
+      - name: Verify root release gate
+        run: npm ci && npm run deploy:gate
+      - name: Install Android dependencies
+        working-directory: android-shell
+        run: npm install --no-audit --no-fund
+      - name: Verify 1.0.5 identity target
+        working-directory: android-shell
+        run: |
+          node -e "const v=require('./version.json'); if(v.versionName!=='1.0.5'||v.versionCode!==1006) process.exit(1)"
+          node --test test/apk-identity-contract.test.mjs test/apk-version-contract.test.mjs test/app-update.test.mjs test/settings-update-state.test.mjs test/managed-artifact-activation.test.mjs
+      - name: Stage existing full application
+        working-directory: android-shell
+        run: npm run app:stage-existing
+      - name: Verify staged application
+        working-directory: android-shell
+        run: node --test test/existing-full-app-package.test.mjs test/repository-release-contract.test.mjs
+      - name: Generate and prepare Android
+        working-directory: android-shell
+        run: |
+          npx cap add android
+          npx cap sync android
+          npm run android:updater:apply
+          node tools/set-android-version.mjs
+          npm run android:security:apply
+          cd android && ./gradlew :app:processReleaseMainManifest
+          cd .. && npm run android:security:verify
+          npm run android:release
+      - name: Sign canonical candidate
+        working-directory: android-shell
+        env:
+          LIGHTHOUSE_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
+          LIGHTHOUSE_APK_STORE_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_STORE_PASSWORD }}
+          LIGHTHOUSE_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
+          LIGHTHOUSE_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do test -n "${!name:-}"; done
+          umask 077
+          keystore="$RUNNER_TEMP/lighthouse-apk-release.p12"
+          aligned="$RUNNER_TEMP/lighthouse-105-aligned.apk"
+          unsigned="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          signed="android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk"
+          printf '%s' "$LIGHTHOUSE_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$build_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
+          "$build_tools/apksigner" sign --ks "$keystore" --ks-pass "env:LIGHTHOUSE_APK_STORE_PASSWORD" --ks-key-alias "$LIGHTHOUSE_APK_KEY_ALIAS" --key-pass "env:LIGHTHOUSE_APK_KEY_PASSWORD" --out "$signed" "$aligned"
+          "$build_tools/apksigner" verify "$signed"
+          echo "APK_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Verify final APK identity
+        working-directory: android-shell
+        env: { APK_SOURCE_COMMIT: '${{ env.APK_SOURCE_COMMIT }}' }
+        run: |
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          export APKSIGNER="$build_tools/apksigner"
+          export AAPT="$build_tools/aapt"
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk release/apk-identity-evidence-1.0.5.json
+      - name: Freeze candidate checksum
+        working-directory: android-shell
+        run: sha256sum android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk > release/LIGHTHOUSE-1.0.5-vc1006.sha256
+      - name: Upload clean-install candidate only
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIGHTHOUSE-1.0.5-vc1006-clean-install-candidate
+          path: |
+            android-shell/android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk
+            android-shell/release/apk-identity-evidence-1.0.5.json
+            android-shell/release/android-security-evidence.json
+            android-shell/release/LIGHTHOUSE-1.0.5-vc1006.sha256
+          if-no-files-found: error
+          retention-days: 14

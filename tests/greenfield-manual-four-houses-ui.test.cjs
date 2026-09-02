@@ -13,10 +13,12 @@ test('MANUAL Finance surface exposes only the missing lifecycle controls while r
   for (const id of [
     'incomeTargetForm','incomeTargetProgress','receivableForm','receivableList',
     'outcomeCeilingForm','outcomeCeilingProgress',
-    'calendarItemForm','manualCalendarViews',
+    'calendarItemForm','manualCalendarDetail',
     'ledgerSearchForm','ledgerSearchResults','ledgerDetail',
   ]) assert.match(manualUi, new RegExp(`["']${id}["']`), `missing mounted ${id}`);
 
+  assert.match(html, /id="financeSchedule"/, 'Calendar list and selected-day surface stays Finance-hosted');
+  assert.doesNotMatch(manualUi, /manualCalendarViews/, 'MANUAL must not create a second Calendar list');
   assert.match(html, /id="incomeForm"/);
   assert.match(html, /id="expenseForm"/);
   assert.match(html, /id="obligationForm"/);

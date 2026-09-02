@@ -303,3 +303,31 @@ body.lighthouse-shell-active .truth-warning{background:#fffafa;border-color:#f3b
   .lighthouse-bottom-nav{width:calc(100% - 16px);bottom:max(6px,env(safe-area-inset-bottom));border-radius:19px}
   .lighthouse-bottom-nav button{min-height:52px}
 }
+
+/* LIGHTHOUSE 1.0.5 Gate A: mobile shell ownership */
+html,
+body{min-height:100%;}
+body.lighthouse-shell-active{
+  min-height:100dvh;
+  padding-top:env(safe-area-inset-top);
+}
+body.lighthouse-shell-active .appbar{
+  padding-top:env(safe-area-inset-top);
+}
+body.lighthouse-shell-active #workspace{
+  min-height:calc(100dvh - env(safe-area-inset-top));
+}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]{
+  min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>#masterInputShell{
+  min-height:0;
+  flex:1 1 auto;
+}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"] .master-input-shell{
+  min-height:0;
+  max-height:calc(100dvh - 9.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.lighthouse-bottom-nav button{min-height:54px;min-width:44px;}

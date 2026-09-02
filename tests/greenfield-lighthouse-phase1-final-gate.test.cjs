@@ -23,10 +23,10 @@ test('P1F01 production Master Input walks local Direct intent through explicit e
 test('P1F02 production recovery walks invalid -> still invalid -> valid -> explicit execute and reaches real durable truth', async () => {
   const env = await setupProductionUi('F02');
   try {
-    assert.equal(await env.submit('ข้าว 1,50'), 'รอ');
+    assert.equal(await env.submit('ข้าว 1,50'), 'WAITING');
     assert.equal(env.document.getElementById('masterInputTitle').textContent, 'รอให้ระบุเฉพาะจุด');
 
-    assert.equal(await env.submit('แก้ไข 1,60'), 'รอ');
+    assert.equal(await env.submit('แก้ไข 1,60'), 'WAITING');
     assert.equal(env.document.getElementById('masterInputTitle').textContent, 'รออีกจุดก่อนทำงานต่อ');
 
     assert.equal(await env.submit('แก้ไข 160'), 'READY');
@@ -60,7 +60,7 @@ test('P1F03 production front door keeps prohibition and understood unsupported c
 test('P1F04 whole-input replacement exits recovery, becomes a fresh routable input, and still requires explicit execute', async () => {
   const env = await setupProductionUi('F04');
   try {
-    assert.equal(await env.submit('ข้าว 1,50'), 'รอ');
+    assert.equal(await env.submit('ข้าว 1,50'), 'WAITING');
     assert.equal(await env.submit('แทนที่ ข้าว65'), 'READY');
     assert.equal(env.document.getElementById('masterInputText').value, 'ข้าว65');
     assert.equal(env.providerCalls(), 0);

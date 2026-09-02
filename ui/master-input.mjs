@@ -18,7 +18,7 @@ import { createExpenseCapability } from '../lighthouse/capabilities/expense.mjs'
 import { createRecordReference } from '../greenfield/context-reference.mjs';
 
 const STATES = Object.freeze(['IDLE','INTERPRETING','READY','ASK','WAITING','UNSUPPORTED','SUCCESS','ERROR']);
-const STATE_LABELS = Object.freeze({ WAITING:'รอ' });
+const STATE_LABELS = Object.freeze({ IDLE:'พร้อมพิมพ์', INTERPRETING:'กำลังอ่าน', READY:'พร้อม', ASK:'ต้องถามเพิ่ม', WAITING:'รอ', UNSUPPORTED:'ยังทำไม่ได้', SUCCESS:'สำเร็จ', ERROR:'ไม่สำเร็จ' });
 const $ = id => document.getElementById(id);
 const localPathKernel = createPathKernel({ capabilities:[createExpenseCapability()] });
 let preparedExecution = null;
@@ -118,7 +118,7 @@ function renderProvenReferenceActions(readback) {
     open.type = 'button';
     open.className = 'secondary';
     open.dataset.bridgeAction = 'open';
-    open.textContent = 'เปิด Manual';
+    open.textContent = 'เปิดรายการ';
     open.addEventListener('click', () => bridgeActions.open(reference));
     actions.append(open);
   }
@@ -183,7 +183,7 @@ function readbackText(object, readback = {}) {
 }
 
 function commandStatusText(commands = []) {
-  return commands.map(command => `${command.rawText || command.groupId || 'คำสั่ง'} · ${command.status}`).join(' · ');
+  return commands.map(command => `${command.rawText || command.groupId || 'คำสั่ง'} · ${STATE_LABELS[command.status] ?? 'กำลังดำเนินการ'}`).join(' · ');
 }
 
 function friendlyError(error) {
@@ -197,9 +197,9 @@ function friendlyError(error) {
     RATE_LIMITER_NOT_CONFIGURED:'ระบบจำกัดการเรียกใช้งานยังไม่พร้อม',
     MASTER_INPUT_RIDE_ROUND_REQUIRED:'ยังไม่มีรอบวิ่งที่กำลังทำงาน',
     MASTER_INPUT_RIDE_ROUND_ACTIVE:'มีรอบวิ่งกำลังทำงานอยู่แล้ว',
-    MASTER_INPUT_RUNTIME_LOCKED:'Runtime ของแอปยังไม่พร้อม กรุณาเข้าแอปใหม่',
+    MASTER_INPUT_RUNTIME_LOCKED:'แอปยังไม่พร้อม กรุณาเข้าแอปใหม่',
     MASTER_INPUT_RESPONSE_INVALID:'คำตอบจากล่ามไม่ผ่านสัญญาระบบ',
-    MASTER_INPUT_PATH_NOT_PROVEN:'PATH ยังยืนยันผลจริงไม่ได้',
+    MASTER_INPUT_PATH_NOT_PROVEN:'ยังยืนยันผลจริงไม่ได้',
   };
   return map[code] || 'ดำเนินการไม่สำเร็จ';
 }
@@ -210,24 +210,24 @@ function createShell() {
   const shell = document.createElement('section');
   shell.id = 'masterInputShell';
   shell.className = 'master-input-shell';
-  shell.setAttribute('aria-label', 'Master Input');
+  shell.setAttribute('aria-label', 'พิมพ์สิ่งที่ต้องการ');
   shell.innerHTML = `
     <div class="master-input-head">
-      <div><small>MASTER INPUT</small><h2>พิมพ์ตามที่พูดจริงได้เลย</h2></div>
+      <div><small>พิมพ์สิ่งที่ต้องการ</small><h2>พิมพ์ตามที่พูดจริงได้เลย</h2></div>
       <span id="masterInputState" class="master-input-state">IDLE</span>
     </div>
     <div id="masterInputSubjectBar" class="master-input-subject" hidden>
       <div><small>กำลังคุยเรื่อง</small><strong id="masterInputSubject"></strong></div>
       <div class="master-input-subject-actions">
         <button id="masterInputSubjectPeek" type="button">ดูสั้น ๆ</button>
-        <button id="masterInputSubjectOpen" type="button">เปิด Manual</button>
+        <button id="masterInputSubjectOpen" type="button">เปิดรายการ</button>
         <button id="masterInputSubjectBack" type="button">กลับรายการ</button>
         <button id="masterInputSubjectClear" type="button" aria-label="เลิกอ้างอิงเรื่องนี้">×</button>
       </div>
     </div>
     <p id="masterInputPeek" class="master-input-peek" hidden></p>
     <form id="masterInputForm" class="master-input-form">
-      <textarea id="masterInputText" rows="1" maxlength="1200" placeholder="เช่น ข้าว 65 · งาน 380 เงินสด · วันนี้วิ่งได้เท่าไร" aria-label="ข้อความ Master Input" required></textarea>
+      <textarea id="masterInputText" rows="1" maxlength="1200" placeholder="เช่น ข้าว 65 · งาน 380 เงินสด · วันนี้วิ่งได้เท่าไร" aria-label="ข้อความที่ต้องการ" required></textarea>
       <button id="masterInputInterpret" class="primary-action" type="submit">ตีความ</button>
     </form>
     <div id="masterInputResult" class="master-input-result" aria-live="polite" hidden>
@@ -265,6 +265,14 @@ function createShell() {
 
 function setState(state, { title = '', copy = '', meta = '', execute = false } = {}) {
   if (!STATES.includes(state)) throw new Error('MASTER_INPUT_UI_STATE_INVALID');
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
   $('masterInputState').textContent = STATE_LABELS[state] ?? state;
   const result = $('masterInputResult');
   result.classList.toggle('master-input-error', state === 'ERROR');

@@ -82,7 +82,7 @@ test('installer is reached only after download hash, inspection and real backup 
   const updater=createAppUpdater({metadataUrl:'https://example.com/lighthouse-update.json',fetchImpl,nativeBridge,requestBackup});
   await updater.check();
   const result=await updater.downloadAndInstall();
-  assert.equal(result.status,'installer-opened');
+  assert.equal(result.status,'waiting-installer');
   assert.deepEqual(calls,['identity','download','inspect','backup','permission','installer']);
 });
 
