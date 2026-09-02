@@ -22,6 +22,16 @@ function addManifestUpdaterContract(source) {
   return text;
 }
 
+function renderUpdaterPlugin(source) {
+  const text = String(source);
+  const generated = text.replace(
+    'verified.getBool("ok", false)',
+    'Boolean.TRUE.equals(verified.getBool("ok"))',
+  );
+  if (generated === text) throw new Error('ANDROID_UPDATER_TEMPLATE_BOOL_COMPAT_PATCH_MISSING');
+  return generated;
+}
+
 export async function applyUpdaterAndroid(androidRoot = 'android') {
   const root = resolve(shellRoot, androidRoot);
   const javaDir = resolve(root, 'app/src/main/java/com/yggdrasil/lighthouse');
@@ -30,7 +40,8 @@ export async function applyUpdaterAndroid(androidRoot = 'android') {
   await mkdir(javaDir, { recursive:true });
   await mkdir(resXmlDir, { recursive:true });
 
-  await cp(resolve(templateRoot, 'LighthouseUpdaterPlugin.java'), resolve(javaDir, 'LighthouseUpdaterPlugin.java'));
+  const pluginTemplate = await readFile(resolve(templateRoot, 'LighthouseUpdaterPlugin.java'), 'utf8');
+  await writeFile(resolve(javaDir, 'LighthouseUpdaterPlugin.java'), renderUpdaterPlugin(pluginTemplate), 'utf8');
   await cp(resolve(templateRoot, 'file_paths.xml'), resolve(resXmlDir, 'file_paths.xml'));
 
   const mainActivity = `package ${applicationId};\n\nimport android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(LighthouseUpdaterPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n}\n`;
