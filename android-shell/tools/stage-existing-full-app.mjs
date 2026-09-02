@@ -20,6 +20,7 @@ const requiredFiles = [
 const optionalFiles = [
   'theme.css',
   'compact-ui.css',
+  'lighthouse.css',
   'icon-192.png',
   'icon-512.png',
 ];
@@ -78,6 +79,7 @@ for (const relative of [
   'manifest.webmanifest',
   'sw.js',
   'compact-ui.css',
+  'lighthouse.css',
   'icon-192.png',
   'icon-512.png',
   'effective-base-manifest.json',
