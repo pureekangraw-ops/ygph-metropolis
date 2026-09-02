@@ -7,6 +7,7 @@ function stable(path){
 }
 function requireAndReplace(source,from,to,label){
   if(!source.includes(from)) throw new Error(`${label} not found in stable suite`);
+  // Replace every exact occurrence so duplicated stable assertions stay aligned.
   return source.split(from).join(to);
 }
 
