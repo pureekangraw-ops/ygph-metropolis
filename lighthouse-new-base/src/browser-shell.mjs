@@ -12,6 +12,14 @@ function formatBaht(satang) {
   return new Intl.NumberFormat('th-TH', { minimumFractionDigits:0, maximumFractionDigits:2 }).format(amount);
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return '';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 const THAI_MONTHS = Object.freeze([
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
@@ -165,6 +173,34 @@ function renderManualHouse(house, data = {}) {
   </main>`;
 }
 
+function renderUpdaterStatus(status = null) {
+  if (!status || status.state === 'idle') return '<p class="notice">ยังไม่ได้ตรวจอัปเดต</p>';
+  const candidate = status.candidate || {};
+  const progress = status.progress || {};
+  const downloaded = formatBytes(progress.downloadedBytes);
+  const total = formatBytes(progress.totalBytes);
+  const progressText = progress.indeterminate
+    ? (downloaded ? `ดาวน์โหลดแล้ว ${downloaded}` : 'กำลังดาวน์โหลด')
+    : `${Number(progress.percent || 0)}%${downloaded && total ? ` · ${downloaded} / ${total}` : ''}`;
+
+  if (status.state === 'update-available') {
+    return `<div data-updater-state="update-available"><p>พบเวอร์ชัน ${escapeHtml(candidate.versionName)}</p><p>${escapeHtml(candidate.releaseNotes || '')}</p><button type="button" data-updater-action="start">อัปเดต</button></div>`;
+  }
+  if (status.state === 'up-to-date') return '<p data-updater-state="up-to-date">เป็นเวอร์ชันล่าสุดแล้ว</p>';
+  if (status.state === 'rejected-downgrade') return `<p data-updater-state="rejected-downgrade">${escapeHtml(status.message || 'รุ่นที่พบเก่ากว่ารุ่นที่ติดตั้งอยู่')}</p>`;
+  if (status.state === 'Downloading') return `<div data-updater-state="Downloading"><p>กำลังดาวน์โหลด</p><p>${escapeHtml(progressText)}</p></div>`;
+  if (status.state === 'Paused') return `<div data-updater-state="Paused"><p>ดาวน์โหลดหยุดชั่วคราว</p><p>${escapeHtml(progressText)}</p><button type="button" data-updater-action="retry">ลองต่ออีกครั้ง</button></div>`;
+  if (status.state === 'Retrying') return `<div data-updater-state="Retrying"><p>กำลังลองดาวน์โหลดอีกครั้ง</p><p>${escapeHtml(progressText)}</p></div>`;
+  if (status.state === 'Verifying') return '<p data-updater-state="Verifying">กำลังตรวจไฟล์อัปเดต</p>';
+  if (status.state === 'Ready to install') return '<div data-updater-state="Ready to install"><p>ไฟล์พร้อมติดตั้ง</p><button type="button" data-updater-action="install">ติดตั้ง</button></div>';
+  if (status.state === 'permission-required') return `<div data-updater-state="permission-required"><p>${escapeHtml(status.message || 'ต้องอนุญาตการติดตั้งจากแหล่งนี้ก่อน')}</p><button type="button" data-updater-action="install">ตรวจสิทธิ์แล้วทำต่อ</button></div>`;
+  if (status.state === 'Installing') return '<p data-updater-state="Installing">กำลังรอ Android ยืนยันการติดตั้ง</p>';
+  if (status.state === 'updated-successfully') return '<p data-updater-state="updated-successfully">อัปเดตสำเร็จ</p>';
+  if (status.state === 'install-not-completed') return `<p data-updater-state="install-not-completed">${escapeHtml(status.message || 'การติดตั้งยังไม่สำเร็จหรือถูกยกเลิก')}</p>`;
+  if (status.state === 'Failed') return `<div data-updater-state="Failed"><p>${escapeHtml(status.message || 'อัปเดตไม่สำเร็จ')}</p><button type="button" data-updater-action="retry">ลองอีกครั้ง</button></div>`;
+  return `<p>${escapeHtml(status.message || '')}</p>`;
+}
+
 function renderSettings(settings = {}) {
   const version = escapeHtml(settings.version || 'ไม่ทราบรุ่น');
   const rollback = settings.rollbackSupported === true
@@ -174,6 +210,7 @@ function renderSettings(settings = {}) {
     <header><h1>SETTINGS</h1><p>เวอร์ชัน ${version}</p></header>
     <section class="settings-actions">
       <button type="button" data-settings-action="check-update">ตรวจอัปเดต</button>
+      <section class="updater-status" aria-live="polite">${renderUpdaterStatus(settings.updaterStatus)}</section>
       ${rollback}
       <button type="button" data-settings-action="backup">สำรองข้อมูล</button>
       <button type="button" data-settings-action="restore">กู้คืนข้อมูล</button>
