@@ -11,25 +11,30 @@ function installPermissionCount(manifestText) {
   return [...String(manifestText).matchAll(/<uses-permission\b[^>]*android:name="android\.permission\.REQUEST_INSTALL_PACKAGES"[^>]*\/?\s*>/g)].length;
 }
 
-function providerOpenTag(manifestText) {
-  const paired = new RegExp(`<provider\\b([^>]*)android:name="${FILE_PROVIDER.replaceAll('.', '\\.')}"([^>]*)>`, 's').exec(manifestText);
-  if (paired) return `<provider${paired[1]}android:name="${FILE_PROVIDER}"${paired[2]}>`;
-  const any = [...String(manifestText).matchAll(/<provider\b[^>]*>/gs)].map(match => match[0]);
-  return any.find(tag => tag.includes(`android:name="${FILE_PROVIDER}"`)) || null;
-}
-
 function attribute(tag, name) {
   return new RegExp(`\\bandroid:${name}="([^"]*)"`).exec(tag || '')?.[1];
 }
 
+function updaterProviderBlock(manifestText) {
+  const blocks = [...String(manifestText).matchAll(/<provider\b([^>]*)>([\s\S]*?)<\/provider>/g)].map(match => ({
+    openTag:`<provider${match[1]}>`,
+    body:match[2],
+  }));
+  return blocks.find(block => (
+    attribute(block.openTag, 'name') === FILE_PROVIDER
+    && attribute(block.openTag, 'authorities') === FILE_PROVIDER_AUTHORITY
+  )) || null;
+}
+
 export function verifyUpdaterAndroidSecurity({ manifestText, capacitorConfig, manifestPath = null }) {
   if (installPermissionCount(manifestText) !== 1) throw new Error(`ANDROID_UPDATER_INSTALL_PERMISSION_COUNT:${installPermissionCount(manifestText)}`);
-  const providerTag = providerOpenTag(manifestText);
-  if (!providerTag) throw new Error('ANDROID_UPDATER_FILE_PROVIDER_MISSING');
-  if (attribute(providerTag, 'authorities') !== FILE_PROVIDER_AUTHORITY) throw new Error(`ANDROID_UPDATER_FILE_PROVIDER_AUTHORITY:${attribute(providerTag, 'authorities') || 'UNKNOWN'}`);
-  if (attribute(providerTag, 'exported') !== 'false') throw new Error('ANDROID_UPDATER_FILE_PROVIDER_EXPORTED');
-  if (attribute(providerTag, 'grantUriPermissions') !== 'true') throw new Error('ANDROID_UPDATER_FILE_PROVIDER_GRANT_MISSING');
-  if (!/android:name="android\.support\.FILE_PROVIDER_PATHS"[\s\S]*android:resource="@xml\/file_paths"/.test(manifestText)) throw new Error('ANDROID_UPDATER_FILE_PROVIDER_PATHS_MISSING');
+  const provider = updaterProviderBlock(manifestText);
+  if (!provider) throw new Error('ANDROID_UPDATER_FILE_PROVIDER_MISSING');
+  if (attribute(provider.openTag, 'exported') !== 'false') throw new Error('ANDROID_UPDATER_FILE_PROVIDER_EXPORTED');
+  if (attribute(provider.openTag, 'grantUriPermissions') !== 'true') throw new Error('ANDROID_UPDATER_FILE_PROVIDER_GRANT_MISSING');
+  if (!/android:name="android\.support\.FILE_PROVIDER_PATHS"/.test(provider.body) || !/android:resource="@xml\/file_paths"/.test(provider.body)) {
+    throw new Error('ANDROID_UPDATER_FILE_PROVIDER_PATHS_MISSING');
+  }
 
   const baselineManifest = String(manifestText).replace(/\s*<uses-permission\b[^>]*android:name="android\.permission\.REQUEST_INSTALL_PACKAGES"[^>]*\/?\s*>/g, '');
   const baseline = verifyAndroidSecurity({ manifestText:baselineManifest, capacitorConfig, manifestPath });
