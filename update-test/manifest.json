@@ -1,0 +1,9 @@
+{
+  "versionName": "2.0.1",
+  "versionCode": 2001,
+  "packageName": "com.yggdrasil.lighthouse",
+  "apkUrl": "https://github.com/pureekangraw-ops/ygph-metropolis/releases/download/lighthouse-2.0.1/LIGHTHOUSE-2.0.1.apk",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sizeBytes": 1,
+  "releaseNotes": "LIGHTHOUSE 2.0.1 — updater foundation test channel"
+}
