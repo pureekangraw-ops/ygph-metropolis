@@ -61,6 +61,9 @@ jobs:
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
 
+      - name: Apply LIGHTHOUSE updater Android owner
+        run: npm run android:updater:apply
+
       - name: Apply generated Android security baseline
         run: npm run android:security:apply
 
@@ -115,7 +118,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-2.0.0-owner-test
+          name: lighthouse-2.0.1-owner-test
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
