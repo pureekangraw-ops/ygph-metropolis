@@ -20,7 +20,7 @@ test('Backup Import and Restore remain separate concepts and latest backup is on
   const importer = read('ui/obligation-import-ui.mjs');
   assert.match(settings, /สำรองข้อมูล/);
   assert.match(settings, /นำเข้าข้อมูล/);
-  assert.match(settings, /กู้คืนจาก Backup/);
+  assert.match(settings, /กู้คืนจากข้อมูลสำรอง/);
   assert.match(settings, /latestBackup/);
   assert.match(settings, /recordLatestBackup/);
   assert.match(importer, /BACKUP_RESTORE_ROUTE_REQUIRED/);

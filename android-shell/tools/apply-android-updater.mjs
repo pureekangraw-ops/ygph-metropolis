@@ -38,12 +38,17 @@ import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "LighthouseUpdater")
 public class LighthouseUpdaterPlugin extends Plugin {
-    private static final String APK_NAME = "lighthouse-update.apk";
+    private static final String APK_PREFIX = "LIGHTHOUSE-update-vc";
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean cancelled = false;
     private volatile HttpURLConnection activeConnection = null;
 
-    private File apkFile() { return new File(getContext().getCacheDir(), APK_NAME); }
+    private File apkFile(int versionCode) { return new File(getContext().getCacheDir(), APK_PREFIX + versionCode + ".apk"); }
+
+    private Integer versionCode(PluginCall call) {
+        Integer value = call.getInt("versionCode");
+        return value != null && value > 0 ? value : null;
+    }
 
     @PluginMethod
     public void getInstalledIdentity(PluginCall call) {
@@ -61,11 +66,14 @@ public class LighthouseUpdaterPlugin extends Plugin {
     public void downloadApk(PluginCall call) {
         String source = call.getString("url");
         if (source == null || !source.startsWith("https://")) { call.reject("UPDATE_APK_URL_HTTPS_REQUIRED"); return; }
+        Integer requestedVersionCode = versionCode(call);
+        if (requestedVersionCode == null) { call.reject("UPDATE_VERSION_CODE_REQUIRED"); return; }
+        final int targetVersionCode = requestedVersionCode;
         cancelled = false;
         executor.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                File target = apkFile();
+                File target = apkFile(targetVersionCode);
                 if (target.exists() && !target.delete()) throw new IllegalStateException("UPDATE_STAGED_APK_DELETE_FAILED");
                 connection = (HttpURLConnection) new URL(source).openConnection();
                 activeConnection = connection;
@@ -90,7 +98,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                         JSObject progress = new JSObject();
                         progress.put("downloadedBytes", downloaded);
                         progress.put("totalBytes", total);
-                        progress.put("percent", total > 0 ? Math.min(100, (downloaded * 100.0) / total) : 0);
+                        if (total > 0) progress.put("percent", Math.min(100, (downloaded * 100.0) / total));
                         notifyListeners("downloadProgress", progress);
                     }
                     output.getFD().sync();
@@ -101,7 +109,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 out.put("sizeBytes", target.length());
                 call.resolve(out);
             } catch (Exception error) {
-                File target = apkFile();
+                File target = apkFile(targetVersionCode);
                 if (target.exists()) target.delete();
                 call.reject(error.getMessage() == null ? "UPDATE_DOWNLOAD_FAILED" : error.getMessage(), error);
             } finally {
@@ -116,15 +124,23 @@ public class LighthouseUpdaterPlugin extends Plugin {
         cancelled = true;
         HttpURLConnection connection = activeConnection;
         if (connection != null) connection.disconnect();
-        File target = apkFile();
-        if (target.exists()) target.delete();
+        Integer requestedVersionCode = versionCode(call);
+        if (requestedVersionCode != null) {
+            File target = apkFile(requestedVersionCode);
+            if (target.exists()) target.delete();
+        } else {
+            File[] staged = getContext().getCacheDir().listFiles((dir, name) -> name.startsWith(APK_PREFIX) && name.endsWith(".apk"));
+            if (staged != null) for (File target : staged) target.delete();
+        }
         JSObject out = new JSObject(); out.put("cancelled", true); call.resolve(out);
     }
 
     @PluginMethod
     public void inspectApk(PluginCall call) {
         try {
-            File target = apkFile();
+            Integer requestedVersionCode = versionCode(call);
+            if (requestedVersionCode == null) { call.reject("UPDATE_VERSION_CODE_REQUIRED"); return; }
+            File target = apkFile(requestedVersionCode);
             if (!target.isFile()) { call.reject("UPDATE_APK_NOT_DOWNLOADED"); return; }
             PackageManager pm = getContext().getPackageManager();
             int flags = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
@@ -160,7 +176,9 @@ public class LighthouseUpdaterPlugin extends Plugin {
     @PluginMethod
     public void openInstaller(PluginCall call) {
         try {
-            File target = apkFile();
+            Integer requestedVersionCode = versionCode(call);
+            if (requestedVersionCode == null) { call.reject("UPDATE_VERSION_CODE_REQUIRED"); return; }
+            File target = apkFile(requestedVersionCode);
             if (!target.isFile()) { call.reject("UPDATE_APK_NOT_DOWNLOADED"); return; }
             Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".updater.fileprovider", target);
             Intent intent = new Intent(Intent.ACTION_VIEW);

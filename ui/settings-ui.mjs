@@ -102,6 +102,21 @@ function formatBytes(value){
   return `${(bytes/(1024*1024)).toFixed(1)} MB`;
 }
 
+function friendlyUpdateError(error,fallback='ดำเนินการอัปเดตไม่สำเร็จ'){
+  const code=String(error?.code||error?.message||error||'');
+  const map={
+    UPDATE_BACKUP_FAILED:'สำรองข้อมูลไม่สำเร็จ',
+    UPDATE_BACKUP_TIMEOUT:'สำรองข้อมูลใช้เวลานานเกินไป',
+    UPDATE_HASH_MISMATCH:'ไฟล์อัปเดตไม่ผ่านการตรวจสอบ',
+    UPDATE_PACKAGE_MISMATCH:'ไฟล์อัปเดตไม่ใช่ LIGHTHOUSE ที่ถูกต้อง',
+    UPDATE_VERSION_MISMATCH:'รุ่นของไฟล์อัปเดตไม่ตรงกัน',
+    UPDATE_SIGNER_MISMATCH:'ลายเซ็นของแอปไม่ตรงกับรุ่นที่ติดตั้ง',
+    UPDATE_VERSION_NOT_NEWER:'ตอนนี้เป็นรุ่นล่าสุดแล้ว',
+    UPDATE_CANCELLED:'ยกเลิกการดาวน์โหลดแล้ว'
+  };
+  return map[code]||fallback;
+}
+
 function setUpdateStatus(message,error=false){
   const node=$('settingsApkUpdateStatus');
   if(!node)return;
@@ -135,36 +150,54 @@ async function wireAppUpdater(){
   }
 
   updateController=createAppUpdater({metadataUrl:DEFAULT_UPDATE_METADATA_URL,nativeBridge:bridge,requestBackup:requestRealBackup});
-  bridge.addProgressListener?.(({percent,downloadedBytes,totalBytes}={})=>{
+  let retryVerifiedArtifact=false;
+  bridge.addProgressListener?.(({downloadedBytes,totalBytes}={})=>{
     const progress=$('settingsUpdateProgress');
-    if(progress){progress.max=100;progress.value=Math.max(0,Math.min(100,Number(percent||0)));}
+    const downloaded=Number(downloadedBytes||0);
+    const total=Number(totalBytes||0);
+    if(progress){
+      progress.max=100;
+      if(Number.isFinite(total)&&total>0)progress.value=Math.max(0,Math.min(100,(Number(downloadedBytes)/Number(totalBytes))*100));
+      else progress.removeAttribute('value');
+    }
     const detail=$('settingsUpdateProgressText');
-    if(detail)detail.textContent=totalBytes?`${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`:formatBytes(downloadedBytes);
+    if(detail)detail.textContent=total>0?`${formatBytes(downloaded)} / ${formatBytes(total)} · ${Math.round((downloaded/total)*100)}%`:formatBytes(downloaded);
   });
 
   check.addEventListener('click',async()=>{
     check.disabled=true;setUpdateStatus('กำลังตรวจหาอัปเดต…');
     try{
+      retryVerifiedArtifact=false;
       const result=await updateController.check();renderUpdateInfo(result);setUpdateStatus(`พบรุ่น ${result.latest.versionName} พร้อมอัปเดต`);
-    }catch(error){setUpdateStatus(error?.message==='UPDATE_VERSION_NOT_NEWER'?'ตอนนี้เป็นรุ่นล่าสุดแล้ว':`ตรวจหาอัปเดตไม่สำเร็จ: ${error?.message||error}`,true);}
+    }catch(error){setUpdateStatus(friendlyUpdateError(error,'ตรวจหาอัปเดตไม่สำเร็จ'),true);}
     finally{check.disabled=false;}
   });
 
   install.addEventListener('click',async()=>{
     install.disabled=true;cancel.classList.remove('hidden');permission.classList.add('hidden');setUpdateStatus('กำลังดาวน์โหลดและตรวจ APK…');
     try{
-      const result=await updateController.downloadAndInstall();
+      const result=retryVerifiedArtifact?await updateController.retryInstaller():await updateController.downloadAndInstall();
       if(result.status==='permission-required'){
+        retryVerifiedArtifact=true;
         permission.classList.remove('hidden');setUpdateStatus('Android ต้องอนุญาตให้ LIGHTHOUSE ติดตั้งแอปจากแหล่งนี้ก่อน');
-      }else setUpdateStatus('ส่ง APK ที่ตรวจผ่านให้ Android แล้ว กรุณายืนยันการติดตั้ง');
-    }catch(error){setUpdateStatus(`อัปเดตไม่สำเร็จ: ${error?.message||error}`,true);}
+      }else if(result.status==='installed'){
+        retryVerifiedArtifact=false;renderUpdateInfo(result);setUpdateStatus('ติดตั้งแล้ว · LIGHTHOUSE เป็นรุ่นล่าสุด');
+      }else {
+        retryVerifiedArtifact=true;setUpdateStatus('รอการยืนยันจาก Android');
+      }
+    }catch(error){setUpdateStatus(friendlyUpdateError(error,'อัปเดตไม่สำเร็จ'),true);}
     finally{install.disabled=false;cancel.classList.add('hidden');}
   });
 
-  cancel.addEventListener('click',async()=>{try{await updateController.cancel();setUpdateStatus('ยกเลิกการดาวน์โหลดแล้ว');}catch(error){setUpdateStatus(error?.message||String(error),true);}});
-  permission.addEventListener('click',async()=>{try{await bridge.openUnknownSourcesSettings();setUpdateStatus('เปิดหน้าสิทธิ์ Android แล้ว กลับมาและกดดาวน์โหลดและติดตั้งอีกครั้ง');}catch(error){setUpdateStatus(error?.message||String(error),true);}});
+  cancel.addEventListener('click',async()=>{try{await updateController.cancel();setUpdateStatus('ยกเลิกการดาวน์โหลดแล้ว');}catch(error){setUpdateStatus(friendlyUpdateError(error,'ยกเลิกการดาวน์โหลดไม่สำเร็จ'),true);}});
+  permission.addEventListener('click',async()=>{try{await bridge.openUnknownSourcesSettings();setUpdateStatus('เปิดหน้าสิทธิ์ Android แล้ว กลับมาและกดดาวน์โหลดและติดตั้งอีกครั้ง');}catch(error){setUpdateStatus(friendlyUpdateError(error,'เปิดหน้าสิทธิ์ไม่สำเร็จ'),true);}});
 
-  try{const identity=await bridge.getInstalledIdentity();renderUpdateInfo({installed:identity});}catch{setUpdateStatus('อ่านเวอร์ชันที่ติดตั้งไม่สำเร็จ',true);}
+  try{
+    const resumed=await updateController.resume();
+    renderUpdateInfo(resumed);
+    if(resumed.status==='ready-to-install'){retryVerifiedArtifact=true;install.classList.remove('hidden');install.textContent='ติดตั้งอีกครั้ง';setUpdateStatus('ไฟล์ตรวจผ่านแล้ว · พร้อมส่งให้ Android อีกครั้ง');}
+    else if(resumed.status==='installed'){retryVerifiedArtifact=false;install.classList.add('hidden');setUpdateStatus('ติดตั้งแล้ว · LIGHTHOUSE เป็นรุ่นล่าสุด');}
+  }catch{setUpdateStatus('อ่านสถานะการอัปเดตไม่สำเร็จ',true);}
 }
 
 function buildUpdatePanel(){
@@ -172,7 +205,7 @@ function buildUpdatePanel(){
   const facts=document.createElement('div');facts.className='system-facts';
   facts.innerHTML='<div class="system-fact"><span>รุ่นปัจจุบัน</span><b id="settingsInstalledVersion">—</b></div><div class="system-fact"><span>รุ่นใหม่</span><b id="settingsLatestVersion">—</b></div><div class="system-fact"><span>ขนาด</span><b id="settingsUpdateSize">—</b></div>';
   const notes=document.createElement('p');notes.id='settingsReleaseNotes';notes.className='muted';notes.textContent='กดตรวจหาอัปเดตเพื่อดูรายการแก้ไข';
-  const progress=document.createElement('progress');progress.id='settingsUpdateProgress';progress.max=100;progress.value=0;
+  const progress=document.createElement('progress');progress.id='settingsUpdateProgress';progress.max=100;progress.removeAttribute('value');
   const progressText=document.createElement('p');progressText.id='settingsUpdateProgressText';progressText.className='muted';
   const actions=document.createElement('div');actions.className='action-row';
   const check=document.createElement('button');check.id='settingsApkCheckBtn';check.type='button';check.textContent='ตรวจหาอัปเดต';
@@ -200,11 +233,11 @@ function installSettingsUtility(){
   index.append(
     makeIndexRow('settingsUsage','การใช้งาน','ค่าที่ผู้ใช้เลือกเอง'),
     makeIndexRow('settingsPermissions','การแจ้งเตือนและสิทธิ์','สถานะจากเจ้าของระบบ'),
-    makeIndexRow('settingsData','ข้อมูลและการสำรอง','Backup · นำเข้าข้อมูล · Restore'),
+    makeIndexRow('settingsData','ข้อมูลและการสำรอง','สำรองข้อมูล · นำเข้าข้อมูล · กู้คืน'),
     makeIndexRow('settingsSecurity','ความปลอดภัย','รหัสผ่านและการล็อกแอป'),
     makeIndexRow('settingsUpdatePanel','การอัปเดตแอป','ตรวจรุ่น · ดาวน์โหลด APK · ติดตั้งผ่าน Android'),
     makeIndexRow('settingsAbout','เกี่ยวกับแอป','เวอร์ชันและข้อมูลแอป'),
-    makeIndexRow('settingsAdvanced','ขั้นสูง','Recovery · Technical · Danger Zone')
+    makeIndexRow('settingsAdvanced','ขั้นสูง','กู้คืน · ข้อมูลทางเทคนิค · ล้างข้อมูล')
   );
 
   const usage=makeSection('settingsUsage','การใช้งาน','ยังไม่มีค่าการแสดงผลที่ผู้ใช้ปรับเองในรุ่นนี้ จึงไม่มีสวิตช์จำลอง');
@@ -215,11 +248,11 @@ function installSettingsUtility(){
   permissionState.textContent='สิทธิ์ติดตั้ง APK จัดการจากหน้า “การอัปเดตแอป” เมื่อจำเป็น';
   permissions.append(permissionState);
 
-  const data=makeSection('settingsData','ข้อมูลและการสำรอง','Backup = สร้างสำเนาปัจจุบัน · นำเข้าข้อมูล = เพิ่มข้อมูลภายนอก · Restore = คืนสถานะจาก Backup');
+  const data=makeSection('settingsData','ข้อมูลและการสำรอง','สำรองข้อมูล = สร้างสำเนาปัจจุบัน · นำเข้าข้อมูล = เพิ่มข้อมูลภายนอก · กู้คืน = คืนสถานะจากข้อมูลสำรอง');
   const latest=document.createElement('p');latest.id='settingsLatestBackup';latest.className='muted';data.append(latest,dataSection);
   dataSection.querySelector('h3')?.remove();
   const backup=$('backupBtn');if(backup)backup.textContent='สำรองข้อมูล';
-  const restore=$('openRestoreRouteBtn');if(restore){restore.textContent='กู้คืนจาก Backup';restore.classList.remove('hidden');restore.removeAttribute('aria-hidden');restore.tabIndex=0;}
+  const restore=$('openRestoreRouteBtn');if(restore){restore.textContent='กู้คืนจากข้อมูลสำรอง';restore.classList.remove('hidden');restore.removeAttribute('aria-hidden');restore.tabIndex=0;}
 
   const security=makeSection('settingsSecurity','ความปลอดภัย','จัดการการเข้าถึงแอปของผู้ใช้');
   security.append(securitySection);securitySection.querySelector('h3')?.remove();
