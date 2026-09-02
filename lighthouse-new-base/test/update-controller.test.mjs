@@ -95,3 +95,23 @@ test('verification failure is surfaced as Failed and permanent cancel deletes st
   await controller.cancel({ permanent:true });
   assert.deepEqual(native.calls.at(-1), ['cancelUpdate', { permanent:true }]);
 });
+
+test('restore rebuilds updater state from persisted native download metadata after process interruption', async () => {
+  const native = bridge({
+    async readDownloadState(){
+      return {
+        state:'Downloading',
+        downloadedBytes:1024,
+        totalBytes:-1,
+        candidate:manifest,
+      };
+    },
+  });
+  const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
+  const restored = await controller.restore();
+  assert.equal(restored.state, 'Downloading');
+  assert.equal(restored.candidate.versionCode, 2002);
+  assert.equal(restored.installed.versionCode, 2001);
+  assert.equal(restored.progress.indeterminate, true);
+  assert.equal(restored.progress.percent, null);
+});
