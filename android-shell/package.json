@@ -1,0 +1,18 @@
+{
+  "name": "lighthouse-android-shell",
+  "version": "2.0.0",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "app:stage-new-base": "node tools/stage-new-base.mjs",
+    "test": "node --test test/*.test.mjs",
+    "android:security:apply": "node tools/apply-android-security.mjs android",
+    "android:security:verify": "node tools/verify-android-security.mjs android release/android-security-evidence.json",
+    "android:release": "cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": { "@capacitor/core": "8.5.0" },
+  "devDependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/cli": "8.5.0"
+  }
+}
