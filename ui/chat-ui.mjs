@@ -16,14 +16,8 @@ function safeParse(raw){
     return Array.isArray(value)?value:[];
   }catch{return[];}
 }
-
-function loadMessages(){
-  return safeParse(globalThis.localStorage?.getItem(CHAT_STORAGE_KEY)).filter(message=>message&&['user','assistant'].includes(message.role)&&typeof message.text==='string');
-}
-
-function saveMessages(messages){
-  try{globalThis.localStorage?.setItem(CHAT_STORAGE_KEY,JSON.stringify(messages.slice(-300)));}catch{}
-}
+function loadMessages(){return safeParse(globalThis.localStorage?.getItem(CHAT_STORAGE_KEY)).filter(message=>message&&['user','assistant'].includes(message.role)&&typeof message.text==='string');}
+function saveMessages(messages){try{globalThis.localStorage?.setItem(CHAT_STORAGE_KEY,JSON.stringify(messages.slice(-300)));}catch{}}
 
 function createShell(workspace){
   if($('lighthouseChat'))return $('lighthouseChat');
@@ -48,11 +42,7 @@ function textFromSource(){
   const copy=String($('masterInputCopy')?.textContent||'').trim();
   return [question,title,copy].filter(Boolean).join('\n');
 }
-
-function sourceActionLabels(){
-  return [...($('masterInputActions')?.querySelectorAll('button')||[])].map(button=>String(button.textContent||'').trim()).filter(Boolean);
-}
-
+function sourceActionLabels(){return [...($('masterInputActions')?.querySelectorAll('button')||[])].map(button=>String(button.textContent||'').trim()).filter(Boolean);}
 function fingerprintSource(state,text,labels){return JSON.stringify([state,text,labels]);}
 
 export function installChatUI(){
@@ -73,7 +63,6 @@ export function installChatUI(){
   let lastFingerprint=messages.at(-1)?.sourceFingerprint||'';
 
   function scrollLatest(){requestAnimationFrame(()=>{list.scrollTop=list.scrollHeight;});}
-
   function renderMessage(message,{persist=false,proxySourceButtons=false}={}){
     const row=document.createElement('article');
     row.className='lighthouse-chat-message';
@@ -96,9 +85,7 @@ export function installChatUI(){
           const sourceButtons=[...($('masterInputActions')?.querySelectorAll('button')||[])];
           const sourceButton=sourceButtons[index];
           if(!sourceButton)return;
-          if(label==='เปิดรายการ'){
-            globalThis.dispatchEvent(new CustomEvent('lighthouse:navigate',{detail:{page:'manual',manualDetail:true,destination:'finance'}}));
-          }
+          if(label==='เปิดรายการ')document.querySelector('[data-lighthouse-nav="manual"]')?.click();
           sourceButton.click();
         });
         actions.append(button);
@@ -110,11 +97,8 @@ export function installChatUI(){
     scrollLatest();
   }
 
-  messages.forEach(message=>renderMessage(message,{proxySourceButtons:false}));
-
-  function appendUser(text){
-    renderMessage({id:`u-${Date.now()}-${Math.random().toString(36).slice(2)}`,role:'user',text,createdAt:new Date().toISOString()},{persist:true});
-  }
+  messages.forEach(message=>renderMessage(message));
+  function appendUser(text){renderMessage({id:`u-${Date.now()}-${Math.random().toString(36).slice(2)}`,role:'user',text,createdAt:new Date().toISOString()},{persist:true});}
 
   function mirrorSource(){
     const state=String($('masterInputState')?.dataset.state||'');
@@ -128,8 +112,7 @@ export function installChatUI(){
     const sourceFingerprint=fingerprintSource(state,text,actions);
     if(sourceFingerprint===lastFingerprint)return;
     lastFingerprint=sourceFingerprint;
-    const message={id:`a-${Date.now()}-${Math.random().toString(36).slice(2)}`,role:'assistant',text,actions,sourceFingerprint,createdAt:new Date().toISOString()};
-    renderMessage(message,{persist:true,proxySourceButtons:true});
+    renderMessage({id:`a-${Date.now()}-${Math.random().toString(36).slice(2)}`,role:'assistant',text,actions,sourceFingerprint,createdAt:new Date().toISOString()},{persist:true,proxySourceButtons:true});
   }
 
   form.addEventListener('submit',event=>{
@@ -150,16 +133,8 @@ export function installChatUI(){
     scrollLatest();
   });
 
-  input.addEventListener('input',()=>{
-    input.style.height='auto';
-    input.style.height=`${Math.min(input.scrollHeight,136)}px`;
-  });
-  input.addEventListener('keydown',event=>{
-    if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){
-      event.preventDefault();
-      form.requestSubmit();
-    }
-  });
+  input.addEventListener('input',()=>{input.style.height='auto';input.style.height=`${Math.min(input.scrollHeight,136)}px`;});
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();form.requestSubmit();}});
 
   const observer=new MutationObserver(mirrorSource);
   observer.observe(master,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','disabled','data-state']});
