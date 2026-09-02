@@ -9,13 +9,7 @@ function ensureStylesheet(){
   link.dataset.lighthouseChatStyle='true';
   document.head.append(link);
 }
-
-function safeParse(raw){
-  try{
-    const value=JSON.parse(raw||'[]');
-    return Array.isArray(value)?value:[];
-  }catch{return[];}
-}
+function safeParse(raw){try{const value=JSON.parse(raw||'[]');return Array.isArray(value)?value:[];}catch{return[];}}
 function loadMessages(){return safeParse(globalThis.localStorage?.getItem(CHAT_STORAGE_KEY)).filter(message=>message&&['user','assistant'].includes(message.role)&&typeof message.text==='string');}
 function saveMessages(messages){try{globalThis.localStorage?.setItem(CHAT_STORAGE_KEY,JSON.stringify(messages.slice(-300)));}catch{}}
 
@@ -85,7 +79,9 @@ export function installChatUI(){
           const sourceButtons=[...($('masterInputActions')?.querySelectorAll('button')||[])];
           const sourceButton=sourceButtons[index];
           if(!sourceButton)return;
-          if(label==='เปิดรายการ')document.querySelector('[data-lighthouse-nav="manual"]')?.click();
+          if(label==='เปิดรายการ'){
+            globalThis.dispatchEvent(new CustomEvent('lighthouse:navigate',{detail:{page:'manual',manualDetail:true,destination:'finance'}}));
+          }
           sourceButton.click();
         });
         actions.append(button);
@@ -124,10 +120,7 @@ export function installChatUI(){
     input.value='';
     const sourceInput=$('masterInputText');
     const sourceForm=$('masterInputForm');
-    if(!sourceInput||!sourceForm){
-      renderMessage({id:`a-${Date.now()}`,role:'assistant',text:'ส่งข้อความไม่ได้ในตอนนี้',createdAt:new Date().toISOString()},{persist:true});
-      return;
-    }
+    if(!sourceInput||!sourceForm){renderMessage({id:`a-${Date.now()}`,role:'assistant',text:'ส่งข้อความไม่ได้ในตอนนี้',createdAt:new Date().toISOString()},{persist:true});return;}
     sourceInput.value=text;
     sourceForm.requestSubmit();
     scrollLatest();
