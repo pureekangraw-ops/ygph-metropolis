@@ -4,6 +4,12 @@ function requirePositiveSatang(value, code = 'INVALID_OUTCOME_AMOUNT') {
   return amount;
 }
 
+function requireNonNegativeSatang(value, code = 'INVALID_DAILY_SPENDING_LIMIT') {
+  const amount = Number(value);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new Error(code);
+  return amount;
+}
+
 function freezeRecord(record) {
   return record ? Object.freeze({ ...record }) : null;
 }
@@ -111,6 +117,21 @@ export function createOutcomeOwner({ runtime, idFactory } = {}) {
         cashOut: true,
         ledger: freezeRecord(ledger),
         calendar: freezeRecord(calendar),
+      });
+    },
+
+    async setDailySpendingLimit({ date, limitSatang } = {}) {
+      const limit = requireNonNegativeSatang(limitSatang);
+      await runtime.overrideDailySpendingLimit({ date, limitSatang:limit });
+      const state = await runtime.readState();
+      const readback = state?.meta?.dailySpendingLimits?.[date];
+      if (!readback || Number(readback.limitSatang) !== limit) {
+        throw new Error('OUTCOME_DAILY_SPENDING_LIMIT_READBACK_MISMATCH');
+      }
+      return Object.freeze({
+        owner:'outcome',
+        kind:'daily-spending-limit',
+        limit:Object.freeze({ ...readback }),
       });
     },
   });
