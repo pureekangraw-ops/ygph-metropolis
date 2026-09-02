@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOutcomeOwner } from '../src/outcome-owner.mjs';
+import { createMemoryDailyControls } from '../src/daily-controls.mjs';
 
 function fakeRuntime() {
   const ledger = {};
   const calendar = {};
   const ride = {};
-  const meta = { dailySpendingAllowances:{} };
   let writes = 0;
   return {
     get writes() { return writes; },
@@ -34,12 +34,7 @@ function fakeRuntime() {
       queue.status = queue.paidSatang >= queue.amountSatang ? 'COMPLETED' : 'PARTIAL';
       ledger[ledgerTransactionId] = { record:{ recordId:ledgerTransactionId, type:'TRANSACTION', direction:'OUT', subtype:'OBLIGATION_PAYMENT', amountSatang, sourceRef:`LEDGER/${obligationId}` } };
     },
-    async overrideDailySpendingAllowance({ date, allowanceSatang }) {
-      writes += 1;
-      meta.dailySpendingAllowances[date] = { date, allowanceSatang, source:'MANUAL' };
-      return { status:'UPDATED', allowance:meta.dailySpendingAllowances[date] };
-    },
-    async readState() { return { revision:writes, meta, domains:{ LEDGER:{records:ledger}, CALENDAR:{records:calendar}, RIDE:{records:ride} } }; },
+    async readState() { return { revision:writes, domains:{ LEDGER:{records:ledger}, CALENDAR:{records:calendar}, RIDE:{records:ride} } }; },
   };
 }
 
@@ -91,15 +86,20 @@ test('paying an obligation creates real cash-out and updates the same Calendar q
   assert.equal(result.calendar.status, 'COMPLETED');
 });
 
-test('วงเงินใช้จ่าย behaves like a daily target and never creates Ledger money', async () => {
+test('วงเงินใช้จ่าย is NEW BASE daily control and never mutates money Runtime', async () => {
   const runtime = fakeRuntime();
-  const owner = createOutcomeOwner({ runtime, idFactory:()=> 'unused' });
+  const dailyControls = createMemoryDailyControls();
+  const owner = createOutcomeOwner({ runtime, dailyControls, idFactory:()=> 'unused' });
+  const writesBefore = runtime.writes;
+
   const result = await owner.setDailySpendingAllowance({ date:'2026-09-02', allowanceSatang:50000 });
+
   assert.equal(result.owner, 'outcome');
   assert.equal(result.kind, 'daily-spending-allowance');
   assert.equal(result.allowance.date, '2026-09-02');
   assert.equal(result.allowance.allowanceSatang, 50000);
+  assert.equal(runtime.writes, writesBefore);
+  assert.equal((await dailyControls.getSpendingAllowance('2026-09-02')).allowanceSatang, 50000);
   const state = await runtime.readState();
-  assert.equal(state.meta.dailySpendingAllowances['2026-09-02'].allowanceSatang, 50000);
   assert.equal(Object.values(state.domains.LEDGER.records).filter(x => x.record.type === 'TRANSACTION').length, 0);
 });
