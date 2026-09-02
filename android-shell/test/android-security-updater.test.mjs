@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyAndroidSecurity } from '../tools/verify-android-security.mjs';
+import { verifyUpdaterAndroidSecurity } from '../tools/verify-android-updater-security.mjs';
 
 const manifestText = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
@@ -13,16 +13,19 @@ const manifestText = `<?xml version="1.0" encoding="utf-8"?>
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
-    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.updater.files" android:exported="false" android:grantUriPermissions="true" />
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.updater.files" android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+    </provider>
   </application>
 </manifest>`;
 
 test('security verifier admits REQUEST_INSTALL_PACKAGES only with a private FileProvider surface', () => {
-  const evidence = verifyAndroidSecurity({ manifestText, capacitorConfig:{ appId:'com.yggdrasil.lighthouse' } });
+  const evidence = verifyUpdaterAndroidSecurity({ manifestText, capacitorConfig:{ appId:'com.yggdrasil.lighthouse' } });
   assert.equal(evidence.status, 'PROVEN');
   assert.deepEqual(evidence.requestedPermissions, [
     'android.permission.INTERNET',
     'android.permission.REQUEST_INSTALL_PACKAGES',
   ]);
-  assert.equal(evidence.components.find(item => item.type === 'provider')?.exported, false);
+  assert.equal(evidence.updater.fileProviderAuthority, 'com.yggdrasil.lighthouse.updater.files');
+  assert.equal(evidence.updater.fileProviderPrivate, true);
 });
