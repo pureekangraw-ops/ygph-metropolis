@@ -2,9 +2,18 @@ name: LIGHTHOUSE APK Debug
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android-shell/**'
+      - 'ui/**'
+      - 'lighthouse/**'
+      - 'styles/**'
+      - 'lighthouse.css'
+      - 'sw.js'
+      - '.github/workflows/lighthouse-apk-debug.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-existing-full-app:
@@ -13,8 +22,16 @@ jobs:
       run:
         working-directory: android-shell
     steps:
-      - name: Checkout exact selected ref
+      - name: Checkout exact repair source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Capture source identity
+        run: |
+          echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "TARGET_BRANCH=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -30,6 +47,9 @@ jobs:
       - name: Install Capacitor dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Verify repository release contract
+        run: node --test test/repository-release-contract.test.mjs
+
       - name: Stage existing repository application
         run: npm run app:stage-existing
 
@@ -41,6 +61,9 @@ jobs:
 
       - name: Sync exact staged web assets
         run: npx cap sync android
+
+      - name: Inject LIGHTHOUSE APK updater bridge
+        run: npm run android:updater:apply
 
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
@@ -95,16 +118,122 @@ jobs:
 
       - name: Verify final APK identity
         env:
-          APK_SOURCE_COMMIT: ${{ github.sha }}
+          APK_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
+
+      - name: Publish immutable repository APK assets
+        working-directory: .
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(node -p "require('./android-shell/version.json').versionName")"
+          VERSION_CODE="$(node -p "require('./android-shell/version.json').versionCode")"
+          APK_SOURCE="android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk"
+          IDENTITY_SOURCE="android-shell/release/apk-identity-evidence.json"
+          SECURITY_SOURCE="android-shell/release/android-security-evidence.json"
+          ASSET_DIR="release/assets/${VERSION_NAME}"
+          APK_NAME="LIGHTHOUSE-${VERSION_NAME}-vc${VERSION_CODE}.apk"
+          APK_PATH="${ASSET_DIR}/${APK_NAME}"
+          NOTES_PATH="${ASSET_DIR}/RELEASE-NOTES.md"
+          SUMS_PATH="${ASSET_DIR}/SHA256SUMS.txt"
+          APK_SHA="$(sha256sum "$APK_SOURCE" | awk '{print $1}')"
+          RELEASE_NOTES="คืน direct startup, เก็บ Snapshot เป็น release evidence, และเพิ่ม Settings in-app APK updater"
+
+          cp "$APK_SOURCE" "$RUNNER_TEMP/lighthouse-release.apk"
+          cp "$IDENTITY_SOURCE" "$RUNNER_TEMP/apk-identity-evidence.json"
+          cp "$SECURITY_SOURCE" "$RUNNER_TEMP/android-security-evidence.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git reset --hard HEAD
+          git fetch origin "$TARGET_BRANCH"
+          git rebase "origin/$TARGET_BRANCH"
+
+          mkdir -p "$(dirname "$APK_SOURCE")" "$(dirname "$IDENTITY_SOURCE")"
+          cp "$RUNNER_TEMP/lighthouse-release.apk" "$APK_SOURCE"
+          cp "$RUNNER_TEMP/apk-identity-evidence.json" "$IDENTITY_SOURCE"
+          cp "$RUNNER_TEMP/android-security-evidence.json" "$SECURITY_SOURCE"
+
+          if [ -e "$APK_PATH" ]; then
+            EXISTING_SHA="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+            if [ "$EXISTING_SHA" != "$APK_SHA" ]; then
+              echo "UPDATE_ASSET_EXISTS_WITH_DIFFERENT_SHA"
+              exit 1
+            fi
+            test -f "$NOTES_PATH" && test -f "$SUMS_PATH"
+          else
+            mkdir -p "$ASSET_DIR"
+            cp "$APK_SOURCE" "$APK_PATH"
+            printf '%s  %s\n' "$APK_SHA" "$APK_NAME" > "$SUMS_PATH"
+            printf '# LIGHTHOUSE %s\n\n- versionCode: %s\n- SHA-256: `%s`\n- %s\n' "$VERSION_NAME" "$VERSION_CODE" "$APK_SHA" "$RELEASE_NOTES" > "$NOTES_PATH"
+            git add "$APK_PATH" "$SUMS_PATH" "$NOTES_PATH"
+            git commit -m "release: add immutable LIGHTHOUSE ${VERSION_NAME} vc${VERSION_CODE} APK"
+            pushed=false
+            for attempt in 1 2 3 4; do
+              git fetch origin "$TARGET_BRANCH"
+              git rebase --autostash "origin/$TARGET_BRANCH"
+              if git push origin "HEAD:${TARGET_BRANCH}"; then pushed=true; break; fi
+              sleep $((attempt * 2))
+            done
+            [ "$pushed" = true ]
+          fi
+
+          ASSET_COMMIT="$(git log --diff-filter=A --format=%H -- "$APK_PATH" | tail -1)"
+          test -n "$ASSET_COMMIT"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+          echo "APK_SHA=$APK_SHA" >> "$GITHUB_ENV"
+          echo "ASSET_COMMIT=$ASSET_COMMIT" >> "$GITHUB_ENV"
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+          echo "RELEASE_NOTES=$RELEASE_NOTES" >> "$GITHUB_ENV"
+
+      - name: Verify immutable Raw APK
+        working-directory: .
+        run: |
+          set -euo pipefail
+          RAW_URL="https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/${ASSET_COMMIT}/${APK_PATH}"
+          curl --fail --location --retry 5 --retry-delay 2 "$RAW_URL" --output "$RUNNER_TEMP/raw-lighthouse.apk"
+          RAW_SHA="$(sha256sum "$RUNNER_TEMP/raw-lighthouse.apk" | awk '{print $1}')"
+          test "$RAW_SHA" = "$APK_SHA"
+          echo "RAW_APK_URL=$RAW_URL" >> "$GITHUB_ENV"
+
+      - name: Publish update manifest
+        working-directory: .
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          node android-shell/tools/build-update-metadata.mjs \
+            android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk \
+            android-shell/release/apk-identity-evidence.json \
+            release/lighthouse-update.json \
+            "$RAW_APK_URL" \
+            "$RELEASE_NOTES" \
+            1004 \
+            false
+          git add release/lighthouse-update.json
+          if ! git diff --cached --quiet; then
+            git commit -m "release: open LIGHTHOUSE ${VERSION_NAME} update manifest"
+            pushed=false
+            for attempt in 1 2 3 4; do
+              git fetch origin "$TARGET_BRANCH"
+              git rebase --autostash "origin/$TARGET_BRANCH"
+              if git push origin "HEAD:${TARGET_BRANCH}"; then pushed=true; break; fi
+              sleep $((attempt * 2))
+            done
+            [ "$pushed" = true ]
+          fi
 
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-existing-full-app-1.0.3
+          name: lighthouse-existing-full-app-1.0.4-vc1005
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
+            release/lighthouse-update.json
+            release/assets/1.0.4/SHA256SUMS.txt
+            release/assets/1.0.4/RELEASE-NOTES.md
+            android-shell/www/effective-base-manifest.json
           if-no-files-found: error
           retention-days: 14

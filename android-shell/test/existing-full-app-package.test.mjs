@@ -14,10 +14,12 @@ async function text(path) {
 for (const relative of [
   'index.html',
   'app.mjs',
+  'lighthouse.css',
   'ui/app.mjs',
   'ui/master-input.mjs',
   'ui/manual-finance-ui.mjs',
   'ui/settings-ui.mjs',
+  'ui/lighthouse-shell.mjs',
 ]) {
   test(`staged Android app keeps existing source byte-identical: ${relative}`, async () => {
     assert.equal(
@@ -40,6 +42,26 @@ test('existing Chat ↔ Manual bridge wiring is packaged', async () => {
   }
 });
 
+test('LIGHTHOUSE three-page coastal shell is packaged without replacing domain runtime', async () => {
+  const [shell, css, theme] = await Promise.all([
+    text(resolve(wwwRoot, 'ui/lighthouse-shell.mjs')),
+    text(resolve(wwwRoot, 'lighthouse.css')),
+    text(resolve(wwwRoot, 'ui/theme-shell.mjs')),
+  ]);
+  for (const marker of ['LIGHTHOUSE', 'CHAT', 'MANUAL', 'SETTINGS', 'masterInputShell', 'manualHub']) {
+    assert.match(shell, new RegExp(marker));
+  }
+  assert.match(theme, /lighthouse-shell\.mjs/);
+  assert.match(css, /--lh-navy:\s*#0d2b45/i);
+  assert.match(css, /--lh-ocean:\s*#1e5a8a/i);
+  assert.match(css, /--lh-seafoam:\s*#1fa7a4/i);
+  assert.match(css, /\.lighthouse-wave/);
+  assert.match(css, /\.lighthouse-bottom-nav/);
+  assert.doesNotMatch(shell, /greenfield\//);
+  assert.doesNotMatch(shell, /runtime\.mjs/);
+  assert.doesNotMatch(shell, /persistence\.mjs/);
+});
+
 test('existing Manual ask action is packaged', async () => {
   const source = await text(resolve(wwwRoot, 'ui/manual-finance-ui.mjs'));
   assert.match(source, /ถามเรื่องนี้/);
@@ -54,11 +76,11 @@ test('existing Settings utility is packaged', async () => {
   assert.match(source, /ความปลอดภัย/);
 });
 
-test('Android entry is the existing application, not replacement front-door UI', async () => {
+test('Android entry starts the existing application directly and never waits for snapshot bootstrap', async () => {
   const source = await text(resolve(wwwRoot, 'index.html'));
-  assert.match(source, /YGPH METROPOLIS/);
   assert.match(source, /src="ui\/master-input\.mjs"/);
   assert.match(source, /src="app\.mjs"/);
+  assert.doesNotMatch(source, /canonical-bootstrap|CURRENT_SNAPSHOT/);
   assert.doesNotMatch(source, /Foundation Proof/);
   assert.doesNotMatch(source, /trusted\/bootstrap\.mjs/);
 });

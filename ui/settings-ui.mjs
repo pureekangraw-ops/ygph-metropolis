@@ -1,5 +1,8 @@
+import { createAppUpdater, capacitorUpdaterBridge, DEFAULT_UPDATE_METADATA_URL } from './app-update.mjs';
+
 const $=id=>document.getElementById(id);
 const LATEST_BACKUP_KEY='metro-settings-latest-backup';
+let updateController=null;
 
 function makeSection(id,title,description=''){
   const section=document.createElement('section');
@@ -74,6 +77,113 @@ function observeRealBackupSuccess(){
   observer.observe(appStatus,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['class']});
 }
 
+function requestRealBackup(){
+  const button=$('backupBtn');
+  const appStatus=$('appStatus');
+  if(!button||!appStatus||typeof MutationObserver==='undefined')return Promise.reject(new Error('UPDATE_BACKUP_UI_UNAVAILABLE'));
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);observer.disconnect();if(error)reject(error);else{recordLatestBackup();resolve({ok:true});}};
+    const observer=new MutationObserver(()=>{
+      const message=String(appStatus.textContent||'');
+      if(message.includes('สร้าง Encrypted Backup แล้ว'))finish();
+      else if(appStatus.classList.contains('error'))finish(new Error(message||'UPDATE_BACKUP_FAILED'));
+    });
+    observer.observe(appStatus,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['class']});
+    const timer=setTimeout(()=>finish(new Error('UPDATE_BACKUP_TIMEOUT')),30000);
+    button.click();
+  });
+}
+
+function formatBytes(value){
+  const bytes=Number(value||0);
+  if(!Number.isFinite(bytes)||bytes<=0)return '—';
+  if(bytes<1024*1024)return `${Math.max(1,Math.round(bytes/1024))} KB`;
+  return `${(bytes/(1024*1024)).toFixed(1)} MB`;
+}
+
+function setUpdateStatus(message,error=false){
+  const node=$('settingsApkUpdateStatus');
+  if(!node)return;
+  node.textContent=message||'';
+  node.classList.toggle('error',error);
+}
+
+function renderUpdateInfo({installed,latest}={}){
+  if(installed){
+    if($('settingsInstalledVersion'))$('settingsInstalledVersion').textContent=`${installed.versionName||'—'} (${installed.versionCode||'—'})`;
+  }
+  if(latest){
+    if($('settingsLatestVersion'))$('settingsLatestVersion').textContent=`${latest.versionName} (${latest.versionCode})`;
+    if($('settingsUpdateSize'))$('settingsUpdateSize').textContent=formatBytes(latest.sizeBytes);
+    if($('settingsReleaseNotes'))$('settingsReleaseNotes').textContent=latest.releaseNotes;
+    $('settingsInstallUpdateBtn')?.classList.remove('hidden');
+  }
+}
+
+async function wireAppUpdater(){
+  const bridge=capacitorUpdaterBridge();
+  const check=$('settingsApkCheckBtn');
+  const install=$('settingsInstallUpdateBtn');
+  const cancel=$('settingsCancelUpdateBtn');
+  const permission=$('settingsUnknownSourcesBtn');
+  if(!check||!install||!cancel||!permission)return;
+  if(!bridge){
+    setUpdateStatus('ระบบอัปเดต APK ใช้ได้เมื่อเปิดจากแอป LIGHTHOUSE บน Android');
+    check.disabled=true;install.disabled=true;cancel.disabled=true;permission.disabled=true;
+    return;
+  }
+
+  updateController=createAppUpdater({metadataUrl:DEFAULT_UPDATE_METADATA_URL,nativeBridge:bridge,requestBackup:requestRealBackup});
+  bridge.addProgressListener?.(({percent,downloadedBytes,totalBytes}={})=>{
+    const progress=$('settingsUpdateProgress');
+    if(progress){progress.max=100;progress.value=Math.max(0,Math.min(100,Number(percent||0)));}
+    const detail=$('settingsUpdateProgressText');
+    if(detail)detail.textContent=totalBytes?`${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`:formatBytes(downloadedBytes);
+  });
+
+  check.addEventListener('click',async()=>{
+    check.disabled=true;setUpdateStatus('กำลังตรวจหาอัปเดต…');
+    try{
+      const result=await updateController.check();renderUpdateInfo(result);setUpdateStatus(`พบรุ่น ${result.latest.versionName} พร้อมอัปเดต`);
+    }catch(error){setUpdateStatus(error?.message==='UPDATE_VERSION_NOT_NEWER'?'ตอนนี้เป็นรุ่นล่าสุดแล้ว':`ตรวจหาอัปเดตไม่สำเร็จ: ${error?.message||error}`,true);}
+    finally{check.disabled=false;}
+  });
+
+  install.addEventListener('click',async()=>{
+    install.disabled=true;cancel.classList.remove('hidden');permission.classList.add('hidden');setUpdateStatus('กำลังดาวน์โหลดและตรวจ APK…');
+    try{
+      const result=await updateController.downloadAndInstall();
+      if(result.status==='permission-required'){
+        permission.classList.remove('hidden');setUpdateStatus('Android ต้องอนุญาตให้ LIGHTHOUSE ติดตั้งแอปจากแหล่งนี้ก่อน');
+      }else setUpdateStatus('ส่ง APK ที่ตรวจผ่านให้ Android แล้ว กรุณายืนยันการติดตั้ง');
+    }catch(error){setUpdateStatus(`อัปเดตไม่สำเร็จ: ${error?.message||error}`,true);}
+    finally{install.disabled=false;cancel.classList.add('hidden');}
+  });
+
+  cancel.addEventListener('click',async()=>{try{await updateController.cancel();setUpdateStatus('ยกเลิกการดาวน์โหลดแล้ว');}catch(error){setUpdateStatus(error?.message||String(error),true);}});
+  permission.addEventListener('click',async()=>{try{await bridge.openUnknownSourcesSettings();setUpdateStatus('เปิดหน้าสิทธิ์ Android แล้ว กลับมาและกดดาวน์โหลดและติดตั้งอีกครั้ง');}catch(error){setUpdateStatus(error?.message||String(error),true);}});
+
+  try{const identity=await bridge.getInstalledIdentity();renderUpdateInfo({installed:identity});}catch{setUpdateStatus('อ่านเวอร์ชันที่ติดตั้งไม่สำเร็จ',true);}
+}
+
+function buildUpdatePanel(){
+  const update=makeSection('settingsUpdatePanel','การอัปเดตแอป','ดาวน์โหลด APK เต็ม ตรวจความถูกต้อง สำรองข้อมูล แล้วให้ Android เป็นผู้ยืนยันการติดตั้ง');
+  const facts=document.createElement('div');facts.className='system-facts';
+  facts.innerHTML='<div class="system-fact"><span>รุ่นปัจจุบัน</span><b id="settingsInstalledVersion">—</b></div><div class="system-fact"><span>รุ่นใหม่</span><b id="settingsLatestVersion">—</b></div><div class="system-fact"><span>ขนาด</span><b id="settingsUpdateSize">—</b></div>';
+  const notes=document.createElement('p');notes.id='settingsReleaseNotes';notes.className='muted';notes.textContent='กดตรวจหาอัปเดตเพื่อดูรายการแก้ไข';
+  const progress=document.createElement('progress');progress.id='settingsUpdateProgress';progress.max=100;progress.value=0;
+  const progressText=document.createElement('p');progressText.id='settingsUpdateProgressText';progressText.className='muted';
+  const actions=document.createElement('div');actions.className='action-row';
+  const check=document.createElement('button');check.id='settingsApkCheckBtn';check.type='button';check.textContent='ตรวจหาอัปเดต';
+  const install=document.createElement('button');install.id='settingsInstallUpdateBtn';install.type='button';install.className='primary-action hidden';install.textContent='ดาวน์โหลดและติดตั้ง';
+  const cancel=document.createElement('button');cancel.id='settingsCancelUpdateBtn';cancel.type='button';cancel.className='secondary hidden';cancel.textContent='ยกเลิก';
+  const permission=document.createElement('button');permission.id='settingsUnknownSourcesBtn';permission.type='button';permission.className='secondary hidden';permission.textContent='เปิดสิทธิ์ติดตั้งแอป';
+  const status=document.createElement('p');status.id='settingsApkUpdateStatus';status.className='status';status.setAttribute('aria-live','polite');
+  actions.append(check,install,cancel,permission);update.append(facts,notes,progress,progressText,actions,status);
+  return update;
+}
+
 function installSettingsUtility(){
   const body=$('settingsDialog')?.querySelector('.dialog-body');
   if(!body||$('settingsUtilityIndex'))return;
@@ -92,7 +202,8 @@ function installSettingsUtility(){
     makeIndexRow('settingsPermissions','การแจ้งเตือนและสิทธิ์','สถานะจากเจ้าของระบบ'),
     makeIndexRow('settingsData','ข้อมูลและการสำรอง','Backup · นำเข้าข้อมูล · Restore'),
     makeIndexRow('settingsSecurity','ความปลอดภัย','รหัสผ่านและการล็อกแอป'),
-    makeIndexRow('settingsAbout','เกี่ยวกับแอป','เวอร์ชันและสถานะอัปเดต'),
+    makeIndexRow('settingsUpdatePanel','การอัปเดตแอป','ตรวจรุ่น · ดาวน์โหลด APK · ติดตั้งผ่าน Android'),
+    makeIndexRow('settingsAbout','เกี่ยวกับแอป','เวอร์ชันและข้อมูลแอป'),
     makeIndexRow('settingsAdvanced','ขั้นสูง','Recovery · Technical · Danger Zone')
   );
 
@@ -101,7 +212,7 @@ function installSettingsUtility(){
   const permissionState=document.createElement('p');
   permissionState.dataset.permissionOwnerUnavailable='true';
   permissionState.className='muted permission-owner-unavailable';
-  permissionState.textContent='ยังไม่มี Android permission bridge ที่แอปใช้งานจริงในรุ่นนี้';
+  permissionState.textContent='สิทธิ์ติดตั้ง APK จัดการจากหน้า “การอัปเดตแอป” เมื่อจำเป็น';
   permissions.append(permissionState);
 
   const data=makeSection('settingsData','ข้อมูลและการสำรอง','Backup = สร้างสำเนาปัจจุบัน · นำเข้าข้อมูล = เพิ่มข้อมูลภายนอก · Restore = คืนสถานะจาก Backup');
@@ -113,11 +224,12 @@ function installSettingsUtility(){
   const security=makeSection('settingsSecurity','ความปลอดภัย','จัดการการเข้าถึงแอปของผู้ใช้');
   security.append(securitySection);securitySection.querySelector('h3')?.remove();
 
-  const about=makeSection('settingsAbout','เกี่ยวกับแอป','ข้อมูลที่ใช้บ่อยโดยไม่เปิดรายละเอียดระบบ');
+  const update=buildUpdatePanel();
+
+  const about=makeSection('settingsAbout','เกี่ยวกับแอป','ข้อมูลรุ่นของตัวแอปและฐานเว็บภายใน');
   const facts=document.createElement('div');facts.className='system-facts';
-  facts.innerHTML='<div class="system-fact"><span>เวอร์ชัน</span><b id="settingsAboutVersion">—</b></div><div class="system-fact"><span>สถานะอัปเดต</span><b id="settingsUpdateStatus">กำลังตรวจสอบ</b></div>';
-  const checkUpdate=document.createElement('button');checkUpdate.id='settingsCheckUpdateBtn';checkUpdate.type='button';checkUpdate.className='secondary';checkUpdate.textContent='ตรวจหาอัปเดต';
-  about.append(facts,checkUpdate);
+  facts.innerHTML='<div class="system-fact"><span>Web release</span><b id="settingsAboutVersion">—</b></div>';
+  about.append(facts);
 
   const advanced=makeSection('settingsAdvanced','ขั้นสูง','ห้องเครื่องสำหรับ Recovery, ประวัติอัปเดต และข้อมูลทางเทคนิค');
   const technical=document.createElement('section');technical.id='settingsTechnicalInfo';technical.dataset.settingsTechnical='true';technical.className='settings-advanced-block';
@@ -133,6 +245,7 @@ function installSettingsUtility(){
   body.insertBefore(permissions,anchor);
   body.insertBefore(data,anchor);
   body.insertBefore(security,anchor);
+  body.insertBefore(update,anchor);
   body.insertBefore(about,anchor);
   body.insertBefore(advanced,anchor);
   renderLatestBackup();
@@ -140,6 +253,7 @@ function installSettingsUtility(){
   $('settingsBtn')?.addEventListener('click',showIndex);
   $('settingsDialog')?.addEventListener('close',showIndex);
   showIndex();
+  void wireAppUpdater();
 }
 
 installSettingsUtility();

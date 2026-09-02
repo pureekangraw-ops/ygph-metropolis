@@ -5,6 +5,7 @@
 !/styles.css
 !/theme.css
 !/compact-ui.css
+!/lighthouse.css
 !/styles/
 !/styles/settings-utility.css
 !/manifest.webmanifest
@@ -13,11 +14,13 @@
 !/icon-512.png
 !/ui/
 !/ui/action-popups.mjs
+!/ui/app-update.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
 !/ui/settings-ui.mjs
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
+!/ui/lighthouse-shell.mjs
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs

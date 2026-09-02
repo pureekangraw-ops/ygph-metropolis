@@ -27,15 +27,18 @@ test('Backup Import and Restore remain separate concepts and latest backup is on
   assert.doesNotMatch(importer, /openGreenfieldRuntimeFromBackup|importBackup\s*\(/);
 });
 
-test('normal update view stays human-facing while technical status is advanced', () => {
+test('normal APK update view stays human-facing while Web cache status is advanced', () => {
   const settings = read('ui/settings-ui.mjs');
   const release = read('ui/release-status.mjs');
-  assert.match(settings, /เวอร์ชัน/);
-  assert.match(settings, /สถานะอัปเดต/);
-  assert.match(settings, /settingsCheckUpdateBtn/);
+  assert.match(settings, /การอัปเดตแอป/);
+  assert.match(settings, /settingsApkCheckBtn/);
+  assert.match(settings, /settingsInstallUpdateBtn/);
+  assert.match(settings, /settingsReleaseNotes/);
+  assert.match(settings, /settingsUpdateSize/);
   assert.match(settings, /ข้อมูลทางเทคนิค/);
   assert.match(release, /data-settings-technical/);
-  assert.match(release, /settingsCheckUpdateBtn/);
+  assert.match(release, /Web cache/);
+  assert.doesNotMatch(release, /settingsApkCheckBtn|settingsInstallUpdateBtn/);
 });
 
 test('Reset All lives only in Advanced Danger Zone and clears local Settings metadata', () => {

@@ -36,22 +36,25 @@ test('visible release authority agrees across package manifest service worker an
   assert.match(status, /import ['"]\.\/theme-shell\.mjs['"]/);
 });
 
-test('System reports service-worker lifecycle instead of leaving update state invisible', () => {
+test('System reports service-worker lifecycle as technical Web cache state only', () => {
   const status = source('ui/release-status.mjs');
   assert.match(status, /systemVersion/);
   assert.match(status, /systemServiceWorker/);
   assert.match(status, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
-  for (const label of ['กำลังตรวจสอบ','พร้อมใช้','กำลังอัปเดต','มีอัปเดตพร้อมใช้','อัปเดตแล้ว','มีปัญหา']) assert.match(status, new RegExp(label));
+  assert.match(status, /Web cache/);
+  for (const label of ['กำลังตรวจสอบ','กำลังเตรียม cache','พร้อมใช้','ไม่พร้อม']) assert.match(status, new RegExp(label));
+  assert.doesNotMatch(status, /settingsApkCheckBtn|settingsInstallUpdateBtn/);
 });
 
-test('Settings shows only the latest human update entry', () => {
+test('human APK update summary is owned by Settings and release manifest data', () => {
+  const settings = source('ui/settings-ui.mjs');
+  const updater = source('ui/app-update.mjs');
   const status = source('ui/release-status.mjs');
-  assert.match(status, /มีอะไรใหม่/);
-  assert.match(status, /24 ส\.ค\. 2026 · 08:15/);
-  assert.match(status, /นำเข้าไฟล์/);
-  assert.equal((status.match(/timestamp:'/g) || []).length, 1);
-  assert.doesNotMatch(status, /24 ส\.ค\. 2026 · 02:28/);
-  assert.doesNotMatch(status, /23 ส\.ค\. 2026 · 21:36/);
-  assert.doesNotMatch(status, /เติมเงินออกที่ขาด/);
-  assert.doesNotMatch(status, /ค่าเสื่อม/);
+  assert.match(settings, /settingsApkCheckBtn/);
+  assert.match(settings, /settingsInstallUpdateBtn/);
+  assert.match(settings, /settingsReleaseNotes/);
+  assert.match(settings, /latest\.releaseNotes/);
+  assert.match(settings, /settingsUpdateSize/);
+  assert.match(updater, /releaseNotes/);
+  assert.doesNotMatch(status, /settingsApkCheckBtn|settingsInstallUpdateBtn/);
 });

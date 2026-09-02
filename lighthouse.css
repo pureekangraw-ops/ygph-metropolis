@@ -1,0 +1,305 @@
+:root{
+  --lh-navy:#0d2b45;
+  --lh-ocean:#1e5a8a;
+  --lh-seafoam:#1fa7a4;
+  --lh-aqua:#7ed6cf;
+  --lh-sky:#eaf3f9;
+  --lh-sand:#fff7ec;
+  --lh-shell:#ffffff;
+  --lh-coral:#ff6b6b;
+  --lh-ink:#18334a;
+  --lh-muted:#708493;
+  --lh-line:#d9e6ed;
+  --bg:#f6fbfd;
+  --panel:#ffffff;
+  --panel2:#f1f8fa;
+  --line:#d9e6ed;
+  --text:#18334a;
+  --muted:#708493;
+  --accent:#1fa7a4;
+  --warn:#d39b35;
+  --danger:#e45f63;
+}
+
+html{background:var(--lh-sky)}
+body.lighthouse-shell-active{
+  color:var(--lh-ink);
+  background:
+    radial-gradient(circle at 82% 9%,rgba(126,214,207,.2),transparent 21rem),
+    linear-gradient(180deg,#f9fdff 0%,#f3fafc 58%,#eef7fa 100%);
+}
+body.lighthouse-shell-active .layout{position:relative;z-index:1}
+
+.lighthouse-wave{
+  position:fixed;
+  inset:auto 0 0;
+  z-index:0;
+  height:34vh;
+  min-height:220px;
+  pointer-events:none;
+  opacity:.58;
+  overflow:hidden;
+  background:
+    radial-gradient(110% 55% at 15% 100%,rgba(30,90,138,.14) 0 34%,transparent 35%),
+    radial-gradient(120% 60% at 72% 112%,rgba(31,167,164,.16) 0 35%,transparent 36%),
+    linear-gradient(180deg,transparent,rgba(234,243,249,.72));
+}
+.lighthouse-wave::before,.lighthouse-wave::after{
+  content:'';
+  position:absolute;
+  left:-8%;
+  width:116%;
+  height:56px;
+  border:2px solid rgba(30,90,138,.13);
+  border-color:rgba(30,90,138,.13) transparent transparent transparent;
+  border-radius:50%;
+  transform:rotate(-2deg);
+}
+.lighthouse-wave::before{bottom:68px}
+.lighthouse-wave::after{bottom:28px;left:-2%;transform:rotate(2deg);border-color:rgba(31,167,164,.14) transparent transparent transparent}
+.lighthouse-beacon{
+  position:absolute;
+  right:7vw;
+  bottom:58px;
+  width:24px;
+  height:90px;
+  background:linear-gradient(90deg,rgba(255,255,255,.7),rgba(126,214,207,.25));
+  clip-path:polygon(35% 0,65% 0,88% 100%,12% 100%);
+  border-radius:4px;
+  filter:drop-shadow(0 8px 14px rgba(13,43,69,.08));
+}
+.lighthouse-beacon::before{content:'';position:absolute;left:-7px;top:-10px;width:38px;height:12px;border-radius:999px;background:rgba(13,43,69,.28)}
+.lighthouse-beacon::after{content:'';position:absolute;left:6px;top:15px;width:12px;height:8px;border-radius:2px;background:rgba(30,90,138,.28);box-shadow:0 24px 0 rgba(30,90,138,.18),0 48px 0 rgba(30,90,138,.14)}
+.lighthouse-shore{position:absolute;right:-5vw;bottom:38px;width:27vw;height:34px;background:rgba(13,43,69,.07);border-radius:60% 0 0 0;transform:rotate(-4deg)}
+
+body.lighthouse-shell-active .appbar{
+  background:rgba(251,254,255,.9);
+  color:var(--lh-navy);
+  border-bottom:1px solid rgba(13,43,69,.09);
+  box-shadow:0 8px 28px rgba(13,43,69,.06);
+  backdrop-filter:blur(18px);
+}
+body.lighthouse-shell-active .brand-lockup{gap:9px}
+body.lighthouse-shell-active .brand-lockup strong{display:block;color:var(--lh-navy);font-size:.86rem;letter-spacing:.16em;white-space:nowrap}
+body.lighthouse-shell-active #commandNav{display:none!important}
+body.lighthouse-shell-active .brand-home-control{color:var(--lh-ocean);background:#fff;border:1px solid var(--lh-line);box-shadow:0 4px 14px rgba(13,43,69,.06)}
+body.lighthouse-shell-active .brand-home-control:hover{background:#f4fbfd;border-color:#bcd4df}
+.lighthouse-mini-mark{position:relative;display:block;width:25px;height:27px;flex:0 0 auto}
+.lighthouse-mini-mark i{position:absolute;display:block}
+.lighthouse-mini-light{left:4px;top:2px;width:17px;height:6px;border-radius:8px 8px 2px 2px;background:var(--lh-ocean)}
+.lighthouse-mini-tower{left:7px;top:7px;width:11px;height:15px;background:linear-gradient(90deg,#fff 0 38%,var(--lh-aqua) 39% 61%,#fff 62%);clip-path:polygon(28% 0,72% 0,100% 100%,0 100%);border:1px solid rgba(13,43,69,.18)}
+.lighthouse-mini-sea{left:2px;bottom:0;width:21px;height:4px;border-radius:999px;background:var(--lh-seafoam);box-shadow:0 -3px 0 rgba(30,90,138,.18)}
+
+body.lighthouse-shell-active .panel,
+body.lighthouse-shell-active .card,
+body.lighthouse-shell-active .task-panel,
+body.lighthouse-shell-active .home-summary-card,
+body.lighthouse-shell-active .metrics article,
+body.lighthouse-shell-active .item,
+body.lighthouse-shell-active .settings-inline,
+body.lighthouse-shell-active .finance-schedule,
+body.lighthouse-shell-active .attention-item,
+body.lighthouse-shell-active .city-inspection-links button{
+  color:var(--lh-ink);
+  background:rgba(255,255,255,.93);
+  border-color:var(--lh-line);
+  box-shadow:0 7px 22px rgba(13,43,69,.055);
+}
+body.lighthouse-shell-active small,
+body.lighthouse-shell-active .muted,
+body.lighthouse-shell-active label{color:var(--lh-muted)}
+body.lighthouse-shell-active .page-head h1,
+body.lighthouse-shell-active .subhead h2,
+body.lighthouse-shell-active .dialog-head h2,
+body.lighthouse-shell-active .hero strong,
+body.lighthouse-shell-active .metrics b,
+body.lighthouse-shell-active .home-summary b{color:var(--lh-ink)}
+
+body.lighthouse-shell-active button{
+  color:var(--lh-ink);
+  background:#fff;
+  border-color:#cfdfe7;
+  box-shadow:none;
+}
+body.lighthouse-shell-active button:hover{background:#f3fafc;border-color:#a9cbd8}
+body.lighthouse-shell-active .primary-action{
+  color:#fff;
+  background:linear-gradient(135deg,var(--lh-ocean),var(--lh-seafoam));
+  border-color:transparent;
+  box-shadow:0 8px 20px rgba(31,167,164,.16);
+}
+body.lighthouse-shell-active .primary-action:hover{background:linear-gradient(135deg,#174f7a,#168f8c)}
+body.lighthouse-shell-active .secondary,
+body.lighthouse-shell-active .utility-btn{background:#fff;border-color:#cfdfe7;color:var(--lh-ocean)}
+body.lighthouse-shell-active .danger-action{background:#fff7f7;border-color:#ffc4c6;color:#d94f54}
+body.lighthouse-shell-active input,
+body.lighthouse-shell-active textarea,
+body.lighthouse-shell-active select{
+  color:var(--lh-ink);
+  background:#fbfeff;
+  border-color:#cfdee6;
+}
+body.lighthouse-shell-active button:focus-visible,
+body.lighthouse-shell-active input:focus-visible,
+body.lighthouse-shell-active textarea:focus-visible,
+body.lighthouse-shell-active select:focus-visible,
+body.lighthouse-shell-active summary:focus-visible{outline:2px solid var(--lh-seafoam);outline-offset:3px;box-shadow:0 0 0 4px rgba(31,167,164,.1)}
+body.lighthouse-shell-active .status{color:var(--lh-seafoam)}
+body.lighthouse-shell-active .status.error{color:var(--lh-coral)}
+body.lighthouse-shell-active .badge{background:#f4fafc;border-color:var(--lh-line)}
+
+body.lighthouse-shell-active #workspace{position:relative;max-width:900px;margin:0 auto;padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>.workspace-content,
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>#manualHub{display:none!important}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>#masterInputShell{display:block}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="manual"]>#masterInputShell{display:none!important}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="manual"][data-lighthouse-manual-mode="hub"]>.workspace-content{display:none!important}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="manual"][data-lighthouse-manual-mode="hub"]>#manualHub{display:block}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="manual"][data-lighthouse-manual-mode="detail"]>#manualHub{display:none!important}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="manual"][data-lighthouse-manual-mode="detail"]>.workspace-content{display:block}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="settings"]>#masterInputShell,
+body.lighthouse-shell-active #workspace[data-lighthouse-view="settings"]>#manualHub,
+body.lighthouse-shell-active #workspace[data-lighthouse-view="settings"]>.workspace-content{display:none!important}
+
+body.lighthouse-shell-active .master-input-shell{
+  position:relative;
+  overflow:hidden;
+  min-height:min(72vh,680px);
+  margin:8px 0 0;
+  padding:22px;
+  color:var(--lh-ink);
+  background:rgba(255,255,255,.92);
+  border:1px solid var(--lh-line);
+  border-radius:24px;
+  box-shadow:0 18px 50px rgba(13,43,69,.08);
+}
+body.lighthouse-shell-active .master-input-shell::before{content:'CHAT · คุยกับ GO';display:block;margin-bottom:18px;color:var(--lh-ocean);font-weight:800;letter-spacing:.08em;font-size:.8rem}
+body.lighthouse-shell-active .master-input-shell::after{content:'';position:absolute;right:-60px;top:-72px;width:190px;height:190px;border-radius:50%;background:radial-gradient(circle,rgba(126,214,207,.22),transparent 68%);pointer-events:none}
+body.lighthouse-shell-active .master-input-head{position:relative;z-index:1;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid #e6eff3}
+body.lighthouse-shell-active .master-input-head small{color:var(--lh-seafoam);opacity:1;font-weight:800;letter-spacing:.09em}
+body.lighthouse-shell-active .master-input-head h2{font-size:1.2rem;color:var(--lh-ink)}
+body.lighthouse-shell-active .master-input-state{color:var(--lh-ocean);background:#f4fafc;border-color:#d1e3ea}
+body.lighthouse-shell-active .master-input-form textarea{background:#f9fdfe;border-color:#cddfe7;border-radius:16px}
+body.lighthouse-shell-active .master-input-result{background:#f2f9fa;border:1px solid #dcebee}
+
+.lighthouse-page{position:relative}
+.lighthouse-page-head{margin:6px 0 18px;padding:4px 2px}
+.lighthouse-page-head small{display:block;color:var(--lh-seafoam)!important;font-weight:800;letter-spacing:.1em}
+.lighthouse-page-head h1{margin:.2rem 0 .15rem;color:var(--lh-navy);font-size:clamp(1.65rem,6vw,2.15rem)}
+.lighthouse-page-head p{margin:0;color:var(--lh-muted)}
+.lighthouse-manual-hub{padding:10px 0 18px}
+.lighthouse-manual-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.lighthouse-manual-tile{
+  min-height:92px;
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:15px;
+  text-align:left;
+  border:1px solid var(--lh-line)!important;
+  border-radius:18px!important;
+  background:rgba(255,255,255,.94)!important;
+  box-shadow:0 8px 24px rgba(13,43,69,.055)!important;
+}
+.lighthouse-manual-tile:hover{transform:translateY(-1px);border-color:#abd0da!important;background:#fff!important}
+.lighthouse-tile-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:14px;color:#fff;background:linear-gradient(145deg,var(--lh-ocean),var(--lh-seafoam))}
+.lighthouse-tile-icon svg{width:23px;height:23px}
+.lighthouse-manual-tile strong{display:block;color:var(--lh-ink);font-size:1rem}
+.lighthouse-manual-tile small{display:block;margin-top:3px;color:var(--lh-muted);font-size:.82rem}
+.lighthouse-chevron{color:var(--lh-ocean);font-size:1.65rem;font-weight:300}
+.lighthouse-manual-back{display:none!important;align-items:center;gap:8px;width:max-content;margin:0 0 14px;padding:8px 13px;border-radius:999px!important}
+.lighthouse-manual-back svg{width:18px;height:18px}
+#workspace[data-lighthouse-view="manual"][data-lighthouse-manual-mode="detail"] .lighthouse-manual-back{display:inline-flex!important}
+
+.lighthouse-bottom-nav{
+  position:fixed;
+  z-index:40;
+  left:50%;
+  bottom:max(10px,env(safe-area-inset-bottom));
+  transform:translateX(-50%);
+  width:min(calc(100% - 24px),660px);
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:4px;
+  padding:7px;
+  border:1px solid rgba(13,43,69,.1);
+  border-radius:22px;
+  background:rgba(255,255,255,.94);
+  box-shadow:0 14px 40px rgba(13,43,69,.14);
+  backdrop-filter:blur(18px);
+}
+.lighthouse-bottom-nav button{
+  position:relative;
+  display:flex;
+  min-height:54px;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:6px 8px;
+  border:0!important;
+  border-radius:15px!important;
+  background:transparent!important;
+  color:#718796!important;
+  font-size:.68rem;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.lighthouse-bottom-nav button svg{width:21px;height:21px}
+.lighthouse-bottom-nav button.active{color:var(--lh-ocean)!important;background:#eef8fa!important}
+.lighthouse-bottom-nav button.active::after{content:'';position:absolute;left:30%;right:30%;bottom:2px;height:2px;border-radius:99px;background:var(--lh-seafoam)}
+
+body.lighthouse-shell-active .modal-dialog{color:var(--lh-ink);background:#fff;border-color:var(--lh-line);box-shadow:0 24px 70px rgba(13,43,69,.18)}
+body.lighthouse-shell-active .modal-dialog::backdrop{background:rgba(13,43,69,.2);backdrop-filter:blur(5px)}
+body.lighthouse-shell-active .settings-dialog.lighthouse-settings-page[open]{
+  position:relative;
+  inset:auto;
+  width:100%;
+  max-width:760px;
+  max-height:none;
+  margin:4px auto 18px;
+  padding:0;
+  color:var(--lh-ink);
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+body.lighthouse-shell-active .settings-dialog.lighthouse-settings-page .dialog-body{padding:20px;background:rgba(255,255,255,.94);border:1px solid var(--lh-line);border-radius:24px;box-shadow:0 18px 50px rgba(13,43,69,.08)}
+body.lighthouse-shell-active .settings-section{border-top-color:#e3edf2}
+body.lighthouse-shell-active .settings-section h3{color:var(--lh-ocean)}
+body.lighthouse-shell-active .system-facts{background:#f7fbfc;border-color:#dce8ed}
+body.lighthouse-shell-active .system-fact{border-top-color:#e0ebef}
+body.lighthouse-shell-active .system-fact span{color:var(--lh-muted)}
+body.lighthouse-shell-active .system-fact b{color:var(--lh-ink)}
+body.lighthouse-shell-active .system-fact.service-worker b{color:var(--lh-seafoam)}
+body.lighthouse-shell-active .diagnostics{background:#f4f9fb;border-color:#d7e5eb;color:#486274}
+
+body.lighthouse-shell-active .day-cell{background:#f9fcfd;border-color:#dbe7ec;color:#68808f}
+body.lighthouse-shell-active .day-cell.selected{color:#fff;background:var(--lh-seafoam);border-color:var(--lh-seafoam)}
+body.lighthouse-shell-active .day-cell.selected .day-count{background:rgba(13,43,69,.2);color:#fff}
+body.lighthouse-shell-active .day-cell .day-count{background:#e8f2f5}
+body.lighthouse-shell-active .cash-flow-in{fill:var(--lh-seafoam)}
+body.lighthouse-shell-active .cash-flow-out{fill:#f2ad58}
+body.lighthouse-shell-active .cash-flow-baseline{stroke:#d8e5ea}
+body.lighthouse-shell-active .cash-flow-day-label{fill:#718796}
+body.lighthouse-shell-active .truth-warning{background:#fffafa;border-color:#f3b7ba}
+
+@media(max-width:700px){
+  body.lighthouse-shell-active .layout{padding-left:12px;padding-right:12px}
+  body.lighthouse-shell-active .appbar{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  body.lighthouse-shell-active #workspace{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+  body.lighthouse-shell-active .master-input-shell{min-height:calc(100dvh - 160px);padding:16px;border-radius:20px}
+  .lighthouse-manual-grid{grid-template-columns:1fr;gap:10px}
+  .lighthouse-manual-tile{min-height:78px;padding:12px 14px}
+  body.lighthouse-shell-active .settings-dialog.lighthouse-settings-page .dialog-body{padding:16px;border-radius:20px}
+  .lighthouse-wave{height:29vh;opacity:.48}
+  .lighthouse-beacon{right:4vw;transform:scale(.78);transform-origin:bottom}
+}
+
+@media(max-width:420px){
+  body.lighthouse-shell-active .brand-lockup strong{font-size:.76rem;letter-spacing:.1em}
+  .lighthouse-bottom-nav{width:calc(100% - 16px);bottom:max(6px,env(safe-area-inset-bottom));border-radius:19px}
+  .lighthouse-bottom-nav button{min-height:52px}
+}
