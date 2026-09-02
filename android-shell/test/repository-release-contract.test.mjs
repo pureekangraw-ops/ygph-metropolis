@@ -10,7 +10,9 @@ async function workflow(){return readFile(workflowUrl,'utf8');}
 test('APK publish contract uses immutable repository assets and never GitHub Release downloads',async()=>{
   const source=await workflow();
   assert.match(source,/permissions:\s*[\s\S]*contents:\s*write/);
-  assert.match(source,/release\/assets\/\$?\{?VERSION_NAME\}?\/LIGHTHOUSE-\$?\{?VERSION_NAME\}?-vc\$?\{?VERSION_CODE\}?\.apk/);
+  assert.match(source,/ASSET_DIR="release\/assets\/\$\{VERSION_NAME\}"/);
+  assert.match(source,/APK_NAME="LIGHTHOUSE-\$\{VERSION_NAME\}-vc\$\{VERSION_CODE\}\.apk"/);
+  assert.match(source,/APK_PATH="\$\{ASSET_DIR\}\/\$\{APK_NAME\}"/);
   assert.match(source,/SHA256SUMS\.txt/);
   assert.match(source,/RELEASE-NOTES\.md/);
   assert.match(source,/raw\.githubusercontent\.com/);
