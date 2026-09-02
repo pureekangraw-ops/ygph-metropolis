@@ -98,8 +98,6 @@ function createSurface(documentRef) {
   ceiling.card.append(node(documentRef, 'p', { id:'outcomeCeilingProgress', className:'muted' }, 'ยังไม่มี Ceiling'));
   outcome.append(ceiling.card, node(documentRef, 'div', { id:'outcomeObligationList', className:'manual-list' }), node(documentRef, 'div', { id:'outcomeDetail', className:'manual-record-detail', dataset:{ recordDetail:'outcome' }, hidden:true }));
 
-  const calendar = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualCalendarTitle' });
-  calendar.append(node(documentRef, 'h3', { id:'manualCalendarTitle' }, 'Calendar — อะไรต้องเกิดเมื่อไร'));
   const calDisclosure = disclosure(documentRef, '+ สร้างรายการ');
   const calForm = node(documentRef, 'form', { id:'calendarItemForm', className:'stack' });
   const cTitle = field(documentRef, 'รายการ ', 'title', { required:true });
@@ -110,7 +108,7 @@ function createSurface(documentRef) {
   cMore.append(cType.label, cDetail.label);
   calForm.append(cTitle.label, cDue.label, cMore, node(documentRef, 'button', { type:'submit' }, 'สร้างรายการ'));
   calDisclosure.append(calForm);
-  calendar.append(calDisclosure, node(documentRef, 'div', { id:'manualCalendarViews', className:'manual-list' }), node(documentRef, 'div', { id:'manualCalendarDetail', className:'manual-record-detail', dataset:{ recordDetail:'calendar' }, hidden:true }));
+  const calendarDetail = node(documentRef, 'div', { id:'manualCalendarDetail', className:'manual-record-detail', dataset:{ recordDetail:'calendar' }, hidden:true });
 
   const ledger = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualLedgerTitle' });
   ledger.append(node(documentRef, 'h3', { id:'manualLedgerTitle' }, 'Ledger — คุมความจริง'));
@@ -131,9 +129,14 @@ function createSurface(documentRef) {
   sheetPanel.append(node(documentRef, 'h3', { id:'manualActionSheetTitle' }, 'Action'), node(documentRef, 'div', { id:'manualActionSheetBody' }), node(documentRef, 'button', { id:'manualActionSheetClose', type:'button', className:'secondary' }, 'ปิด'));
   sheet.append(sheetPanel);
 
-  root.append(income, outcome, calendar, ledger, sheet);
+  root.append(income, outcome, ledger, sheet);
   const schedule = documentRef.getElementById('financeSchedule');
-  if (schedule) schedule.before(root); else financePage.append(root);
+  if (schedule) {
+    const firstScheduleChild = schedule.children?.[0] || null;
+    if (firstScheduleChild?.before) firstScheduleChild.before(calDisclosure); else schedule.append(calDisclosure);
+    schedule.append(calendarDetail);
+    schedule.before(root);
+  } else financePage.append(root);
 }
 
 function currentExpectationId(kind) { return kind === 'TARGET' ? 'MANUAL-TARGET-CURRENT' : 'MANUAL-CEILING-CURRENT'; }
@@ -404,14 +407,6 @@ export function createManualFinanceUi({ documentRef = globalThis.document, getMa
       for(const record of obligations) oList.append(row(record,{amountField:'remainingSatang',onOpen:()=>openReference(createRecordReference({version:1,owner:'LEDGER',recordId:record.recordId}))}));
       if(!obligations.length) oList.textContent='ยังไม่มี Obligation';
 
-      const [todayItems,upcoming,overdue]=await Promise.all([manual.calendarToday(),manual.calendarUpcoming(),manual.calendarOverdue()]);
-      const c=documentRef.getElementById('manualCalendarViews'); c.textContent='';
-      for(const [label,items] of [['Today',todayItems],['Upcoming',upcoming],['Overdue',overdue]]){
-        const group=node(documentRef,'section',{className:'manual-list-group'});
-        group.append(node(documentRef,'b',{},`${label} ${items.length}`));
-        for(const record of items) group.append(row(record,{onOpen:()=>openReference(createRecordReference({version:1,owner:'CALENDAR',recordId:record.recordId}))}));
-        c.append(group);
-      }
       await renderLedger();
     } catch (error) { notify(String(error?.message || error), true); }
   }
