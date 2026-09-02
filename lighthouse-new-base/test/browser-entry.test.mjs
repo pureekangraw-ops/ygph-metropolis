@@ -48,6 +48,18 @@ test('browser main inspects and uses the proven Runtime boot gate before reading
   assert.doesNotMatch(source, /browserModel\.read\(today\);\s*\n\s*const app = createBrowserApp/s);
 });
 
+test('setup-required uses proven Greenfield first-run instead of a dead-end message', async () => {
+  const source = await text('main.mjs');
+  assert.match(source, /initializeFirstRun/);
+  assert.match(source, /from '\.\.\/greenfield\/first-run\.mjs'/);
+  assert.match(source, /data-first-run/);
+  assert.match(source, /name="password"/);
+  assert.match(source, /name="recoveryCode"/);
+  assert.match(source, /await initializeFirstRun\(/);
+  assert.match(source, /await boot\.inspect\(\)/);
+  assert.match(source, /await boot\.unlock\(/);
+});
+
 test('NEW BASE stylesheet is mobile-first and reserves safe space for the only bottom navigation', async () => {
   const css = await text('styles.css');
   assert.match(css, /\.bottom-nav\s*\{/);
