@@ -13,72 +13,56 @@ jobs:
     if: "${{ github.actor != 'github-actions[bot]' }}"
     runs-on: ubuntu-latest
     steps:
-      - name: Check out branch
-        uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Use Node.js 22
-        uses: actions/setup-node@v7.0.0
-        with:
-          node-version: 22
-      - name: Install dependencies
-        run: npm ci
-      - name: Apply Gate C single-Calendar changes
-        run: node scripts/apply-lighthouse-105-gate-c.mjs
-      - name: Apply Gate D human-copy changes
-        run: node scripts/apply-lighthouse-105-gate-d.mjs
-      - name: Apply Gate E updater changes
-        run: node scripts/apply-lighthouse-105-gate-e.mjs
-      - name: Restore stable tests and patch only intentional contracts
-        run: node scripts/repair-lighthouse-105-test-contracts.mjs
-      - name: Apply Gate A source and cache changes
-        run: node scripts/apply-lighthouse-105-gate-a.mjs
-      - name: Persist generated Gate A-E candidate
+      - uses: actions/checkout@v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v7.0.0
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: node scripts/apply-lighthouse-105-gate-c.mjs
+      - run: node scripts/apply-lighthouse-105-gate-d.mjs
+      - run: node scripts/apply-lighthouse-105-gate-e.mjs
+      - run: node scripts/repair-lighthouse-105-test-contracts.mjs
+      - run: node scripts/apply-lighthouse-105-gate-a.mjs
+      - name: Persist generated candidate
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs ui/app-update.mjs android-shell/tools/apply-android-updater.mjs android-shell/test/app-update.test.mjs android-shell/test/settings-update-state.test.mjs android-shell/test/managed-artifact-activation.test.mjs tests/master-input-ui-fixture.cjs tests/greenfield-login-ux.test.cjs tests/greenfield-lighthouse-intent-question.test.cjs tests/greenfield-lighthouse-phase1-final-gate.test.cjs tests/greenfield-manual-context-bridge.test.cjs tests/settings-utility.test.cjs RELEASE_MANIFEST.json sw.js
-          if ! git diff --cached --quiet; then
-            git commit -m "workbench: materialize LIGHTHOUSE 1.0.5 Gates A-E"
-            git push origin HEAD:feat/lighthouse-1.0.5-real-app
-          fi
+          if ! git diff --cached --quiet; then git commit -m "workbench: materialize LIGHTHOUSE 1.0.5 Gates A-E"; git push origin HEAD:feat/lighthouse-1.0.5-real-app; fi
       - name: Verify web regression suite
         run: npm run deploy:gate
-      - name: Verify updater unit suite
+      - name: Verify Android suite with exact diagnostic
         shell: bash
         working-directory: android-shell
         run: |
           set +e
           npm install --no-audit --no-fund
-          npm test 2>&1 | tee /tmp/lighthouse-android-test.log
+          npm test 2>&1 | tee /tmp/android.log
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
             cd ..
             {
-              echo '# LIGHTHOUSE 1.0.5 Android updater diagnostic'
+              echo '# LIGHTHOUSE 1.0.5 Android exact failures'
               echo
               echo '```text'
-              tail -n 180 /tmp/lighthouse-android-test.log
+              grep -B 3 -A 24 '^not ok ' /tmp/android.log || true
+              echo
+              tail -n 25 /tmp/android.log
               echo '```'
             } > docs/lighthouse-105-android-failure.md
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add docs/lighthouse-105-android-failure.md
-            git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 Android updater failure"
+            git commit -m "diagnostic: capture exact Android failures"
             git push origin HEAD:feat/lighthouse-1.0.5-real-app
             exit "$code"
           fi
-      - name: Remove stale diagnostics
+      - name: Clear diagnostics
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           changed=0
-          for file in docs/lighthouse-105-workbench-failure.md docs/lighthouse-105-android-failure.md; do
-            if [ -f "$file" ]; then git rm "$file"; changed=1; fi
-          done
-          if [ "$changed" -eq 1 ]; then
-            git commit -m "chore: clear LIGHTHOUSE 1.0.5 workbench diagnostics"
-            git push origin HEAD:feat/lighthouse-1.0.5-real-app
-          fi
+          for f in docs/lighthouse-105-workbench-failure.md docs/lighthouse-105-android-failure.md; do if [ -f "$f" ]; then git rm "$f"; changed=1; fi; done
+          if [ "$changed" -eq 1 ]; then git commit -m "chore: clear LIGHTHOUSE 1.0.5 diagnostics"; git push origin HEAD:feat/lighthouse-1.0.5-real-app; fi
