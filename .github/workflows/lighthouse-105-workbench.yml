@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  gate-a:
+  gate-a-c:
     if: "${{ github.actor != 'github-actions[bot]' }}"
     runs-on: ubuntu-latest
     steps:
@@ -23,41 +23,43 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm ci
-      - name: Apply Gate A source changes
+      - name: Apply Gate C single-Calendar changes
+        run: node scripts/apply-lighthouse-105-gate-c.mjs
+      - name: Apply Gate A source and cache changes
         run: node scripts/apply-lighthouse-105-gate-a.mjs
-      - name: Verify Gate A and regression suite
+      - name: Verify LIGHTHOUSE 1.0.5 regression suite
         id: verify
         shell: bash
         run: |
           set +e
-          npm run deploy:gate > /tmp/lighthouse-105-gate-a.log 2>&1
+          npm run deploy:gate > /tmp/lighthouse-105-gate.log 2>&1
           code=$?
-          cat /tmp/lighthouse-105-gate-a.log
+          cat /tmp/lighthouse-105-gate.log
           if [ "$code" -ne 0 ]; then
             mkdir -p docs
             {
-              echo "# LIGHTHOUSE 1.0.5 Gate A diagnostic"
+              echo "# LIGHTHOUSE 1.0.5 workbench diagnostic"
               echo
               echo "Exit code: $code"
               echo
               echo "## Failed tests"
               echo '```text'
-              grep -n -B 16 -A 28 '^not ok ' /tmp/lighthouse-105-gate-a.log || true
+              grep -n -B 16 -A 28 '^not ok ' /tmp/lighthouse-105-gate.log || true
               echo '```'
               echo
               echo "## Summary tail"
               echo '```text'
-              tail -n 80 /tmp/lighthouse-105-gate-a.log
+              tail -n 80 /tmp/lighthouse-105-gate.log
               echo '```'
             } > docs/lighthouse-105-workbench-failure.md
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add docs/lighthouse-105-workbench-failure.md
-            git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 Gate A failure details"
-            git push origin HEAD:feat/lighthouse-1.0.5-real-app
+            git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 failure details" || true
+            git push origin HEAD:feat/lighthouse-1.0.5-real-app || true
             exit "$code"
           fi
-      - name: Commit verified Gate A changes
+      - name: Commit verified source changes
         shell: bash
         run: |
           rm -f docs/lighthouse-105-workbench-failure.md
@@ -67,6 +69,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html lighthouse.css ui/lighthouse-shell.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
-          git commit -m "workbench: apply LIGHTHOUSE 1.0.5 Gate A"
+          git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/manual-finance-ui.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
+          git commit -m "workbench: apply LIGHTHOUSE 1.0.5 verified source changes"
           git push origin HEAD:feat/lighthouse-1.0.5-real-app
