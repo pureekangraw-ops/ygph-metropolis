@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   gate-a:
-    if: github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, 'workbench: apply LIGHTHOUSE 1.0.5 Gate A')
+    if: "${{ github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, 'workbench: apply LIGHTHOUSE 1.0.5 Gate A') }}"
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
