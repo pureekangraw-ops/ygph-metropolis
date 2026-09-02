@@ -1,256 +1,247 @@
-# LIGHTHOUSE NEW BASE — Screen / Route Acceptance Contract
+# LIGHTHOUSE NEW BASE — Screen / Route / Logic Acceptance Contract
 
-**Status:** OWNER DIRECTION CAPTURED — PRODUCT CODE BLOCKED UNTIL SCREEN/ROUTE REVIEW
+**Status:** CURRENT OWNER REVIEW CONTRACT
 **Owner:** BIG
 **Working branch:** `codex/lighthouse-new-base-20260902`
 
 ## Acceptance Principle
-A technically passing build is not accepted unless the assembled application is the LIGHTHOUSE experience the owner asked for.
+A technically passing build is not accepted unless the assembled application is the LIGHTHOUSE experience BIG asked for.
 
 `Build succeeds` != `Product accepted`.
 
 ## Top-Level Product Shape
 LIGHTHOUSE has one navigation owner and three top-level surfaces:
+1. CHAT
+2. MANUAL
+3. SETTINGS
 
-1. `CHAT`
-2. `MANUAL`
-3. `SETTINGS`
+MANUAL opens to a compact “วันนี้เป็นอย่างไร” dashboard with exactly four houses:
+- Income
+- Outcome
+- Calendar
+- Ledger
 
-`MANUAL` is not a pile of equal-sized feature cards. It opens to a compact today/dashboard surface with four short doors:
+Store, Ride, debtors, obligations and other details are data under their appropriate owner, not peer houses.
 
-- `MONEY` — รายรับ / รายจ่าย / Ledger
-- `CALENDAR` — ปฏิทินและรายการตามเวลา; one Calendar UI only
-- `STORE` — ร้านค้า / ยอดขาย / สต็อก / ลูกหนี้
-- `RIDE` — วิ่งงาน / รอบวิ่ง / รายได้จากงาน
+## CHAT Contract
+- CHAT is a real conversation surface.
+- Master Input/interpreter may be internal but is not the page identity.
+- User types normally; interpreted result appears in conversation.
+- Confirmation/edit/cancel can continue through normal conversation; popup is not the primary flow.
+- Quick Capture stays in the thread.
+- Vocabulary/typo knowledge may assist interpretation but cannot override user intent.
+- No write is reported as successful before real readback.
+- Keyboard must not hide critical input/actions.
+- Internal state/event words do not render directly.
 
-Calendar is a first-class Manual house. It must not be implemented as a Finance subsection or route through Finance.
+## MANUAL Dashboard Contract
+Dashboard answers “วันนี้เป็นอย่างไร” before offering doors.
 
-## Screen Wireframes
+Must show useful current summary such as:
+- money in;
+- money out;
+- due items;
+- relevant events.
 
-### S0 — CHAT
+Must offer exactly four house doors:
+- Income
+- Outcome
+- Calendar
+- Ledger
 
-```text
-┌──────────────────────────────────────┐
-│ LIGHTHOUSE                           │
-│                                      │
-│  Conversation / result area          │
-│  - show user-relevant result          │
-│  - show confirmation when needed      │
-│  - show problem only when actionable  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ Quick Capture / message input  │  │
-│  └────────────────────────────────┘  │
-│                                      │
-├──────────────────────────────────────┤
-│   CHAT        MANUAL       SETTINGS  │
-└──────────────────────────────────────┘
-```
+Dashboard must not become a mega-menu.
+
+## Income Contract
+Owner of money-in truth:
+- income;
+- received debtor payments;
+- Lalamove/ride income;
+- daily income target.
+
+A debtor payment must change the real debtor state as well as money-in readback.
+
+## Outcome Contract
+Owner of money-out and obligation truth:
+- expenses;
+- obligations;
+- ride/work expenses;
+- spending ceiling.
+
+An unpaid obligation is not cash already paid. Dated obligations may appear in Calendar while Outcome remains owner.
+
+## Calendar Contract
+- One Calendar UI only.
+- Default monthly presentation.
+- Shows which dates contain items/events.
+- Reads dated items from their real owners; no cloning.
+- Opening an item reads real details.
+- Completing from Calendar sends the state change back to the original owner.
+- Edit/cancel modifies the original item.
+- Add obligation routes to Outcome.
+- Note/Task routes to its defined owner and is presented by date.
+- Calendar is presentation + time action surface, not a second truth store.
+
+## Ledger Contract
+Ledger has three roles:
+1. ledger/history/real balance readback;
+2. Manual control surface across houses;
+3. CHAT ↔ MANUAL bridge.
 
 Rules:
-- Master Input/interpreter is an internal mechanism, not the CHAT page identity.
-- Internal words such as `IDLE`, `WAITING`, `SUCCESS`, `READBACK`, or interpreter terminology must not leak into product copy.
-- Internal events stay internal unless they become a confirmation, actionable problem, or changed result.
+- can open detail;
+- can request edit/cancel through original owner;
+- does not take ownership away from Income/Outcome;
+- reads changed data back before returning results;
+- centralizes cross-house control without becoming a mega-menu.
 
-### S1 — MANUAL / TODAY DASHBOARD
+## SETTINGS Contract
+SETTINGS is a top-level page for app operations:
+- version;
+- check update;
+- rollback when truly supported;
+- backup;
+- restore;
+- reset.
 
-```text
-┌──────────────────────────────────────┐
-│ MANUAL                               │
-│ วันนี้เป็นอย่างไร                     │
-│ [short today status / real data]      │
-│                                      │
-│  ┌──────────────┐  ┌──────────────┐  │
-│  │ เงิน          │  │ ปฏิทิน        │  │
-│  │ MONEY         │  │ CALENDAR     │  │
-│  └──────────────┘  └──────────────┘  │
-│  ┌──────────────┐  ┌──────────────┐  │
-│  │ ร้านค้า       │  │ วิ่งงาน       │  │
-│  │ STORE         │  │ RIDE         │  │
-│  └──────────────┘  └──────────────┘  │
-│                                      │
-├──────────────────────────────────────┤
-│   CHAT        MANUAL       SETTINGS  │
-└──────────────────────────────────────┘
-```
-
-Rules:
-- Dashboard answers “today is how?” before offering doors.
-- Four doors are short entry points, not giant dashboard cards that elevate every sub-feature to top level.
-- Income, Expense and Ledger are inside MONEY, not three peer houses.
-- Calendar has one UI and one route owner.
-
-### S2 — MANUAL / HOUSE DETAIL
-
-```text
-┌──────────────────────────────────────┐
-│ ‹ MANUAL                    [HOUSE]  │
-│                                      │
-│  Actual house content                │
-│  Actual data / action / readback      │
-│                                      │
-├──────────────────────────────────────┤
-│   CHAT        MANUAL       SETTINGS  │
-└──────────────────────────────────────┘
-```
-
-Back rule:
-- House detail `Back` -> MANUAL dashboard.
-- Bottom `MANUAL` from any house -> MANUAL dashboard.
-- Bottom `CHAT` -> CHAT.
-- Bottom `SETTINGS` -> SETTINGS.
-
-### S3 — SETTINGS
-
-```text
-┌──────────────────────────────────────┐
-│ SETTINGS                             │
-│                                      │
-│  App settings / maintenance          │
-│  Patch / rollback where authorized   │
-│                                      │
-├──────────────────────────────────────┤
-│   CHAT        MANUAL       SETTINGS  │
-└──────────────────────────────────────┘
-```
-
-SETTINGS is a real top-level page, not a dialog whose internal state competes with navigation state.
+Operation status must match real state; “requested” is not automatically “completed”.
 
 ## Single Navigation Owner
-The NEW BASE must expose one central route state. No screen may privately own a conflicting page state.
-
 Canonical route model:
 
 ```text
 CHAT
 MANUAL
-  ├─ MONEY
-  ├─ CALENDAR
-  ├─ STORE
-  └─ RIDE
+  ├─ Income
+  ├─ Outcome
+  ├─ Calendar
+  └─ Ledger
 SETTINGS
 ```
 
-Suggested state shape for later implementation:
-
-```js
-{
-  top: 'chat' | 'manual' | 'settings',
-  manualHouse: null | 'money' | 'calendar' | 'store' | 'ride'
-}
-```
-
-The exact implementation may change, but there must be only one authoritative navigation state.
+Rules:
+- bottom navigation is `CHAT | MANUAL | SETTINGS`;
+- MANUAL opens dashboard;
+- each house opens directly from dashboard;
+- no screen privately owns competing route state;
+- no redundant Home/Back controls are added everywhere;
+- actual history/back behavior is used where needed;
+- visible control label and destination must agree.
 
 ## Route Matrix
+| From | Action | To | Acceptance evidence |
+| --- | --- | --- | --- |
+| CHAT | tap MANUAL | MANUAL dashboard | rendered destination + central route state |
+| CHAT | tap SETTINGS | SETTINGS | rendered destination + central route state |
+| MANUAL dashboard | tap Income | Income | real surface + data path |
+| MANUAL dashboard | tap Outcome | Outcome | real surface + data path |
+| MANUAL dashboard | tap Calendar | Calendar | one Calendar UI + owner-backed items |
+| MANUAL dashboard | tap Ledger | Ledger | real readback/control surface |
+| Any MANUAL house | tap MANUAL | MANUAL dashboard | central route state |
+| Any surface | tap CHAT | CHAT | no competing hidden state |
+| Any surface | tap SETTINGS | SETTINGS | top-level route state |
 
-| From | Action | To | Back target | Acceptance evidence |
-| --- | --- | --- | --- | --- |
-| CHAT | tap MANUAL | MANUAL dashboard | CHAT via bottom nav | rendered screen + central route state |
-| CHAT | tap SETTINGS | SETTINGS | CHAT via bottom nav | rendered screen + central route state |
-| MANUAL dashboard | tap MONEY | MONEY house | MANUAL dashboard | screen + actual data path |
-| MANUAL dashboard | tap CALENDAR | CALENDAR house | MANUAL dashboard | one Calendar UI; no Finance redirect |
-| MANUAL dashboard | tap STORE | STORE house | MANUAL dashboard | screen + actual data path |
-| MANUAL dashboard | tap RIDE | RIDE house | MANUAL dashboard | screen + actual data path |
-| Any MANUAL house | tap MANUAL bottom nav | MANUAL dashboard | n/a | route state resets `manualHouse` |
-| Any top-level page | tap CHAT | CHAT | prior page reachable through nav | no hidden competing state |
-| Any top-level page | tap SETTINGS | SETTINGS | prior page reachable through nav | no dialog-only navigation owner |
+Every new interactive control must have an explicit destination and real behavior evidence before implementation is accepted.
 
-Every interactive button added later must extend this matrix with `from -> action -> to -> back` before implementation.
+## Data Ownership Matrix
+| Surface | Owns | Does not own |
+| --- | --- | --- |
+| CHAT | conversation / user interaction | domain truth storage |
+| Income | money in | money out / calendar truth |
+| Outcome | money out + obligations | money in / calendar presentation |
+| Calendar | time presentation + time actions | duplicated domain truth |
+| Ledger | readback + cross-house control + bridge | replacement ownership of Income/Outcome |
+| SETTINGS | app operations | daily financial/domain truth |
 
-## Legacy Migration Gate — KEEP / ADAPT / REJECT
+## Migration Gate — KEEP / ADAPT / REJECT
 No legacy file enters NEW BASE because it is convenient.
 
-For each candidate, record:
-- Decision: `KEEP`, `ADAPT`, or `REJECT`.
-- Concrete behavior needed.
-- Hidden dependencies checked: DOM, state owner, naming, storage, route assumptions.
-- Failing contract test proving the needed behavior before migration.
-- Readback evidence after migration.
+For each candidate record:
+- KEEP / ADAPT / REJECT;
+- exact behavior needed;
+- hidden DOM/state/storage/route dependencies checked;
+- failing behavior contract before admission;
+- readback evidence after integration.
 
-Initial defaults:
-- Legacy `ui/lighthouse-shell.mjs`: `REJECT AS PRODUCT STRUCTURE`; may be read only for failure lessons.
-- Legacy Manual hub that routes Calendar through Finance: `REJECT`.
-- Existing signer secret contract: `KEEP` as Shared Infra.
-- Existing owner-triggered build mechanism: `ADAPT` only after product acceptance gates pass.
-- Existing domain/core logic: `ADAPT CANDIDATE`; no admission without contract test independent of legacy UI.
+Defaults:
+- old UI/navigation structure: REJECT as product structure;
+- signer/secrets contract: KEEP as shared infrastructure;
+- owner-triggered build mechanism: ADAPT to NEW BASE;
+- old domain/core logic: candidate only, never automatically admitted.
 
 ## Copy Boundary
-UI copy must come through one product-copy mapping layer or equivalent single contract.
+Forbidden direct user-facing internal vocabulary includes at minimum:
+- IDLE
+- WAITING
+- SUCCESS
+- READBACK
+- MASTER_INPUT
+- METROPOLIS
+- raw interpreter/routing/event names
 
-Forbidden user-facing internal terms include at minimum:
-- `IDLE`
-- `WAITING`
-- `SUCCESS`
-- `READBACK`
-- raw interpreter / routing terminology
+Tests must inspect what the user actually sees, not just source constants.
 
-Tests must inspect rendered/user-visible copy, not merely source constants.
+## Vertical Slice Order
+1. Owner UI/Route/Logic review.
+2. NEW BASE boundary.
+3. Central navigation.
+4. CHAT.
+5. MANUAL Dashboard + Income.
+6. Outcome.
+7. Calendar.
+8. Ledger / Manual Control.
+9. SETTINGS.
+10. Whole-app walk.
+11. Android packaging/device acceptance.
+12. updater continuity acceptance.
 
-## Vertical Slice Rule
-Do not build Chat lifecycle + Quick Capture + four houses + Calendar simultaneously.
-
-Order:
-1. Navigation shell and route state.
-2. MANUAL dashboard + one real house route.
-3. MONEY vertical slice with actual behavior + readback.
-4. CALENDAR vertical slice with one canonical UI.
-5. STORE vertical slice.
-6. RIDE vertical slice.
-7. CHAT lifecycle + Quick Capture using internal interpreter only as a mechanism.
-8. SETTINGS and maintenance path.
-9. Full route walk.
-10. Android packaging and device acceptance.
-
-A slice cannot start until the previous slice can be clicked end-to-end and its resulting state/data can be read back.
+A slice advances only after it is usable and its resulting state/data can be read back.
 
 ## Acceptance Gates
-
-### Gate A — Screen / Route Review
-Before NEW BASE production UI code:
-- owner sees the intended screens and route model;
-- route ownership is singular;
-- Calendar is separate from Finance;
-- Dashboard role is “today status + four short doors”.
+### Gate A — Owner Review
+Before production UI code:
+- BIG sees current screen roles, routes and logic;
+- four houses are Income / Outcome / Calendar / Ledger;
+- CHAT behavior is conversation-first;
+- Calendar and Ledger ownership rules are understood;
+- navigation has one owner.
 
 ### Gate B — Migration Admission
-Before any legacy code enters NEW BASE:
+Before old code enters NEW BASE:
 - KEEP / ADAPT / REJECT recorded;
-- behavior test exists and fails for the missing behavior;
-- legacy UI/DOM/navigation dependency is not imported accidentally.
+- behavior test exists and fails for missing behavior;
+- forbidden legacy UI/navigation dependency is absent.
 
 ### Gate C — Slice Acceptance
-Before merging each vertical slice:
-- click it like a user;
-- verify route destination;
-- perform actual action where applicable;
-- read back resulting state/data;
+Before merging each product slice:
+- click like a user;
+- verify destination;
+- perform real action where applicable;
+- read back resulting data/state;
 - inspect user-facing copy;
-- owner reviews the real surface, not only CI output.
+- review actual surface, not CI only.
 
-### Gate D — Pre-APK Full Walk
-Before building the APK candidate, complete:
+### Gate D — Pre-APK Whole-App Walk
+Required walk:
 
-`CHAT -> MANUAL -> CALENDAR -> Back -> SETTINGS`
+`CHAT -> MANUAL -> Income -> MANUAL -> Outcome -> MANUAL -> Calendar -> MANUAL -> Ledger -> CHAT -> SETTINGS`
 
-and also verify all four Manual houses from the dashboard.
+No dead ends, duplicate navigation owners or inconsistent readback.
 
 ### Gate E — Android Device Acceptance
-Build is not accepted until a real Android install proves:
-- fresh install launches correct NEW BASE;
-- keyboard does not hide critical input/actions;
-- tap targets and viewport fit the device;
-- route/back behavior matches the route matrix;
-- actual actions/readback still work on device.
+A real Android install must prove:
+- correct NEW BASE launches;
+- keyboard/viewport/taps work;
+- navigation matches the contract;
+- real actions/readback still work on device.
 
 ### Gate F — Updater Acceptance
-After first NEW BASE device candidate passes, create the next candidate and perform an actual update over the installed version. Fresh-install success alone is insufficient evidence for updater continuity.
+After first NEW BASE candidate passes, create a later candidate and update over the installed version. Fresh-install success alone is not updater evidence.
 
 ## Final Definition of Done
 LIGHTHOUSE NEW BASE is done only when:
-1. the assembled app matches this screen/route contract;
-2. real behavior/readback tests pass;
-3. no legacy UI/navigation owns NEW BASE product structure;
-4. owner APK build preserves signer continuity;
+1. assembled app matches this contract;
+2. real behavior/readback works;
+3. superseded product structure does not own NEW BASE;
+4. signer continuity is preserved;
 5. Android device acceptance passes;
 6. real updater continuity passes.
