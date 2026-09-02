@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  gate-a-c:
+  gate-a-d:
     if: "${{ github.actor != 'github-actions[bot]' }}"
     runs-on: ubuntu-latest
     steps:
@@ -25,6 +25,8 @@ jobs:
         run: npm ci
       - name: Apply Gate C single-Calendar changes
         run: node scripts/apply-lighthouse-105-gate-c.mjs
+      - name: Apply Gate D human-copy changes
+        run: node scripts/apply-lighthouse-105-gate-d.mjs
       - name: Apply Gate A source and cache changes
         run: node scripts/apply-lighthouse-105-gate-a.mjs
       - name: Verify LIGHTHOUSE 1.0.5 regression suite
@@ -69,6 +71,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/manual-finance-ui.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
+          git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
           git commit -m "workbench: apply LIGHTHOUSE 1.0.5 verified source changes"
           git push origin HEAD:feat/lighthouse-1.0.5-real-app
