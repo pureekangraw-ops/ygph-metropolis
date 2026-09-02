@@ -60,7 +60,7 @@ export function installChatUI(){
   const workspace=$('workspace');
   const master=$('masterInputShell');
   if(!workspace||!master)return false;
-  const shell=createShell(workspace);
+  createShell(workspace);
   master.setAttribute('aria-hidden','true');
   master.classList.add('lighthouse-internal-master-input');
 
@@ -94,7 +94,12 @@ export function installChatUI(){
         button.addEventListener('click',()=>{
           if(busy)return;
           const sourceButtons=[...($('masterInputActions')?.querySelectorAll('button')||[])];
-          sourceButtons[index]?.click();
+          const sourceButton=sourceButtons[index];
+          if(!sourceButton)return;
+          if(label==='เปิดรายการ'){
+            globalThis.dispatchEvent(new CustomEvent('lighthouse:navigate',{detail:{page:'manual',manualDetail:true,destination:'finance'}}));
+          }
+          sourceButton.click();
         });
         actions.append(button);
       });
@@ -163,6 +168,7 @@ export function installChatUI(){
   function syncViewport(){
     const height=Math.max(320,Math.round(viewport?.height||globalThis.innerHeight||0));
     document.documentElement.style.setProperty('--lh-viewport-height',`${height}px`);
+    document.body?.style.setProperty('--lh-viewport-height',`${height}px`);
     scrollLatest();
   }
   viewport?.addEventListener('resize',syncViewport);
