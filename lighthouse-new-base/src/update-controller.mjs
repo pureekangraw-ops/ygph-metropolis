@@ -141,11 +141,12 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
   async function reconcile() {
     if (typeof native.reconcileInstalledVersion !== 'function') throw new Error('UPDATE_READBACK_UNAVAILABLE');
     const current = await native.reconcileInstalledVersion();
+    if (current?.candidate) candidate = validateUpdateManifest(current.candidate, { packageName });
     installed = Object.freeze({ ...current });
     if (candidate && current?.packageName === packageName && current?.versionCode === candidate.versionCode) {
       status = freezeStatus({ state:'updated-successfully', canUpdate:false, installed, candidate, message:'อัปเดตสำเร็จ' });
     } else if (candidate) {
-      status = freezeStatus({ ...status, state:'install-not-completed', installed, message:'การติดตั้งยังไม่สำเร็จหรือถูกยกเลิก' });
+      status = freezeStatus({ ...status, state:'install-not-completed', installed, candidate, message:'การติดตั้งยังไม่สำเร็จหรือถูกยกเลิก' });
     } else {
       status = freezeStatus({ ...status, installed });
     }
@@ -155,6 +156,20 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
   async function restore() {
     try {
       const current = await readInstalled();
+      if (typeof native.reconcileInstalledVersion === 'function') {
+        const reconciled = await native.reconcileInstalledVersion();
+        if (reconciled?.candidate) candidate = validateUpdateManifest(reconciled.candidate, { packageName });
+        if (reconciled?.state === 'updated-successfully' && candidate && reconciled.versionCode === candidate.versionCode) {
+          installed = Object.freeze({ ...reconciled });
+          status = freezeStatus({ state:'updated-successfully', canUpdate:false, installed, candidate, message:'อัปเดตสำเร็จ' });
+          return status;
+        }
+        if (reconciled?.state === 'install-not-completed' && candidate) {
+          installed = Object.freeze({ ...reconciled });
+          status = freezeStatus({ state:'install-not-completed', canUpdate:true, installed, candidate, message:'การติดตั้งยังไม่สำเร็จหรือถูกยกเลิก' });
+          return status;
+        }
+      }
       if (typeof native.readDownloadState !== 'function') return status;
       const persisted = await native.readDownloadState();
       if (persisted?.candidate) candidate = validateUpdateManifest(persisted.candidate, { packageName });
@@ -163,7 +178,6 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
         return status;
       }
       if (current.versionCode === candidate.versionCode) {
-        if (typeof native.reconcileInstalledVersion === 'function') await native.reconcileInstalledVersion();
         status = freezeStatus({ state:'updated-successfully', canUpdate:false, installed:current, candidate, message:'อัปเดตสำเร็จ' });
         return status;
       }
