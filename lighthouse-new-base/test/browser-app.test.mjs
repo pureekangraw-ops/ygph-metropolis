@@ -47,6 +47,37 @@ test('browser app owns one navigation state and real clicks rerender the promise
   assert.deepEqual(app.route(), { top:'settings', manualHouse:null });
 });
 
+test('browser app passes real Manual house projections into the assembled shell', () => {
+  const root = fakeRoot();
+  const app = createBrowserApp({
+    root,
+    model:{
+      income:{ cashInSatang:12345, pendingRideCreditSatang:0, recent:[] },
+      outcome:{ spentSatang:6500, allowanceSatang:20000, remainingSatang:13500, overSatang:0, exceeded:false },
+      ledger:{ balanceSatang:5845, history:[] },
+      calendar:{ year:2026, month:9, cells:[] },
+    },
+  });
+  app.start();
+  root.click({ topRoute:'manual' });
+
+  root.click({ manualHouse:'income' });
+  assert.match(root.innerHTML, /123\.45 บาท/);
+
+  root.click({ topRoute:'manual' });
+  root.click({ manualHouse:'outcome' });
+  assert.match(root.innerHTML, /200 บาท/);
+  assert.match(root.innerHTML, /65 บาท/);
+
+  root.click({ topRoute:'manual' });
+  root.click({ manualHouse:'ledger' });
+  assert.match(root.innerHTML, /58\.45 บาท/);
+
+  root.click({ topRoute:'manual' });
+  root.click({ manualHouse:'calendar' });
+  assert.match(root.innerHTML, /กันยายน 2026/);
+});
+
 test('browser app ignores legacy house clicks because the central route owner rejects them', () => {
   const root = fakeRoot();
   const app = createBrowserApp({ root });
