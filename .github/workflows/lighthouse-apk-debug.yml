@@ -8,8 +8,10 @@ on:
       - 'ui/**'
       - 'lighthouse/**'
       - 'styles/**'
+      - 'tests/**'
       - 'lighthouse.css'
       - 'sw.js'
+      - '.assetsignore'
       - '.github/workflows/lighthouse-apk-debug.yml'
 
 permissions:
@@ -22,7 +24,7 @@ jobs:
       run:
         working-directory: android-shell
     steps:
-      - name: Checkout exact repair source
+      - name: Checkout exact candidate source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -46,6 +48,9 @@ jobs:
 
       - name: Install Capacitor dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Run Android shell and updater tests
+        run: npm test
 
       - name: Verify repository release contract
         run: node --test test/repository-release-contract.test.mjs
@@ -76,6 +81,9 @@ jobs:
 
       - name: Verify generated Android security
         run: npm run android:security:verify
+
+      - name: Run Android unit tests
+        run: cd android && ./gradlew testDebugUnitTest
 
       - name: Build unsigned release APK
         run: npm run android:release
@@ -121,7 +129,7 @@ jobs:
           APK_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
         run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
 
-      - name: Publish immutable repository APK assets
+      - name: Publish immutable candidate assets
         working-directory: .
         run: |
           set -euo pipefail
@@ -135,8 +143,10 @@ jobs:
           APK_PATH="${ASSET_DIR}/${APK_NAME}"
           NOTES_PATH="${ASSET_DIR}/RELEASE-NOTES.md"
           SUMS_PATH="${ASSET_DIR}/SHA256SUMS.txt"
+          CHECKPOINT_PATH="${ASSET_DIR}/CHECKPOINT.md"
           APK_SHA="$(sha256sum "$APK_SOURCE" | awk '{print $1}')"
-          RELEASE_NOTES="คืน direct startup, เก็บ Snapshot เป็น release evidence, และเพิ่ม Settings in-app APK updater"
+          APK_SIZE="$(stat -c '%s' "$APK_SOURCE")"
+          RELEASE_NOTES="CHAT เป็นบทสนทนาจริง, ปรับ mobile viewport/keyboard, รวม navigation state และใช้ Calendar บ้านเดียว"
 
           cp "$APK_SOURCE" "$RUNNER_TEMP/lighthouse-release.apk"
           cp "$IDENTITY_SOURCE" "$RUNNER_TEMP/apk-identity-evidence.json"
@@ -159,14 +169,15 @@ jobs:
               echo "UPDATE_ASSET_EXISTS_WITH_DIFFERENT_SHA"
               exit 1
             fi
-            test -f "$NOTES_PATH" && test -f "$SUMS_PATH"
+            test -f "$NOTES_PATH" && test -f "$SUMS_PATH" && test -f "$CHECKPOINT_PATH"
           else
             mkdir -p "$ASSET_DIR"
             cp "$APK_SOURCE" "$APK_PATH"
             printf '%s  %s\n' "$APK_SHA" "$APK_NAME" > "$SUMS_PATH"
-            printf '# LIGHTHOUSE %s\n\n- versionCode: %s\n- SHA-256: `%s`\n- %s\n' "$VERSION_NAME" "$VERSION_CODE" "$APK_SHA" "$RELEASE_NOTES" > "$NOTES_PATH"
-            git add "$APK_PATH" "$SUMS_PATH" "$NOTES_PATH"
-            git commit -m "release: add immutable LIGHTHOUSE ${VERSION_NAME} vc${VERSION_CODE} APK"
+            printf '# LIGHTHOUSE %s\n\n- versionCode: %s\n- SHA-256: `%s`\n- sizeBytes: %s\n- %s\n' "$VERSION_NAME" "$VERSION_CODE" "$APK_SHA" "$APK_SIZE" "$RELEASE_NOTES" > "$NOTES_PATH"
+            printf '# CHECKPOINT — LIGHTHOUSE %s\n\n- candidateSource: `%s`\n- package: `com.yggdrasil.lighthouse`\n- versionName: `%s`\n- versionCode: `%s`\n- SHA-256: `%s`\n- sizeBytes: `%s`\n- activation: `LOCKED — device acceptance required`\n' "$VERSION_NAME" "$SOURCE_SHA" "$VERSION_NAME" "$VERSION_CODE" "$APK_SHA" "$APK_SIZE" > "$CHECKPOINT_PATH"
+            git add "$APK_PATH" "$SUMS_PATH" "$NOTES_PATH" "$CHECKPOINT_PATH"
+            git commit -m "release: add immutable LIGHTHOUSE ${VERSION_NAME} vc${VERSION_CODE} candidate"
             pushed=false
             for attempt in 1 2 3 4; do
               git fetch origin "$TARGET_BRANCH"
@@ -183,6 +194,7 @@ jobs:
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA=$APK_SHA" >> "$GITHUB_ENV"
+          echo "APK_SIZE=$APK_SIZE" >> "$GITHUB_ENV"
           echo "ASSET_COMMIT=$ASSET_COMMIT" >> "$GITHUB_ENV"
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
           echo "RELEASE_NOTES=$RELEASE_NOTES" >> "$GITHUB_ENV"
@@ -197,43 +209,24 @@ jobs:
           test "$RAW_SHA" = "$APK_SHA"
           echo "RAW_APK_URL=$RAW_URL" >> "$GITHUB_ENV"
 
-      - name: Publish update manifest
+      - name: Confirm activation remains locked
         working-directory: .
         run: |
           set -euo pipefail
-          mkdir -p release
-          node android-shell/tools/build-update-metadata.mjs \
-            android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk \
-            android-shell/release/apk-identity-evidence.json \
-            release/lighthouse-update.json \
-            "$RAW_APK_URL" \
-            "$RELEASE_NOTES" \
-            1004 \
-            false
-          git add release/lighthouse-update.json
-          if ! git diff --cached --quiet; then
-            git commit -m "release: open LIGHTHOUSE ${VERSION_NAME} update manifest"
-            pushed=false
-            for attempt in 1 2 3 4; do
-              git fetch origin "$TARGET_BRANCH"
-              git rebase --autostash "origin/$TARGET_BRANCH"
-              if git push origin "HEAD:${TARGET_BRANCH}"; then pushed=true; break; fi
-              sleep $((attempt * 2))
-            done
-            [ "$pushed" = true ]
-          fi
+          test "${LIGHTHOUSE_ALLOW_MANIFEST_ACTIVATION:-0}" != "1"
+          echo "Candidate verified. release/lighthouse-update.json is intentionally unchanged until real-device acceptance."
 
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-existing-full-app-1.0.4-vc1005
+          name: lighthouse-existing-full-app-${{ env.VERSION_NAME }}-vc${{ env.VERSION_CODE }}
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
-            release/lighthouse-update.json
-            release/assets/1.0.4/SHA256SUMS.txt
-            release/assets/1.0.4/RELEASE-NOTES.md
+            release/assets/${{ env.VERSION_NAME }}/SHA256SUMS.txt
+            release/assets/${{ env.VERSION_NAME }}/RELEASE-NOTES.md
+            release/assets/${{ env.VERSION_NAME }}/CHECKPOINT.md
             android-shell/www/effective-base-manifest.json
           if-no-files-found: error
           retention-days: 14
