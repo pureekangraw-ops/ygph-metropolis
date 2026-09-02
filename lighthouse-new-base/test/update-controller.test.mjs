@@ -98,6 +98,7 @@ test('verification failure is surfaced as Failed and permanent cancel deletes st
 
 test('restore rebuilds updater state from persisted native download metadata after process interruption', async () => {
   const native = bridge({
+    async reconcileInstalledVersion(){ return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001, state:'Downloading' }; },
     async readDownloadState(){
       return {
         state:'Downloading',
@@ -114,4 +115,25 @@ test('restore rebuilds updater state from persisted native download metadata aft
   assert.equal(restored.installed.versionCode, 2001);
   assert.equal(restored.progress.indeterminate, true);
   assert.equal(restored.progress.percent, null);
+});
+
+test('restore reconciles a returned Android installer before treating the completed download as Ready again', async () => {
+  const native = bridge({
+    async getInstalledIdentity(){ return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001 }; },
+    async reconcileInstalledVersion(){
+      return {
+        packageName:'com.yggdrasil.lighthouse',
+        versionName:'2.0.1',
+        versionCode:2001,
+        state:'install-not-completed',
+        candidate:manifest,
+      };
+    },
+    async readDownloadState(){ throw new Error('must not replay completed download after install attempt'); },
+  });
+  const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
+  const restored = await controller.restore();
+  assert.equal(restored.state, 'install-not-completed');
+  assert.equal(restored.candidate.versionCode, 2002);
+  assert.match(restored.message, /ยังไม่สำเร็จ|ถูกยกเลิก/);
 });
