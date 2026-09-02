@@ -14,7 +14,7 @@ function freezeRecord(record) {
   return record ? Object.freeze({ ...record }) : null;
 }
 
-export function createOutcomeOwner({ runtime, idFactory } = {}) {
+export function createOutcomeOwner({ runtime, idFactory, dailyControls = null } = {}) {
   if (!runtime) throw new Error('OUTCOME_RUNTIME_REQUIRED');
   if (typeof idFactory !== 'function') throw new Error('OUTCOME_ID_FACTORY_REQUIRED');
 
@@ -121,10 +121,12 @@ export function createOutcomeOwner({ runtime, idFactory } = {}) {
     },
 
     async setDailySpendingAllowance({ date, allowanceSatang } = {}) {
+      if (!dailyControls || typeof dailyControls.setSpendingAllowance !== 'function' || typeof dailyControls.getSpendingAllowance !== 'function') {
+        throw new Error('OUTCOME_DAILY_CONTROLS_REQUIRED');
+      }
       const allowance = requireNonNegativeSatang(allowanceSatang);
-      await runtime.overrideDailySpendingAllowance({ date, allowanceSatang:allowance });
-      const state = await runtime.readState();
-      const readback = state?.meta?.dailySpendingAllowances?.[date];
+      await dailyControls.setSpendingAllowance({ date, allowanceSatang:allowance });
+      const readback = await dailyControls.getSpendingAllowance(date);
       if (!readback || Number(readback.allowanceSatang) !== allowance) {
         throw new Error('OUTCOME_DAILY_SPENDING_ALLOWANCE_READBACK_MISMATCH');
       }
