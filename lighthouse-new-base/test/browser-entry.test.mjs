@@ -37,6 +37,17 @@ test('browser main reads the assembled model from the active Runtime session ins
   assert.doesNotMatch(source, /income:\s*\{|outcome:\s*\{|ledger:\s*\{|calendar:\s*\{/);
 });
 
+test('browser main inspects and uses the proven Runtime boot gate before reading product data', async () => {
+  const source = await text('main.mjs');
+  assert.match(source, /from '\.\/src\/runtime-boot\.mjs'/);
+  assert.match(source, /inspectGreenfieldDeviceUnlock/);
+  assert.match(source, /openGreenfieldRuntimeWithDevicePin/);
+  assert.match(source, /activateRuntimeSession/);
+  assert.match(source, /createRuntimeBoot/);
+  assert.match(source, /boot\.inspect\(\)/);
+  assert.doesNotMatch(source, /browserModel\.read\(today\);\s*\n\s*const app = createBrowserApp/s);
+});
+
 test('NEW BASE stylesheet is mobile-first and reserves safe space for the only bottom navigation', async () => {
   const css = await text('styles.css');
   assert.match(css, /\.bottom-nav\s*\{/);
