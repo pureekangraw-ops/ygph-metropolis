@@ -2,14 +2,32 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // Restore the question suite exactly as it existed before the accidental broad edit,
-// then change only the one UI-fixture state expectation that intentionally moved to raw state.
-const stableQuestionSuite = execFileSync('git', [
+// then repair only contracts that intentionally changed under the current Runtime/UI.
+let stableQuestionSuite = execFileSync('git', [
   'show',
   '2473e4b0dafdd87e17e77a98958eb0f046bb01f7:tests/greenfield-lighthouse-intent-question.test.cjs',
 ], { encoding:'utf8' });
+
 const questionNeedle = "assert.equal(await env.submit('ลงข้าว1,50หรือยัง'), 'รอ');";
 if (!stableQuestionSuite.includes(questionNeedle)) throw new Error('Q05 waiting expectation not found in stable suite');
-writeFileSync('tests/greenfield-lighthouse-intent-question.test.cjs', stableQuestionSuite.replace(questionNeedle, "assert.equal(await env.submit('ลงข้าว1,50หรือยัง'), 'WAITING');"));
+stableQuestionSuite = stableQuestionSuite.replace(questionNeedle, "assert.equal(await env.submit('ลงข้าว1,50หรือยัง'), 'WAITING');");
+
+const oldExpenseHelper = `async function expense(env, suffix, title, amountSatang, createdAt = '2026-08-28T02:00:00.000Z') {
+  const result = await env.runtime.recordExpense({ workflowId:\`WF-Q-\${suffix}\`, recordId:\`TX-Q-\${suffix}\`, title, amountSatang, createdAt });
+  assert.equal(result.commandResult.readback.readback.status, 'READBACK_VERIFIED');
+}`;
+const newExpenseHelper = `async function expense(env, suffix, title, amountSatang, createdAt = '2026-08-28T02:00:00.000Z') {
+  const ledgerTransactionId = \`TX-Q-\${suffix}\`;
+  await env.runtime.expense({ workflowId:\`WF-Q-\${suffix}\`, ledgerTransactionId, title, amountSatang, createdAt });
+  const state = await env.runtime.readState();
+  const record = state?.domains?.LEDGER?.records?.[ledgerTransactionId]?.record;
+  assert.equal(record?.recordId, ledgerTransactionId);
+  assert.equal(record?.direction, 'OUT');
+  assert.equal(record?.amountSatang, amountSatang);
+}`;
+if (!stableQuestionSuite.includes(oldExpenseHelper)) throw new Error('question expense helper contract not found in stable suite');
+stableQuestionSuite = stableQuestionSuite.replace(oldExpenseHelper, newExpenseHelper);
+writeFileSync('tests/greenfield-lighthouse-intent-question.test.cjs', stableQuestionSuite);
 
 let finalGate = readFileSync('tests/greenfield-lighthouse-phase1-final-gate.test.cjs','utf8');
 for (const [from,to] of [
