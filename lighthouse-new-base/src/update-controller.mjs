@@ -152,6 +152,36 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
     return status;
   }
 
+  async function restore() {
+    try {
+      const current = await readInstalled();
+      if (typeof native.readDownloadState !== 'function') return status;
+      const persisted = await native.readDownloadState();
+      if (persisted?.candidate) candidate = validateUpdateManifest(persisted.candidate, { packageName });
+      if (!candidate) {
+        status = freezeStatus({ state:'idle', canUpdate:false, installed:current });
+        return status;
+      }
+      if (current.versionCode === candidate.versionCode) {
+        if (typeof native.reconcileInstalledVersion === 'function') await native.reconcileInstalledVersion();
+        status = freezeStatus({ state:'updated-successfully', canUpdate:false, installed:current, candidate, message:'อัปเดตสำเร็จ' });
+        return status;
+      }
+      status = freezeStatus({
+        state:persisted?.state || 'Downloading',
+        canUpdate:candidate.versionCode > current.versionCode,
+        installed:current,
+        candidate,
+        progress:projectDownloadProgress(persisted || {}),
+        message:persisted?.message || null,
+      });
+      return status;
+    } catch (error) {
+      status = freezeStatus({ state:'Failed', canUpdate:false, message:'กู้สถานะอัปเดตไม่สำเร็จ', reason:error?.message || 'unknown' });
+      return status;
+    }
+  }
+
   async function cancel({ permanent = false } = {}) {
     if (typeof native.cancelUpdate === 'function') await native.cancelUpdate({ permanent });
     if (permanent) {
@@ -161,5 +191,5 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
     return status;
   }
 
-  return Object.freeze({ checkUpdate, startUpdate, readStatus, retry, verify, install, reconcile, cancel });
+  return Object.freeze({ checkUpdate, startUpdate, readStatus, retry, verify, install, reconcile, restore, cancel });
 }
