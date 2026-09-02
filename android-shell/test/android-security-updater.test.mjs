@@ -13,13 +13,16 @@ const manifestText = `<?xml version="1.0" encoding="utf-8"?>
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.fileprovider" android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+    </provider>
     <provider android:name="androidx.core.content.FileProvider" android:authorities="com.yggdrasil.lighthouse.updater.files" android:exported="false" android:grantUriPermissions="true">
       <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
     </provider>
   </application>
 </manifest>`;
 
-test('security verifier admits REQUEST_INSTALL_PACKAGES only with a private FileProvider surface', () => {
+test('security verifier admits REQUEST_INSTALL_PACKAGES only with the private updater FileProvider when other providers exist', () => {
   const evidence = verifyUpdaterAndroidSecurity({ manifestText, capacitorConfig:{ appId:'com.yggdrasil.lighthouse' } });
   assert.equal(evidence.status, 'PROVEN');
   assert.deepEqual(evidence.requestedPermissions, [
