@@ -29,7 +29,7 @@ jobs:
         run: node scripts/apply-lighthouse-105-gate-d.mjs
       - name: Apply Gate E updater changes
         run: node scripts/apply-lighthouse-105-gate-e.mjs
-      - name: Restore stable tests and patch only the five known contracts
+      - name: Restore stable tests and patch only intentional contracts
         run: node scripts/repair-lighthouse-105-test-contracts.mjs
       - name: Apply Gate A source and cache changes
         run: node scripts/apply-lighthouse-105-gate-a.mjs
@@ -83,7 +83,8 @@ jobs:
           git add \
             index.html lighthouse.css \
             ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs ui/app-update.mjs \
-            android-shell/tools/apply-android-updater.mjs android-shell/test/app-update.test.mjs \
+            android-shell/tools/apply-android-updater.mjs \
+            android-shell/test/app-update.test.mjs android-shell/test/settings-update-state.test.mjs android-shell/test/managed-artifact-activation.test.mjs \
             tests/master-input-ui-fixture.cjs tests/greenfield-login-ux.test.cjs tests/greenfield-lighthouse-intent-question.test.cjs \
             tests/greenfield-lighthouse-phase1-final-gate.test.cjs tests/greenfield-manual-context-bridge.test.cjs \
             tests/settings-utility.test.cjs \
