@@ -2,6 +2,7 @@ import { createBrowserApp } from './src/browser-app.mjs';
 import { createBrowserModel } from './src/browser-model.mjs';
 import { createMemoryDailyControls } from './src/daily-controls.mjs';
 import { createRuntimeBoot } from './src/runtime-boot.mjs';
+import { initializeFirstRun } from '../greenfield/first-run.mjs';
 import {
   inspectGreenfieldDeviceUnlock,
   openGreenfieldRuntimeWithDevicePin,
@@ -75,11 +76,32 @@ function showLockedGate() {
   });
 }
 
+function showFirstRunGate() {
+  root.innerHTML = '<main class="runtime-gate"><h1>LIGHTHOUSE</h1><form data-first-run><label>ตั้งรหัสเข้าแอป<input name="password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required></label><label>รหัสกู้คืน<input name="recoveryCode" type="password" minlength="12" autocomplete="new-password" required></label><button type="submit">เริ่มใช้งาน</button><p data-runtime-message></p></form></main>';
+  const form = root.querySelector('[data-first-run]');
+  const message = root.querySelector('[data-runtime-message]');
+  form?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const password = String(data.get('password') || '');
+    const recoveryCode = String(data.get('recoveryCode') || '');
+    try {
+      await initializeFirstRun({ recoveryCode, password });
+      const state = await boot.inspect();
+      if (state.state !== 'locked') throw new Error('LIGHTHOUSE_FIRST_RUN_READBACK_FAILED');
+      await boot.unlock(password);
+      await startProduct();
+    } catch {
+      if (message) message.textContent = 'ยังตั้งค่าไม่ได้ กรุณาตรวจรหัสเข้าแอปและรหัสกู้คืน';
+    }
+  });
+}
+
 const bootState = await boot.inspect();
 if (bootState.state === 'locked') {
   showLockedGate();
 } else if (bootState.state === 'setup-required') {
-  root.innerHTML = '<main class="runtime-gate"><h1>LIGHTHOUSE</h1><p>ต้องตั้งค่าการเข้าแอปก่อนใช้งาน</p></main>';
+  showFirstRunGate();
 } else {
   root.innerHTML = '<main class="runtime-gate"><h1>LIGHTHOUSE</h1><p>ข้อมูลการเข้าแอปไม่สมบูรณ์ ต้องกู้คืนหรือซ่อมการตั้งค่าก่อน</p></main>';
 }
