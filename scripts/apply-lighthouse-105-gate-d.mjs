@@ -43,6 +43,8 @@ patch('ui/manual-finance-ui.mjs',[
   ["'Ledger — คุมความจริง'","'ประวัติเงินจริง'"],
   ["['TRANSACTION','Transaction'],['TARGET','เป้ารายได้'],['CEILING','เพดานรายจ่าย'],['RECEIVABLE','Receivable'],['OBLIGATION','Obligation']","['TRANSACTION','รายการเงินจริง'],['TARGET','เป้ารายได้'],['CEILING','เพดานรายจ่าย'],['RECEIVABLE','เงินที่ต้องรับ'],['OBLIGATION','ภาระ']"],
   ["['OPEN','Open'],['PARTIAL','Partial'],['COMPLETED','Complete'],['CANCELLED','Cancelled']","['OPEN','เปิดอยู่'],['PARTIAL','บางส่วน'],['COMPLETED','เสร็จแล้ว'],['CANCELLED','ยกเลิก']"],
+  ["dataset:{ primaryAction:primary.label }","dataset:{ primaryAction:primary.actionId || primary.label }"],
+  ["primary:active?{label:'Complete',run:()=>mutate(()=>manual.completeCalendar({workflowId:makeId('WF-CAL-DONE'),recordId:current.recordId}),'Complete และอ่าน Truth ใหม่แล้ว')}:null","primary:active?{actionId:'COMPLETED',label:'เสร็จแล้ว',run:()=>mutate(()=>manual.completeCalendar({workflowId:makeId('WF-CAL-DONE'),recordId:current.recordId}),'ทำรายการเสร็จแล้วและอ่านสถานะใหม่แล้ว')}:null"],
   ["'Action'","'จัดการ'"],
 ]);
 
