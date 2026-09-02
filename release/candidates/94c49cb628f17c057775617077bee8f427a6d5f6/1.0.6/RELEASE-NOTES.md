@@ -1,0 +1,7 @@
+# LIGHTHOUSE 1.0.6 candidate
+
+- candidateSource: `94c49cb628f17c057775617077bee8f427a6d5f6`
+- versionCode: 1007
+- SHA-256: `3130d23894adca2b3ce0405205ab4621e51bbbdad1c5e58712e2800cef3986d1`
+- sizeBytes: 3539794
+- CHAT เป็นบทสนทนาจริง, ปรับ mobile viewport/keyboard, รวม navigation state และใช้ Calendar บ้านเดียว

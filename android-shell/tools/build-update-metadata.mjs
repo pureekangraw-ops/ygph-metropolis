@@ -22,22 +22,13 @@ export async function buildUpdateMetadata({apkPath,evidencePath,outputPath,apkUr
   if(typeof evidence.versionName!=='string'||!evidence.versionName.trim())throw new Error('UPDATE_VERSION_NAME_REQUIRED');
   const sha256=createHash('sha256').update(bytes).digest('hex');
   if(!HEX64.test(String(evidence.apkSha256||''))||String(evidence.apkSha256).toLowerCase()!==sha256)throw new Error('UPDATE_EVIDENCE_HASH_MISMATCH');
-  const result={
-    versionName:evidence.versionName,
-    versionCode:evidence.versionCode,
-    minVersionCode,
-    apkUrl:httpsUrl(apkUrl),
-    sha256,
-    sizeBytes:fileStat.size,
-    required:required===true,
-    releaseVerified:true,
-    releaseNotes:releaseNotes.trim(),
-  };
+  const result={versionName:evidence.versionName,versionCode:evidence.versionCode,minVersionCode,apkUrl:httpsUrl(apkUrl),sha256,sizeBytes:fileStat.size,required:required===true,releaseVerified:true,releaseNotes:releaseNotes.trim()};
   await writeFile(outputPath,`${JSON.stringify(result,null,2)}\n`,'utf8');
   return result;
 }
 
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]){
+  if(process.env.LIGHTHOUSE_ALLOW_MANIFEST_ACTIVATION!=='1')throw new Error('UPDATE_MANIFEST_ACTIVATION_LOCKED');
   const [apkPath,evidencePath,outputPath,apkUrl,releaseNotes,minVersionCode,required]=process.argv.slice(2);
   const result=await buildUpdateMetadata({apkPath,evidencePath,outputPath,apkUrl,releaseNotes,minVersionCode:Number(minVersionCode),required:required==='true'});
   console.log(JSON.stringify(result));

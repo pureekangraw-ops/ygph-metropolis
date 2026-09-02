@@ -1,0 +1,45 @@
+/* LIGHTHOUSE 1.0.6 — user-facing CHAT */
+body.lighthouse-shell-active{--lh-viewport-height:100dvh}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>#masterInputShell{display:none!important}
+body.lighthouse-shell-active #workspace[data-lighthouse-view="chat"]>#lighthouseChat{display:flex}
+body.lighthouse-shell-active #workspace:not([data-lighthouse-view="chat"])>#lighthouseChat{display:none!important}
+.lighthouse-page-controls{display:flex;justify-content:space-between;gap:8px;margin:4px 0 8px}
+.lighthouse-page-controls button{min-width:72px;min-height:44px;padding:7px 11px;border-radius:13px!important}
+.lighthouse-calendar-filters{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.lighthouse-calendar-filters button{min-height:44px;padding:8px 12px;border-radius:999px!important}
+.lighthouse-calendar-filters button.active{color:#fff!important;background:linear-gradient(135deg,var(--lh-ocean),var(--lh-seafoam))!important;border-color:transparent!important}
+.lighthouse-chat{
+  box-sizing:border-box;
+  min-height:0;
+  height:calc(var(--lh-viewport-height,100dvh) - 11.9rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height:calc(var(--lh-viewport-height,100dvh) - 11.9rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow:hidden;
+  flex-direction:column;
+  background:rgba(255,255,255,.94);
+  border:1px solid var(--lh-line);
+  border-radius:22px;
+  box-shadow:0 18px 50px rgba(13,43,69,.08);
+}
+.lighthouse-chat-head{flex:0 0 auto;padding:14px 16px 11px;border-bottom:1px solid #e4edf2}
+.lighthouse-chat-head small{display:block;color:var(--lh-seafoam)!important;font-weight:800;letter-spacing:.1em}
+.lighthouse-chat-head h1{margin:.15rem 0 0;font-size:1.16rem;color:var(--lh-ink)}
+.lighthouse-chat-messages{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px;scroll-padding-bottom:1rem}
+.lighthouse-chat-message{display:flex;margin:0 0 10px}
+.lighthouse-chat-message[data-chat-role="user"]{justify-content:flex-end}
+.lighthouse-chat-message[data-chat-role="assistant"]{justify-content:flex-start}
+.lighthouse-chat-bubble{max-width:min(82%,34rem);padding:10px 13px;border-radius:17px;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.45}
+.lighthouse-chat-message[data-chat-role="user"] .lighthouse-chat-bubble{color:#fff;background:linear-gradient(135deg,var(--lh-ocean),var(--lh-seafoam));border-bottom-right-radius:5px}
+.lighthouse-chat-message[data-chat-role="assistant"] .lighthouse-chat-bubble{color:var(--lh-ink);background:#f2f8fa;border:1px solid #dce8ed;border-bottom-left-radius:5px}
+.lighthouse-chat-bubble strong{display:block;margin-bottom:3px}
+.lighthouse-chat-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.lighthouse-chat-actions button{min-height:44px;padding:8px 12px;border-radius:12px!important}
+.lighthouse-chat-composer{flex:0 0 auto;display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;align-items:end;padding:10px max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));border-top:1px solid #dfe9ee;background:rgba(255,255,255,.98)}
+.lighthouse-chat-composer textarea{box-sizing:border-box;width:100%;min-height:44px;max-height:8.5rem;resize:none;padding:10px 12px;border-radius:15px!important;line-height:1.35}
+.lighthouse-chat-send{width:48px;min-width:48px;height:44px;min-height:44px;padding:0!important;border-radius:14px!important;color:#fff!important;background:linear-gradient(135deg,var(--lh-ocean),var(--lh-seafoam))!important;border:0!important;font-size:1.2rem}
+.lighthouse-chat-send:disabled{opacity:.5}
+@media(max-width:420px){
+  .lighthouse-page-controls{margin-top:2px}
+  .lighthouse-chat{height:calc(var(--lh-viewport-height,100dvh) - 11.2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:calc(var(--lh-viewport-height,100dvh) - 11.2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));border-radius:18px}
+  .lighthouse-chat-messages{padding:12px 10px}
+  .lighthouse-chat-bubble{max-width:88%}
+}
