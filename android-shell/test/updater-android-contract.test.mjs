@@ -41,6 +41,7 @@ test('native updater reconciles installed version after Android installer return
   assert.match(plugin, /updated-successfully/);
   assert.match(plugin, /install-not-completed/);
   assert.match(plugin, /deleteStagedFile\(\)/);
+  assert.match(plugin, /if \(p\.getBoolean\("installAttempted", false\)\) \{\s*call\.resolve\(reconcileCurrentInstallAttempt\(\)\);/s);
 });
 
 test('generated Android patch adds REQUEST_INSTALL_PACKAGES and FileProvider without clearing app data', () => {
