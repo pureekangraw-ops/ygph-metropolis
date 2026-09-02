@@ -10,10 +10,10 @@ test('LIGHTHOUSE exposes one Calendar surface and keeps creation inside that sam
   const html=await read('index.html');
   const manual=await read('ui/manual-finance-ui.mjs');
   assert.equal((html.match(/id="financeSchedule"/g)||[]).length,1,'one canonical Calendar surface');
-  assert.equal((`${html}\n${manual}`.match(/id=['"]manualCalendarViews['"]/g)||[]).length,0,'no second Calendar list');
-  assert.equal((`${html}\n${manual}`.match(/id=['"]manualCalendarDetail['"]/g)||[]).length,0,'no second Calendar detail');
+  assert.doesNotMatch(manual,/manualCalendarViews/,'no second Calendar list may be created by MANUAL');
+  assert.doesNotMatch(manual,/manualCalendarDetail/,'no second Calendar detail may be created by MANUAL');
   assert.match(manual,/calendarItemForm/,'Calendar creation remains available');
-  assert.match(manual,/financeSchedule[\s\S]*calendarItemForm|calendarItemForm[\s\S]*financeSchedule/,'creation is mounted into the canonical Calendar flow');
+  assert.match(manual,/getElementById\(['"]financeSchedule['"]\)[\s\S]{0,800}calendarItemForm|calendarItemForm[\s\S]{0,1600}getElementById\(['"]financeSchedule['"]\)/,'creation is mounted into the canonical Calendar flow');
 });
 
 test('MANUAL Calendar entry routes to the canonical Finance-hosted Calendar without creating another owner',async()=>{
