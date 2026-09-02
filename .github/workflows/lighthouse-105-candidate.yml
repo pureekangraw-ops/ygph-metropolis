@@ -4,7 +4,7 @@ on:
     branches: [feat/lighthouse-1.0.5-real-app]
     paths: ['android-shell/version.json', '.github/workflows/lighthouse-105-candidate.yml']
 permissions:
-  contents: write
+  contents: read
 jobs:
   build-signed-candidate:
     runs-on: ubuntu-latest
@@ -43,7 +43,6 @@ jobs:
           cd .. && npm run android:security:verify
           npm run android:release
       - name: Sign canonical candidate
-        id: sign
         working-directory: android-shell
         env:
           LIGHTHOUSE_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
@@ -51,12 +50,8 @@ jobs:
           LIGHTHOUSE_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
           LIGHTHOUSE_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
         run: |
-          set -o pipefail
-          exec > >(tee /tmp/sign.log) 2>&1
-          set -eu
-          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do
-            if [ -z "${!name:-}" ]; then echo "MISSING_SECRET:$name"; exit 31; fi
-          done
+          set -euo pipefail
+          for name in LIGHTHOUSE_APK_KEYSTORE_BASE64 LIGHTHOUSE_APK_STORE_PASSWORD LIGHTHOUSE_APK_KEY_ALIAS LIGHTHOUSE_APK_KEY_PASSWORD; do test -n "${!name:-}"; done
           umask 077
           keystore="$RUNNER_TEMP/lighthouse-apk-release.p12"
           aligned="$RUNNER_TEMP/lighthouse-105-aligned.apk"
@@ -64,31 +59,22 @@ jobs:
           signed="android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk"
           printf '%s' "$LIGHTHOUSE_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
           build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          test -f "$unsigned" || { echo MISSING_UNSIGNED_APK; exit 32; }
           "$build_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
           "$build_tools/apksigner" sign --ks "$keystore" --ks-pass "env:LIGHTHOUSE_APK_STORE_PASSWORD" --ks-key-alias "$LIGHTHOUSE_APK_KEY_ALIAS" --key-pass "env:LIGHTHOUSE_APK_KEY_PASSWORD" --out "$signed" "$aligned"
           "$build_tools/apksigner" verify "$signed"
           echo "APK_SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Persist signing diagnostic
-        if: failure() && steps.sign.outcome == 'failure'
-        run: |
-          { echo '# LIGHTHOUSE 1.0.5 signing diagnostic'; echo '```text'; cat /tmp/sign.log 2>/dev/null || true; echo '```'; } > docs/lighthouse-105-signing-failure.md
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/lighthouse-105-signing-failure.md
-          git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 signing failure"
-          git push origin HEAD:feat/lighthouse-1.0.5-real-app
       - name: Verify final APK identity
-        if: success()
         working-directory: android-shell
         env: { APK_SOURCE_COMMIT: '${{ env.APK_SOURCE_COMMIT }}' }
-        run: node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk release/apk-identity-evidence-1.0.5.json
+        run: |
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          export APKSIGNER="$build_tools/apksigner"
+          export AAPT="$build_tools/aapt"
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk release/apk-identity-evidence-1.0.5.json
       - name: Freeze candidate checksum
-        if: success()
         working-directory: android-shell
         run: sha256sum android/app/build/outputs/apk/release/LIGHTHOUSE-1.0.5-vc1006.apk > release/LIGHTHOUSE-1.0.5-vc1006.sha256
       - name: Upload clean-install candidate only
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: LIGHTHOUSE-1.0.5-vc1006-clean-install-candidate
