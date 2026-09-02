@@ -18,6 +18,10 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
       route:routeState,
       chat:model.chat || {},
       manual:model.manual || {},
+      income:model.income || {},
+      outcome:model.outcome || {},
+      calendar:model.calendar || {},
+      ledger:model.ledger || {},
       settings:model.settings || {},
     });
   }
