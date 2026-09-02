@@ -141,7 +141,7 @@
     "externalBackupFiles": "UNTOUCHED"
   },
   "serviceWorker": {
-    "assetRevision": "sha256-c59f5857565db7f5",
+    "assetRevision": "sha256-9a04ffc74af42370",
     "cacheIdentity": "RELEASE_PLUS_ASSET_REVISION",
     "legacyCacheCleanup": true
   },

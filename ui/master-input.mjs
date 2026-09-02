@@ -267,6 +267,7 @@ function setState(state, { title = '', copy = '', meta = '', execute = false } =
   if (!STATES.includes(state)) throw new Error('MASTER_INPUT_UI_STATE_INVALID');
   $('masterInputState').dataset.state = state;
   $('masterInputState').dataset.state = state;
+  $('masterInputState').dataset.state = state;
   $('masterInputState').textContent = STATE_LABELS[state] ?? state;
   const result = $('masterInputResult');
   result.classList.toggle('master-input-error', state === 'ERROR');

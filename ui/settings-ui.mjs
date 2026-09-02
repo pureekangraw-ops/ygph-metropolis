@@ -169,6 +169,7 @@ async function wireAppUpdater(){
     try{
       retryVerifiedArtifact=false;
       retryVerifiedArtifact=false;
+      retryVerifiedArtifact=false;
       const result=await updateController.check();renderUpdateInfo(result);setUpdateStatus(`พบรุ่น ${result.latest.versionName} พร้อมอัปเดต`);
     }catch(error){setUpdateStatus(friendlyUpdateError(error,'ตรวจหาอัปเดตไม่สำเร็จ'),true);}
     finally{check.disabled=false;}
