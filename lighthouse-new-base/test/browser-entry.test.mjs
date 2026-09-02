@@ -25,6 +25,18 @@ test('browser main boots only the NEW BASE browser app into #app', async () => {
   assert.doesNotMatch(source, /\.\.\/ui\/|greenfield\/ui|lighthouse-shell/);
 });
 
+test('browser main reads the assembled model from the active Runtime session instead of shipping placeholder money', async () => {
+  const source = await text('main.mjs');
+  assert.match(source, /from '\.\/src\/browser-model\.mjs'/);
+  assert.match(source, /from '\.\.\/greenfield\/runtime-session\.mjs'/);
+  assert.match(source, /from '\.\/src\/daily-controls\.mjs'/);
+  assert.match(source, /createBrowserModel/);
+  assert.match(source, /withRuntimeSession/);
+  assert.match(source, /\.read\(/);
+  assert.doesNotMatch(source, /manual:\s*\{\s*summary:\s*\{\}/s);
+  assert.doesNotMatch(source, /income:\s*\{|outcome:\s*\{|ledger:\s*\{|calendar:\s*\{/);
+});
+
 test('NEW BASE stylesheet is mobile-first and reserves safe space for the only bottom navigation', async () => {
   const css = await text('styles.css');
   assert.match(css, /\.bottom-nav\s*\{/);
