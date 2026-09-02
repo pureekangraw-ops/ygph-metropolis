@@ -1,5 +1,6 @@
 import { hydrateIcons } from './icons.mjs';
 import { installChatUI } from './chat-ui.mjs';
+import { installCalendarCategoryFilter } from './calendar-filter-ui.mjs';
 
 const PAGE=Object.freeze({CHAT:'chat',MANUAL:'manual',SETTINGS:'settings'});
 const MANUAL_DESTINATIONS=Object.freeze({
@@ -158,6 +159,7 @@ function installShell(){
   const nav=createBottomNav(workspace);
   prepareSettings();
   installChatUI();
+  installCalendarCategoryFilter();
 
   let currentState=normalizeNavigationState({page:PAGE.CHAT});
   let suppressSettingsClose=false;
@@ -197,7 +199,7 @@ function installShell(){
   }
 
   function navigate(nextState,{replace=false}={}){
-    const state=normalizeNavigationState(nextState);
+    const state=normalizeNavigationState({...nextState,calendarFilter:nextState?.calendarFilter??currentState.calendarFilter});
     const historyState={[LIGHTHOUSE_HISTORY_KEY]:true,...state};
     if(replace)history.replaceState(historyState,'',globalThis.location?.href||'');
     else history.pushState(historyState,'',globalThis.location?.href||'');
@@ -235,6 +237,11 @@ function installShell(){
   });
 
   $('lighthouseManualBack')?.addEventListener('click',goBack);
+
+  globalThis.addEventListener('lighthouse:navigate',event=>{
+    if(!event.detail||!Object.values(PAGE).includes(event.detail.page))return;
+    navigate(event.detail);
+  });
 
   globalThis.addEventListener('popstate',event=>{
     if(!event.state?.[LIGHTHOUSE_HISTORY_KEY])return;
