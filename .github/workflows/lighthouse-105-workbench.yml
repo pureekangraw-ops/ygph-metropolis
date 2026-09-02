@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  gate-a-d:
+  gate-a-e:
     if: "${{ github.actor != 'github-actions[bot]' }}"
     runs-on: ubuntu-latest
     steps:
@@ -27,40 +27,19 @@ jobs:
         run: node scripts/apply-lighthouse-105-gate-c.mjs
       - name: Apply Gate D human-copy changes
         run: node scripts/apply-lighthouse-105-gate-d.mjs
+      - name: Apply Gate E updater changes
+        run: node scripts/apply-lighthouse-105-gate-e.mjs
       - name: Apply Gate A source and cache changes
         run: node scripts/apply-lighthouse-105-gate-a.mjs
-      - name: Verify LIGHTHOUSE 1.0.5 regression suite
-        id: verify
+      - name: Verify web regression suite
         shell: bash
+        run: npm run deploy:gate
+      - name: Verify updater unit suite
+        shell: bash
+        working-directory: android-shell
         run: |
-          set +e
-          npm run deploy:gate > /tmp/lighthouse-105-gate.log 2>&1
-          code=$?
-          cat /tmp/lighthouse-105-gate.log
-          if [ "$code" -ne 0 ]; then
-            mkdir -p docs
-            {
-              echo "# LIGHTHOUSE 1.0.5 workbench diagnostic"
-              echo
-              echo "Exit code: $code"
-              echo
-              echo "## Failed tests"
-              echo '```text'
-              grep -n -B 16 -A 28 '^not ok ' /tmp/lighthouse-105-gate.log || true
-              echo '```'
-              echo
-              echo "## Summary tail"
-              echo '```text'
-              tail -n 80 /tmp/lighthouse-105-gate.log
-              echo '```'
-            } > docs/lighthouse-105-workbench-failure.md
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/lighthouse-105-workbench-failure.md
-            git commit -m "diagnostic: capture LIGHTHOUSE 1.0.5 failure details" || true
-            git push origin HEAD:feat/lighthouse-1.0.5-real-app || true
-            exit "$code"
-          fi
+          npm install --no-audit --no-fund
+          npm test
       - name: Commit verified source changes
         shell: bash
         run: |
@@ -71,6 +50,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
-          git commit -m "workbench: apply LIGHTHOUSE 1.0.5 verified source changes"
+          git add index.html lighthouse.css ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs ui/app-update.mjs android-shell/tools/apply-android-updater.mjs android-shell/test/app-update.test.mjs tests/greenfield-login-ux.test.cjs RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
+          git commit -m "workbench: apply LIGHTHOUSE 1.0.5 Gates A-E"
           git push origin HEAD:feat/lighthouse-1.0.5-real-app
