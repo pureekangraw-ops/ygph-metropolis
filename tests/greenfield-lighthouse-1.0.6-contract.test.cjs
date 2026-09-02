@@ -42,19 +42,35 @@ test('navigation owns one state and exposes Back and Home semantics', () => {
   assert.match(shell, /resetCurrentTabHome/);
 });
 
+test('CHAT record deep-link enters MANUAL through the central navigation owner', () => {
+  const chat = read('ui/chat-ui.mjs');
+  const shell = read('ui/lighthouse-shell.mjs');
+  assert.match(chat, /lighthouse:navigate/);
+  assert.match(chat, /manualDetail:true/);
+  assert.match(shell, /addEventListener\('lighthouse:navigate'/);
+  assert.match(shell, /navigate\(event\.detail/);
+});
+
 test('MANUAL exposes one calendar home and category filters instead of duplicate calendars', () => {
   const shell = read('ui/lighthouse-shell.mjs');
+  const calendarFilter = read('ui/calendar-filter-ui.mjs');
   assert.match(shell, /calendar:Object\.freeze/);
   assert.match(shell, /destination:'calendar'/);
   assert.match(shell, /data-calendar-filter/);
+  assert.match(shell, /calendar-filter-ui\.mjs/);
+  assert.match(calendarFilter, /finance/);
+  assert.match(calendarFilter, /work/);
+  assert.match(calendarFilter, /other/);
+  assert.match(calendarFilter, /MutationObserver/);
   const calendarTiles = shell.match(/title:'ปฏิทิน'/g) || [];
   assert.equal(calendarTiles.length, 1);
 });
 
-test('new chat assets are included in packaged app staging', () => {
+test('new chat and calendar projection assets are included in packaged app staging', () => {
   const assets = read('.assetsignore');
   assert.match(assets, /!\/ui\/chat-ui\.mjs/);
   assert.match(assets, /!\/ui\/chat-ui\.css/);
+  assert.match(assets, /!\/ui\/calendar-filter-ui\.mjs/);
 });
 
 test('Android release identity advances to 1.0.6 vc1007', () => {
