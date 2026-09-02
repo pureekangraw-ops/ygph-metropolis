@@ -84,7 +84,7 @@ jobs:
             index.html lighthouse.css \
             ui/lighthouse-shell.mjs ui/master-input.mjs ui/manual-finance-ui.mjs ui/settings-ui.mjs ui/app-update.mjs \
             android-shell/tools/apply-android-updater.mjs android-shell/test/app-update.test.mjs \
-            tests/greenfield-login-ux.test.cjs tests/greenfield-lighthouse-intent-question.test.cjs \
+            tests/master-input-ui-fixture.cjs tests/greenfield-login-ux.test.cjs tests/greenfield-lighthouse-intent-question.test.cjs \
             tests/greenfield-lighthouse-phase1-final-gate.test.cjs tests/greenfield-manual-context-bridge.test.cjs \
             tests/settings-utility.test.cjs \
             RELEASE_MANIFEST.json sw.js docs/lighthouse-105-workbench-failure.md
