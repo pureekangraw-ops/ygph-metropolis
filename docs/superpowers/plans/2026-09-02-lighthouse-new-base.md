@@ -2,203 +2,307 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a clean LIGHTHOUSE product base inside the existing repository and connect it to the proven owner APK build path without inheriting legacy UI/navigation.
+**Goal:** Build the owner-approved LIGHTHOUSE experience on a clean product base inside the existing repository, then connect it to the proven APK delivery infrastructure without inheriting legacy UI/navigation.
 
-**Architecture:** Product source is isolated under `lighthouse-new-base/`. Existing repo logic is treated as migration candidates, not implicit dependencies. GitHub Actions/signing remain shared infrastructure and are adapted only after the new base has its own passing tests and staging contract.
+**Architecture:** Product source is isolated under `lighthouse-new-base/`. One central navigation state owns CHAT, MANUAL, SETTINGS and MANUAL house routing. Existing repo logic is migration-candidate material only. APK build/signing is downstream shared infrastructure, not proof of product correctness.
 
-**Tech Stack:** Node.js 22, native `node:test`, ES modules, Capacitor/Android packaging via existing `android-shell`, GitHub Actions.
+**Tech Stack:** Node.js 22, native `node:test`, ES modules, browser DOM UI, Capacitor/Android packaging via existing `android-shell`, GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-09-02-lighthouse-new-base-design.md`
+**Screen/Route Contract:** `docs/superpowers/specs/2026-09-02-lighthouse-screen-route-acceptance.md`
 
 ## Global Constraints
 - Work only on `codex/lighthouse-new-base-20260902`.
 - `reference/lighthouse-1.0.5` is read-only reference evidence.
-- Do not extend legacy `ui/` navigation or root `app.mjs` as the NEW BASE product source.
-- Preserve the existing APK signer secret names.
-- Migrate code one behavior at a time behind tests.
-- No NEW BASE production code without a failing test first.
+- Do not extend legacy `ui/` navigation or root `app.mjs` as NEW BASE product source.
+- Legacy `ui/lighthouse-shell.mjs` is rejected as product structure.
+- Calendar is a first-class MANUAL house and must not route through Finance.
+- One central navigation state owns all route transitions.
+- Preserve existing APK signer secret names.
+- Every migrated unit requires KEEP / ADAPT / REJECT and a failing behavior test before admission.
+- No NEW BASE production behavior without a failing test first.
+- Component existence and text labels are not acceptance evidence; route/action/readback are.
+- Product slice acceptance comes before Android packaging.
 
 ---
 
-### Task 1: Establish the NEW BASE boundary contract
+### Task 0: Owner Screen / Route Gate
 
 **Files:**
-- Create: `tests/lighthouse-new-base-boundary.test.cjs`
-- Create: `lighthouse-new-base/README.md`
-- Create: `lighthouse-new-base/package.json`
+- Existing: `docs/superpowers/specs/2026-09-02-lighthouse-screen-route-acceptance.md`
 
-**Interfaces:**
-- Consumes: repository filesystem only.
-- Produces: a test-enforced boundary that requires the NEW BASE directory and forbids direct imports from legacy `ui/` and root `app.mjs`.
+**Produces:** explicit screen and route contract for CHAT, MANUAL dashboard, MONEY, CALENDAR, STORE, RIDE and SETTINGS.
 
-- [ ] **Step 1: Write the failing boundary test**
+- [x] **Step 1: Capture prior failure lessons as product gates.**
+- [x] **Step 2: Draw text wireframes for CHAT, MANUAL dashboard, house detail and SETTINGS.**
+- [x] **Step 3: Define canonical route model and Back behavior.**
+- [x] **Step 4: Define route matrix with `from -> action -> to -> back`.**
+- [ ] **Step 5: Owner reviews the screen/route contract before production UI code starts.**
+
+**STOP:** Tasks 2+ may not begin until Step 5 is satisfied.
+
+### Task 1: Establish the NEW BASE filesystem boundary
+
+**Files:**
+- Existing: `tests/lighthouse-new-base-boundary.test.cjs`
+- Create after RED evidence: `lighthouse-new-base/README.md`
+- Create after RED evidence: `lighthouse-new-base/package.json`
+
+**Produces:** a test-enforced boundary requiring the NEW BASE directory and forbidding direct imports from legacy `ui/` and root `app.mjs`.
+
+- [x] **Step 1: Write the failing boundary test.**
+- [x] **Step 2: Open draft PR #108 so GitHub CI can execute the RED boundary test.**
+- [ ] **Step 3: Record CI RED evidence showing failure is caused by missing NEW BASE boundary.**
+- [ ] **Step 4: Create minimal README/package only after valid RED evidence.**
+- [ ] **Step 5: Run/observe boundary test GREEN in PR CI.**
+
+### Task 2: Central Navigation Contract
+
+**Files:**
+- Create: `lighthouse-new-base/test/navigation-state.test.mjs`
+- Create: `lighthouse-new-base/src/navigation-state.mjs`
+- Create: `lighthouse-new-base/src/routes.mjs`
+
+**Produces:** one authoritative state:
 
 ```js
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
-const root = path.resolve(__dirname, '..');
-const base = path.join(root, 'lighthouse-new-base');
-
-test('LIGHTHOUSE new base exists as its own product boundary', () => {
-  assert.equal(fs.existsSync(base), true);
-  assert.equal(fs.existsSync(path.join(base, 'package.json')), true);
-});
-
-test('LIGHTHOUSE new base source does not import legacy UI/navigation', () => {
-  const src = path.join(base, 'src');
-  if (!fs.existsSync(src)) return;
-  const files = fs.readdirSync(src).filter((name) => name.endsWith('.mjs'));
-  for (const file of files) {
-    const text = fs.readFileSync(path.join(src, file), 'utf8');
-    assert.doesNotMatch(text, /(?:\.\.\/)+ui\//);
-    assert.doesNotMatch(text, /(?:\.\.\/)+app\.mjs/);
-  }
-});
-```
-
-- [ ] **Step 2: Run the test and verify RED**
-
-Run: `node --test tests/lighthouse-new-base-boundary.test.cjs`
-Expected: FAIL because `lighthouse-new-base/package.json` does not exist.
-
-- [ ] **Step 3: Add the minimal boundary package and README**
-
-`lighthouse-new-base/package.json`:
-```json
 {
-  "name": "lighthouse-new-base",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test test/*.test.mjs"
-  }
+  top: 'chat' | 'manual' | 'settings',
+  manualHouse: null | 'money' | 'calendar' | 'store' | 'ride'
 }
 ```
 
-`lighthouse-new-base/README.md` documents: NEW BASE only, legacy UI/navigation reference-only, migrations require tests, shared infra stays outside product source.
+**Behavior tests must cover:**
+- initial route is CHAT;
+- CHAT -> MANUAL produces MANUAL dashboard (`manualHouse: null`);
+- MANUAL -> CALENDAR produces `{ top:'manual', manualHouse:'calendar' }` directly, never Finance;
+- Back from any Manual house resets `manualHouse` to null;
+- tapping MANUAL while in a house resets to dashboard;
+- SETTINGS and CHAT transitions clear house detail state;
+- unknown routes are rejected without mutating current state.
 
-- [ ] **Step 4: Run boundary test and verify GREEN**
+- [ ] Write failing tests for every transition above.
+- [ ] Verify RED because navigation module does not exist.
+- [ ] Implement the smallest pure state transition API.
+- [ ] Verify all navigation tests GREEN.
+- [ ] Run repository boundary test to prove no legacy UI imports.
 
-Run: `node --test tests/lighthouse-new-base-boundary.test.cjs`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add tests/lighthouse-new-base-boundary.test.cjs lighthouse-new-base/README.md lighthouse-new-base/package.json
-git commit -m "test: lock LIGHTHOUSE new base boundary"
-```
-
-### Task 2: Create the minimal NEW BASE application contract
+### Task 3: Product Copy Boundary
 
 **Files:**
-- Create: `lighthouse-new-base/test/app.test.mjs`
-- Create: `lighthouse-new-base/src/app.mjs`
+- Create: `lighthouse-new-base/test/product-copy.test.mjs`
+- Create: `lighthouse-new-base/src/product-copy.mjs`
+
+**Produces:** one product-copy contract used by visible UI.
+
+**Tests:**
+- visible copy contains no `IDLE`, `WAITING`, `SUCCESS`, `READBACK`;
+- raw interpreter/routing labels are not exposed;
+- CHAT result states map only to user-level confirmation, actionable problem, or changed result.
+
+- [ ] Write failing copy tests.
+- [ ] Verify RED.
+- [ ] Implement minimum mapping.
+- [ ] Verify GREEN.
+
+### Task 4: MANUAL Dashboard Shell — Today + Four Doors
+
+**Files:**
+- Create: `lighthouse-new-base/test/manual-dashboard.test.mjs`
+- Create: `lighthouse-new-base/src/manual-dashboard.mjs`
 - Create: `lighthouse-new-base/src/app-shell.mjs`
 
-**Interfaces:**
-- Produces: `createApp()` returning `{ id: 'lighthouse', surface: 'new-base', shell }` and `createAppShell()` returning a minimal shell model.
+**Produces:** MANUAL dashboard with exactly four top-level doors:
+- MONEY
+- CALENDAR
+- STORE
+- RIDE
 
-- [ ] **Step 1: Write the failing application test**
+**Behavior tests:**
+- dashboard presents today-status region before house doors;
+- four and only four house doors exist;
+- Income/Expense/Ledger do not appear as peer houses;
+- Calendar door targets `calendar`, not `finance`;
+- clicking each door requests central navigation transition; it does not mutate private page state.
 
-```js
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { createApp } from '../src/app.mjs';
+- [ ] Write failing tests first.
+- [ ] Verify RED.
+- [ ] Implement minimal dashboard shell.
+- [ ] Verify click behavior and rendered structure GREEN.
+- [ ] Review actual rendered/manual surface before Task 5.
 
-test('creates LIGHTHOUSE from the new-base surface', () => {
-  const app = createApp();
-  assert.equal(app.id, 'lighthouse');
-  assert.equal(app.surface, 'new-base');
-  assert.deepEqual(app.shell, { home: 'chat', sections: ['chat', 'manual', 'settings'] });
-});
+### Task 5: MONEY Vertical Slice
+
+**Migration gate:** inspect existing finance/core candidates and classify each used file as KEEP / ADAPT / REJECT before import.
+
+**Behavior:** one concrete user action must flow through MONEY and be read back from real state/data. A visible “success” word is not evidence.
+
+- [ ] Select the smallest concrete MONEY behavior needed for first slice.
+- [ ] Record candidate-file decisions and hidden dependencies.
+- [ ] Write failing contract/action/readback test independent of legacy DOM/navigation.
+- [ ] Migrate/reimplement smallest compatible logic.
+- [ ] Verify actual action + readback.
+- [ ] Verify Back -> MANUAL dashboard.
+- [ ] Review actual MONEY surface before Task 6.
+
+### Task 6: CALENDAR Vertical Slice — One Canonical UI
+
+**Files:** new-base Calendar files only; legacy Finance Calendar UI is reference-only.
+
+**Tests must prove:**
+- MANUAL -> CALENDAR route does not invoke Finance route;
+- exactly one Calendar UI is mounted for the canonical route;
+- Calendar items retain their own domain/source owner;
+- Back returns to MANUAL dashboard;
+- bottom navigation remains central owner.
+
+- [ ] Write failing route/UI tests.
+- [ ] Verify RED.
+- [ ] Implement minimal canonical Calendar surface.
+- [ ] Verify behavior/readback where Calendar mutation exists.
+- [ ] Review actual Calendar surface before Task 7.
+
+### Task 7: STORE Vertical Slice
+
+- [ ] Classify required old store/core candidates KEEP / ADAPT / REJECT.
+- [ ] Write failing real-behavior/readback test.
+- [ ] Implement smallest STORE path without importing legacy navigation.
+- [ ] Verify route/back/readback.
+- [ ] Review real surface.
+
+### Task 8: RIDE Vertical Slice
+
+- [ ] Classify required old ride/core candidates KEEP / ADAPT / REJECT.
+- [ ] Write failing real-behavior/readback test.
+- [ ] Implement smallest RIDE path without importing legacy navigation.
+- [ ] Verify route/back/readback.
+- [ ] Review real surface.
+
+### Task 9: CHAT + Quick Capture Vertical Slice
+
+**Rule:** Master Input / interpreter may be used only as an internal mechanism. It is not the CHAT page identity.
+
+**Tests must prove:**
+- CHAT owns conversation/result area and Quick Capture input;
+- interpreter/system event names are not rendered;
+- one concrete Quick Capture input causes an actual expected behavior and readback;
+- only confirmation, actionable problem, or changed result becomes user-visible;
+- CHAT/MANUAL/SETTINGS navigation remains central-state driven.
+
+- [ ] Inspect interpreter candidates; classify KEEP / ADAPT / REJECT.
+- [ ] Write failing user-behavior test first.
+- [ ] Implement minimal adapter without legacy CHAT shell.
+- [ ] Verify action + readback + visible copy.
+- [ ] Review actual CHAT surface.
+
+### Task 10: SETTINGS Vertical Slice
+
+**Rule:** SETTINGS is a top-level page, not a dialog with independent route ownership.
+
+- [ ] Write failing navigation/render tests.
+- [ ] Implement minimal SETTINGS surface.
+- [ ] Add Patch/Rollback only where already owner-authorized and contract-backed.
+- [ ] Verify bottom-nav transitions and no competing dialog state.
+- [ ] Review actual SETTINGS surface.
+
+### Task 11: Full Product Route Acceptance
+
+**Automated route walk must cover:**
+
+```text
+CHAT -> MANUAL -> CALENDAR -> Back -> SETTINGS
 ```
 
-- [ ] **Step 2: Run and verify RED**
+and MANUAL dashboard -> MONEY / CALENDAR / STORE / RIDE -> Back for every house.
 
-Run: `cd lighthouse-new-base && npm test`
-Expected: FAIL because `src/app.mjs` is missing.
+**Evidence:** rendered destination + central route state + actual data/readback for behavior routes.
 
-- [ ] **Step 3: Implement the minimal shell**
+- [ ] Add route-matrix behavior test.
+- [ ] Add dead-end detection for every interactive route button.
+- [ ] Verify forbidden internal UI terms absent from rendered surfaces.
+- [ ] Review actual assembled web product as a user.
 
-`src/app-shell.mjs` exports `createAppShell()` returning exactly `{ home: 'chat', sections: ['chat', 'manual', 'settings'] }`.
+**STOP:** Android integration does not begin until this gate passes.
 
-`src/app.mjs` imports `createAppShell` only from `./app-shell.mjs` and exports `createApp()` returning `{ id: 'lighthouse', surface: 'new-base', shell: createAppShell() }`.
-
-- [ ] **Step 4: Run both NEW BASE and repository boundary tests**
-
-Run: `cd lighthouse-new-base && npm test && cd .. && node --test tests/lighthouse-new-base-boundary.test.cjs`
-Expected: all PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add lighthouse-new-base/src lighthouse-new-base/test
-git commit -m "feat: add LIGHTHOUSE new base application contract"
-```
-
-### Task 3: Add a deterministic staging contract
+### Task 12: Deterministic NEW BASE Staging Contract
 
 **Files:**
 - Create: `lighthouse-new-base/test/stage.test.mjs`
 - Create: `lighthouse-new-base/tools/stage.mjs`
 - Modify: `lighthouse-new-base/package.json`
 
-**Interfaces:**
-- Produces: `npm run stage -- <destination>` that writes a minimal staged web package containing `index.html` and `app.mjs` without copying legacy `ui/`.
+**Tests:** staged package contains NEW BASE assets and contains no copied legacy `ui/` tree or root legacy app marker.
 
-- [ ] **Step 1: Write a failing staging test** that creates a temp directory, runs the exported `stage(destination)` function, verifies `index.html` and `app.mjs` exist, and verifies no `ui/` directory is created.
-- [ ] **Step 2: Run `npm test` and verify RED** because `tools/stage.mjs` is missing.
-- [ ] **Step 3: Implement `stage(destination)`** using `fs.mkdir`, `fs.copyFile`, and generated minimal `index.html`; add package script `"stage": "node tools/stage.mjs"`.
-- [ ] **Step 4: Run `npm test` and boundary tests; verify GREEN**.
-- [ ] **Step 5: Commit** with `feat: add new base staging contract`.
+- [ ] Write failing staging test.
+- [ ] Verify RED.
+- [ ] Implement deterministic staging.
+- [ ] Verify GREEN plus full NEW BASE tests.
 
-### Task 4: Integrate NEW BASE into the owner APK staging path
+### Task 13: Android Packaging Adapter
 
 **Files:**
 - Create: `android-shell/test/new-base-package.test.mjs`
-- Modify: `android-shell/package.json`
-- Add or modify the smallest staging adapter under `android-shell/tools/` necessary to call `lighthouse-new-base/tools/stage.mjs`.
+- Modify smallest required `android-shell` package/tool adapter.
 
-**Interfaces:**
-- Consumes: NEW BASE staging contract.
-- Produces: Android web assets sourced from `lighthouse-new-base/`, not legacy root UI.
+- [ ] Write failing package test proving staged asset marker identifies NEW BASE and legacy bundle is absent.
+- [ ] Verify RED.
+- [ ] Implement `app:stage-new-base` adapter.
+- [ ] Verify package test + all NEW BASE tests GREEN.
 
-- [ ] **Step 1: Write a failing Android package test** that checks the staged asset marker identifies `surface: new-base` and contains no legacy UI bundle marker.
-- [ ] **Step 2: Run the targeted test and verify RED**.
-- [ ] **Step 3: Implement minimal adapter and package script `app:stage-new-base`**.
-- [ ] **Step 4: Run Android-shell staging test plus NEW BASE tests; verify GREEN**.
-- [ ] **Step 5: Commit** with `feat: stage LIGHTHOUSE new base for Android`.
-
-### Task 5: Adapt the owner build workflow without changing signer secrets
+### Task 14: Adapt Owner Build Workflow — Preserve Signer
 
 **Files:**
 - Create: `tests/lighthouse-owner-build-new-base.test.cjs`
 - Modify: `.github/workflows/lighthouse-owner-build.yml`
 
-**Interfaces:**
-- Preserves secret names: `LIGHTHOUSE_APK_KEYSTORE_BASE64`, `LIGHTHOUSE_APK_STORE_PASSWORD`, `LIGHTHOUSE_APK_KEY_ALIAS`, `LIGHTHOUSE_APK_KEY_PASSWORD`.
-- Changes staging command to `npm run app:stage-new-base`.
-- Changes verification test to the NEW BASE package test.
-- Changes artifact naming away from `existing-full-app-1.0.3` to a neutral NEW BASE candidate name.
+**Must preserve exactly:**
+- `LIGHTHOUSE_APK_KEYSTORE_BASE64`
+- `LIGHTHOUSE_APK_STORE_PASSWORD`
+- `LIGHTHOUSE_APK_KEY_ALIAS`
+- `LIGHTHOUSE_APK_KEY_PASSWORD`
 
-- [ ] **Step 1: Write a failing workflow text-contract test** that asserts the workflow contains `app:stage-new-base`, does not contain `app:stage-existing`, preserves all four signer secret names, and does not contain `existing-full-app-1.0.3`.
-- [ ] **Step 2: Run targeted test and verify RED**.
-- [ ] **Step 3: Make the smallest workflow edits** to satisfy the contract while preserving signing and APK identity verification steps.
-- [ ] **Step 4: Run repository deploy gate and targeted workflow contract test**; verify GREEN.
-- [ ] **Step 5: Commit** with `ci: point LIGHTHOUSE owner build at new base`.
+**Must change:**
+- staging command from `app:stage-existing` to `app:stage-new-base`;
+- legacy package-verification wording;
+- artifact name away from `existing-full-app-1.0.3`.
 
-### Task 6: Open a draft PR and verify GitHub Actions
+- [ ] Write failing workflow contract test.
+- [ ] Verify RED.
+- [ ] Make minimal workflow edits while preserving signing and APK identity verification.
+- [ ] Run repository deploy gate and workflow contract test GREEN.
 
-**Files:** none.
+### Task 15: Android Device Acceptance
 
-**Interfaces:** GitHub PR CI is the external verification surface because `greenfield-deploy-gate.yml` runs on pull requests.
+**Acceptance is manual-on-device evidence, not CI.**
 
-- [ ] **Step 1: Push/ensure all commits are on `codex/lighthouse-new-base-20260902`.**
-- [ ] **Step 2: Open a draft PR to `main` titled `LIGHTHOUSE: establish clean new base`.**
-- [ ] **Step 3: Wait for the pull-request safety gate result and inspect failing jobs if any.**
-- [ ] **Step 4: Fix only failures caused by this branch, preserving the boundary rules.**
-- [ ] **Step 5: Record exact CI status and commit SHA in the PR description/comment.**
+Required checks:
+- fresh install launches correct NEW BASE;
+- CHAT input remains usable with keyboard open;
+- critical controls fit viewport;
+- tap targets work;
+- `CHAT -> MANUAL -> CALENDAR -> Back -> SETTINGS` matches route matrix;
+- all four houses open and Back correctly;
+- concrete action/readback still works on device.
+
+- [ ] Build owner-selected NEW BASE candidate.
+- [ ] Install on actual Android device.
+- [ ] Execute device checklist and record pass/fail evidence.
+- [ ] Fix product/device failures before updater test.
+
+### Task 16: Updater Continuity Acceptance
+
+Fresh install is not updater proof.
+
+- [ ] Create next candidate with a safe visible version/evidence change.
+- [ ] Build with same canonical signer.
+- [ ] Update over the installed first NEW BASE candidate without clearing app data.
+- [ ] Verify app identity, routes and retained expected data/state.
+- [ ] Record updater acceptance evidence.
+
+### Task 17: Completion Verification
+
+- [ ] Run all NEW BASE tests.
+- [ ] Run repository deploy gate.
+- [ ] Verify draft PR CI is green for branch-caused checks.
+- [ ] Confirm Screen/Route, Migration, Slice, Pre-APK, Device and Updater gates are all satisfied.
+- [ ] Only then change status from candidate to accepted release.
