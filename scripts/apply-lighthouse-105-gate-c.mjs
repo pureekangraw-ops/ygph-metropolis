@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const path='ui/manual-finance-ui.mjs';
 let source=readFileSync(path,'utf8');
-if(source.includes("schedule.prepend(calDisclosure)")&&!source.includes('manualCalendarViews'))process.exit(0);
+if(source.includes("firstScheduleChild?.before")&&!source.includes('manualCalendarViews'))process.exit(0);
 
 const calendarStart=source.indexOf("  const calendar = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualCalendarTitle' });");
 const ledgerStart=source.indexOf("  const ledger = node(documentRef, 'section', { className:'manual-house', 'aria-labelledby':'manualLedgerTitle' });");
@@ -28,7 +28,7 @@ if(!duplicateRender.test(source))throw new Error('Gate C: duplicate Calendar ren
 source=source.replace(duplicateRender,'\n');
 
 const mountOld=`  root.append(income, outcome, calendar, ledger, sheet);\n  const schedule = documentRef.getElementById('financeSchedule');\n  if (schedule) schedule.before(root); else financePage.append(root);`;
-const mountNew=`  root.append(income, outcome, ledger, sheet);\n  const schedule = documentRef.getElementById('financeSchedule');\n  if (schedule) {\n    schedule.prepend(calDisclosure);\n    schedule.append(calendarDetail);\n    schedule.before(root);\n  } else financePage.append(root);`;
+const mountNew=`  root.append(income, outcome, ledger, sheet);\n  const schedule = documentRef.getElementById('financeSchedule');\n  if (schedule) {\n    const firstScheduleChild = schedule.children?.[0] || null;\n    if (firstScheduleChild?.before) firstScheduleChild.before(calDisclosure); else schedule.append(calDisclosure);\n    schedule.append(calendarDetail);\n    schedule.before(root);\n  } else financePage.append(root);`;
 if(!source.includes(mountOld))throw new Error('Gate C: legacy Calendar mount block not found');
 source=source.replace(mountOld,mountNew);
 
