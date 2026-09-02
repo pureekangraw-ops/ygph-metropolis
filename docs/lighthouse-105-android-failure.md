@@ -1,175 +1,592 @@
-# LIGHTHOUSE 1.0.5 Android updater diagnostic
+# LIGHTHOUSE 1.0.5 Android exact failures
 
 ```text
-  duration_ms: 3.731221
   type: 'test'
   ...
-# Subtest: historical key-1 sample remains evidence but is not trusted by current key-3 APK
-ok 124 - historical key-1 sample remains evidence but is not trusted by current key-3 APK
+# Subtest: standard APK flow delegates current Patch ownership instead of hard-coding a release number
+not ok 15 - standard APK flow delegates current Patch ownership instead of hard-coding a release number
   ---
-  duration_ms: 7.773862
+  duration_ms: 8.230791
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/apk-ci-signing-contract.test.mjs:12:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /build-current-patch-source\.mjs/. Input:
+    
+    'name: LIGHTHOUSE APK Debug\n' +
+      '\n' +
+      'on:\n' +
+      '  workflow_dispatch:\n' +
+      '  pull_request:\n' +
+      '    paths:\n' +
+      "      - 'android-shell/**'\n" +
+      "      - 'ui/**'\n" +
+      "      - 'lighthouse/**'\n" +
+      "      - 'styles/**'\n" +
+      "      - 'lighthouse.css'\n" +
+      "      - 'sw.js'\n" +
+      "      - '.github/workflows/lighthouse-apk-debug.yml'\n" +
+      '\n' +
+      'permissions:\n' +
+      '  contents: write\n' +
+--
   type: 'test'
   ...
-# Subtest: signPatchSource creates a bundle verifiable by the matching public key
-ok 125 - signPatchSource creates a bundle verifiable by the matching public key
+# Subtest: Patch and APK signing trust domains stay isolated
+not ok 17 - Patch and APK signing trust domains stay isolated
   ---
-  duration_ms: 12.100452
+  duration_ms: 1.451773
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/apk-ci-signing-contract.test.mjs:37:1'
+  failureType: 'testCodeFailure'
+  error: 'missing standard Patch signing step'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: -1
+  actual: -1
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/apk-ci-signing-contract.test.mjs:41:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: APK publication is downstream of generated security and final-byte identity verification
+not ok 18 - APK publication is downstream of generated security and final-byte identity verification
+  ---
+  duration_ms: 2.572928
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/apk-ci-signing-contract.test.mjs:54:1'
+  failureType: 'testCodeFailure'
+  error: 'APK upload must happen after identity verification'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/apk-ci-signing-contract.test.mjs:63:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: identity evidence binds to the PR head source commit instead of the synthetic PR merge SHA
+ok 19 - identity evidence binds to the PR head source commit instead of the synthetic PR merge SHA
+  ---
+  duration_ms: 1.916351
   type: 'test'
   ...
-# Subtest: package exposes manual patch signing and repository web/tool files contain no private PEM
-ok 126 - package exposes manual patch signing and repository web/tool files contain no private PEM
-  ---
-  duration_ms: 42.34676
+# Subtest: APK identity contract pins LIGHTHOUSE package and canonical signer without secrets
+ok 20 - APK identity contract pins LIGHTHOUSE package and canonical signer without secrets
+--
   type: 'test'
   ...
-# Subtest: memory store treats a staged snapshot version as immutable
-ok 127 - memory store treats a staged snapshot version as immutable
+# Subtest: staged Android app keeps existing source byte-identical: index.html
+not ok 52 - staged Android app keeps existing source byte-identical: index.html
   ---
-  duration_ms: 3.089924
+  duration_ms: 12.015563
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+      '<!doctype html>\n' +
+        '<html lang="th">\n' +
+        '<head>\n' +
+        '  <meta charset="utf-8">\n' +
+    +   '  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+    +   '  <meta name="description" content="LIGHTHOUSE APK Foundation Proof">\n' +
+    -   '  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' +
+    -   '  <meta name="theme-color" content="#101617">\n' +
+    -   '  <meta name="referrer" content="no-referrer">\n' +
+    -   `  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'">\n` +
+    -   '  <link rel="manifest" href="manifest.webmanifest">\n' +
+    -   '  <link rel="stylesheet" href="styles.css">\n' +
+        '  <title>LIGHTHOUSE</title>\n' +
+    +   '  <style>\n' +
+    +   '    :root { font-family: system-ui, sans-serif; color-scheme: dark; }\n' +
+--
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: app.mjs
+not ok 53 - staged Android app keeps existing source byte-identical: app.mjs
+  ---
+  duration_ms: 4.161218
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/app.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: lighthouse.css
+not ok 54 - staged Android app keeps existing source byte-identical: lighthouse.css
+  ---
+  duration_ms: 1.372284
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/lighthouse.css'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: ui/app.mjs
+not ok 55 - staged Android app keeps existing source byte-identical: ui/app.mjs
+  ---
+  duration_ms: 1.574983
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/app.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: ui/master-input.mjs
+not ok 56 - staged Android app keeps existing source byte-identical: ui/master-input.mjs
+  ---
+  duration_ms: 1.447936
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/master-input.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: ui/manual-finance-ui.mjs
+not ok 57 - staged Android app keeps existing source byte-identical: ui/manual-finance-ui.mjs
+  ---
+  duration_ms: 1.379878
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/manual-finance-ui.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: ui/settings-ui.mjs
+not ok 58 - staged Android app keeps existing source byte-identical: ui/settings-ui.mjs
+  ---
+  duration_ms: 3.619935
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/settings-ui.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: staged Android app keeps existing source byte-identical: ui/lighthouse-shell.mjs
+not ok 59 - staged Android app keeps existing source byte-identical: ui/lighthouse-shell.mjs
+  ---
+  duration_ms: 1.173513
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:24:3'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/lighthouse-shell.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:26:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: existing Chat ↔ Manual bridge wiring is packaged
+not ok 60 - existing Chat ↔ Manual bridge wiring is packaged
+  ---
+  duration_ms: 1.605751
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/app.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:33:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: LIGHTHOUSE three-page coastal shell is packaged without replacing domain runtime
+not ok 61 - LIGHTHOUSE three-page coastal shell is packaged without replacing domain runtime
+  ---
+  duration_ms: 1.758786
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:45:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/lighthouse-shell.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async Promise.all (index 0)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:46:31)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: existing Manual ask action is packaged
+not ok 62 - existing Manual ask action is packaged
+  ---
+  duration_ms: 1.131004
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:65:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/manual-finance-ui.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:66:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: existing Settings utility is packaged
+not ok 63 - existing Settings utility is packaged
+  ---
+  duration_ms: 1.017591
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:71:1'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/www/ui/settings-ui.mjs'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async TestContext.<anonymous> (file:///home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:72:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: Android entry starts the existing application directly and never waits for snapshot bootstrap
+not ok 64 - Android entry starts the existing application directly and never waits for snapshot bootstrap
+  ---
+  duration_ms: 1.505734
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/existing-full-app-package.test.mjs:79:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /src="ui\/master-input\.mjs"/. Input:
+    
+    '<!doctype html>\n' +
+      '<html lang="th">\n' +
+      '<head>\n' +
+      '  <meta charset="utf-8">\n' +
+      '  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n' +
+      '  <meta name="description" content="LIGHTHOUSE APK Foundation Proof">\n' +
+      '  <title>LIGHTHOUSE</title>\n' +
+      '  <style>\n' +
+      '    :root { font-family: system-ui, sans-serif; color-scheme: dark; }\n' +
+      '    body { margin: 0; min-height: 100vh; background: #10151d; color: #f5f7fb; }\n' +
+      '    .patch-controls { box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; padding: .8rem 1rem; border-top: 1px solid #293241; background: #0c1118; }\n' +
+      '    .patch-controls button { font: inherit; padding: .4rem .7rem; }\n' +
+      '    .patch-controls input { display:none; }\n' +
+      '    #patch-status { flex: 1 1 12rem; margin: 0; font-size: .85rem; color: #c7d0dc; }\n' +
+      '  </style>\n' +
+      '</head>\n' +
+--
   type: 'test'
   ...
-# Subtest: IndexedDB get/compare/insert keeps a staged snapshot version immutable
-ok 128 - IndexedDB get/compare/insert keeps a staged snapshot version immutable
+# Subtest: GitHub Actions builds a canonical verified APK but never deploys or publishes it
+not ok 69 - GitHub Actions builds a canonical verified APK but never deploys or publishes it
   ---
-  duration_ms: 13.69585
+  duration_ms: 7.05857
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/foundation-contract.test.mjs:43:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /\bdeploy\b|google[-_ ]?play|play[-_ ]?console|\bpublish\b/i. Input:
+    
+    'name: LIGHTHOUSE APK Debug\n' +
+      '\n' +
+      'on:\n' +
+      '  workflow_dispatch:\n' +
+      '  pull_request:\n' +
+      '    paths:\n' +
+      "      - 'android-shell/**'\n" +
+      "      - 'ui/**'\n" +
+      "      - 'lighthouse/**'\n" +
+      "      - 'styles/**'\n" +
+      "      - 'lighthouse.css'\n" +
+      "      - 'sw.js'\n" +
+      "      - '.github/workflows/lighthouse-apk-debug.yml'\n" +
+      '\n' +
+      'permissions:\n' +
+      '  contents: write\n' +
+--
   type: 'test'
   ...
-# Subtest: APK publish contract uses immutable repository assets and never GitHub Release downloads
-ok 129 - APK publish contract uses immutable repository assets and never GitHub Release downloads
+# Subtest: standard APK workflow builds signs verifies and uploads the current key-3 Patch plus manifest
+not ok 82 - standard APK workflow builds signs verifies and uploads the current key-3 Patch plus manifest
   ---
-  duration_ms: 8.63359
+  duration_ms: 3.515269
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/front-door-release-source.test.mjs:39:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /build-current-patch-source\.mjs/u. Input:
+    
+    'name: LIGHTHOUSE APK Debug\n' +
+      '\n' +
+      'on:\n' +
+      '  workflow_dispatch:\n' +
+      '  pull_request:\n' +
+      '    paths:\n' +
+      "      - 'android-shell/**'\n" +
+      "      - 'ui/**'\n" +
+      "      - 'lighthouse/**'\n" +
+      "      - 'styles/**'\n" +
+      "      - 'lighthouse.css'\n" +
+      "      - 'sw.js'\n" +
+      "      - '.github/workflows/lighthouse-apk-debug.yml'\n" +
+      '\n' +
+      'permissions:\n' +
+      '  contents: write\n' +
+--
   type: 'test'
   ...
-# Subtest: APK publish contract verifies Raw bytes before opening lighthouse-update manifest
-ok 130 - APK publish contract verifies Raw bytes before opening lighthouse-update manifest
+# Subtest: staging is readable before activation and does not move current
+not ok 106 - staging is readable before activation and does not move current
   ---
-  duration_ms: 2.721197
+  duration_ms: 2.715435
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:248:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.1',
+    +   previousSnapshotId: null,
+        previousVersion: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.1'
+    previousVersion: ~
+  actual:
+    currentVersion: '0.0.1'
+    previousVersion: ~
+--
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: activation moves current and previous pointers together
+not ok 107 - activation moves current and previous pointers together
+  ---
+  duration_ms: 1.290642
+  type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:266:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.2',
+    +   previousSnapshotId: null,
+        previousVersion: '0.0.1'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.2'
+    previousVersion: '0.0.1'
+  actual:
+    currentVersion: '0.0.2'
+    previousVersion: '0.0.1'
+--
   type: 'test'
   ...
-# Subtest: Settings derives determinate progress only from real byte counts
-ok 131 - Settings derives determinate progress only from real byte counts
+# Subtest: stale activation is rejected after current advances
+not ok 109 - stale activation is rejected after current advances
   ---
-  duration_ms: 8.854834
+  duration_ms: 0.849377
   type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:302:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.3',
+    +   previousSnapshotId: null,
+        previousVersion: '0.0.1'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.3'
+    previousVersion: '0.0.1'
+  actual:
+    currentVersion: '0.0.3'
+    previousVersion: '0.0.1'
+--
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-# Subtest: Settings distinguishes waiting for Android from installed readback
-ok 132 - Settings distinguishes waiting for Android from installed readback
+# Subtest: failed staging leaves the active snapshot untouched
+not ok 110 - failed staging leaves the active snapshot untouched
   ---
-  duration_ms: 1.807077
+  duration_ms: 0.960986
   type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:330:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.1',
+    +   previousSnapshotId: null,
+        previousVersion: null
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.1'
+    previousVersion: ~
+  actual:
+    currentVersion: '0.0.1'
+    previousVersion: ~
+--
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-# Subtest: trusted bootstrap exposes only chat-gated Brain capability and preserves durable readback
-ok 133 - trusted bootstrap exposes only chat-gated Brain capability and preserves durable readback
+# Subtest: rollback atomically swaps back to the previous complete snapshot
+not ok 111 - rollback atomically swaps back to the previous complete snapshot
   ---
-  duration_ms: 3465.023264
+  duration_ms: 2.228335
   type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:347:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.1',
+    +   previousSnapshotId: null,
+        previousVersion: '0.0.2'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.1'
+    previousVersion: '0.0.2'
+  actual:
+    currentVersion: '0.0.1'
+    previousVersion: '0.0.2'
+--
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-# Subtest: cold reopen exposes a truthful durable restore witness without replaying chat history
-ok 134 - cold reopen exposes a truthful durable restore witness without replaying chat history
+# Subtest: IndexedDB store persists the active pointer and supports rollback after reopen
+not ok 112 - IndexedDB store persists the active pointer and supports rollback after reopen
   ---
-  duration_ms: 2365.231639
+  duration_ms: 18.52079
   type: 'test'
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:367:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.2',
+    +   previousSnapshotId: null,
+        previousVersion: '0.0.1'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.2'
+    previousVersion: '0.0.1'
+  actual:
+    currentVersion: '0.0.2'
+    previousVersion: '0.0.1'
+--
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-# Subtest: reopen while confirmation is pending fails closed and cannot execute stale pending work
-ok 135 - reopen while confirmation is pending fails closed and cannot execute stale pending work
+# Subtest: concurrent imports cannot activate a stale patch over a newer patch
+not ok 113 - concurrent imports cannot activate a stale patch over a newer patch
   ---
-  duration_ms: 2430.43693
+  duration_ms: 11.465321
   type: 'test'
-  ...
-# Subtest: stable APK entry goes through trusted bootstrap before Patch runtime
-ok 136 - stable APK entry goes through trusted bootstrap before Patch runtime
+  location: '/home/runner/work/ygph-metropolis/ygph-metropolis/android-shell/test/patch-contract.test.mjs:406:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   currentSnapshotId: null,
+        currentVersion: '0.0.3',
+    +   previousSnapshotId: null,
+        previousVersion: '0.0.1'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    currentVersion: '0.0.3'
+    previousVersion: '0.0.1'
+  actual:
+    currentVersion: '0.0.3'
+    previousVersion: '0.0.1'
+
   ---
-  duration_ms: 2.581777
-  type: 'test'
-  ...
-# Subtest: ข้าว 65 stays READY without a write until explicit execute, then durable readback survives reopen
-ok 137 - ข้าว 65 stays READY without a write until explicit execute, then durable readback survives reopen
-  ---
-  duration_ms: 2650.88908
-  type: 'test'
-  ...
-# Subtest: ข้าว 1,50 waits for owner correction, returns READY without writing, then executes the corrected amount
-ok 138 - ข้าว 1,50 waits for owner correction, returns READY without writing, then executes the corrected amount
-  ---
-  duration_ms: 2552.426272
-  type: 'test'
-  ...
-# Subtest: concurrent execute writes once and replay after SUCCESS is blocked
-ok 139 - concurrent execute writes once and replay after SUCCESS is blocked
-  ---
-  duration_ms: 2372.937809
-  type: 'test'
-  ...
-# Subtest: chat-native cancel is the only denial path and never exposes execute
-ok 140 - chat-native cancel is the only denial path and never exposes execute
-  ---
-  duration_ms: 1706.056577
-  type: 'test'
-  ...
-# Subtest: chat-native approval is the only path from pending to durable SUCCESS and replay fails closed
-ok 141 - chat-native approval is the only path from pending to durable SUCCESS and replay fails closed
-  ---
-  duration_ms: 1940.201579
-  type: 'test'
-  ...
-# Subtest: unrelated text while pending fails closed and preserves the original pending command
-ok 142 - unrelated text while pending fails closed and preserves the original pending command
-  ---
-  duration_ms: 1700.841204
-  type: 'test'
-  ...
-# Subtest: malicious Patch cannot obtain raw execute or a second confirmation seam
-ok 143 - malicious Patch cannot obtain raw execute or a second confirmation seam
-  ---
-  duration_ms: 1200.749249
-  type: 'test'
-  ...
-# Subtest: trusted brain packaging copies audited root Brain/Greenfield sources exactly into non-patchable generated source
-ok 144 - trusted brain packaging copies audited root Brain/Greenfield sources exactly into non-patchable generated source
-  ---
-  duration_ms: 72.541002
-  type: 'test'
-  ...
-# Subtest: npm test prepares trusted source and generated source is excluded from Git history
-ok 145 - npm test prepares trusted source and generated source is excluded from Git history
-  ---
-  duration_ms: 1.889431
-  type: 'test'
-  ...
-# Subtest: Front Door 0.0.5 renders trusted confirmation as chat text and uses the same composer for approval
-ok 146 - Front Door 0.0.5 renders trusted confirmation as chat text and uses the same composer for approval
-  ---
-  duration_ms: 118.567939
-  type: 'test'
-  ...
-# Subtest: trusted gate accepts only chat answer ยืนยัน as approval
-ok 147 - trusted gate accepts only chat answer ยืนยัน as approval
-  ---
-  duration_ms: 0.61617
-  type: 'test'
-  ...
-# Subtest: trusted gate maps unsupported commands to public 404 and records the private cause with Bangkok time
-ok 148 - trusted gate maps unsupported commands to public 404 and records the private cause with Bangkok time
-  ---
-  duration_ms: 14.327083
-  type: 'test'
-  ...
-# Subtest: actual trusted session keeps error statistics encrypted without changing business revision
-ok 149 - actual trusted session keeps error statistics encrypted without changing business revision
-  ---
-  duration_ms: 1431.515536
+  duration_ms: 1345.339493
   type: 'test'
   ...
 # Subtest: buildUpdateMetadata emits compatible verified read-only manifest from final APK evidence
 ok 150 - buildUpdateMetadata emits compatible verified read-only manifest from final APK evidence
   ---
-  duration_ms: 10.334858
+  duration_ms: 13.52489
   type: 'test'
   ...
 # Subtest: metadata generator rejects non-HTTPS URL, signer mismatch and evidence hash mismatch
 ok 151 - metadata generator rejects non-HTTPS URL, signer mismatch and evidence hash mismatch
   ---
-  duration_ms: 5.594584
+  duration_ms: 7.273499
   type: 'test'
   ...
 1..151
@@ -180,5 +597,5 @@ ok 151 - metadata generator rejects non-HTTPS URL, signer mismatch and evidence 
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 15681.673937
+# duration_ms 14917.857671
 ```
