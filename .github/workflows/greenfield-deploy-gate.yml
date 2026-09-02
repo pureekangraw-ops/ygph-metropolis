@@ -27,6 +27,25 @@ jobs:
       - name: Validate Wrangler production config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
 
+  android-tests:
+    name: NEW BASE Android tests
+    needs: safety-gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-shell
+    steps:
+      - name: Check out release candidate
+        uses: actions/checkout@v7.0.1
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+      - name: Install Android shell dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run Android packaging and identity tests
+        run: npm test
+
   staging:
     name: Deploy Master Input candidate to staging
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -65,7 +84,7 @@ jobs:
   deploy:
     name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: safety-gate
+    needs: [safety-gate, android-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
