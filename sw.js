@@ -1,4 +1,5 @@
 "use strict";
+// Web cache only. Full APK update ownership stays in Settings/native updater.
 const RELEASE='5.2.6';
 const ASSET_REVISION='sha256-1bf369d0196a7735';
 const CACHE=`ygph-metropolis-${RELEASE}-${ASSET_REVISION}`;
