@@ -13,6 +13,7 @@
 !/icon-512.png
 !/ui/
 !/ui/action-popups.mjs
+!/ui/app-update.mjs
 !/ui/app.mjs
 !/ui/release-status.mjs
 !/ui/settings-ui.mjs
