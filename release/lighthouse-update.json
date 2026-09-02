@@ -1,9 +1,9 @@
 {
-  "versionName": "1.0.4",
-  "versionCode": 1005,
+  "versionName": "1.0.5",
+  "versionCode": 1006,
   "minVersionCode": 1004,
-  "apkUrl": "https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/e6e8d4067ff7bba032ff91eb114f807d9f23326b/release/assets/1.0.4/LIGHTHOUSE-1.0.4-vc1005.apk",
-  "sha256": "4ffa43a763b2082b2837c4d4fa28ebcd263a590d29a88afb9362005b9c9707c1",
+  "apkUrl": "https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/44c6bfe3c79c8da5ae704b1df02cae85d04ad5b9/release/assets/1.0.5/LIGHTHOUSE-1.0.5-vc1006.apk",
+  "sha256": "9ea645abf2d501a72cc1edbdc2d03ee79200c898decb35e9c62a5f70e4e85a14",
   "sizeBytes": 3435751,
   "required": false,
   "releaseVerified": true,
