@@ -23,6 +23,7 @@ patch('ui/master-input.mjs',[
   ["MASTER_INPUT_RUNTIME_LOCKED:'Runtime ของแอปยังไม่พร้อม กรุณาเข้าแอปใหม่'","MASTER_INPUT_RUNTIME_LOCKED:'แอปยังไม่พร้อม กรุณาเข้าแอปใหม่'"],
   ["MASTER_INPUT_PATH_NOT_PROVEN:'PATH ยังยืนยันผลจริงไม่ได้'","MASTER_INPUT_PATH_NOT_PROVEN:'ยังยืนยันผลจริงไม่ได้'"],
   ["return commands.map(command => `${command.rawText || command.groupId || 'คำสั่ง'} · ${command.status}`).join(' · ');","return commands.map(command => `${command.rawText || command.groupId || 'คำสั่ง'} · ${STATE_LABELS[command.status] ?? 'กำลังดำเนินการ'}`).join(' · ');"],
+  ["  $('masterInputState').textContent = STATE_LABELS[state] ?? state;","  $('masterInputState').dataset.state = state;\n  $('masterInputState').textContent = STATE_LABELS[state] ?? state;"],
 ]);
 
 patch('ui/manual-finance-ui.mjs',[
