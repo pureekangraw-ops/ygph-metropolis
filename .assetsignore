@@ -21,6 +21,8 @@
 !/ui/reset-all-ui.mjs
 !/ui/theme-shell.mjs
 !/ui/lighthouse-shell.mjs
+!/ui/chat-ui.mjs
+!/ui/chat-ui.css
 !/ui/home-ui.mjs
 !/ui/store-ui.mjs
 !/ui/finance-ui.mjs
