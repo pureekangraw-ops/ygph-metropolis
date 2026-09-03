@@ -79,10 +79,17 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     return readback;
   }
 
-  async function verifiedInstall(path) {
-    const inspected = await inspectForInstall(path);
+  async function verifiedInstall(jobId) {
+    const snapshot = await native.getJobSnapshot(jobId);
+    if (snapshot?.state !== 'STAGED' || !snapshot?.stagedPath) {
+      const error = new Error('UPDATE_JOB_NOT_STAGED');
+      error.code = 'UPDATE_JOB_NOT_STAGED';
+      error.snapshot = snapshot;
+      throw error;
+    }
+    const inspected = await inspectForInstall(snapshot.stagedPath);
     const backupReadback = await verifyPreinstallBackup();
-    const result = await native.requestInstall(path);
+    const result = await native.requestInstall(jobId);
     return { ...result, stagedIdentity: inspected, ...(backupReadback ? { backupReadback } : {}) };
   }
 
@@ -123,12 +130,12 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
       return native.discardDownload(jobId);
     },
 
-    async install(path) {
-      return verifiedInstall(path);
+    async install(jobId) {
+      return verifiedInstall(jobId);
     },
 
-    async resumeInstallAfterPermission(path) {
-      return verifiedInstall(path);
+    async resumeInstallAfterPermission(jobId) {
+      return verifiedInstall(jobId);
     },
 
     async reconcileInstalled() {
