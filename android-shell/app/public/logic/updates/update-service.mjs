@@ -21,7 +21,7 @@ function deriveProgress(snapshot) {
   return { bytesDownloaded, totalBytes, percent };
 }
 
-export function createUpdateService({ native, verifier, expectedIdentity } = {}) {
+export function createUpdateService({ native, verifier, backup, expectedIdentity } = {}) {
   for (const name of [
     'startDownload',
     'getJobSnapshot',
@@ -32,6 +32,10 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
     'reconcileInstalledVersion',
   ]) requireMethod(native, name);
   requireMethod(verifier, 'inspect');
+  if (backup) {
+    requireMethod(backup, 'exportBackup');
+    requireMethod(backup, 'readback');
+  }
 
   if (!expectedIdentity?.applicationId || !expectedIdentity?.signerCertificateSha256) {
     throw new TypeError('expectedIdentity applicationId and signerCertificateSha256 are required');
@@ -63,10 +67,23 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
     return inspected;
   }
 
+  async function verifyPreinstallBackup() {
+    if (!backup) return null;
+    const artifact = await backup.exportBackup();
+    const readback = await backup.readback(artifact);
+    if (!artifact?.artifactHash || readback?.artifactHash !== artifact.artifactHash || readback?.revision !== artifact.revision) {
+      const error = new Error('UPDATE_BACKUP_READBACK_FAILED');
+      error.code = 'UPDATE_BACKUP_READBACK_FAILED';
+      throw error;
+    }
+    return readback;
+  }
+
   async function verifiedInstall(path) {
     const inspected = await inspectForInstall(path);
+    const backupReadback = await verifyPreinstallBackup();
     const result = await native.requestInstall(path);
-    return { ...result, stagedIdentity: inspected };
+    return { ...result, stagedIdentity: inspected, ...(backupReadback ? { backupReadback } : {}) };
   }
 
   return Object.freeze({
