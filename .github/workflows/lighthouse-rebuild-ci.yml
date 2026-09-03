@@ -57,6 +57,8 @@ jobs:
         run: npm run android:sync
       - name: Apply Android security baseline
         run: npm run android:security:apply
+      - name: Generate merged release manifest
+        run: cd android && ./gradlew processReleaseMainManifest
       - name: Verify Android security baseline
         run: npm run android:security:verify
       - name: Run native unit tests
