@@ -139,9 +139,16 @@ public class LighthouseUpdaterPlugin extends Plugin {
 
     @PluginMethod
     public void requestInstall(PluginCall call) {
-        String path = call.getString("path");
+        String jobId = call.getString("jobId");
+        JSObject snapshot = load(jobId);
+        if (snapshot == null) {
+            call.reject("UPDATE_JOB_NOT_FOUND");
+            return;
+        }
+        if (!requireState(call, snapshot, "STAGED")) return;
+        String path = snapshot.getString("stagedPath");
         if (path == null || path.isBlank()) {
-            call.reject("UPDATE_PATH_REQUIRED");
+            call.reject("UPDATE_STAGE_PATH_REQUIRED");
             return;
         }
         File apk = new File(path);
