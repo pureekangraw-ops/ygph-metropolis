@@ -67,6 +67,31 @@ test('process-death recovery re-reads native staged job and re-inspects artifact
   assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','inspect']);
 });
 
+test('permission return re-inspects staged artifact before retrying installer', async () => {
+  const calls = [];
+  let attempt = 0;
+  const native = {
+    startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
+    getJobSnapshot: async id => ({ jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
+    resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
+    discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
+    requestInstall: async path => {
+      calls.push(['requestInstall', path]);
+      attempt += 1;
+      return attempt === 1 ? { status:'PERMISSION_REQUIRED' } : { status:'REQUESTED' };
+    },
+    reconcileInstalledVersion: async () => null,
+  };
+  const verifier = {
+    inspect: async path => (calls.push(['inspect', path]), { sha256:'sha', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }),
+  };
+  const { service } = fixture({ native, verifier });
+  assert.equal((await service.install('/tmp/update.apk')).status, 'PERMISSION_REQUIRED');
+  assert.equal((await service.resumeInstallAfterPermission('/tmp/update.apk')).status, 'REQUESTED');
+  assert.deepEqual(calls.map(x => x[0]), ['inspect','requestInstall','inspect','requestInstall']);
+});
+
 test('installed state is reconciled from PackageManager/native readback, not install request', async () => {
   const { service } = fixture();
   assert.equal((await service.install('/tmp/update.apk')).status, 'REQUESTED');
