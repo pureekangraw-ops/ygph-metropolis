@@ -84,6 +84,7 @@ async function readUpdaterStatus() {
 }
 
 async function startProduct() {
+  await chatController.recover();
   const projected = await browserModel.read(today);
   if (!projected.available) throw new Error('LIGHTHOUSE_RUNTIME_NOT_READY');
   const updaterStatus = await readUpdaterStatus();
