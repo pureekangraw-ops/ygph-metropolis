@@ -107,6 +107,34 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
     }
   }
 
+  function routeHistoryState() {
+    return { lighthouseRoute:{ top:routeState.top, manualHouse:routeState.manualHouse || null } };
+  }
+
+  function pushRouteHistory() {
+    const history = globalThis.window?.history;
+    if (history && typeof history.pushState === 'function') history.pushState(routeHistoryState(), '');
+  }
+
+  function replaceRouteHistory() {
+    const history = globalThis.window?.history;
+    if (history && typeof history.replaceState === 'function') history.replaceState(routeHistoryState(), '');
+  }
+
+  function restoreRoute(value) {
+    const desired = value?.lighthouseRoute;
+    let next = createNavigationState();
+    if (desired?.top) next = navigateTop(next, desired.top);
+    if (next.top === 'manual' && desired?.manualHouse) next = openManualHouse(next, desired.manualHouse);
+    routeState = next;
+    render();
+    if (routeState.top === 'settings') ensurePolling();
+  }
+
+  function onPopState(event) {
+    restoreRoute(event?.state || null);
+  }
+
   async function onClick(event) {
     const top = event?.target?.closest?.('[data-top-route]');
     if (top?.dataset?.topRoute) {
@@ -114,6 +142,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
       const next = navigateTop(routeState, top.dataset.topRoute);
       if (next !== routeState) {
         routeState = next;
+        pushRouteHistory();
         render();
         if (routeState.top === 'settings') ensurePolling();
       }
@@ -149,6 +178,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
       const next = openManualHouse(routeState, house.dataset.manualHouse);
       if (next !== routeState) {
         routeState = next;
+        pushRouteHistory();
         render();
       }
       return;
@@ -194,6 +224,17 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
     globalThis.window?.visualViewport?.removeEventListener?.('scroll', syncVisualViewport);
   }
 
+  function bindHistory() {
+    const win = globalThis.window;
+    if (win && typeof win.addEventListener === 'function') win.addEventListener('popstate', onPopState);
+    replaceRouteHistory();
+  }
+
+  function unbindHistory() {
+    const win = globalThis.window;
+    if (win && typeof win.removeEventListener === 'function') win.removeEventListener('popstate', onPopState);
+  }
+
   return Object.freeze({
     start() {
       if (!started) {
@@ -202,6 +243,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
         target.addEventListener('keydown', onKeyDown);
         started = true;
         bindViewport();
+        bindHistory();
       }
       refreshChat();
       ensurePolling();
@@ -212,6 +254,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
         target.removeEventListener('submit', onSubmit);
         target.removeEventListener('keydown', onKeyDown);
         unbindViewport();
+        unbindHistory();
         started = false;
       }
       if (pollTimer) {
