@@ -16,7 +16,8 @@ function fixture(overrides = {}) {
   const verifier = overrides.verifier ?? {
     inspect: async path => (calls.push(['inspect', path]), { sha256:'sha', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }),
   };
-  const service = createUpdateService({ native, verifier, expectedIdentity:{ applicationId:'com.yggdrasil.lighthouse', signerCertificateSha256:'signer', minVersionCode:1005, artifactSha256:'sha' } });
+  const backup = overrides.backup;
+  const service = createUpdateService({ native, verifier, backup, expectedIdentity:{ applicationId:'com.yggdrasil.lighthouse', signerCertificateSha256:'signer', minVersionCode:1005, artifactSha256:'sha' } });
   return { service, calls };
 }
 
@@ -90,6 +91,25 @@ test('permission return re-inspects staged artifact before retrying installer', 
   assert.equal((await service.install('/tmp/update.apk')).status, 'PERMISSION_REQUIRED');
   assert.equal((await service.resumeInstallAfterPermission('/tmp/update.apk')).status, 'REQUESTED');
   assert.deepEqual(calls.map(x => x[0]), ['inspect','requestInstall','inspect','requestInstall']);
+});
+
+test('installer handoff requires successful backup durable readback when backup owner is configured', async () => {
+  const calls = [];
+  const backup = {
+    exportBackup: async () => (calls.push(['backup']), { revision:7, artifactHash:'backup-sha' }),
+    readback: async artifact => (calls.push(['backupReadback', artifact.artifactHash]), { revision:7, artifactHash:'backup-sha' }),
+  };
+  const { service } = fixture({ backup, native:{
+    startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
+    getJobSnapshot: async id => ({ jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
+    resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
+    discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
+    requestInstall: async path => (calls.push(['requestInstall', path]), { status:'REQUESTED' }),
+    reconcileInstalledVersion: async () => null,
+  }});
+  assert.equal((await service.install('/tmp/update.apk')).status, 'REQUESTED');
+  assert.deepEqual(calls.map(x => x[0]), ['backup','backupReadback','requestInstall']);
 });
 
 test('installed state is reconciled from PackageManager/native readback, not install request', async () => {
