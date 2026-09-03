@@ -98,3 +98,30 @@ test('native updater persists WAITING_ANDROID_CONFIRMATION before opening Androi
   assert.ok(waitingStateIndex >= 0 && saveIndex > waitingStateIndex && installerIndex > saveIndex,
     'WAITING_ANDROID_CONFIRMATION must be durable before Android package installer is opened');
 });
+
+test('installed readback is bound to the waiting job and compares PackageManager version against durable targetVersionCode', () => {
+  const start = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
+  const end = source.indexOf('private boolean requireState', start);
+  assert.ok(start >= 0 && end > start, 'reconcileInstalledVersion method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /call\.getString\("jobId"\)/);
+  assert.match(method, /load\(jobId\)/);
+  assert.match(method, /requireState\(call, snapshot, "WAITING_ANDROID_CONFIRMATION"\)/);
+  assert.match(method, /nullableLong\(snapshot, "targetVersionCode"\)/);
+  assert.doesNotMatch(method, /minVersionCode/);
+
+  const readbackStateIndex = method.indexOf('snapshot.put("state", "READBACK")');
+  const readbackSaveIndex = method.indexOf('save(snapshot)', readbackStateIndex);
+  const packageReadIndex = method.indexOf('getPackageInfo(');
+  assert.ok(readbackStateIndex >= 0 && readbackSaveIndex > readbackStateIndex && packageReadIndex > readbackSaveIndex,
+    'READBACK must be durable before PackageManager identity is read');
+
+  assert.match(method, /installedVersionCode\s*>=\s*targetVersionCode/);
+  assert.match(method, /snapshot\.put\("state",\s*"DONE"\)/);
+  assert.match(method, /snapshot\.put\("state",\s*"READY_TO_INSTALL"\)/);
+  assert.match(method, /snapshot\.put\("installedVersionCode",\s*installedVersionCode\)/);
+  assert.match(method, /snapshot\.put\("installedVersionName",\s*info\.versionName\)/);
+  assert.match(method, /snapshot\.put\("installedSignerSha256",\s*installedSignerSha256\)/);
+  assert.match(method, /save\(snapshot\)/);
+  assert.match(method, /call\.resolve\(snapshot\)/);
+});
