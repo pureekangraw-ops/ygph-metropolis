@@ -129,7 +129,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "STAGED", "FAILED")) return;
+        if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "READY_TO_INSTALL", "FAILED")) return;
         snapshot.put("state", "CANCELLED");
         save(snapshot);
         String path = snapshot.getString("stagedPath");
@@ -145,7 +145,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if (!requireState(call, snapshot, "STAGED", "PERMISSION_REQUIRED")) return;
+        if (!requireState(call, snapshot, "READY_TO_INSTALL", "PERMISSION_REQUIRED")) return;
         String path = snapshot.getString("stagedPath");
         if (path == null || path.isBlank()) {
             call.reject("UPDATE_STAGE_PATH_REQUIRED");
@@ -286,7 +286,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 fail(jobId, "STAGE_RENAME_FAILED");
                 return;
             }
-            done.put("state", "STAGED");
+            done.put("state", "READY_TO_INSTALL");
             done.put("stagedPath", apk.getAbsolutePath());
             done.put("bytesDownloaded", apk.length());
             Long totalBytes = nullableLong(done, "totalBytes");
