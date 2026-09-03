@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
   const verifier = overrides.verifier ?? {
     inspect: async path => (calls.push(['inspect', path]), { sha256:'sha', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }),
   };
-  const service = createUpdateService({ native, verifier, expectedIdentity:{ applicationId:'com.yggdrasil.lighthouse', signerCertificateSha256:'signer', minVersionCode:1005 } });
+  const service = createUpdateService({ native, verifier, expectedIdentity:{ applicationId:'com.yggdrasil.lighthouse', signerCertificateSha256:'signer', minVersionCode:1005, artifactSha256:'sha' } });
   return { service, calls };
 }
 
@@ -37,6 +37,12 @@ test('resume re-inspects staged artifact before installer handoff', async () => 
 test('wrong signer or package blocks installer handoff', async () => {
   const { service, calls } = fixture({ verifier:{ inspect: async () => ({ sha256:'sha', applicationId:'evil.app', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'wrong' }) } });
   await assert.rejects(() => service.install('/tmp/update.apk'), /UPDATE_IDENTITY_MISMATCH/);
+  assert.equal(calls.some(x => x[0] === 'requestInstall'), false);
+});
+
+test('altered staged artifact blocks installer handoff', async () => {
+  const { service, calls } = fixture({ verifier:{ inspect: async () => ({ sha256:'altered', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }) } });
+  await assert.rejects(() => service.install('/tmp/update.apk'), /UPDATE_ARTIFACT_MISMATCH/);
   assert.equal(calls.some(x => x[0] === 'requestInstall'), false);
 });
 
