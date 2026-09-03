@@ -42,8 +42,13 @@ public class LighthouseUpdaterPlugin extends Plugin {
     @PluginMethod
     public void startDownload(PluginCall call) {
         String url = call.getString("url");
+        String expectedSha256 = normalizeHex(call.getString("expectedSha256"));
         if (url == null || url.isBlank()) {
             call.reject("UPDATE_URL_REQUIRED");
+            return;
+        }
+        if (expectedSha256 == null || expectedSha256.isBlank()) {
+            call.reject("UPDATE_EXPECTED_SHA256_REQUIRED");
             return;
         }
         String jobId = call.getString("jobId", UUID.randomUUID().toString());
@@ -55,6 +60,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         File part = new File(dir, jobId + ".apk.part");
         JSObject snapshot = snapshot(jobId, "DOWNLOADING", part.getAbsolutePath(), part.length(), null, null);
         snapshot.put("attempts", 0);
+        snapshot.put("expectedSha256", expectedSha256);
         save(snapshot);
         launch(jobId, url, part);
         call.resolve(load(jobId));
@@ -234,18 +240,26 @@ public class LighthouseUpdaterPlugin extends Plugin {
                     save(state);
                 }
             }
+            JSObject done = load(jobId);
+            if (done == null) return;
+            String stagedSha256 = sha256File(part);
+            done.put("stagedSha256", stagedSha256);
+            String expectedSha256 = normalizeHex(done.getString("expectedSha256"));
+            if (expectedSha256 == null || !expectedSha256.equals(normalizeHex(stagedSha256))) {
+                done.put("state", "FAILED");
+                done.put("error", "UPDATE_ARTIFACT_MISMATCH");
+                save(done);
+                return;
+            }
             File apk = new File(part.getParentFile(), jobId + ".apk");
             if (apk.exists()) apk.delete();
             if (!part.renameTo(apk)) {
                 fail(jobId, "STAGE_RENAME_FAILED");
                 return;
             }
-            JSObject done = load(jobId);
-            if (done == null) return;
             done.put("state", "STAGED");
             done.put("stagedPath", apk.getAbsolutePath());
             done.put("bytesDownloaded", apk.length());
-            done.put("stagedSha256", sha256File(apk));
             Long totalBytes = nullableLong(done, "totalBytes");
             if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
             save(done);
@@ -322,6 +336,10 @@ public class LighthouseUpdaterPlugin extends Plugin {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String normalizeHex(String value) {
+        return value == null ? null : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private static String sha256File(File file) throws Exception {
