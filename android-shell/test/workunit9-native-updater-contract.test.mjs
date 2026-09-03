@@ -13,3 +13,11 @@ test('native updater persists staged artifact identity before installer handoff'
   assert.match(source, /"stagedSha256"/);
   assert.match(source, /sha256File\(/);
 });
+
+test('native updater rejects invalid lifecycle transitions instead of silently changing state', () => {
+  assert.match(source, /UPDATE_INVALID_STATE/);
+  assert.match(source, /requireState\(/);
+  assert.match(source, /"DOWNLOADING"/);
+  assert.match(source, /"PAUSED"/);
+  assert.match(source, /"STAGED"/);
+});
