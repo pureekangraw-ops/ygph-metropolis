@@ -16,7 +16,7 @@ export function createAndroidUpdaterBridge() {
     getInstalledIdentity:() => updaterPlugin().getInstalledIdentity(),
     enqueueDownload:input => updaterPlugin().enqueueDownload(input),
     readDownloadState:() => updaterPlugin().readDownloadState(),
-    retryDownload:() => updaterPlugin().retryDownload(),
+    retryDownload:input => updaterPlugin().retryDownload(input),
     verifyDownloadedApk:input => updaterPlugin().verifyDownloadedApk(input),
     canInstallPackages:() => updaterPlugin().canInstallPackages(),
     requestInstallPermission:() => updaterPlugin().requestInstallPermission(),
