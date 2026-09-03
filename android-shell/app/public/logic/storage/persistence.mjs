@@ -72,6 +72,7 @@ export function createMemoryVaultStore() {
   return {
     async get(key) { return structuredClone(map.get(key) ?? null); },
     async put(key, value) { map.set(key, structuredClone(value)); },
+    async delete(key) { map.delete(key); },
     async putMany(entries) {
       if (!Array.isArray(entries) || entries.length === 0) throw new TypeError('INVALID_GREENFIELD_STORE_ENTRIES');
       const next = new Map(map);
