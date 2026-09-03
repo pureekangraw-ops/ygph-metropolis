@@ -43,6 +43,15 @@ test('native updater exposes installed-version reconciliation and cleans staged 
   assert.match(plugin, /deleteStagedFile\(\)/);
 });
 
+test('native retry requires and persists the current candidate before restarting DownloadManager', () => {
+  const retryStart = plugin.indexOf('public void retryDownload');
+  const retryEnd = plugin.indexOf('@PluginMethod', retryStart + 1);
+  const retryBody = plugin.slice(retryStart, retryEnd > retryStart ? retryEnd : undefined);
+  assert.match(retryBody, /persistCandidate\(call\)/);
+  assert.match(retryBody, /retry-candidate-required/);
+  assert.ok(retryBody.indexOf('persistCandidate(call)') < retryBody.indexOf('enqueueFromPrefs'));
+});
+
 test('generated Android patch adds REQUEST_INSTALL_PACKAGES and FileProvider without clearing app data', () => {
   assert.match(applyTool, /REQUEST_INSTALL_PACKAGES/);
   assert.match(applyTool, /androidx\.core\.content\.FileProvider/);
