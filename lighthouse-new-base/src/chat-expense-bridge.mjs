@@ -39,7 +39,7 @@ export function createExpenseChatBridge({ runtime, requestIdFactory } = {}) {
     async readback(result) {
       if (result?.status === 'COMPLETE' && result.readback) {
         readback = result.readback;
-        return Object.freeze({ ok: true });
+        return Object.freeze({ ok: true, evidence: result.readback });
       }
       return Object.freeze({ ok: false });
     },
