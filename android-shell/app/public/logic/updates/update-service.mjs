@@ -63,6 +63,12 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
     return inspected;
   }
 
+  async function verifiedInstall(path) {
+    const inspected = await inspectForInstall(path);
+    const result = await native.requestInstall(path);
+    return { ...result, stagedIdentity: inspected };
+  }
+
   return Object.freeze({
     async start(input) {
       return native.startDownload(input);
@@ -100,9 +106,11 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
     },
 
     async install(path) {
-      const inspected = await inspectForInstall(path);
-      const result = await native.requestInstall(path);
-      return { ...result, stagedIdentity: inspected };
+      return verifiedInstall(path);
+    },
+
+    async resumeInstallAfterPermission(path) {
+      return verifiedInstall(path);
     },
 
     async reconcileInstalled() {
