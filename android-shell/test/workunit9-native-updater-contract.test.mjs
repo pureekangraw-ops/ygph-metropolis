@@ -9,6 +9,18 @@ test('native updater persists retry attempts for recovery diagnostics', () => {
   assert.match(source, /"lastAttemptAt"/);
 });
 
+test('native updater persists target version metadata from the update candidate', () => {
+  const start = source.indexOf('public void startDownload(PluginCall call)');
+  const end = source.indexOf('public void getJobSnapshot(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'startDownload method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /call\.getLong\("targetVersionCode"\)/);
+  assert.match(method, /call\.getString\("targetVersionName"\)/);
+  assert.match(method, /UPDATE_TARGET_VERSION_CODE_REQUIRED/);
+  assert.match(method, /snapshot\.put\("targetVersionCode",\s*targetVersionCode\)/);
+  assert.match(method, /snapshot\.put\("targetVersionName",\s*targetVersionName\)/);
+});
+
 test('native updater persists staged artifact identity before installer handoff', () => {
   assert.match(source, /"stagedSha256"/);
   assert.match(source, /sha256File\(/);
