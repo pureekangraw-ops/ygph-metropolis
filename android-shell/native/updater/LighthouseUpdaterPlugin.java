@@ -79,6 +79,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
+        if (!requireState(call, snapshot, "DOWNLOADING")) return;
         snapshot.put("state", "PAUSED");
         save(snapshot);
         call.resolve(snapshot);
@@ -93,6 +94,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
+        if (!requireState(call, snapshot, "PAUSED")) return;
         if (url == null || url.isBlank()) url = snapshot.getString("url");
         if (url == null || url.isBlank()) {
             call.reject("UPDATE_URL_REQUIRED");
@@ -121,6 +123,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
+        if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "STAGED", "FAILED")) return;
         snapshot.put("state", "CANCELLED");
         save(snapshot);
         String path = snapshot.getString("stagedPath");
@@ -174,6 +177,15 @@ public class LighthouseUpdaterPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("INSTALLED_READBACK_FAILED", e);
         }
+    }
+
+    private boolean requireState(PluginCall call, JSObject snapshot, String... allowedStates) {
+        String current = snapshot.getString("state");
+        for (String allowed : allowedStates) {
+            if (allowed.equals(current)) return true;
+        }
+        call.reject("UPDATE_INVALID_STATE", "Current state " + current + " does not allow this transition");
+        return false;
     }
 
     private void launch(String jobId, String url, File part) {
