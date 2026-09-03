@@ -3,7 +3,10 @@ import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const EXPECTED_APPLICATION_ID = 'com.yggdrasil.lighthouse';
-const ALLOWED_PERMISSIONS = new Set(['android.permission.INTERNET']);
+const ALLOWED_PERMISSIONS = new Set([
+  'android.permission.INTERNET',
+  'android.permission.REQUEST_INSTALL_PACKAGES',
+]);
 const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
 const PROFILE_INSTALL_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
 const PROFILE_INSTALL_PERMISSION = 'android.permission.DUMP';
