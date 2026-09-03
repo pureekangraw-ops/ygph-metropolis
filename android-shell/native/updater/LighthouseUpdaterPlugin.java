@@ -43,12 +43,22 @@ public class LighthouseUpdaterPlugin extends Plugin {
     public void startDownload(PluginCall call) {
         String url = call.getString("url");
         String expectedSha256 = normalizeHex(call.getString("expectedSha256"));
+        Long targetVersionCode = call.getLong("targetVersionCode");
+        String targetVersionName = call.getString("targetVersionName");
         if (url == null || url.isBlank()) {
             call.reject("UPDATE_URL_REQUIRED");
             return;
         }
         if (expectedSha256 == null || expectedSha256.isBlank()) {
             call.reject("UPDATE_EXPECTED_SHA256_REQUIRED");
+            return;
+        }
+        if (targetVersionCode == null || targetVersionCode <= 0L) {
+            call.reject("UPDATE_TARGET_VERSION_CODE_REQUIRED");
+            return;
+        }
+        if (targetVersionName == null || targetVersionName.isBlank()) {
+            call.reject("UPDATE_TARGET_VERSION_NAME_REQUIRED");
             return;
         }
         String jobId = call.getString("jobId", UUID.randomUUID().toString());
@@ -61,6 +71,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
         JSObject snapshot = snapshot(jobId, "DOWNLOADING", part.getAbsolutePath(), part.length(), null, null);
         snapshot.put("attempts", 0);
         snapshot.put("expectedSha256", expectedSha256);
+        snapshot.put("targetVersionCode", targetVersionCode);
+        snapshot.put("targetVersionName", targetVersionName);
         save(snapshot);
         launch(jobId, url, part);
         call.resolve(load(jobId));
