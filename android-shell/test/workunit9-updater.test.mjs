@@ -46,6 +46,27 @@ test('altered staged artifact blocks installer handoff', async () => {
   assert.equal(calls.some(x => x[0] === 'requestInstall'), false);
 });
 
+test('process-death recovery re-reads native staged job and re-inspects artifact', async () => {
+  const calls = [];
+  const native = {
+    startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
+    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
+    resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
+    discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
+    requestInstall: async path => ({ status:'REQUESTED', path }),
+    reconcileInstalledVersion: async () => null,
+  };
+  const verifier = {
+    inspect: async path => (calls.push(['inspect', path]), { sha256:'sha', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }),
+  };
+  const { service } = fixture({ native, verifier });
+  const recovered = await service.recover('J1');
+  assert.equal(recovered.state, 'READY_TO_INSTALL');
+  assert.equal(recovered.stagedPath, '/tmp/update.apk');
+  assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','inspect']);
+});
+
 test('installed state is reconciled from PackageManager/native readback, not install request', async () => {
   const { service } = fixture();
   assert.equal((await service.install('/tmp/update.apk')).status, 'REQUESTED');
