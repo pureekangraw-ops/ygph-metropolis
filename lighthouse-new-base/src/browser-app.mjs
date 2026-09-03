@@ -8,17 +8,28 @@ function requireRoot(root) {
   return root;
 }
 
-export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
+export function createBrowserApp({ root, initialRoute, model = {}, chatController = null } = {}) {
   const target = requireRoot(root);
   let routeState = initialRoute ? Object.freeze({ ...initialRoute }) : createNavigationState();
   let started = false;
   let pollTimer = null;
   let settingsState = Object.freeze({ ...(model.settings || {}) });
+  let chatState = chatController?.snapshot?.() || model.chat || {};
+  let chatBusy = false;
+  let editingMessageId = null;
+  let submitSequence = 0;
+
+  function scrollLatestMessage() {
+    if (routeState.top !== 'chat' || typeof target.querySelectorAll !== 'function') return;
+    const messages = target.querySelectorAll('[data-chat-message]');
+    const latest = messages?.[messages.length - 1];
+    latest?.scrollIntoView?.({ block:'end' });
+  }
 
   function render() {
     target.innerHTML = renderBrowserShell({
       route:routeState,
-      chat:model.chat || {},
+      chat:chatState,
       manual:model.manual || {},
       income:model.income || {},
       outcome:model.outcome || {},
@@ -26,6 +37,12 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
       ledger:model.ledger || {},
       settings:settingsState,
     });
+    queueMicrotask(scrollLatestMessage);
+  }
+
+  function refreshChat(next = null) {
+    chatState = next || chatController?.snapshot?.() || chatState;
+    render();
   }
 
   function updateUpdaterStatus(next) {
@@ -52,9 +69,42 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
         const next = await settingsState.operations.readStatus();
         if (next) updateUpdaterStatus(next);
       } catch {
-        // Controller owns truthful failure projection.
+        // Updater controller owns truthful failure projection.
       }
     }, 1000);
+  }
+
+  function composerInput() {
+    return typeof target.querySelector === 'function' ? target.querySelector('[data-chat-input]') : null;
+  }
+
+  async function onSubmit(event) {
+    const form = event?.target;
+    if (!form?.matches?.('[data-chat-form]') || !chatController || chatBusy) return;
+    event.preventDefault?.();
+    const input = form.querySelector?.('[data-chat-input]') || composerInput();
+    const text = String(input?.value || '').trim();
+    if (!text) return;
+    chatBusy = true;
+    try {
+      const next = editingMessageId
+        ? await chatController.edit(editingMessageId, text)
+        : await chatController.send(text, { submitToken:`ui-submit-${++submitSequence}` });
+      editingMessageId = null;
+      if (input) input.value = '';
+      refreshChat(next);
+    } finally {
+      chatBusy = false;
+    }
+  }
+
+  function onKeyDown(event) {
+    const input = event?.target;
+    if (!input?.matches?.('[data-chat-input]')) return;
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault?.();
+      input.closest?.('[data-chat-form]')?.requestSubmit?.();
+    }
   }
 
   async function onClick(event) {
@@ -66,6 +116,29 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
         routeState = next;
         render();
         if (routeState.top === 'settings') ensurePolling();
+      }
+      return;
+    }
+
+    const chatAction = event?.target?.closest?.('[data-chat-action]');
+    if (chatAction?.dataset?.chatAction && chatController) {
+      event.preventDefault?.();
+      const action = chatAction.dataset.chatAction;
+      const messageId = chatAction.dataset.chatMessageId;
+      if (action === 'edit') {
+        editingMessageId = messageId;
+        const pending = chatController.snapshot().pending;
+        const input = composerInput();
+        if (input) {
+          input.value = pending?.messageId === messageId ? pending.rawText : '';
+          input.focus?.();
+        }
+        return;
+      }
+      const operation = chatController[action];
+      if (typeof operation === 'function') {
+        const next = await operation(messageId);
+        refreshChat(next);
       }
       return;
     }
@@ -103,18 +176,42 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
     }
   }
 
+  function syncVisualViewport() {
+    const viewport = globalThis.window?.visualViewport;
+    const height = viewport?.height || globalThis.window?.innerHeight;
+    if (Number.isFinite(height)) globalThis.document?.documentElement?.style?.setProperty('--lh-visual-viewport-height', `${Math.round(height)}px`);
+    scrollLatestMessage();
+  }
+
+  function bindViewport() {
+    globalThis.window?.visualViewport?.addEventListener?.('resize', syncVisualViewport);
+    globalThis.window?.visualViewport?.addEventListener?.('scroll', syncVisualViewport);
+    syncVisualViewport();
+  }
+
+  function unbindViewport() {
+    globalThis.window?.visualViewport?.removeEventListener?.('resize', syncVisualViewport);
+    globalThis.window?.visualViewport?.removeEventListener?.('scroll', syncVisualViewport);
+  }
+
   return Object.freeze({
     start() {
       if (!started) {
         target.addEventListener('click', onClick);
+        target.addEventListener('submit', onSubmit);
+        target.addEventListener('keydown', onKeyDown);
         started = true;
+        bindViewport();
       }
-      render();
+      refreshChat();
       ensurePolling();
     },
     stop() {
       if (started) {
         target.removeEventListener('click', onClick);
+        target.removeEventListener('submit', onSubmit);
+        target.removeEventListener('keydown', onKeyDown);
+        unbindViewport();
         started = false;
       }
       if (pollTimer) {
@@ -122,12 +219,8 @@ export function createBrowserApp({ root, initialRoute, model = {} } = {}) {
         pollTimer = null;
       }
     },
-    route() {
-      return Object.freeze({ ...routeState });
-    },
-    setUpdaterStatus(next) {
-      updateUpdaterStatus(next);
-    },
+    route() { return Object.freeze({ ...routeState }); },
+    setUpdaterStatus(next) { updateUpdaterStatus(next); },
     render,
   });
 }
