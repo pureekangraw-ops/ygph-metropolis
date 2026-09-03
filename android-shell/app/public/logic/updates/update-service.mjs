@@ -82,8 +82,8 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
   async function verifiedInstall(jobId, allowedStates) {
     const snapshot = await native.getJobSnapshot(jobId);
     if (!allowedStates.includes(snapshot?.state) || !snapshot?.stagedPath) {
-      const error = new Error('UPDATE_JOB_NOT_STAGED');
-      error.code = 'UPDATE_JOB_NOT_STAGED';
+      const error = new Error('UPDATE_JOB_NOT_READY_TO_INSTALL');
+      error.code = 'UPDATE_JOB_NOT_READY_TO_INSTALL';
       error.snapshot = snapshot;
       throw error;
     }
@@ -106,11 +106,10 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
 
     async recover(jobId) {
       const snapshot = await native.getJobSnapshot(jobId);
-      if (snapshot?.state === 'STAGED' && snapshot?.stagedPath) {
+      if (snapshot?.state === 'READY_TO_INSTALL' && snapshot?.stagedPath) {
         const inspected = await inspectForInstall(snapshot.stagedPath);
         return {
           ...snapshot,
-          state: 'READY_TO_INSTALL',
           stagedIdentity: inspected,
           progress: deriveProgress(snapshot),
         };
@@ -131,7 +130,7 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     },
 
     async install(jobId) {
-      return verifiedInstall(jobId, ['STAGED']);
+      return verifiedInstall(jobId, ['READY_TO_INSTALL']);
     },
 
     async resumeInstallAfterPermission(jobId) {
