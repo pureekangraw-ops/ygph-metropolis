@@ -20,7 +20,6 @@ import {
 const root = document.getElementById('app');
 if (!root) throw new Error('LIGHTHOUSE_APP_ROOT_MISSING');
 
-const APP_VERSION = '2.0.1';
 const APP_PACKAGE = 'com.yggdrasil.lighthouse';
 const TEST_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/codex/lighthouse-new-base-20260902/update-test/manifest.json';
 
@@ -98,7 +97,7 @@ async function startProduct() {
       calendar:projected.calendar,
       ledger:projected.ledger,
       settings:{
-        version:APP_VERSION,
+        version:updaterStatus?.installed?.versionName || null,
         rollbackSupported:false,
         updaterStatus,
         operations:nativeUpdaterAvailable() ? updater : {},
