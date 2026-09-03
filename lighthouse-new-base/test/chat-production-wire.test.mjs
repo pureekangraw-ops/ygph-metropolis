@@ -8,7 +8,7 @@ test('production entry creates durable CHAT store/controller and passes it to th
   assert.match(main, /createChatStore/);
   assert.match(main, /createChatController/);
   assert.match(main, /createExpenseChatBridge/);
-  assert.match(main, /chatController\s*:/);
+  assert.match(main, /createBrowserApp\(\{[\s\S]*?\bchatController(?:\s*:|\s*,)/);
   assert.doesNotMatch(main, /chat:\s*\{\s*messages:\s*\[\]\s*\}/);
 });
 
