@@ -139,6 +139,19 @@ public class LighthouseUpdaterPlugin extends Plugin {
             .apply();
     }
 
+    private boolean hasValidCandidate(PluginCall call) {
+        String packageName = call.getString("packageName", "");
+        String apkUrl = call.getString("apkUrl", "");
+        String sha256 = call.getString("sha256", "");
+        long versionCode = call.getLong("versionCode", 0L);
+        long sizeBytes = call.getLong("sizeBytes", 0L);
+        return !packageName.isEmpty()
+            && apkUrl.startsWith("https://")
+            && !sha256.isEmpty()
+            && versionCode > 0
+            && sizeBytes > 0;
+    }
+
     private void deleteStagedFile() {
         File file = stagedFile();
         if (file.exists()) file.delete();
@@ -296,8 +309,14 @@ public class LighthouseUpdaterPlugin extends Plugin {
     @PluginMethod
     public void retryDownload(PluginCall call) {
         try {
+            if (!hasValidCandidate(call)) {
+                call.reject("retry-candidate-required");
+                return;
+            }
+            persistCandidate(call);
             long existing = prefs().getLong("downloadId", -1L);
             if (existing >= 0) downloads().remove(existing);
+            prefs().edit().remove("downloadId").apply();
             call.resolve(enqueueFromPrefs("Retrying"));
         } catch (Exception error) {
             call.reject("download-retry-failed", error);
