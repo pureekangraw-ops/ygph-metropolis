@@ -3,7 +3,7 @@
   "versionCode": 2002,
   "packageName": "com.yggdrasil.lighthouse",
   "apkUrl": "https://github.com/pureekangraw-ops/ygph-metropolis/releases/download/lighthouse-2.0.2-test/LIGHTHOUSE-2.0.2.apk",
-  "sha256": "e5526a8ac6c5be73bf869ab68e9a82635ab3d8772a7c73d38a3e08db82e63a6d",
+  "sha256": "a39a0486bcdcd52a67cc0392a8e30ec179a0ecbfbb6435e495ba72a00058b314",
   "sizeBytes": 3356027,
-  "releaseNotes": "LIGHTHOUSE 2.0.2 — CHAT complete vertical slice owner test"
+  "releaseNotes": "LIGHTHOUSE 2.0.2 — CHAT complete vertical slice + updater stale-candidate fix owner test"
 }
