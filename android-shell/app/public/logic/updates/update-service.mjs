@@ -73,6 +73,20 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
       return { ...snapshot, progress: deriveProgress(snapshot) };
     },
 
+    async recover(jobId) {
+      const snapshot = await native.getJobSnapshot(jobId);
+      if (snapshot?.state === 'STAGED' && snapshot?.stagedPath) {
+        const inspected = await inspectForInstall(snapshot.stagedPath);
+        return {
+          ...snapshot,
+          state: 'READY_TO_INSTALL',
+          stagedIdentity: inspected,
+          progress: deriveProgress(snapshot),
+        };
+      }
+      return { ...snapshot, progress: deriveProgress(snapshot) };
+    },
+
     async pause(jobId) {
       return native.pauseDownload(jobId);
     },
