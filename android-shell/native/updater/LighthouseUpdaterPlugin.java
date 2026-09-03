@@ -212,15 +212,37 @@ public class LighthouseUpdaterPlugin extends Plugin {
 
     @PluginMethod
     public void reconcileInstalledVersion(PluginCall call) {
+        String jobId = call.getString("jobId");
+        JSObject snapshot = load(jobId);
+        if (snapshot == null) {
+            call.reject("UPDATE_JOB_NOT_FOUND");
+            return;
+        }
+        if (!requireState(call, snapshot, "WAITING_ANDROID_CONFIRMATION")) return;
+        Long targetVersionCode = nullableLong(snapshot, "targetVersionCode");
+        if (targetVersionCode == null || targetVersionCode <= 0L) {
+            call.reject("UPDATE_TARGET_VERSION_CODE_REQUIRED");
+            return;
+        }
+        snapshot.put("state", "READBACK");
+        save(snapshot);
         try {
             PackageManager pm = getContext().getPackageManager();
             PackageInfo info = pm.getPackageInfo(getContext().getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
-            JSObject out = new JSObject();
-            out.put("applicationId", info.packageName);
-            out.put("versionName", info.versionName);
-            out.put("versionCode", Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode);
-            out.put("signerCertificateSha256", signerSha256(info));
-            call.resolve(out);
+            long installedVersionCode = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+            String installedSignerSha256 = signerSha256(info);
+            snapshot.put("installedVersionCode", installedVersionCode);
+            snapshot.put("installedVersionName", info.versionName);
+            snapshot.put("installedSignerSha256", installedSignerSha256);
+            snapshot.put("readbackAt", System.currentTimeMillis());
+            if (installedVersionCode >= targetVersionCode) {
+                snapshot.put("state", "DONE");
+            } else {
+                snapshot.put("state", "READY_TO_INSTALL");
+                snapshot.put("message", "ยังไม่ได้ติดตั้ง");
+            }
+            save(snapshot);
+            call.resolve(snapshot);
         } catch (Exception e) {
             call.reject("INSTALLED_READBACK_FAILED", e);
         }
