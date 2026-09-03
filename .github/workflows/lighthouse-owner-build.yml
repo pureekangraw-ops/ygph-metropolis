@@ -13,7 +13,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-owner-selected-ref:
@@ -114,6 +114,25 @@ jobs:
 
       - name: Verify final APK identity
         run: APK_SOURCE_COMMIT="$(git rev-parse HEAD)" node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
+
+      - name: Publish 2.0.2 test-channel APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="lighthouse-2.0.2-test"
+          release_apk="$RUNNER_TEMP/LIGHTHOUSE-2.0.2.apk"
+          cp android/app/build/outputs/apk/release/lighthouse-release.apk "$release_apk"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$release_apk" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$release_apk" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$(git rev-parse HEAD)" \
+              --title "LIGHTHOUSE 2.0.2 Owner Test" \
+              --notes "Owner test-channel build only. Device acceptance is still required before final release." \
+              --prerelease
+          fi
 
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
