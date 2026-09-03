@@ -6,7 +6,7 @@ on:
       target_ref:
         description: Branch or commit to build
         required: true
-        default: codex/package-existing-full-app-20260902
+        default: feat/lighthouse-1.0.0-rebuild
         type: string
 
 permissions:
@@ -111,7 +111,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-existing-full-app-1.0.3
+          name: lighthouse-1.0.0-candidate
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
