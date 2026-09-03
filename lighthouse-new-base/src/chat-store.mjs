@@ -80,7 +80,16 @@ export function createChatStore({ storage = defaultStorage(), key = DEFAULT_KEY,
       return document;
     });
   }
-  function archive(messageId) { return updateMessage(messageId, { archived:true }); }
+  function archive(messageId) {
+    return updateDocument(document => {
+      const root = document.messages.find(item => item.id === messageId);
+      if (!root) throw new Error('CHAT_MESSAGE_NOT_FOUND');
+      for (const message of document.messages) {
+        if (message.id === messageId || message.relatedMessageId === messageId) message.archived = true;
+      }
+      return document;
+    });
+  }
   function activeMessages() { return read().messages.filter(message => message.archived !== true); }
 
   return Object.freeze({ read, commitUserMessage, updateDocument, updateMessage, archive, activeMessages });
