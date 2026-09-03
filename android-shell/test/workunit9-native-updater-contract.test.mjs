@@ -14,32 +14,36 @@ test('native updater persists staged artifact identity before installer handoff'
   assert.match(source, /sha256File\(/);
 });
 
-test('native updater rejects invalid lifecycle transitions instead of silently changing state', () => {
+test('native updater uses canonical READY_TO_INSTALL lifecycle state', () => {
   assert.match(source, /UPDATE_INVALID_STATE/);
   assert.match(source, /requireState\(/);
   assert.match(source, /"DOWNLOADING"/);
   assert.match(source, /"PAUSED"/);
-  assert.match(source, /"STAGED"/);
+  assert.match(source, /"READY_TO_INSTALL"/);
+  assert.doesNotMatch(source, /"STAGED"/);
 });
 
-test('native updater verifies expected SHA before staging the completed artifact', () => {
+test('native updater verifies expected SHA before making the completed artifact ready to install', () => {
   assert.match(source, /"expectedSha256"/);
   assert.match(source, /UPDATE_ARTIFACT_MISMATCH/);
   assert.match(source, /sha256File\(part\)/);
   const digestIndex = source.indexOf('sha256File(part)');
   const renameIndex = source.indexOf('part.renameTo(apk)');
+  const readyIndex = source.indexOf('done.put("state", "READY_TO_INSTALL")');
   assert.ok(digestIndex >= 0 && renameIndex >= 0 && digestIndex < renameIndex,
-    'completed .part must be hashed before rename to staged APK');
+    'completed .part must be hashed before rename to ready APK');
+  assert.ok(renameIndex >= 0 && readyIndex > renameIndex,
+    'job can become READY_TO_INSTALL only after verified artifact is renamed into place');
 });
 
-test('native installer handoff is bound to a persisted STAGED job instead of a free path', () => {
+test('native installer handoff is bound to a persisted READY_TO_INSTALL job instead of a free path', () => {
   const start = source.indexOf('public void requestInstall(PluginCall call)');
   const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
   assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
   const method = source.slice(start, end);
   assert.match(method, /call\.getString\("jobId"\)/);
   assert.match(method, /load\(jobId\)/);
-  assert.match(method, /requireState\(call, snapshot, "STAGED"/);
+  assert.match(method, /requireState\(call, snapshot, "READY_TO_INSTALL", "PERMISSION_REQUIRED"\)/);
   assert.match(method, /snapshot\.getString\("stagedPath"\)/);
 });
 
@@ -62,7 +66,7 @@ test('native updater persists permission requirement before leaving for Android 
   const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
   assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
   const method = source.slice(start, end);
-  assert.match(method, /requireState\(call, snapshot, "STAGED", "PERMISSION_REQUIRED"\)/);
+  assert.match(method, /requireState\(call, snapshot, "READY_TO_INSTALL", "PERMISSION_REQUIRED"\)/);
   const permissionStateIndex = method.indexOf('snapshot.put("state", "PERMISSION_REQUIRED")');
   const saveIndex = method.indexOf('save(snapshot)', permissionStateIndex);
   const settingsIndex = method.indexOf('startActivity(settings)');
