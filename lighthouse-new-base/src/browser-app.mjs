@@ -8,6 +8,10 @@ function requireRoot(root) {
   return root;
 }
 
+function settingsMethodName(action) {
+  return action === 'check-update' ? 'checkUpdate' : action;
+}
+
 export function createBrowserApp({ root, initialRoute, model = {}, chatController = null } = {}) {
   const target = requireRoot(root);
   let routeState = initialRoute ? Object.freeze({ ...initialRoute }) : createNavigationState();
@@ -26,6 +30,19 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
     latest?.scrollIntoView?.({ block:'end' });
   }
 
+  function pruneUnavailableSettingsActions() {
+    if (routeState.top !== 'settings' || typeof target.querySelectorAll !== 'function') return;
+    const operations = settingsState.operations || {};
+    const buttons = target.querySelectorAll('[data-settings-action]');
+    for (const button of buttons || []) {
+      const action = button?.dataset?.settingsAction;
+      const methodName = settingsMethodName(action);
+      const supported = typeof operations?.[methodName] === 'function'
+        && (action !== 'rollback' || settingsState.rollbackSupported === true);
+      if (!supported) button?.remove?.();
+    }
+  }
+
   function render() {
     target.innerHTML = renderBrowserShell({
       route:routeState,
@@ -37,6 +54,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
       ledger:model.ledger || {},
       settings:settingsState,
     });
+    pruneUnavailableSettingsActions();
     queueMicrotask(scrollLatestMessage);
   }
 
@@ -189,7 +207,7 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
       event.preventDefault?.();
       const action = settingsAction.dataset.settingsAction;
       const operations = settingsState.operations || {};
-      const methodName = action === 'check-update' ? 'checkUpdate' : action;
+      const methodName = settingsMethodName(action);
       const operation = operations?.[methodName];
       if (typeof operation === 'function') {
         const result = await operation.call(operations);
