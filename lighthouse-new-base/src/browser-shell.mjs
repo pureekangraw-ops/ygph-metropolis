@@ -36,18 +36,39 @@ function renderTopNavigation(route) {
   )).join('')}</nav>`;
 }
 
+function renderChatActions(message, pending) {
+  if (pending?.messageId === message?.relatedMessageId && message?.kind === 'draft') {
+    return `<span class="chat-message-actions" data-chat-actions-for="${escapeHtml(pending.messageId)}">
+      <button type="button" data-chat-action="edit" data-chat-message-id="${escapeHtml(pending.messageId)}">แก้ไข</button>
+      <button type="button" data-chat-action="confirm" data-chat-message-id="${escapeHtml(pending.messageId)}">ยืนยัน</button>
+      <button type="button" data-chat-action="cancel" data-chat-message-id="${escapeHtml(pending.messageId)}">ยกเลิก</button>
+    </span>`;
+  }
+  if (message?.side === 'user' && message?.executionState === 'SUCCESS' && message?.syncState === 'ERROR') {
+    return `<span class="chat-message-actions"><button type="button" data-chat-action="retry" data-chat-message-id="${escapeHtml(message.id)}">ลองอีกครั้ง</button></span>`;
+  }
+  if (message?.side === 'user' && message?.executionState === 'SUCCESS' && message?.syncState === 'SUCCESS') {
+    return `<span class="chat-message-actions"><button type="button" data-chat-action="archive" data-chat-message-id="${escapeHtml(message.id)}">เก็บเข้าประวัติ</button></span>`;
+  }
+  return '';
+}
+
 function renderChat(chat = {}) {
   const messages = Array.isArray(chat.messages) ? chat.messages : [];
+  const pending = chat.pending || null;
   const thread = messages.map(message => {
-    const role = message?.role === 'user' ? 'user' : 'assistant';
-    return `<p data-chat-message="${role}">${escapeHtml(message?.text || '')}</p>`;
+    const role = message?.side === 'user' || message?.role === 'user' ? 'user' : 'assistant';
+    return `<article class="chat-message chat-message-${role}" data-chat-message="${role}" data-chat-message-id="${escapeHtml(message?.id || '')}">
+      <p>${escapeHtml(message?.text || '')}</p>
+      ${renderChatActions({ ...message, side:role }, pending)}
+    </article>`;
   }).join('');
 
   return `<main data-surface="chat" class="surface chat-surface">
     <header><h1>CHAT</h1></header>
     <section data-chat-thread aria-live="polite">${thread}</section>
     <form data-chat-form class="chat-composer">
-      <textarea data-chat-input aria-label="พิมพ์ข้อความ" rows="2" placeholder="พิมพ์คุยได้เลย"></textarea>
+      <textarea data-chat-input aria-label="พิมพ์ข้อความ" rows="2" enterkeyhint="send" placeholder="พิมพ์คุยได้เลย"></textarea>
       <button type="submit" data-chat-send>ส่ง</button>
     </form>
   </main>`;
@@ -152,12 +173,7 @@ function renderCalendar(calendar = {}) {
 }
 
 function renderManualHouse(house, data = {}) {
-  const labels = {
-    income:'Income',
-    outcome:'Outcome',
-    calendar:'Calendar',
-    ledger:'Ledger',
-  };
+  const labels = { income:'Income', outcome:'Outcome', calendar:'Calendar', ledger:'Ledger' };
   const label = labels[house];
   if (!label) return renderManualDashboard();
   const body = house === 'income'
@@ -183,9 +199,7 @@ function renderUpdaterStatus(status = null) {
     ? (downloaded ? `ดาวน์โหลดแล้ว ${downloaded}` : 'กำลังดาวน์โหลด')
     : `${Number(progress.percent || 0)}%${downloaded && total ? ` · ${downloaded} / ${total}` : ''}`;
 
-  if (status.state === 'update-available') {
-    return `<div data-updater-state="update-available"><p>พบเวอร์ชัน ${escapeHtml(candidate.versionName)}</p><p>${escapeHtml(candidate.releaseNotes || '')}</p><button type="button" data-updater-action="start">อัปเดต</button></div>`;
-  }
+  if (status.state === 'update-available') return `<div data-updater-state="update-available"><p>พบเวอร์ชัน ${escapeHtml(candidate.versionName)}</p><p>${escapeHtml(candidate.releaseNotes || '')}</p><button type="button" data-updater-action="start">อัปเดต</button></div>`;
   if (status.state === 'up-to-date') return '<p data-updater-state="up-to-date">เป็นเวอร์ชันล่าสุดแล้ว</p>';
   if (status.state === 'rejected-downgrade') return `<p data-updater-state="rejected-downgrade">${escapeHtml(status.message || 'รุ่นที่พบเก่ากว่ารุ่นที่ติดตั้งอยู่')}</p>`;
   if (status.state === 'Downloading') return `<div data-updater-state="Downloading"><p>กำลังดาวน์โหลด</p><p>${escapeHtml(progressText)}</p></div>`;
@@ -203,9 +217,7 @@ function renderUpdaterStatus(status = null) {
 
 function renderSettings(settings = {}) {
   const version = escapeHtml(settings.version || 'ไม่ทราบรุ่น');
-  const rollback = settings.rollbackSupported === true
-    ? '<button type="button" data-settings-action="rollback">ย้อนกลับรุ่นก่อน</button>'
-    : '';
+  const rollback = settings.rollbackSupported === true ? '<button type="button" data-settings-action="rollback">ย้อนกลับรุ่นก่อน</button>' : '';
   return `<main data-surface="settings" class="surface settings-surface">
     <header><h1>SETTINGS</h1><p>เวอร์ชัน ${version}</p></header>
     <section class="settings-actions">
@@ -219,33 +231,12 @@ function renderSettings(settings = {}) {
   </main>`;
 }
 
-export function renderBrowserShell({
-  route = { top:'chat', manualHouse:null },
-  chat = {},
-  manual = {},
-  income = {},
-  outcome = {},
-  calendar = {},
-  ledger = {},
-  settings = {},
-} = {}) {
+export function renderBrowserShell({ route = { top:'chat', manualHouse:null }, chat = {}, manual = {}, income = {}, outcome = {}, calendar = {}, ledger = {}, settings = {} } = {}) {
   let body;
   if (route?.top === 'manual') {
-    const houseData = route.manualHouse === 'income'
-      ? income
-      : route.manualHouse === 'outcome'
-        ? outcome
-        : route.manualHouse === 'calendar'
-          ? calendar
-          : route.manualHouse === 'ledger'
-            ? ledger
-            : {};
+    const houseData = route.manualHouse === 'income' ? income : route.manualHouse === 'outcome' ? outcome : route.manualHouse === 'calendar' ? calendar : route.manualHouse === 'ledger' ? ledger : {};
     body = route.manualHouse ? renderManualHouse(route.manualHouse, houseData) : renderManualDashboard(manual);
-  } else if (route?.top === 'settings') {
-    body = renderSettings(settings);
-  } else {
-    body = renderChat(chat);
-  }
-
+  } else if (route?.top === 'settings') body = renderSettings(settings);
+  else body = renderChat(chat);
   return `<div data-lighthouse-new-base class="lighthouse-app">${body}${renderTopNavigation(route)}</div>`;
 }
