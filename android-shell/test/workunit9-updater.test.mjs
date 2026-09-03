@@ -34,6 +34,22 @@ test('unknown total never invents a percentage', async () => {
   assert.equal(snapshot.progress.bytesDownloaded, 50);
 });
 
+test('update service accepts the native canonical READY_TO_INSTALL state for installer handoff', async () => {
+  const calls = [];
+  const native = {
+    startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
+    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'READY_TO_INSTALL', stagedPath:'/tmp/update.apk' }),
+    pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
+    resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
+    discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
+    requestInstall: async id => (calls.push(['requestInstall', id]), { status:'REQUESTED' }),
+    reconcileInstalledVersion: async () => null,
+  };
+  const { service } = fixture({ native });
+  assert.equal((await service.install('J1')).status, 'REQUESTED');
+  assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','requestInstall']);
+});
+
 test('installer handoff resolves the staged path from the persisted native job', async () => {
   const { service, calls } = fixture();
   await service.install('J1');
