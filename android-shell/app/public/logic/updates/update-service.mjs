@@ -4,7 +4,7 @@ function requireMethod(owner, name) {
   }
 }
 
-function normalizeSigner(value) {
+function normalizeHex(value) {
   return String(value ?? '').trim().toLowerCase();
 }
 
@@ -39,8 +39,18 @@ export function createUpdateService({ native, verifier, expectedIdentity } = {})
 
   async function inspectForInstall(path) {
     const inspected = await verifier.inspect(path);
+    const expectedArtifactSha = normalizeHex(expectedIdentity.artifactSha256);
+    const actualArtifactSha = normalizeHex(inspected?.sha256);
+
+    if (expectedArtifactSha && actualArtifactSha !== expectedArtifactSha) {
+      const error = new Error('UPDATE_ARTIFACT_MISMATCH');
+      error.code = 'UPDATE_ARTIFACT_MISMATCH';
+      error.inspected = inspected;
+      throw error;
+    }
+
     const packageMatches = inspected?.applicationId === expectedIdentity.applicationId;
-    const signerMatches = normalizeSigner(inspected?.signerCertificateSha256) === normalizeSigner(expectedIdentity.signerCertificateSha256);
+    const signerMatches = normalizeHex(inspected?.signerCertificateSha256) === normalizeHex(expectedIdentity.signerCertificateSha256);
     const minimum = Number(expectedIdentity.minVersionCode);
     const versionMatches = !Number.isFinite(minimum) || Number(inspected?.versionCode) >= minimum;
 
