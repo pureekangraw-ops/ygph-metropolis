@@ -77,19 +77,30 @@ test('process-death recovery re-reads native staged job and re-inspects artifact
   assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','inspect']);
 });
 
-test('permission return re-inspects persisted staged artifact before retrying installer', async () => {
+test('permission return resumes from durable PERMISSION_REQUIRED state and re-inspects staged artifact', async () => {
   const calls = [];
-  let attempt = 0;
+  let installAttempt = 0;
+  let snapshotRead = 0;
   const native = {
     startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
-    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    getJobSnapshot: async id => {
+      calls.push(['getJobSnapshot', id]);
+      snapshotRead += 1;
+      return {
+        jobId:id,
+        state:snapshotRead === 1 ? 'STAGED' : 'PERMISSION_REQUIRED',
+        bytesDownloaded:100,
+        totalBytes:100,
+        stagedPath:'/tmp/update.apk',
+      };
+    },
     pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
     resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
     requestInstall: async id => {
       calls.push(['requestInstall', id]);
-      attempt += 1;
-      return attempt === 1 ? { status:'PERMISSION_REQUIRED' } : { status:'REQUESTED' };
+      installAttempt += 1;
+      return installAttempt === 1 ? { status:'PERMISSION_REQUIRED' } : { status:'REQUESTED' };
     },
     reconcileInstalledVersion: async () => null,
   };
