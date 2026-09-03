@@ -35,5 +35,6 @@ test('KEEP groups exist in canonical tree', async () => {
     'domains/ride-workflows.mjs',
     'domains/calculation-authority.mjs',
     'domains/projections.mjs',
+    'manual/manual-four-houses.mjs',
   ]) assert.ok(files.includes(required), `MISSING_CANONICAL_KEEP:${required}`);
 });
