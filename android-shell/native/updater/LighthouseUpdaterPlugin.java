@@ -156,6 +156,24 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_APK_MISSING");
             return;
         }
+        String stagedSha256 = normalizeHex(snapshot.getString("stagedSha256"));
+        if (stagedSha256 == null || stagedSha256.isBlank()) {
+            call.reject("UPDATE_STAGED_SHA256_REQUIRED");
+            return;
+        }
+        try {
+            String currentSha256 = normalizeHex(sha256File(apk));
+            if (!stagedSha256.equals(currentSha256)) {
+                snapshot.put("state", "FAILED");
+                snapshot.put("error", "UPDATE_ARTIFACT_MISMATCH");
+                save(snapshot);
+                call.reject("UPDATE_ARTIFACT_MISMATCH");
+                return;
+            }
+        } catch (Exception e) {
+            call.reject("UPDATE_ARTIFACT_VERIFY_FAILED", e);
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
             Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:" + getContext().getPackageName()));
