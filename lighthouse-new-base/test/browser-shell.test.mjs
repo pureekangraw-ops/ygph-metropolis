@@ -52,12 +52,12 @@ test('SETTINGS renders truthful app operations and does not offer rollback when 
   assert.equal(count(html, 'data-settings-action="rollback"'), 0);
 });
 
-test('Failed updater state does not offer hidden-state retry and tells the user to check the fresh manifest again', () => {
+test('Failed updater state keeps one clear recovery action without exposing internal candidate metadata', () => {
   const html = renderBrowserShell({
     route:{ top:'settings', manualHouse:null },
-    settings:{ version:'2.0.1', updaterStatus:{ state:'Failed', message:'รุ่นในไฟล์อัปเดตไม่ได้ใหม่กว่ารุ่นที่ติดตั้งอยู่' } },
+    settings:{ version:'2.0.1', updaterStatus:{ state:'Failed', message:'ดาวน์โหลดอัปเดตไม่สำเร็จ' } },
   });
-  assert.match(html, /ตรวจอัปเดตใหม่/);
-  assert.equal(count(html, 'data-updater-action="retry"'), 0);
-  assert.equal(count(html, 'data-settings-action="check-update"'), 1);
+  assert.equal(count(html, 'data-updater-action="retry"'), 1);
+  assert.match(html, /ลองอีกครั้ง/);
+  assert.doesNotMatch(html, /SharedPreferences|candidateVersionCode|archiveVersionCode/);
 });
