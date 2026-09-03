@@ -1,0 +1,7 @@
+{
+  "identitySchemaVersion": 1,
+  "applicationId": "com.yggdrasil.lighthouse",
+  "signerCertificateSha256": "aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce",
+  "versionCodePolicy": "monotonic-increasing-integer",
+  "keyAliasLabel": "lighthouse-apk-release"
+}

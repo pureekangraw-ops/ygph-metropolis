@@ -1,0 +1,31 @@
+{
+  "name": "lighthouse-android-shell",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "app:stage-existing": "node tools/stage-existing-full-app.mjs",
+    "pretest": "node tools/sync-trusted-brain.mjs",
+    "test": "node --test test/*.test.mjs",
+    "patch:sign": "node tools/sign-patch.mjs",
+    "patch:prepare-current": "node tools/build-current-patch-source.mjs release/current-patch-work/input.generated.json release/current-patch-work/input.bootstrap.generated.json",
+    "android:add": "npx cap add android",
+    "preandroid:sync": "node tools/sync-trusted-brain.mjs",
+    "android:sync": "npx cap sync android",
+    "android:security:apply": "node tools/apply-android-security.mjs android",
+    "android:security:verify": "node tools/verify-android-security.mjs android release/android-security-evidence.json",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:release": "cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/cli": "8.5.0",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "29.1.1"
+  }
+}
