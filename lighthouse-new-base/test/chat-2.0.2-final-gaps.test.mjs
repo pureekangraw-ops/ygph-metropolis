@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { createExpenseChatBridge } from '../src/chat-expense-bridge.mjs';
 import { createChatStore } from '../src/chat-store.mjs';
 import { createChatController } from '../src/chat-controller.mjs';
-import { renderBrowserShell } from '../src/browser-shell.mjs';
+import { createBrowserApp } from '../src/browser-app.mjs';
 
 function memoryStorage() {
   const values = new Map();
@@ -65,15 +65,30 @@ test('Archive removes the completed CHAT item including related replies from act
   assert.equal(document.messages.some(item => item.relatedMessageId === sent.pending.messageId), true);
 });
 
-test('SETTINGS renders only actions backed by real production handlers', () => {
-  const html = renderBrowserShell({
-    route:{ top:'settings', manualHouse:null },
-    settings:{ version:'2.0.2', rollbackSupported:false, operations:{ async checkUpdate(){} } },
+test('SETTINGS removes actions without real production handlers before they can be displayed', () => {
+  const removed = [];
+  const actions = ['check-update','backup','restore','reset','rollback'];
+  const root = {
+    innerHTML:'',
+    addEventListener(){},
+    removeEventListener(){},
+    querySelectorAll(selector) {
+      if (selector !== '[data-settings-action]') return [];
+      return actions.map(action => ({
+        dataset:{ settingsAction:action },
+        remove(){ removed.push(action); },
+      }));
+    },
+  };
+  const app = createBrowserApp({
+    root,
+    initialRoute:{ top:'settings', manualHouse:null },
+    model:{ settings:{ version:'2.0.2', rollbackSupported:false, operations:{ async checkUpdate(){} } } },
   });
-  assert.match(html, /data-settings-action="check-update"/);
-  assert.doesNotMatch(html, /data-settings-action="backup"/);
-  assert.doesNotMatch(html, /data-settings-action="restore"/);
-  assert.doesNotMatch(html, /data-settings-action="reset"/);
+  app.start();
+  app.stop();
+  assert.equal(removed.includes('check-update'), false);
+  assert.deepEqual(new Set(removed), new Set(['backup','restore','reset','rollback']));
 });
 
 test('single navigation owner binds browser history so system Back restores the previous LIGHTHOUSE route', () => {
