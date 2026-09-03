@@ -31,3 +31,14 @@ test('native updater verifies expected SHA before staging the completed artifact
   assert.ok(digestIndex >= 0 && renameIndex >= 0 && digestIndex < renameIndex,
     'completed .part must be hashed before rename to staged APK');
 });
+
+test('native installer handoff is bound to a persisted STAGED job instead of a free path', () => {
+  const start = source.indexOf('public void requestInstall(PluginCall call)');
+  const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /call\.getString\("jobId"\)/);
+  assert.match(method, /load\(jobId\)/);
+  assert.match(method, /requireState\(call, snapshot, "STAGED"\)/);
+  assert.match(method, /snapshot\.getString\("stagedPath"\)/);
+});
