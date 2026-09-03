@@ -4,6 +4,9 @@ import { createMemoryDailyControls } from './src/daily-controls.mjs';
 import { createRuntimeBoot } from './src/runtime-boot.mjs';
 import { createAndroidUpdaterBridge } from './src/android-updater-bridge.mjs';
 import { createUpdateController } from './src/update-controller.mjs';
+import { createChatStore } from './src/chat-store.mjs';
+import { createChatController } from './src/chat-controller.mjs';
+import { createExpenseChatBridge } from './src/chat-expense-bridge.mjs';
 import { initializeFirstRun } from '../greenfield/first-run.mjs';
 import {
   inspectGreenfieldDeviceUnlock,
@@ -52,6 +55,22 @@ const updater = createUpdateController({
   manifestUrl:TEST_UPDATE_MANIFEST_URL,
   packageName:APP_PACKAGE,
 });
+const chatStore = createChatStore();
+const chatController = createChatController({
+  store:chatStore,
+  interpret:text => withRuntimeSession(runtime => {
+    const bridge = createExpenseChatBridge({ runtime });
+    return bridge.interpret(text);
+  }),
+  commit:draft => withRuntimeSession(runtime => {
+    const bridge = createExpenseChatBridge({ runtime });
+    return bridge.commit(draft);
+  }),
+  readback:(result, draft) => withRuntimeSession(runtime => {
+    const bridge = createExpenseChatBridge({ runtime });
+    return bridge.readback(result, draft);
+  }),
+});
 const today = bangkokParts();
 let activeApp = null;
 
@@ -70,8 +89,8 @@ async function startProduct() {
   const updaterStatus = await readUpdaterStatus();
   const app = createBrowserApp({
     root,
+    chatController,
     model:{
-      chat:{ messages:[] },
       manual:projected.manual,
       income:projected.income,
       outcome:projected.outcome,
