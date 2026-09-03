@@ -23,7 +23,7 @@ test('canonical logic tree imports without missing dependencies', async () => {
   for (const file of files) await import(pathToFileURL(file).href);
 });
 
-test('first KEEP runtime group exists in canonical tree', async () => {
+test('KEEP groups exist in canonical tree', async () => {
   const files = (await collectMjs(logicRoot)).map(file => file.slice(logicRoot.length + 1).replaceAll('\\', '/'));
   for (const required of [
     'runtime/core.mjs',
@@ -31,5 +31,9 @@ test('first KEEP runtime group exists in canonical tree', async () => {
     'runtime/command-runtime.mjs',
     'runtime/workflow-runtime.mjs',
     'runtime/workflow-invariants.mjs',
+    'domains/business-workflows.mjs',
+    'domains/ride-workflows.mjs',
+    'domains/calculation-authority.mjs',
+    'domains/projections.mjs',
   ]) assert.ok(files.includes(required), `MISSING_CANONICAL_KEEP:${required}`);
 });
