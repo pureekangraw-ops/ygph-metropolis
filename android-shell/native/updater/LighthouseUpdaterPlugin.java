@@ -145,7 +145,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if (!requireState(call, snapshot, "STAGED")) return;
+        if (!requireState(call, snapshot, "STAGED", "PERMISSION_REQUIRED")) return;
         String path = snapshot.getString("stagedPath");
         if (path == null || path.isBlank()) {
             call.reject("UPDATE_STAGE_PATH_REQUIRED");
@@ -175,6 +175,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
             return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
+            snapshot.put("state", "PERMISSION_REQUIRED");
+            save(snapshot);
             Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:" + getContext().getPackageName()));
             settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
