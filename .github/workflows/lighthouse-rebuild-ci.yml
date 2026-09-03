@@ -57,12 +57,16 @@ jobs:
         run: npm run android:sync
       - name: Apply Android security baseline
         run: npm run android:security:apply
+      - name: Wire native updater and release identity
+        run: node tools/apply-native-updater.mjs android
       - name: Generate merged release manifest
         run: cd android && ./gradlew processReleaseMainManifest
       - name: Verify Android security baseline
         run: npm run android:security:verify
       - name: Run native unit tests
         run: cd android && ./gradlew test
+      - name: Compile native updater
+        run: cd android && ./gradlew assembleDebug
       - name: Upload generated Android shell
         uses: actions/upload-artifact@v6
         with:
