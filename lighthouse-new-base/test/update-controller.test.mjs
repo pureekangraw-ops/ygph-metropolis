@@ -20,7 +20,7 @@ function bridge(overrides = {}) {
     async getInstalledIdentity(){ calls.push('getInstalledIdentity'); return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001 }; },
     async enqueueDownload(input){ calls.push(['enqueueDownload', input]); return { state:'Downloading', downloadedBytes:0, totalBytes:input.sizeBytes }; },
     async readDownloadState(){ calls.push('readDownloadState'); return { state:'Paused', downloadedBytes:750, totalBytes:1000 }; },
-    async retryDownload(){ calls.push('retryDownload'); return { state:'Retrying', downloadedBytes:750, totalBytes:1000 }; },
+    async retryDownload(input){ calls.push(['retryDownload', input]); return { state:'Retrying', downloadedBytes:750, totalBytes:1000 }; },
     async verifyDownloadedApk(){ calls.push('verifyDownloadedApk'); return { ok:true }; },
     async canInstallPackages(){ calls.push('canInstallPackages'); return { allowed:true }; },
     async requestInstallPermission(){ calls.push('requestInstallPermission'); return { opened:true }; },
@@ -33,11 +33,7 @@ function bridge(overrides = {}) {
 
 test('checkUpdate reports candidate only when manifest versionCode is higher than installed reality', async () => {
   const native = bridge();
-  const controller = createUpdateController({
-    bridge:native,
-    manifestUrl:'https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/test-manifest/update-test/manifest.json',
-    packageName:'com.yggdrasil.lighthouse',
-  });
+  const controller = createUpdateController({ bridge:native, manifestUrl:'https://raw.githubusercontent.com/pureekangraw-ops/ygph-metropolis/test-manifest/update-test/manifest.json', packageName:'com.yggdrasil.lighthouse' });
   const status = await controller.checkUpdate();
   assert.equal(status.state, 'update-available');
   assert.equal(status.installed.versionCode, 2001);
@@ -73,6 +69,19 @@ test('download lifecycle exposes real progress, verification, permission, instal
   assert.equal(reconciled.installed.versionCode, 2002);
 });
 
+test('retry always hands the current controller candidate to native storage instead of reusing hidden stale metadata', async () => {
+  const native = bridge();
+  const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
+  await controller.checkUpdate();
+  await controller.startUpdate();
+  await controller.retry();
+  const retryCall = native.calls.find(call => Array.isArray(call) && call[0] === 'retryDownload');
+  assert.ok(retryCall);
+  assert.equal(retryCall[1].versionCode, 2002);
+  assert.equal(retryCall[1].apkUrl, manifest.apkUrl);
+  assert.equal(retryCall[1].sha256, manifest.sha256);
+});
+
 test('unknown-source permission opens Android settings and keeps updater resumable', async () => {
   const native = bridge({ async canInstallPackages(){ return { allowed:false }; } });
   const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
@@ -99,14 +108,7 @@ test('verification failure is surfaced as Failed and permanent cancel deletes st
 test('restore rebuilds updater state from persisted native download metadata after process interruption', async () => {
   const native = bridge({
     async reconcileInstalledVersion(){ return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001, state:'Downloading' }; },
-    async readDownloadState(){
-      return {
-        state:'Downloading',
-        downloadedBytes:1024,
-        totalBytes:-1,
-        candidate:manifest,
-      };
-    },
+    async readDownloadState(){ return { state:'Downloading', downloadedBytes:1024, totalBytes:-1, candidate:manifest }; },
   });
   const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
   const restored = await controller.restore();
@@ -120,15 +122,7 @@ test('restore rebuilds updater state from persisted native download metadata aft
 test('restore reconciles a returned Android installer before treating the completed download as Ready again', async () => {
   const native = bridge({
     async getInstalledIdentity(){ return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001 }; },
-    async reconcileInstalledVersion(){
-      return {
-        packageName:'com.yggdrasil.lighthouse',
-        versionName:'2.0.1',
-        versionCode:2001,
-        state:'install-not-completed',
-        candidate:manifest,
-      };
-    },
+    async reconcileInstalledVersion(){ return { packageName:'com.yggdrasil.lighthouse', versionName:'2.0.1', versionCode:2001, state:'install-not-completed', candidate:manifest }; },
     async readDownloadState(){ throw new Error('must not replay completed download after install attempt'); },
   });
   const controller = createUpdateController({ bridge:native, manifestUrl:'https://example.com/test.json', packageName:'com.yggdrasil.lighthouse' });
