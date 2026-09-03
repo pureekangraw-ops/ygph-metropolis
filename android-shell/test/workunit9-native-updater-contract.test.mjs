@@ -70,14 +70,15 @@ test('native updater persists permission requirement before leaving for Android 
     'PERMISSION_REQUIRED must be durable before Android settings is opened');
 });
 
-test('native updater persists installer-opened state before leaving for Android package installer', () => {
+test('native updater persists WAITING_ANDROID_CONFIRMATION before opening Android package installer', () => {
   const start = source.indexOf('public void requestInstall(PluginCall call)');
   const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
   assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
   const method = source.slice(start, end);
-  const installerStateIndex = method.indexOf('snapshot.put("state", "INSTALLER_OPENED")');
-  const saveIndex = method.indexOf('save(snapshot)', installerStateIndex);
+  assert.doesNotMatch(method, /INSTALLER_OPENED/);
+  const waitingStateIndex = method.indexOf('snapshot.put("state", "WAITING_ANDROID_CONFIRMATION")');
+  const saveIndex = method.indexOf('save(snapshot)', waitingStateIndex);
   const installerIndex = method.indexOf('startActivity(install)');
-  assert.ok(installerStateIndex >= 0 && saveIndex > installerStateIndex && installerIndex > saveIndex,
-    'INSTALLER_OPENED must be durable before Android package installer is opened');
+  assert.ok(waitingStateIndex >= 0 && saveIndex > waitingStateIndex && installerIndex > saveIndex,
+    'WAITING_ANDROID_CONFIRMATION must be durable before Android package installer is opened');
 });
