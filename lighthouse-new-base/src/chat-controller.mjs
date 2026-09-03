@@ -1,8 +1,14 @@
+import { appendChatEvent, meaningfulChange } from './chat-state.mjs';
+
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+function uid(prefix) {
+  return `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+}
 
 function assistantMessage(text, { relatedMessageId = null, kind = 'reply' } = {}) {
   return {
-    id:`assistant-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+    id:uid('assistant'),
     conversationId:null,
     role:'assistant',
     text:String(text || ''),
@@ -55,6 +61,38 @@ function viewFromDocument(document) {
   return { messages, pending:pending ? clone(pending) : null };
 }
 
+function recordTransition(document, messageId, workId, executionState, syncState, { workStatus = executionState, evidence = null } = {}) {
+  const message = document.messages.find(item => item.id === messageId);
+  if (!message) throw new Error('CHAT_MESSAGE_NOT_FOUND');
+  const previous = { executionState:message.executionState || null, syncState:message.syncState || null };
+  const event = {
+    id:uid('event'),
+    messageId,
+    workId,
+    executionState,
+    syncState,
+    at:new Date().toISOString(),
+    evidence:clone(evidence),
+  };
+  const next = appendChatEvent(document, event);
+  const work = next.work.find(item => item.id === workId);
+  if (work) {
+    work.status = workStatus;
+    work.updatedAt = event.at;
+  }
+  const current = { executionState, syncState };
+  if (meaningfulChange(previous, current)) {
+    next.changeMarkers ||= {};
+    next.changeMarkers[messageId] = {
+      eventId:event.id,
+      executionState,
+      syncState,
+      at:event.at,
+    };
+  }
+  return next;
+}
+
 export function createChatController({ store, interpret, commit, readback } = {}) {
   if (!store || typeof store.read !== 'function' || typeof store.commitUserMessage !== 'function' || typeof store.updateDocument !== 'function') {
     throw new Error('CHAT_CONTROLLER_STORE_INVALID');
@@ -72,39 +110,48 @@ export function createChatController({ store, interpret, commit, readback } = {}
 
   function snapshot() { return viewFromDocument(store.read()); }
 
-  async function send(rawText, { submitToken = null } = {}) {
-    const created = store.commitUserMessage(rawText, { submitToken });
+  function ensureLocalCommitEvent(messageId, workId) {
+    return store.updateDocument(document => {
+      if (document.events.some(event => event.messageId === messageId && event.workId === workId)) return document;
+      return recordTransition(document, messageId, workId, 'WAITING', 'WAITING', { workStatus:'WAITING', evidence:{ phase:'LOCAL_MESSAGE_COMMIT' } });
+    });
+  }
+
+  async function interpretMessage(messageId) {
     let document = store.read();
-    const existingDraft = document.drafts.find(item => item.messageId === created.message.id && item.status === 'CONFIRMATION_REQUIRED');
-    const alreadyInterpreted = document.messages.some(item => item.relatedMessageId === created.message.id && item.kind === 'draft');
+    const message = document.messages.find(item => item.id === messageId && item.role === 'user');
+    const work = document.work.find(item => item.messageId === messageId);
+    if (!message || !work) throw new Error('CHAT_CONTROLLER_RECORD_MISSING');
+    const existingDraft = document.drafts.find(item => item.messageId === messageId && item.status === 'CONFIRMATION_REQUIRED');
+    const alreadyInterpreted = document.messages.some(item => item.relatedMessageId === messageId && item.kind === 'draft');
     if (existingDraft || alreadyInterpreted) return viewFromDocument(document);
 
-    const proposal = await interpret(created.message.rawText);
+    const proposal = await interpret(message.rawText);
     document = store.updateDocument(next => {
-      const message = next.messages.find(item => item.id === created.message.id);
-      const work = next.work.find(item => item.id === created.work.id);
-      if (!message || !work) throw new Error('CHAT_CONTROLLER_RECORD_MISSING');
-      work.attempts = Number(work.attempts || 0) + 1;
-      work.updatedAt = new Date().toISOString();
+      const target = next.messages.find(item => item.id === messageId);
+      const targetWork = next.work.find(item => item.id === work.id);
+      if (!target || !targetWork) throw new Error('CHAT_CONTROLLER_RECORD_MISSING');
+      targetWork.attempts = Number(targetWork.attempts || 0) + 1;
 
       if (proposal?.type === 'draft') {
-        const draft = normalizeDraft(proposal, message, work);
-        next.drafts = next.drafts.filter(item => item.messageId !== message.id);
+        const draft = normalizeDraft(proposal, target, targetWork);
+        next.drafts = next.drafts.filter(item => item.messageId !== target.id);
         next.drafts.push(draft);
-        message.executionState = 'CONFIRMATION_REQUIRED';
-        message.syncState = 'WAITING';
-        work.kind = 'QUICK_CAPTURE';
-        work.status = 'CONFIRMATION_REQUIRED';
-        persistAssistant(next, draftReply(draft), { relatedMessageId:message.id, kind:'draft' });
-      } else {
-        message.executionState = 'SUCCESS';
-        message.syncState = 'SUCCESS';
-        work.status = 'SUCCESS';
-        persistAssistant(next, String(proposal?.text || 'รับทราบ'), { relatedMessageId:message.id });
+        targetWork.kind = 'QUICK_CAPTURE';
+        persistAssistant(next, draftReply(draft), { relatedMessageId:target.id, kind:'draft' });
+        return recordTransition(next, target.id, targetWork.id, 'CONFIRMATION_REQUIRED', 'WAITING', { workStatus:'CONFIRMATION_REQUIRED', evidence:{ phase:'DRAFT_READY', revision:draft.revision } });
       }
-      return next;
+
+      persistAssistant(next, String(proposal?.text || 'รับทราบ'), { relatedMessageId:target.id });
+      return recordTransition(next, target.id, targetWork.id, 'SUCCESS', 'SUCCESS', { workStatus:'SUCCESS', evidence:{ phase:'REPLY_READY' } });
     });
     return viewFromDocument(document);
+  }
+
+  async function send(rawText, { submitToken = null } = {}) {
+    const created = store.commitUserMessage(rawText, { submitToken });
+    ensureLocalCommitEvent(created.message.id, created.work.id);
+    return interpretMessage(created.message.id);
   }
 
   async function edit(messageId, rawText) {
@@ -124,11 +171,9 @@ export function createChatController({ store, interpret, commit, readback } = {}
       draft.revision = Number(previous?.revision || 1) + 1;
       next.drafts = next.drafts.filter(item => item.messageId !== messageId);
       next.drafts.push(draft);
-      target.executionState = 'CONFIRMATION_REQUIRED';
-      target.syncState = 'WAITING';
-      targetWork.status = 'CONFIRMATION_REQUIRED';
+      targetWork.kind = 'QUICK_CAPTURE';
       persistAssistant(next, draftReply(draft), { relatedMessageId:messageId, kind:'draft' });
-      return next;
+      return recordTransition(next, messageId, targetWork.id, 'CONFIRMATION_REQUIRED', 'WAITING', { workStatus:'CONFIRMATION_REQUIRED', evidence:{ phase:'DRAFT_EDITED', revision:draft.revision } });
     });
     return viewFromDocument(document);
   }
@@ -139,14 +184,10 @@ export function createChatController({ store, interpret, commit, readback } = {}
     if (!draft) throw new Error('CHAT_DRAFT_NOT_FOUND');
 
     document = store.updateDocument(next => {
-      const message = next.messages.find(item => item.id === messageId);
       const work = next.work.find(item => item.id === draft.workId);
-      if (!message || !work) throw new Error('CHAT_CONTROLLER_RECORD_MISSING');
-      message.executionState = 'WAITING';
-      message.syncState = 'WAITING';
-      work.status = 'WAITING';
+      if (!work) throw new Error('CHAT_CONTROLLER_RECORD_MISSING');
       work.attempts = Number(work.attempts || 0) + 1;
-      return next;
+      return recordTransition(next, messageId, draft.workId, 'WAITING', 'WAITING', { workStatus:'WAITING', evidence:{ phase:'EXECUTION_QUEUED' } });
     });
 
     let result;
@@ -154,26 +195,19 @@ export function createChatController({ store, interpret, commit, readback } = {}
       result = await commit(clone(draft));
     } catch (error) {
       store.updateDocument(next => {
-        const message = next.messages.find(item => item.id === messageId);
         const work = next.work.find(item => item.id === draft.workId);
-        message.executionState = 'ERROR';
-        message.syncState = 'ERROR';
-        work.status = 'ERROR';
-        work.lastError = String(error?.message || error || 'ERROR');
-        persistAssistant(next, 'ดำเนินการไม่สำเร็จ ลองอีกครั้งได้', { relatedMessageId:messageId, kind:'error' });
-        return next;
+        if (work) work.lastError = String(error?.message || error || 'ERROR');
+        const updated = recordTransition(next, messageId, draft.workId, 'ERROR', 'ERROR', { workStatus:'ERROR', evidence:{ phase:'EXECUTION_FAILED' } });
+        persistAssistant(updated, 'ดำเนินการไม่สำเร็จ ลองอีกครั้งได้', { relatedMessageId:messageId, kind:'error' });
+        return updated;
       });
       return snapshot();
     }
 
     store.updateDocument(next => {
-      const message = next.messages.find(item => item.id === messageId);
       const work = next.work.find(item => item.id === draft.workId);
-      message.executionState = 'SUCCESS';
-      message.syncState = 'WAITING';
-      work.status = 'WAITING';
-      work.lastResult = clone(result);
-      return next;
+      if (work) work.lastResult = clone(result);
+      return recordTransition(next, messageId, draft.workId, 'SUCCESS', 'WAITING', { workStatus:'WAITING', evidence:{ phase:'DOMAIN_COMMITTED' } });
     });
 
     let proof;
@@ -181,25 +215,21 @@ export function createChatController({ store, interpret, commit, readback } = {}
     catch { proof = { ok:false }; }
 
     document = store.updateDocument(next => {
-      const message = next.messages.find(item => item.id === messageId);
       const work = next.work.find(item => item.id === draft.workId);
       if (proof?.ok === true) {
-        message.executionState = 'SUCCESS';
-        message.syncState = 'SUCCESS';
-        work.status = 'SUCCESS';
-        work.readback = clone(proof.evidence || null);
+        if (work) work.readback = clone(proof.evidence || null);
         next.drafts = next.drafts.filter(item => item.messageId !== messageId);
-        const alreadyReported = next.messages.some(item => item.relatedMessageId === messageId && item.kind === 'success');
-        if (!alreadyReported) persistAssistant(next, 'บันทึกแล้ว', { relatedMessageId:messageId, kind:'success' });
-      } else {
-        message.executionState = 'SUCCESS';
-        message.syncState = 'ERROR';
-        work.status = 'ERROR';
-        work.lastError = 'READBACK_UNVERIFIED';
-        const alreadyReported = next.messages.some(item => item.relatedMessageId === messageId && item.kind === 'readback-error');
-        if (!alreadyReported) persistAssistant(next, errorReply(), { relatedMessageId:messageId, kind:'readback-error' });
+        const updated = recordTransition(next, messageId, draft.workId, 'SUCCESS', 'SUCCESS', { workStatus:'SUCCESS', evidence:{ phase:'READBACK_PROVEN', readback:proof.evidence || null } });
+        const alreadyReported = updated.messages.some(item => item.relatedMessageId === messageId && item.kind === 'success');
+        if (!alreadyReported) persistAssistant(updated, 'บันทึกแล้ว', { relatedMessageId:messageId, kind:'success' });
+        return updated;
       }
-      return next;
+
+      if (work) work.lastError = 'READBACK_UNVERIFIED';
+      const updated = recordTransition(next, messageId, draft.workId, 'SUCCESS', 'ERROR', { workStatus:'ERROR', evidence:{ phase:'READBACK_UNVERIFIED' } });
+      const alreadyReported = updated.messages.some(item => item.relatedMessageId === messageId && item.kind === 'readback-error');
+      if (!alreadyReported) persistAssistant(updated, errorReply(), { relatedMessageId:messageId, kind:'readback-error' });
+      return updated;
     });
     return viewFromDocument(document);
   }
@@ -213,15 +243,12 @@ export function createChatController({ store, interpret, commit, readback } = {}
 
   async function cancel(messageId) {
     const document = store.updateDocument(next => {
-      const message = next.messages.find(item => item.id === messageId);
       const work = next.work.find(item => item.messageId === messageId);
-      if (!message || !work) throw new Error('CHAT_MESSAGE_NOT_FOUND');
+      if (!work) throw new Error('CHAT_MESSAGE_NOT_FOUND');
       next.drafts = next.drafts.filter(item => item.messageId !== messageId);
-      message.executionState = 'CANCELLED';
-      message.syncState = 'SUCCESS';
-      work.status = 'CANCELLED';
-      persistAssistant(next, 'ยกเลิกแล้ว', { relatedMessageId:messageId, kind:'cancelled' });
-      return next;
+      const updated = recordTransition(next, messageId, work.id, 'CANCELLED', 'SUCCESS', { workStatus:'CANCELLED', evidence:{ phase:'USER_CANCELLED' } });
+      persistAssistant(updated, 'ยกเลิกแล้ว', { relatedMessageId:messageId, kind:'cancelled' });
+      return updated;
     });
     return viewFromDocument(document);
   }
@@ -231,5 +258,23 @@ export function createChatController({ store, interpret, commit, readback } = {}
     return snapshot();
   }
 
-  return Object.freeze({ send, edit, confirm, cancel, retry, archive, snapshot });
+  async function recover() {
+    const pending = store.read().work.filter(work => work.status === 'WAITING');
+    for (const work of pending) {
+      const current = store.read();
+      const message = current.messages.find(item => item.id === work.messageId);
+      if (!message || message.archived) continue;
+      if (work.kind === 'INTERPRET') {
+        ensureLocalCommitEvent(message.id, work.id);
+        await interpretMessage(message.id);
+        continue;
+      }
+      if (work.kind === 'QUICK_CAPTURE' && current.drafts.some(draft => draft.messageId === message.id && draft.status === 'CONFIRMATION_REQUIRED')) {
+        await confirm(message.id);
+      }
+    }
+    return snapshot();
+  }
+
+  return Object.freeze({ send, edit, confirm, cancel, retry, archive, recover, snapshot });
 }
