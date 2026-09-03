@@ -190,6 +190,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
         Intent install = new Intent(Intent.ACTION_VIEW);
         install.setDataAndType(uri, "application/vnd.android.package-archive");
         install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        snapshot.put("state", "INSTALLER_OPENED");
+        save(snapshot);
         getContext().startActivity(install);
         JSObject result = new JSObject();
         result.put("status", "REQUESTED");
