@@ -21,6 +21,12 @@ function fixture(overrides = {}) {
   return { service, calls };
 }
 
+test('start passes expected artifact digest into native download owner', async () => {
+  const { service, calls } = fixture();
+  await service.start({ url:'https://example.test/lighthouse.apk' });
+  assert.deepEqual(calls[0], ['startDownload', { url:'https://example.test/lighthouse.apk', expectedSha256:'sha' }]);
+});
+
 test('unknown total never invents a percentage', async () => {
   const { service } = fixture();
   const snapshot = await service.snapshot('J1');
