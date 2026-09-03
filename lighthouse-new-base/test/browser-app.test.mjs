@@ -14,10 +14,11 @@ function fakeRoot() {
         closest(selector) {
           if (selector === '[data-top-route]' && dataset.topRoute) return this;
           if (selector === '[data-manual-house]' && dataset.manualHouse) return this;
+          if (selector === '[data-updater-action]' && dataset.updaterAction) return this;
           return null;
         },
       };
-      listeners.get('click')?.({ target, preventDefault(){} });
+      return listeners.get('click')?.({ target, preventDefault(){} });
     },
   };
 }
@@ -99,4 +100,26 @@ test('browser app stop removes its click ownership instead of leaving a second h
   root.click({ topRoute:'settings' });
   assert.equal(root.innerHTML, before);
   assert.deepEqual(app.route(), { top:'chat', manualHouse:null });
+});
+
+test('Failed updater retry refreshes the manifest instead of replaying native stale candidate state', async () => {
+  const root = fakeRoot();
+  const calls = [];
+  const fresh = { state:'update-available', canUpdate:true, candidate:{ versionName:'2.0.2', versionCode:2002 } };
+  const app = createBrowserApp({
+    root,
+    initialRoute:{ top:'settings', manualHouse:null },
+    model:{ settings:{
+      version:'2.0.1',
+      updaterStatus:{ state:'Failed', message:'รุ่นในไฟล์อัปเดตไม่ได้ใหม่กว่ารุ่นที่ติดตั้งอยู่' },
+      operations:{
+        async checkUpdate(){ calls.push('checkUpdate'); return fresh; },
+        async retry(){ calls.push('retry'); return { state:'Retrying' }; },
+      },
+    } },
+  });
+  app.start();
+  await root.click({ updaterAction:'retry' });
+  assert.deepEqual(calls, ['checkUpdate']);
+  assert.match(root.innerHTML, /พบเวอร์ชัน 2\.0\.2/);
 });
