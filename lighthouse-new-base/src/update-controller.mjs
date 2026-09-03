@@ -93,7 +93,7 @@ export function createUpdateController({ bridge, manifestUrl, packageName } = {}
   async function retry() {
     if (!candidate || typeof native.retryDownload !== 'function') throw new Error('UPDATE_RETRY_UNAVAILABLE');
     try {
-      const result = await native.retryDownload();
+      const result = await native.retryDownload(candidate);
       status = freezeStatus({ ...status, state:result?.state || 'Retrying', progress:projectDownloadProgress(result || {}) });
       return status;
     } catch (error) {
