@@ -21,6 +21,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -53,9 +54,10 @@ public class LighthouseUpdaterPlugin extends Plugin {
         }
         File part = new File(dir, jobId + ".apk.part");
         JSObject snapshot = snapshot(jobId, "DOWNLOADING", part.getAbsolutePath(), part.length(), null, null);
+        snapshot.put("attempts", 0);
         save(snapshot);
         launch(jobId, url, part);
-        call.resolve(snapshot);
+        call.resolve(load(jobId));
     }
 
     @PluginMethod
@@ -91,22 +93,24 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if (url == null || url.isBlank()) {
-            url = snapshot.getString("url");
-        }
+        if (url == null || url.isBlank()) url = snapshot.getString("url");
         if (url == null || url.isBlank()) {
             call.reject("UPDATE_URL_REQUIRED");
             return;
         }
-        File part = new File(snapshot.getString("stagedPath"));
-        if (!part.getName().endsWith(".part")) {
-            part = new File(part.getParentFile(), jobId + ".apk.part");
+        String stagedPath = snapshot.getString("stagedPath");
+        if (stagedPath == null || stagedPath.isBlank()) {
+            call.reject("UPDATE_STAGE_PATH_REQUIRED");
+            return;
         }
+        File part = new File(stagedPath);
+        if (!part.getName().endsWith(".part")) part = new File(part.getParentFile(), jobId + ".apk.part");
         snapshot.put("state", "DOWNLOADING");
         snapshot.put("stagedPath", part.getAbsolutePath());
+        snapshot.remove("stagedSha256");
         save(snapshot);
         launch(jobId, url, part);
-        call.resolve(snapshot);
+        call.resolve(load(jobId));
     }
 
     @PluginMethod
@@ -176,6 +180,9 @@ public class LighthouseUpdaterPlugin extends Plugin {
         JSObject current = load(jobId);
         if (current != null) {
             current.put("url", url);
+            current.put("attempts", intValue(current, "attempts") + 1);
+            current.put("lastAttemptAt", System.currentTimeMillis());
+            current.remove("error");
             save(current);
         }
         executor.execute(() -> download(jobId, url, part));
@@ -226,6 +233,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             done.put("state", "STAGED");
             done.put("stagedPath", apk.getAbsolutePath());
             done.put("bytesDownloaded", apk.length());
+            done.put("stagedSha256", sha256File(apk));
             Long totalBytes = nullableLong(done, "totalBytes");
             if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
             save(done);
@@ -275,12 +283,21 @@ public class LighthouseUpdaterPlugin extends Plugin {
             java.util.Iterator<String> keys = object.keys();
             while (keys.hasNext()) {
                 String key = keys.next();
-                Object value = object.get(key);
-                out.put(key, value);
+                out.put(key, object.get(key));
             }
             return out;
         } catch (JSONException e) {
             return null;
+        }
+    }
+
+    private static int intValue(JSObject object, String key) {
+        try {
+            Object value = object.get(key);
+            if (value instanceof Number) return ((Number) value).intValue();
+            return value == null ? 0 : Integer.parseInt(String.valueOf(value));
+        } catch (Exception e) {
+            return 0;
         }
     }
 
@@ -293,6 +310,18 @@ public class LighthouseUpdaterPlugin extends Plugin {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String sha256File(File file) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = new FileInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) digest.update(buffer, 0, read);
+        }
+        StringBuilder hex = new StringBuilder();
+        for (byte b : digest.digest()) hex.append(String.format(Locale.ROOT, "%02x", b));
+        return hex.toString();
     }
 
     private static String signerSha256(PackageInfo info) throws Exception {
