@@ -6,7 +6,7 @@ function fixture(overrides = {}) {
   const calls = [];
   const native = overrides.native ?? {
     startDownload: async input => (calls.push(['startDownload', input]), { jobId:'J1', state:'DOWNLOADING' }),
-    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'STAGED', bytesDownloaded:50, totalBytes:null, stagedPath:'/tmp/update.apk' }),
+    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'READY_TO_INSTALL', bytesDownloaded:50, totalBytes:null, stagedPath:'/tmp/update.apk' }),
     pauseDownload: async id => (calls.push(['pauseDownload', id]), { jobId:id, state:'PAUSED' }),
     resumeDownload: async id => (calls.push(['resumeDownload', id]), { jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => (calls.push(['discardDownload', id]), { jobId:id, state:'CANCELLED' }),
@@ -35,19 +35,23 @@ test('unknown total never invents a percentage', async () => {
 });
 
 test('update service accepts the native canonical READY_TO_INSTALL state for installer handoff', async () => {
-  const calls = [];
+  const { service, calls } = fixture();
+  assert.equal((await service.install('J1')).status, 'REQUESTED');
+  assert.deepEqual(calls.filter(x => ['getJobSnapshot','requestInstall'].includes(x[0])).map(x => x[0]), ['getJobSnapshot','requestInstall']);
+});
+
+test('legacy STAGED state is rejected instead of remaining a second installer lifecycle', async () => {
   const native = {
     startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
-    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'READY_TO_INSTALL', stagedPath:'/tmp/update.apk' }),
+    getJobSnapshot: async id => ({ jobId:id, state:'STAGED', stagedPath:'/tmp/update.apk' }),
     pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
     resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
-    requestInstall: async id => (calls.push(['requestInstall', id]), { status:'REQUESTED' }),
+    requestInstall: async id => ({ status:'REQUESTED', jobId:id }),
     reconcileInstalledVersion: async () => null,
   };
   const { service } = fixture({ native });
-  assert.equal((await service.install('J1')).status, 'REQUESTED');
-  assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','requestInstall']);
+  await assert.rejects(() => service.install('J1'), error => error?.code === 'UPDATE_JOB_NOT_READY_TO_INSTALL');
 });
 
 test('installer handoff resolves the staged path from the persisted native job', async () => {
@@ -72,11 +76,11 @@ test('altered staged artifact blocks installer handoff', async () => {
   assert.equal(calls.some(x => x[0] === 'requestInstall'), false);
 });
 
-test('process-death recovery re-reads native staged job and re-inspects artifact', async () => {
+test('process-death recovery re-reads canonical ready job and re-inspects artifact', async () => {
   const calls = [];
   const native = {
     startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
-    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'READY_TO_INSTALL', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
     pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
     resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
@@ -104,7 +108,7 @@ test('permission return resumes from durable PERMISSION_REQUIRED state and re-in
       snapshotRead += 1;
       return {
         jobId:id,
-        state:snapshotRead === 1 ? 'STAGED' : 'PERMISSION_REQUIRED',
+        state:snapshotRead === 1 ? 'READY_TO_INSTALL' : 'PERMISSION_REQUIRED',
         bytesDownloaded:100,
         totalBytes:100,
         stagedPath:'/tmp/update.apk',
@@ -140,7 +144,7 @@ test('installer handoff requires successful backup durable readback when backup 
   };
   const { service } = fixture({ backup, native:{
     startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
-    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'STAGED', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
+    getJobSnapshot: async id => (calls.push(['getJobSnapshot', id]), { jobId:id, state:'READY_TO_INSTALL', bytesDownloaded:100, totalBytes:100, stagedPath:'/tmp/update.apk' }),
     pauseDownload: async id => ({ jobId:id, state:'PAUSED' }),
     resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
