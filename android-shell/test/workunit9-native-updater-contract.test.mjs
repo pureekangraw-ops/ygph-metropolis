@@ -42,3 +42,17 @@ test('native installer handoff is bound to a persisted STAGED job instead of a f
   assert.match(method, /requireState\(call, snapshot, "STAGED"\)/);
   assert.match(method, /snapshot\.getString\("stagedPath"\)/);
 });
+
+test('native installer re-hashes the staged APK before opening Android installer', () => {
+  const start = source.indexOf('public void requestInstall(PluginCall call)');
+  const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /snapshot\.getString\("stagedSha256"\)/);
+  assert.match(method, /sha256File\(apk\)/);
+  assert.match(method, /UPDATE_ARTIFACT_MISMATCH/);
+  const digestIndex = method.indexOf('sha256File(apk)');
+  const installerIndex = method.indexOf('startActivity(install)');
+  assert.ok(digestIndex >= 0 && installerIndex >= 0 && digestIndex < installerIndex,
+    'staged APK must be re-hashed before Android installer is opened');
+});
