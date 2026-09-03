@@ -70,7 +70,8 @@ export function createBrowserApp({ root, initialRoute, model = {}, chatControlle
 
   async function executeUpdaterAction(action) {
     const operations = settingsState.operations || {};
-    const methodName = action === 'start' ? 'startUpdate' : action;
+    const failedRetry = action === 'retry' && settingsState.updaterStatus?.state === 'Failed';
+    const methodName = failedRetry ? 'checkUpdate' : (action === 'start' ? 'startUpdate' : action);
     const operation = operations?.[methodName];
     if (typeof operation !== 'function') return;
     const result = await operation.call(operations);
