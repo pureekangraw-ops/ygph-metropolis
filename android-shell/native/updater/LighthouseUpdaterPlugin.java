@@ -38,6 +38,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private static final String PREFS = "lighthouse_updater_jobs";
     private static final String PREFIX = "job:";
     private static final String PENDING_INSTALL_JOB = "pendingInstallJobId";
+    private static final long PROGRESS_CHECKPOINT_MS = 500L;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
@@ -117,15 +118,26 @@ public class LighthouseUpdaterPlugin extends Plugin {
     @PluginMethod
     public void pauseDownload(PluginCall call) {
         String jobId = call.getString("jobId");
-        JSObject snapshot = load(jobId);
-        if (snapshot == null) {
-            call.reject("UPDATE_JOB_NOT_FOUND");
-            return;
+        synchronized (this) {
+            JSObject snapshot = load(jobId);
+            if (snapshot == null) {
+                call.reject("UPDATE_JOB_NOT_FOUND");
+                return;
+            }
+            if (!requireState(call, snapshot, "DOWNLOADING")) return;
+            String stagedPath = snapshot.getString("stagedPath");
+            if (stagedPath != null && !stagedPath.isBlank()) {
+                File part = new File(stagedPath);
+                if (!part.getName().endsWith(".part") && part.getParentFile() != null) {
+                    part = new File(part.getParentFile(), jobId + ".apk.part");
+                }
+                if (part.exists()) snapshot.put("bytesDownloaded", part.length());
+                else snapshot.put("bytesDownloaded", 0L);
+            }
+            snapshot.put("state", "PAUSED");
+            save(snapshot);
+            call.resolve(snapshot);
         }
-        if (!requireState(call, snapshot, "DOWNLOADING")) return;
-        snapshot.put("state", "PAUSED");
-        save(snapshot);
-        call.resolve(snapshot);
     }
 
     @PluginMethod
@@ -352,16 +364,26 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 byte[] buffer = new byte[64 * 1024];
                 int read;
                 long downloaded = existing;
+                long lastCheckpointAt = System.currentTimeMillis();
                 while ((read = in.read(buffer)) != -1) {
-                    JSObject state = load(jobId);
-                    if (state == null) return;
-                    String phase = state.getString("state");
-                    if ("PAUSED".equals(phase) || "CANCELLED".equals(phase)) return;
-                    out.write(buffer, 0, read);
-                    downloaded += read;
-                    state.put("bytesDownloaded", downloaded);
-                    if (total != null) state.put("totalBytes", total);
-                    save(state);
+                    synchronized (this) {
+                        JSObject control = load(jobId);
+                        if (control == null) return;
+                        String phase = control.getString("state");
+                        if ("PAUSED".equals(phase) || "CANCELLED".equals(phase)) return;
+                        out.write(buffer, 0, read);
+                        downloaded += read;
+                    }
+                    long now = System.currentTimeMillis();
+                    if (now - lastCheckpointAt >= PROGRESS_CHECKPOINT_MS) {
+                        JSObject state = load(jobId);
+                        if (state == null) return;
+                        if (!"DOWNLOADING".equals(state.getString("state"))) return;
+                        state.put("bytesDownloaded", downloaded);
+                        if (total != null) state.put("totalBytes", total);
+                        save(state);
+                        lastCheckpointAt = now;
+                    }
                 }
             }
             JSObject done = load(jobId);
