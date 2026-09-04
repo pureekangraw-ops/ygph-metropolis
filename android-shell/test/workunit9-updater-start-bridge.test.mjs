@@ -11,7 +11,7 @@ function createFixture() {
     resumeDownload: async id => ({ jobId:id, state:'DOWNLOADING' }),
     discardDownload: async id => ({ jobId:id, state:'CANCELLED' }),
     requestInstall: async id => ({ status:'REQUESTED', jobId:id }),
-    reconcileInstalledVersion: async id => ({ jobId:id, state:'DONE' }),
+    reconcileInstalledVersion: async id => (calls.push(['reconcileInstalledVersion', id]), { jobId:id, state:'DONE', installedVersionCode:1006 }),
   };
   const verifier = {
     inspect: async () => ({
@@ -48,4 +48,11 @@ test('update service maps candidate version identity to native durable target fi
     targetVersionCode:1006,
     targetVersionName:'1.0.5',
   });
+});
+
+test('installed readback bridge preserves updater job identity', async () => {
+  const { service, calls } = createFixture();
+  const result = await service.reconcileInstalled('J1');
+  assert.deepEqual(result, { jobId:'J1', state:'DONE', installedVersionCode:1006 });
+  assert.deepEqual(calls, [['reconcileInstalledVersion', 'J1']]);
 });
