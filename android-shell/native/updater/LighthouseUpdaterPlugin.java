@@ -29,7 +29,9 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.security.cert.Certificate;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,6 +42,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private static final String PENDING_INSTALL_JOB = "pendingInstallJobId";
     private static final long PROGRESS_CHECKPOINT_MS = 500L;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Set<String> activeDownloads = ConcurrentHashMap.newKeySet();
 
     @Override
     protected void handleOnResume() {
@@ -111,6 +114,28 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (snapshot == null) {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
+        }
+        if ("DOWNLOADING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId)) {
+            String stagedPath = snapshot.getString("stagedPath");
+            File part;
+            if (stagedPath == null || stagedPath.isBlank()) {
+                part = new File(new File(getContext().getFilesDir(), "updates"), jobId + ".apk.part");
+            } else {
+                part = new File(stagedPath);
+                if (!part.getName().endsWith(".part") && part.getParentFile() != null) {
+                    part = new File(part.getParentFile(), jobId + ".apk.part");
+                }
+            }
+            Long durableBytes = nullableLong(snapshot, "bytesDownloaded");
+            long actualBytes = part.exists() ? part.length() : 0L;
+            if (durableBytes == null || durableBytes != actualBytes) {
+                snapshot.put("state", "FAILED");
+                snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
+            } else {
+                snapshot.put("state", "PAUSED");
+                snapshot.remove("error");
+            }
+            save(snapshot);
         }
         call.resolve(snapshot);
     }
@@ -339,6 +364,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             current.remove("error");
             save(current);
         }
+        activeDownloads.add(jobId);
         executor.execute(() -> download(jobId, url, part));
     }
 
@@ -413,6 +439,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             fail(jobId, e.getClass().getSimpleName());
         } finally {
             if (connection != null) connection.disconnect();
+            activeDownloads.remove(jobId);
         }
     }
 
