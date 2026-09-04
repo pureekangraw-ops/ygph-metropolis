@@ -11,14 +11,19 @@ function normalizeHex(value) {
 function deriveProgress(snapshot) {
   const bytesDownloaded = Number(snapshot?.bytesDownloaded ?? 0);
   const totalBytes = Number(snapshot?.totalBytes);
+  const rawSpeedBps = snapshot?.speedBps;
+  const parsedSpeedBps = Number(rawSpeedBps);
+  const speedBps = rawSpeedBps == null || !Number.isFinite(parsedSpeedBps) || parsedSpeedBps < 0
+    ? null
+    : parsedSpeedBps;
 
   if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
-    return { bytesDownloaded, totalBytes: null, percent: null };
+    return { bytesDownloaded, totalBytes: null, percent: null, speedBps };
   }
 
   const raw = (bytesDownloaded / totalBytes) * 100;
   const percent = Math.max(0, Math.min(100, raw));
-  return { bytesDownloaded, totalBytes, percent };
+  return { bytesDownloaded, totalBytes, percent, speedBps };
 }
 
 export function createUpdateService({ native, verifier, backup, expectedIdentity } = {}) {
