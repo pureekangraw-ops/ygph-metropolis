@@ -402,10 +402,14 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 return;
             }
 
+            String responseEtag = connection.getHeaderField("ETag");
+            String responseLastModified = connection.getHeaderField("Last-Modified");
+            boolean validatorMatches = resumeValidatorMatches(etag, lastModified, responseEtag, responseLastModified);
             String contentRange = connection.getHeaderField("Content-Range");
             boolean resumeAccepted = existing > 0
                     && code == HttpURLConnection.HTTP_PARTIAL
-                    && contentRangeStartsAt(contentRange, existing);
+                    && contentRangeStartsAt(contentRange, existing)
+                    && validatorMatches;
             if (existing > 0 && !resumeAccepted) {
                 connection.disconnect();
                 connection = null;
@@ -415,8 +419,6 @@ public class LighthouseUpdaterPlugin extends Plugin {
 
             JSObject responseState = load(jobId);
             if (responseState == null) return;
-            String responseEtag = connection.getHeaderField("ETag");
-            String responseLastModified = connection.getHeaderField("Last-Modified");
             if (responseEtag != null && !responseEtag.isBlank()) responseState.put("etag", responseEtag);
             else if (existing == 0) responseState.remove("etag");
             if (responseLastModified != null && !responseLastModified.isBlank()) responseState.put("lastModified", responseLastModified);
@@ -495,6 +497,12 @@ public class LighthouseUpdaterPlugin extends Plugin {
         } catch (NumberFormatException e) {
             return false;
         }
+    }
+
+    private static boolean resumeValidatorMatches(String etag, String lastModified, String responseEtag, String responseLastModified) {
+        if (etag != null && !etag.isBlank()) return etag.equals(responseEtag);
+        if (lastModified != null && !lastModified.isBlank()) return lastModified.equals(responseLastModified);
+        return true;
     }
 
     private boolean restartPartialFromZero(String jobId, String urlString, File part) {
