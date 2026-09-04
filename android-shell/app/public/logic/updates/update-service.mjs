@@ -96,7 +96,11 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
   return Object.freeze({
     async start(input) {
       const expectedSha256 = normalizeHex(expectedIdentity.artifactSha256);
-      return native.startDownload({ ...input, expectedSha256 });
+      const { versionCode, versionName, ...downloadInput } = input ?? {};
+      const nativeInput = { ...downloadInput, expectedSha256 };
+      if (versionCode !== undefined) nativeInput.targetVersionCode = versionCode;
+      if (versionName !== undefined) nativeInput.targetVersionName = versionName;
+      return native.startDownload(nativeInput);
     },
 
     async snapshot(jobId) {
