@@ -131,16 +131,22 @@ public class LighthouseUpdaterPlugin extends Plugin {
         }
         boolean orphanedDownloading = "DOWNLOADING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId);
         boolean orphanedRetrying = "RETRYING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId);
-        if (orphanedDownloading || orphanedRetrying) {
+        boolean orphanedVerifying = "VERIFYING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId);
+        if (orphanedDownloading || orphanedRetrying || orphanedVerifying) {
             String stagedPath = snapshot.getString("stagedPath");
             File part;
             if (stagedPath == null || stagedPath.isBlank()) {
                 part = new File(new File(getContext().getFilesDir(), "updates"), jobId + ".apk.part");
             } else {
                 part = new File(stagedPath);
-                if (!part.getName().endsWith(".part") && part.getParentFile() != null) {
+                if (!part.getName().endsWith(".part") && !part.getName().endsWith(".apk") && part.getParentFile() != null) {
                     part = new File(part.getParentFile(), jobId + ".apk.part");
                 }
+            }
+            if (orphanedVerifying) {
+                File dir = part.getParentFile() != null ? part.getParentFile() : new File(getContext().getFilesDir(), "updates");
+                File apk = new File(dir, jobId + ".apk");
+                if (!part.isFile() && apk.isFile()) part = apk;
             }
             Long durableBytes = nullableLong(snapshot, "bytesDownloaded");
             long actualBytes = part.exists() ? part.length() : 0L;
@@ -150,6 +156,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 save(snapshot);
             } else if (orphanedRetrying) {
                 recoverRetryingJob(jobId, snapshot, part);
+            } else if (orphanedVerifying) {
+                recoverVerifyingJob(jobId, snapshot, part);
             } else {
                 snapshot.put("state", "PAUSED");
                 snapshot.remove("nextRetryAt");
@@ -506,27 +514,11 @@ public class LighthouseUpdaterPlugin extends Plugin {
             }
             JSObject done = load(jobId);
             if (done == null || !isCurrentWorker(jobId) || !"DOWNLOADING".equals(done.getString("state"))) return;
-            String stagedSha256 = sha256File(part);
-            done.put("stagedSha256", stagedSha256);
-            String expectedSha256 = normalizeHex(done.getString("expectedSha256"));
-            if (expectedSha256 == null || !expectedSha256.equals(normalizeHex(stagedSha256))) {
-                done.put("state", "FAILED");
-                done.put("error", "UPDATE_ARTIFACT_MISMATCH");
-                save(done);
-                return;
-            }
-            File apk = new File(part.getParentFile(), jobId + ".apk");
-            if (apk.exists()) apk.delete();
-            if (!part.renameTo(apk)) {
-                fail(jobId, "STAGE_RENAME_FAILED");
-                return;
-            }
-            done.put("state", "READY_TO_INSTALL");
-            done.put("stagedPath", apk.getAbsolutePath());
-            done.put("bytesDownloaded", apk.length());
-            Long totalBytes = nullableLong(done, "totalBytes");
-            if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
+            done.put("state", "VERIFYING");
+            done.put("verifiedBytes", 0L);
+            done.put("bytesDownloaded", part.length());
             save(done);
+            completeVerification(jobId, part);
         } catch (Exception e) {
             if (!isCurrentWorker(jobId)) return;
             JSObject state = load(jobId);
@@ -579,6 +571,57 @@ public class LighthouseUpdaterPlugin extends Plugin {
         save(state);
         download(jobId, urlString, part);
         return true;
+    }
+
+    private void completeVerification(String jobId, File part) throws Exception {
+        JSObject done = load(jobId);
+        if (done == null || !isCurrentWorker(jobId) || !"VERIFYING".equals(done.getString("state"))) return;
+        String stagedSha256 = sha256File(part);
+        if (!isCurrentWorker(jobId)) return;
+        done = load(jobId);
+        if (done == null || !"VERIFYING".equals(done.getString("state"))) return;
+        done.put("stagedSha256", stagedSha256);
+        String expectedSha256 = normalizeHex(done.getString("expectedSha256"));
+        if (expectedSha256 == null || !expectedSha256.equals(normalizeHex(stagedSha256))) {
+            done.put("state", "FAILED");
+            done.put("error", "UPDATE_ARTIFACT_MISMATCH");
+            save(done);
+            return;
+        }
+        File apk = part.getName().endsWith(".apk") ? part : new File(part.getParentFile(), jobId + ".apk");
+        if (apk != part) {
+            if (apk.exists()) apk.delete();
+            if (!part.renameTo(apk)) {
+                fail(jobId, "STAGE_RENAME_FAILED");
+                return;
+            }
+        }
+        if (!isCurrentWorker(jobId)) return;
+        done = load(jobId);
+        if (done == null || !"VERIFYING".equals(done.getString("state"))) return;
+        done.put("stagedPath", apk.getAbsolutePath());
+        done.put("bytesDownloaded", apk.length());
+        done.put("verifiedBytes", apk.length());
+        Long totalBytes = nullableLong(done, "totalBytes");
+        if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
+        done.put("state", "READY_TO_INSTALL");
+        save(done);
+    }
+
+    private void recoverVerifyingJob(String jobId, JSObject snapshot, File part) {
+        long workerToken = claimWorker(jobId);
+        activeDownloads.add(jobId);
+        executor.execute(() -> {
+            executingWorkerToken.set(workerToken);
+            try {
+                completeVerification(jobId, part);
+            } catch (Exception error) {
+                if (isCurrentWorker(jobId)) fail(jobId, error.getClass().getSimpleName());
+            } finally {
+                executingWorkerToken.remove();
+                if (currentWorkerTokens.remove(jobId, workerToken)) activeDownloads.remove(jobId);
+            }
+        });
     }
 
     private void recoverRetryingJob(String jobId, JSObject snapshot, File part) {
