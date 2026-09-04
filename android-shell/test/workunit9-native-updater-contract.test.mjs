@@ -131,7 +131,7 @@ test('native updater persists pending installer job identity before Android hand
   const method = source.slice(start, end);
   const waitingStateIndex = method.indexOf('snapshot.put("state", "WAITING_ANDROID_CONFIRMATION")');
   const saveIndex = method.indexOf('save(snapshot)', waitingStateIndex);
-  const pendingIndex = method.indexOf('putString(PENDING_INSTALL_JOB, jobId)');
+  const pendingIndex = method.indexOf('putString(PENDING_INSTALL_JOB, jobId)', saveIndex);
   const installerIndex = method.indexOf('startActivity(install)');
   assert.ok(waitingStateIndex >= 0 && saveIndex > waitingStateIndex && pendingIndex > saveIndex && installerIndex > pendingIndex,
     'pending installer job must be durable after WAITING state and before Android handoff');
