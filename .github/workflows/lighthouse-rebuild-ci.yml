@@ -28,6 +28,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Sync trusted packaged sources
+        run: npm run pretest
       - name: Run LIGHTHOUSE WorkUnit tests
         run: node --test test/workunit*.test.mjs
 
