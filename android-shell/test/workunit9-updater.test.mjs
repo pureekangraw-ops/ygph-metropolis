@@ -97,7 +97,7 @@ test('process-death recovery re-reads canonical ready job and re-inspects artifa
   assert.deepEqual(calls.map(x => x[0]), ['getJobSnapshot','inspect']);
 });
 
-test('permission return resumes from durable PERMISSION_REQUIRED state and re-inspects staged artifact', async () => {
+test('permission return resumes from native-restored READY_TO_INSTALL state and re-inspects staged artifact', async () => {
   const calls = [];
   let installAttempt = 0;
   let snapshotRead = 0;
@@ -108,7 +108,7 @@ test('permission return resumes from durable PERMISSION_REQUIRED state and re-in
       snapshotRead += 1;
       return {
         jobId:id,
-        state:snapshotRead === 1 ? 'READY_TO_INSTALL' : 'PERMISSION_REQUIRED',
+        state:'READY_TO_INSTALL',
         bytesDownloaded:100,
         totalBytes:100,
         stagedPath:'/tmp/update.apk',
