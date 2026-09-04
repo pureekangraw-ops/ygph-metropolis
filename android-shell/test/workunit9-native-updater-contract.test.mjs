@@ -86,6 +86,31 @@ test('native updater persists permission requirement before leaving for Android 
     'PERMISSION_REQUIRED must be durable before Android settings is opened');
 });
 
+test('native updater resumes permission-required job after Android settings', () => {
+  const requestStart = source.indexOf('public void requestInstall(PluginCall call)');
+  const requestEnd = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
+  assert.ok(requestStart >= 0 && requestEnd > requestStart, 'requestInstall method must exist');
+  const request = source.slice(requestStart, requestEnd);
+  const permissionStateIndex = request.indexOf('snapshot.put("state", "PERMISSION_REQUIRED")');
+  const permissionSaveIndex = request.indexOf('save(snapshot)', permissionStateIndex);
+  const pendingIndex = request.indexOf('putString(PENDING_INSTALL_JOB, jobId)', permissionSaveIndex);
+  const settingsIndex = request.indexOf('startActivity(settings)');
+  assert.ok(permissionStateIndex >= 0 && permissionSaveIndex > permissionStateIndex && pendingIndex > permissionSaveIndex && settingsIndex > pendingIndex,
+    'permission-required job identity must be durable before leaving for Android settings');
+
+  const resumeStart = source.indexOf('protected void handleOnResume()');
+  const resumeEnd = source.indexOf('@PluginMethod', resumeStart);
+  assert.ok(resumeStart >= 0 && resumeEnd > resumeStart, 'handleOnResume must exist before plugin methods');
+  const resume = source.slice(resumeStart, resumeEnd);
+  assert.match(resume, /"PERMISSION_REQUIRED"\.equals\(snapshot\.getString\("state"\)\)/);
+  assert.match(resume, /canRequestPackageInstalls\(\)/);
+  const readyIndex = resume.indexOf('snapshot.put("state", "READY_TO_INSTALL")');
+  const readySaveIndex = resume.indexOf('save(snapshot)', readyIndex);
+  const clearIndex = resume.indexOf('remove(PENDING_INSTALL_JOB)', readySaveIndex);
+  assert.ok(readyIndex >= 0 && readySaveIndex > readyIndex && clearIndex > readySaveIndex,
+    'granted install permission must durably restore READY_TO_INSTALL and clear the external handoff pointer');
+});
+
 test('native updater persists WAITING_ANDROID_CONFIRMATION before opening Android package installer', () => {
   const start = source.indexOf('public void requestInstall(PluginCall call)');
   const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
