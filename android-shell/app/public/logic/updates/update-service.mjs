@@ -41,7 +41,7 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     throw new TypeError('expectedIdentity applicationId and signerCertificateSha256 are required');
   }
 
-  async function inspectForInstall(path) {
+  async function inspectForInstall(path, target = null) {
     const inspected = await verifier.inspect(path);
     const expectedArtifactSha = normalizeHex(expectedIdentity.artifactSha256);
     const actualArtifactSha = normalizeHex(inspected?.sha256);
@@ -56,12 +56,20 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     const packageMatches = inspected?.applicationId === expectedIdentity.applicationId;
     const signerMatches = normalizeHex(inspected?.signerCertificateSha256) === normalizeHex(expectedIdentity.signerCertificateSha256);
     const minimum = Number(expectedIdentity.minVersionCode);
-    const versionMatches = !Number.isFinite(minimum) || Number(inspected?.versionCode) >= minimum;
+    const minimumMatches = !Number.isFinite(minimum) || Number(inspected?.versionCode) >= minimum;
 
-    if (!packageMatches || !signerMatches || !versionMatches) {
+    const targetVersionCode = Number(target?.targetVersionCode);
+    const hasTargetVersionCode = Number.isFinite(targetVersionCode) && targetVersionCode > 0;
+    const targetCodeMatches = !hasTargetVersionCode || Number(inspected?.versionCode) === targetVersionCode;
+    const targetVersionName = String(target?.targetVersionName ?? '').trim();
+    const targetNameMatches = !targetVersionName || String(inspected?.versionName ?? '') === targetVersionName;
+
+    if (!packageMatches || !signerMatches || !minimumMatches || !targetCodeMatches || !targetNameMatches) {
       const error = new Error('UPDATE_IDENTITY_MISMATCH');
       error.code = 'UPDATE_IDENTITY_MISMATCH';
       error.inspected = inspected;
+      error.targetVersionCode = hasTargetVersionCode ? targetVersionCode : null;
+      error.targetVersionName = targetVersionName || null;
       throw error;
     }
     return inspected;
@@ -87,7 +95,7 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
       error.snapshot = snapshot;
       throw error;
     }
-    const inspected = await inspectForInstall(snapshot.stagedPath);
+    const inspected = await inspectForInstall(snapshot.stagedPath, snapshot);
     const backupReadback = await verifyPreinstallBackup();
     const result = await native.requestInstall(jobId);
     return { ...result, stagedIdentity: inspected, ...(backupReadback ? { backupReadback } : {}) };
@@ -111,7 +119,7 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     async recover(jobId) {
       const snapshot = await native.getJobSnapshot(jobId);
       if (snapshot?.state === 'READY_TO_INSTALL' && snapshot?.stagedPath) {
-        const inspected = await inspectForInstall(snapshot.stagedPath);
+        const inspected = await inspectForInstall(snapshot.stagedPath, snapshot);
         return {
           ...snapshot,
           stagedIdentity: inspected,
