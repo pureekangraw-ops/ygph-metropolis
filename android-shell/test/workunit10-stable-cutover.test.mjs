@@ -120,3 +120,19 @@ test('canonical CHAT multi-group route commits through the same encrypted runtim
   assert.equal(response.result.readback.domains.LEDGER.records['TX-CUTOVER-CHAT-1']?.record?.amountSatang, 4321);
   assert.equal((await runtime.readState()).domains.LEDGER.records['TX-CUTOVER-CHAT-1']?.record?.amountSatang, 4321);
 });
+
+test('canonical Manual accepts its revision-bound command envelope for calendar mutations', async () => {
+  const composition = await loadComposition();
+  const { runtime } = await fixture();
+  const services = await composition.createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
+
+  const result = await services.manual.createCalendarItem({
+    workflowId:'WF-CUTOVER-CALENDAR-1',
+    recordId:'CAL-CUTOVER-1',
+    type:'VERIFY',
+    title:'calendar canonical witness',
+    dueDate:'2026-09-05',
+  });
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal((await runtime.readState()).domains.CALENDAR.records['CAL-CUTOVER-1']?.record?.status, 'OPEN');
+});
