@@ -21,6 +21,25 @@ test('native updater persists target version metadata from the update candidate'
   assert.match(method, /snapshot\.put\("targetVersionName",\s*targetVersionName\)/);
 });
 
+test('native updater refuses resume when durable downloaded bytes disagree with partial file size', () => {
+  const start = source.indexOf('public void resumeDownload(PluginCall call)');
+  const end = source.indexOf('public void discardDownload(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'resumeDownload method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /nullableLong\(snapshot, "bytesDownloaded"\)/);
+  assert.match(method, /part\.length\(\)/);
+  assert.match(method, /UPDATE_PARTIAL_FILE_MISMATCH/);
+  const lengthIndex = method.indexOf('part.length()');
+  const failedIndex = method.indexOf('snapshot.put("state", "FAILED")', lengthIndex);
+  const errorIndex = method.indexOf('snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH")', failedIndex);
+  const saveIndex = method.indexOf('save(snapshot)', errorIndex);
+  const launchIndex = method.indexOf('launch(jobId, url, part)');
+  assert.ok(lengthIndex >= 0 && failedIndex > lengthIndex && errorIndex > failedIndex && saveIndex > errorIndex,
+    'partial-file mismatch must be durably failed before resume can continue');
+  assert.ok(launchIndex > saveIndex,
+    'network resume must occur only after the partial-file consistency guard');
+});
+
 test('native updater persists staged artifact identity before installer handoff', () => {
   assert.match(source, /"stagedSha256"/);
   assert.match(source, /sha256File\(/);
