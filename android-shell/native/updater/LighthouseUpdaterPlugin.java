@@ -328,6 +328,17 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 call.reject("UPDATE_ARTIFACT_MISMATCH");
                 return;
             }
+            inspectStagedApk(apk, snapshot);
+        } catch (IllegalStateException e) {
+            if ("UPDATE_IDENTITY_MISMATCH".equals(e.getMessage())) {
+                snapshot.put("state", "FAILED");
+                snapshot.put("error", "UPDATE_IDENTITY_MISMATCH");
+                save(snapshot);
+                call.reject("UPDATE_IDENTITY_MISMATCH");
+                return;
+            }
+            call.reject("UPDATE_ARTIFACT_VERIFY_FAILED", e);
+            return;
         } catch (Exception e) {
             call.reject("UPDATE_ARTIFACT_VERIFY_FAILED", e);
             return;
@@ -642,14 +653,64 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (!isCurrentWorker(jobId)) return;
         done = load(jobId);
         if (done == null || !"VERIFYING".equals(done.getString("state"))) return;
+        JSObject stagedIdentity;
+        try {
+            stagedIdentity = inspectStagedApk(apk, done);
+        } catch (IllegalStateException e) {
+            if ("UPDATE_IDENTITY_MISMATCH".equals(e.getMessage())) {
+                done.put("state", "FAILED");
+                done.put("error", "UPDATE_IDENTITY_MISMATCH");
+                done.remove("speedBps");
+                save(done);
+                return;
+            }
+            throw e;
+        }
         done.put("stagedPath", apk.getAbsolutePath());
         done.put("bytesDownloaded", apk.length());
         done.put("verifiedBytes", apk.length());
+        done.put("stagedApplicationId", stagedIdentity.getString("applicationId"));
+        done.put("stagedVersionCode", nullableLong(stagedIdentity, "versionCode"));
+        done.put("stagedVersionName", stagedIdentity.getString("versionName"));
+        done.put("stagedSignerSha256", stagedIdentity.getString("signerSha256"));
         done.remove("speedBps");
         Long totalBytes = nullableLong(done, "totalBytes");
         if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
         done.put("state", "READY_TO_INSTALL");
         save(done);
+    }
+
+    private JSObject inspectStagedApk(File apk, JSObject snapshot) throws Exception {
+        PackageManager pm = getContext().getPackageManager();
+        int signingFlags = Build.VERSION.SDK_INT >= 28
+                ? PackageManager.GET_SIGNING_CERTIFICATES
+                : PackageManager.GET_SIGNATURES;
+        PackageInfo archive = pm.getPackageArchiveInfo(apk.getAbsolutePath(), signingFlags);
+        PackageInfo installed = pm.getPackageInfo(getContext().getPackageName(), signingFlags);
+        if (archive == null || installed == null) throw new IllegalStateException("UPDATE_IDENTITY_MISMATCH");
+
+        String applicationId = archive.packageName;
+        long versionCode = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
+        String versionName = archive.versionName;
+        String signer = normalizeHex(signerSha256(archive));
+        String installedSigner = normalizeHex(signerSha256(installed));
+        Long targetVersionCode = nullableLong(snapshot, "targetVersionCode");
+        String targetVersionName = snapshot.getString("targetVersionName");
+
+        boolean packageMatches = getContext().getPackageName().equals(applicationId);
+        boolean signerMatches = signer != null && !signer.isBlank() && signer.equals(installedSigner);
+        boolean versionCodeMatches = targetVersionCode != null && targetVersionCode > 0L && versionCode == targetVersionCode;
+        boolean versionNameMatches = targetVersionName != null && !targetVersionName.isBlank() && targetVersionName.equals(versionName);
+        if (!packageMatches || !signerMatches || !versionCodeMatches || !versionNameMatches) {
+            throw new IllegalStateException("UPDATE_IDENTITY_MISMATCH");
+        }
+
+        JSObject identity = new JSObject();
+        identity.put("applicationId", applicationId);
+        identity.put("versionCode", versionCode);
+        identity.put("versionName", versionName);
+        identity.put("signerSha256", signer);
+        return identity;
     }
 
     private void recoverVerifyingJob(String jobId, JSObject snapshot, File part) {
@@ -865,10 +926,14 @@ public class LighthouseUpdaterPlugin extends Plugin {
     }
 
     private static String signerSha256(PackageInfo info) throws Exception {
-        if (info.signingInfo == null) return null;
-        android.content.pm.Signature[] signatures = info.signingInfo.hasMultipleSigners()
-                ? info.signingInfo.getApkContentsSigners()
-                : info.signingInfo.getSigningCertificateHistory();
+        android.content.pm.Signature[] signatures;
+        if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
+            signatures = info.signingInfo.hasMultipleSigners()
+                    ? info.signingInfo.getApkContentsSigners()
+                    : info.signingInfo.getSigningCertificateHistory();
+        } else {
+            signatures = info.signatures;
+        }
         if (signatures == null || signatures.length == 0) return null;
         Certificate cert = java.security.cert.CertificateFactory.getInstance("X.509")
                 .generateCertificate(new java.io.ByteArrayInputStream(signatures[0].toByteArray()));
