@@ -22,9 +22,14 @@ function fixture(inspected) {
   const verifier = {
     inspect: async path => (calls.push(['inspect', path]), inspected),
   };
+  const backup = {
+    exportBackup: async () => ({ revision:7, exportedAt:'2026-09-04T11:00:00.000Z', artifactHash:'backup-sha' }),
+    readback: async artifact => ({ revision:artifact.revision, exportedAt:artifact.exportedAt, artifactHash:artifact.artifactHash }),
+  };
   const service = createUpdateService({
     native,
     verifier,
+    backup,
     expectedIdentity:{
       applicationId:'com.yggdrasil.lighthouse',
       signerCertificateSha256:'signer',
