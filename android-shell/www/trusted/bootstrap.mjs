@@ -1,8 +1,6 @@
 import { initializeFirstRun } from './source/greenfield/first-run.mjs';
-import {
-  inspectGreenfieldDeviceUnlock,
-  openGreenfieldRuntimeWithDevicePin,
-} from './source/greenfield/runtime.mjs';
+import { inspectGreenfieldDeviceUnlock } from './source/greenfield/runtime.mjs';
+import { openCanonicalGreenfieldRuntimeWithDevicePin } from './source/greenfield/canonical-runtime-bridge.mjs';
 import {
   activateRuntimeSession,
   deactivateRuntimeSession,
@@ -112,7 +110,7 @@ export async function openTrustedBrain({
   confirmTextImpl = null,
   documentRef = globalThis.document,
 } = {}) {
-  const runtime = await openGreenfieldRuntimeWithDevicePin({
+  const runtime = await openCanonicalGreenfieldRuntimeWithDevicePin({
     pin,
     indexedDBImpl,
     lockManager,
