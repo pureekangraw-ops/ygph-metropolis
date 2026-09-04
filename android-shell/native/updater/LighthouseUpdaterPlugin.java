@@ -122,7 +122,9 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if ("DOWNLOADING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId)) {
+        boolean orphanedDownloading = "DOWNLOADING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId);
+        boolean orphanedRetrying = "RETRYING".equals(snapshot.getString("state")) && !activeDownloads.contains(jobId);
+        if (orphanedDownloading || orphanedRetrying) {
             String stagedPath = snapshot.getString("stagedPath");
             File part;
             if (stagedPath == null || stagedPath.isBlank()) {
@@ -140,6 +142,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
             } else {
                 snapshot.put("state", "PAUSED");
+                snapshot.remove("nextRetryAt");
                 snapshot.remove("error");
             }
             save(snapshot);
