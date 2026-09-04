@@ -112,14 +112,22 @@ test('native updater persists pending installer job identity before Android hand
     'pending installer job must be durable after WAITING state and before Android handoff');
 });
 
-test('installed readback is bound to the waiting job and compares PackageManager version against durable targetVersionCode', () => {
+test('installed readback bridge is bound to the waiting job and delegates to shared reconciler', () => {
   const start = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
-  const end = source.indexOf('private boolean requireState', start);
-  assert.ok(start >= 0 && end > start, 'reconcileInstalledVersion method must exist');
+  const end = source.indexOf('private JSObject reconcileInstalledJob', start);
+  assert.ok(start >= 0 && end > start, 'reconcileInstalledVersion and shared reconciler must exist');
   const method = source.slice(start, end);
   assert.match(method, /call\.getString\("jobId"\)/);
   assert.match(method, /load\(jobId\)/);
   assert.match(method, /requireState\(call, snapshot, "WAITING_ANDROID_CONFIRMATION"\)/);
+  assert.match(method, /reconcileInstalledJob\(jobId, snapshot\)/);
+});
+
+test('shared installed readback compares PackageManager version against durable targetVersionCode', () => {
+  const start = source.indexOf('private JSObject reconcileInstalledJob');
+  const end = source.indexOf('private boolean requireState', start);
+  assert.ok(start >= 0 && end > start, 'shared installed reconciler must exist');
+  const method = source.slice(start, end);
   assert.match(method, /nullableLong\(snapshot, "targetVersionCode"\)/);
   assert.doesNotMatch(method, /minVersionCode/);
 
@@ -136,5 +144,16 @@ test('installed readback is bound to the waiting job and compares PackageManager
   assert.match(method, /snapshot\.put\("installedVersionName",\s*info\.versionName\)/);
   assert.match(method, /snapshot\.put\("installedSignerSha256",\s*installedSignerSha256\)/);
   assert.match(method, /save\(snapshot\)/);
-  assert.match(method, /call\.resolve\(snapshot\)/);
+  assert.match(method, /return snapshot/);
+});
+
+test('native updater reconciles pending installer job on app resume', () => {
+  const start = source.indexOf('protected void handleOnResume()');
+  const end = source.indexOf('@PluginMethod', start);
+  assert.ok(start >= 0 && end > start, 'handleOnResume must exist before plugin methods');
+  const method = source.slice(start, end);
+  assert.match(method, /prefs\(\)\.getString\(PENDING_INSTALL_JOB, null\)/);
+  assert.match(method, /load\(jobId\)/);
+  assert.match(method, /"WAITING_ANDROID_CONFIRMATION"\.equals\(snapshot\.getString\("state"\)\)/);
+  assert.match(method, /reconcileInstalledJob\(jobId, snapshot\)/);
 });
