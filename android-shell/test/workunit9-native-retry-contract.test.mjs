@@ -57,10 +57,15 @@ test('automatic retry is limited to explicit network and timeout failures', () =
 });
 
 test('artifact mismatch remains terminal and never enters network retry path', () => {
-  const start = source.indexOf('String stagedSha256 = sha256File(part)');
-  const end = source.indexOf('File apk = new File(', start);
-  assert.ok(start >= 0 && end > start, 'artifact verification block must exist');
-  const block = source.slice(start, end);
+  const ownerStart = source.indexOf('private void completeVerification(String jobId, File part)');
+  const ownerEnd = source.indexOf('private void recoverVerifyingJob(', ownerStart);
+  assert.ok(ownerStart >= 0 && ownerEnd > ownerStart, 'artifact verification owner must exist');
+  const owner = source.slice(ownerStart, ownerEnd);
+
+  const start = owner.indexOf('String stagedSha256 = sha256File(part)');
+  const end = owner.indexOf('File apk = ', start);
+  assert.ok(start >= 0 && end > start, 'artifact verification block must exist inside completeVerification');
+  const block = owner.slice(start, end);
   assert.match(block, /UPDATE_ARTIFACT_MISMATCH/);
   assert.match(block, /done\.put\("state", "FAILED"\)/);
   assert.doesNotMatch(block, /retryNetworkFailure|RETRYING/);
