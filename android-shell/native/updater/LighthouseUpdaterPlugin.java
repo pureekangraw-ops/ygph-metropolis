@@ -150,6 +150,15 @@ public class LighthouseUpdaterPlugin extends Plugin {
         }
         File part = new File(stagedPath);
         if (!part.getName().endsWith(".part")) part = new File(part.getParentFile(), jobId + ".apk.part");
+        Long durableBytes = nullableLong(snapshot, "bytesDownloaded");
+        long actualBytes = part.exists() ? part.length() : 0L;
+        if (durableBytes == null || durableBytes != actualBytes) {
+            snapshot.put("state", "FAILED");
+            snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
+            save(snapshot);
+            call.reject("UPDATE_PARTIAL_FILE_MISMATCH");
+            return;
+        }
         snapshot.put("state", "DOWNLOADING");
         snapshot.put("stagedPath", part.getAbsolutePath());
         snapshot.remove("stagedSha256");
