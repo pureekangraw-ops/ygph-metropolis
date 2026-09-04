@@ -168,21 +168,24 @@ test('stable bootstrap composes packaged canonical services and exposes them on 
   assert.match(source, /\bservices\b/);
 
   await resetTrustedVault();
-  t.after(resetTrustedVault);
+  let session = null;
+  t.after(async () => {
+    session?.close();
+    await resetTrustedVault();
+  });
   await initializeTrustedFirstRun({
     recoveryCode:'LH-cutover-session-recovery',
     pin:'778899',
     indexedDBImpl:fakeIndexedDB,
     now:() => NOW,
   });
-  const session = await openTrustedBrain({
+  session = await openTrustedBrain({
     pin:'778899',
     indexedDBImpl:fakeIndexedDB,
     lockManager:null,
     now:() => '2026-09-04T13:10:01.000Z',
     documentRef:null,
   });
-  t.after(() => session.close());
 
   assert.deepEqual(Object.keys(session.services || {}).sort(), ['backup','chat','events','manual','modules','recovery','session','updates']);
   assert.deepEqual((await session.services.modules.list()).map(item => item.moduleId), ['income','outcome','calendar','ledger']);
