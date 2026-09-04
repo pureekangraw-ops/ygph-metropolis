@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { createGreenfieldState } from '../../greenfield/core.mjs';
 import { createMemoryVaultStore, commitEncryptedState } from '../../greenfield/persistence.mjs';
 import { createCanonicalGreenfieldRuntime } from '../../greenfield/canonical-runtime-bridge.mjs';
 import { buildOtherIncomeWorkflow } from '../../greenfield/business-workflows.mjs';
+import { DB_NAME } from '../www/trusted/source/greenfield/browser-store.mjs';
+import { deactivateRuntimeSession } from '../www/trusted/source/greenfield/runtime-session.mjs';
+import { initializeTrustedFirstRun, openTrustedBrain } from '../www/trusted/bootstrap.mjs';
 
 const PASSPHRASE = 'LH-cutover-runtime-passphrase';
 const NOW = '2026-09-04T13:10:00.000Z';
@@ -14,6 +18,16 @@ async function fixture() {
   const state = createGreenfieldState({ now:NOW });
   await commitEncryptedState({ store, passphrase:PASSPHRASE, state, expectedDurableRevision:null });
   return { store, runtime:createCanonicalGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW }) };
+}
+
+async function resetTrustedVault() {
+  deactivateRuntimeSession();
+  await new Promise((resolve, reject) => {
+    const request = fakeIndexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error('TEST_DB_DELETE_FAILED'));
+    request.onblocked = () => reject(new Error('TEST_DB_DELETE_BLOCKED'));
+  });
 }
 
 function externalOwners() {
@@ -147,9 +161,29 @@ test('stable bootstrap opens the canonical runtime bridge after device PIN unloc
   assert.match(source, /createTrustedBrainGate/);
 });
 
-test('stable bootstrap composes packaged canonical services and exposes them on the trusted session', async () => {
+test('stable bootstrap composes packaged canonical services and exposes them on the trusted session', async (t) => {
   const source = await readFile(new URL('../www/trusted/bootstrap.mjs', import.meta.url), 'utf8');
   assert.match(source, /from '\.\/source\/app\/app\/stable-service-composition\.mjs'/);
   assert.match(source, /createStableAppServices\s*\(/);
   assert.match(source, /\bservices\b/);
+
+  await resetTrustedVault();
+  t.after(resetTrustedVault);
+  await initializeTrustedFirstRun({
+    recoveryCode:'LH-cutover-session-recovery',
+    pin:'778899',
+    indexedDBImpl:fakeIndexedDB,
+    now:() => NOW,
+  });
+  const session = await openTrustedBrain({
+    pin:'778899',
+    indexedDBImpl:fakeIndexedDB,
+    lockManager:null,
+    now:() => '2026-09-04T13:10:01.000Z',
+    documentRef:null,
+  });
+  t.after(() => session.close());
+
+  assert.deepEqual(Object.keys(session.services || {}).sort(), ['backup','chat','events','manual','modules','recovery','session','updates']);
+  assert.deepEqual((await session.services.modules.list()).map(item => item.moduleId), ['income','outcome','calendar','ledger']);
 });
