@@ -17,7 +17,7 @@ async function loadSyncTool() {
   }
 }
 
-test('trusted brain packaging copies audited root Brain/Greenfield sources exactly into non-patchable generated source', async (t) => {
+test('trusted brain packaging copies audited legacy and canonical app sources into non-patchable generated source', async (t) => {
   const { syncTrustedBrainSources } = await loadSyncTool();
   const destination = await mkdtemp(join(tmpdir(), 'lighthouse-trusted-source-'));
   t.after(() => rm(destination, { recursive:true, force:true }));
@@ -27,7 +27,7 @@ test('trusted brain packaging copies audited root Brain/Greenfield sources exact
     destination,
   });
 
-  assert.deepEqual(result.directories.sort(), ['greenfield', 'lighthouse']);
+  assert.deepEqual(result.directories.sort(), ['app', 'greenfield', 'lighthouse']);
   assert.equal(
     await readFile(join(destination, 'lighthouse', 'master-input-route.mjs'), 'utf8'),
     await readRepo('lighthouse/master-input-route.mjs'),
@@ -43,6 +43,14 @@ test('trusted brain packaging copies audited root Brain/Greenfield sources exact
   assert.equal(
     await readFile(join(destination, 'greenfield', 'browser-store.mjs'), 'utf8'),
     await readRepo('greenfield/browser-store.mjs'),
+  );
+  assert.equal(
+    await readFile(join(destination, 'app', 'app', 'app-services.mjs'), 'utf8'),
+    await readShell('app/public/app/app-services.mjs'),
+  );
+  assert.equal(
+    await readFile(join(destination, 'app', 'logic', 'updates', 'update-service.mjs'), 'utf8'),
+    await readShell('app/public/logic/updates/update-service.mjs'),
   );
 });
 
