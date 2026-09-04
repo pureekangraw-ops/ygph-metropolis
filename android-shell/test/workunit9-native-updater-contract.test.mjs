@@ -21,6 +21,35 @@ test('native updater persists target version metadata from the update candidate'
   assert.match(method, /snapshot\.put\("targetVersionName",\s*targetVersionName\)/);
 });
 
+test('pause checkpoints actual partial bytes before persisting PAUSED', () => {
+  const start = source.indexOf('public void pauseDownload(PluginCall call)');
+  const end = source.indexOf('public void resumeDownload(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'pauseDownload method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /snapshot\.getString\("stagedPath"\)/);
+  assert.match(method, /part\.length\(\)/);
+  const bytesIndex = method.indexOf('snapshot.put("bytesDownloaded", part.length())');
+  const pausedIndex = method.indexOf('snapshot.put("state", "PAUSED")');
+  const saveIndex = method.indexOf('save(snapshot)', pausedIndex);
+  assert.ok(bytesIndex >= 0 && pausedIndex > bytesIndex && saveIndex > pausedIndex,
+    'pause must durably checkpoint real partial bytes before PAUSED state');
+});
+
+test('download progress checkpoints are throttled to at least 500 ms', () => {
+  assert.match(source, /PROGRESS_CHECKPOINT_MS\s*=\s*500L/);
+  const start = source.indexOf('private void download(String jobId, String urlString, File part)');
+  const end = source.indexOf('private JSObject snapshot(', start);
+  assert.ok(start >= 0 && end > start, 'download method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /long\s+lastCheckpointAt\s*=/);
+  assert.match(method, /now\s*-\s*lastCheckpointAt\s*>=\s*PROGRESS_CHECKPOINT_MS/);
+  const bytesIndex = method.indexOf('state.put("bytesDownloaded", downloaded)');
+  const guardIndex = method.indexOf('now - lastCheckpointAt >= PROGRESS_CHECKPOINT_MS');
+  const saveIndex = method.indexOf('save(state)', guardIndex);
+  assert.ok(guardIndex >= 0 && bytesIndex > guardIndex && saveIndex > bytesIndex,
+    'byte-progress SharedPreferences writes must occur only inside the 500 ms checkpoint guard');
+});
+
 test('native updater refuses resume when durable downloaded bytes disagree with partial file size', () => {
   const start = source.indexOf('public void resumeDownload(PluginCall call)');
   const end = source.indexOf('public void discardDownload(PluginCall call)');
