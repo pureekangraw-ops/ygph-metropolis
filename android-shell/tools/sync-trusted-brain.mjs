@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_DIRECTORIES = Object.freeze(['lighthouse', 'greenfield']);
+const CANONICAL_APP_SOURCE = 'android-shell/app/public';
 
 function pathValue(value) {
   if (value instanceof URL) return fileURLToPath(value);
@@ -28,7 +29,11 @@ export async function syncTrustedBrainSources({
     await cp(source, target, { recursive:true, force:true, errorOnExist:false });
   }
 
-  return Object.freeze({ destination:destinationPath, directories:names });
+  const canonicalAppSource = join(rootPath, CANONICAL_APP_SOURCE);
+  const canonicalAppTarget = join(destinationPath, 'app');
+  await cp(canonicalAppSource, canonicalAppTarget, { recursive:true, force:true, errorOnExist:false });
+
+  return Object.freeze({ destination:destinationPath, directories:[...names, 'app'] });
 }
 
 async function main() {
