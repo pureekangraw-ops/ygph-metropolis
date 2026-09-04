@@ -21,6 +21,48 @@ test('native updater persists target version metadata from the update candidate'
   assert.match(method, /snapshot\.put\("targetVersionName",\s*targetVersionName\)/);
 });
 
+test('native updater tracks active download workers across durable snapshot reads', () => {
+  assert.match(source, /ConcurrentHashMap\.newKeySet\(\)/);
+  const launchStart = source.indexOf('private void launch(String jobId, String url, File part)');
+  const launchEnd = source.indexOf('private void download(String jobId, String urlString, File part)', launchStart);
+  assert.ok(launchStart >= 0 && launchEnd > launchStart, 'launch method must exist before download');
+  const launch = source.slice(launchStart, launchEnd);
+  const activeIndex = launch.indexOf('activeDownloads.add(jobId)');
+  const executeIndex = launch.indexOf('executor.execute(');
+  assert.ok(activeIndex >= 0 && executeIndex > activeIndex,
+    'job must become active before the worker is submitted');
+
+  const downloadStart = launchEnd;
+  const downloadEnd = source.indexOf('private JSObject snapshot(', downloadStart);
+  const download = source.slice(downloadStart, downloadEnd);
+  const finallyIndex = download.indexOf('finally');
+  const removeIndex = download.indexOf('activeDownloads.remove(jobId)', finallyIndex);
+  assert.ok(finallyIndex >= 0 && removeIndex > finallyIndex,
+    'active download identity must be cleared when the worker exits');
+});
+
+test('getJobSnapshot reconciles orphaned DOWNLOADING snapshot against the partial file', () => {
+  const start = source.indexOf('public void getJobSnapshot(PluginCall call)');
+  const end = source.indexOf('public void pauseDownload(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'getJobSnapshot method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /"DOWNLOADING"\.equals\(snapshot\.getString\("state"\)\)/);
+  assert.match(method, /!activeDownloads\.contains\(jobId\)/);
+  assert.match(method, /snapshot\.getString\("stagedPath"\)/);
+  assert.match(method, /nullableLong\(snapshot, "bytesDownloaded"\)/);
+  assert.match(method, /part\.length\(\)/);
+  assert.match(method, /UPDATE_PARTIAL_FILE_MISMATCH/);
+  const orphanIndex = method.indexOf('!activeDownloads.contains(jobId)');
+  const actualIndex = method.indexOf('part.length()', orphanIndex);
+  const failedIndex = method.indexOf('snapshot.put("state", "FAILED")', actualIndex);
+  const pausedIndex = method.indexOf('snapshot.put("state", "PAUSED")', actualIndex);
+  const resolveIndex = method.indexOf('call.resolve(snapshot)');
+  assert.ok(orphanIndex >= 0 && actualIndex > orphanIndex && failedIndex > actualIndex && pausedIndex > actualIndex,
+    'orphaned DOWNLOADING jobs must compare durable bytes to the real partial file before choosing recovery state');
+  assert.ok(resolveIndex > failedIndex && resolveIndex > pausedIndex,
+    'reconciled snapshot must be persisted before it is returned');
+});
+
 test('pause checkpoints actual partial bytes before persisting PAUSED', () => {
   const start = source.indexOf('public void pauseDownload(PluginCall call)');
   const end = source.indexOf('public void resumeDownload(PluginCall call)');
