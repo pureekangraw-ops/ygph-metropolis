@@ -372,24 +372,57 @@ public class LighthouseUpdaterPlugin extends Plugin {
         HttpURLConnection connection = null;
         try {
             long existing = part.exists() ? part.length() : 0L;
+            JSObject durable = load(jobId);
+            if (durable == null) return;
+            String etag = durable.getString("etag");
+            String lastModified = durable.getString("lastModified");
+
             URL url = new URL(urlString);
             connection = (HttpURLConnection) url.openConnection();
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
-            if (existing > 0) connection.setRequestProperty("Range", "bytes=" + existing + "-");
+            if (existing > 0) {
+                connection.setRequestProperty("Range", "bytes=" + existing + "-");
+                String validator = etag != null && !etag.isBlank() ? etag : lastModified;
+                if (validator != null && !validator.isBlank()) {
+                    connection.setRequestProperty("If-Range", validator);
+                }
+            }
             connection.connect();
             int code = connection.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) {
                 fail(jobId, "HTTP_" + code);
                 return;
             }
+
+            String contentRange = connection.getHeaderField("Content-Range");
+            boolean resumeAccepted = existing > 0
+                    && code == HttpURLConnection.HTTP_PARTIAL
+                    && contentRangeStartsAt(contentRange, existing);
+            if (existing > 0 && !resumeAccepted) {
+                connection.disconnect();
+                connection = null;
+                restartPartialFromZero(jobId, urlString, part);
+                return;
+            }
+
+            JSObject responseState = load(jobId);
+            if (responseState == null) return;
+            String responseEtag = connection.getHeaderField("ETag");
+            String responseLastModified = connection.getHeaderField("Last-Modified");
+            if (responseEtag != null && !responseEtag.isBlank()) responseState.put("etag", responseEtag);
+            else if (existing == 0) responseState.remove("etag");
+            if (responseLastModified != null && !responseLastModified.isBlank()) responseState.put("lastModified", responseLastModified);
+            else if (existing == 0) responseState.remove("lastModified");
+            save(responseState);
+
             long contentLength = connection.getContentLengthLong();
-            Long total = contentLength >= 0 ? existing + contentLength : null;
+            Long total = contentLength >= 0 ? (resumeAccepted ? existing + contentLength : contentLength) : null;
             try (InputStream in = connection.getInputStream();
-                 FileOutputStream out = new FileOutputStream(part, existing > 0 && code == HttpURLConnection.HTTP_PARTIAL)) {
+                 FileOutputStream out = new FileOutputStream(part, resumeAccepted)) {
                 byte[] buffer = new byte[64 * 1024];
                 int read;
-                long downloaded = existing;
+                long downloaded = resumeAccepted ? existing : 0L;
                 long lastCheckpointAt = System.currentTimeMillis();
                 while ((read = in.read(buffer)) != -1) {
                     synchronized (this) {
@@ -441,6 +474,35 @@ public class LighthouseUpdaterPlugin extends Plugin {
             if (connection != null) connection.disconnect();
             activeDownloads.remove(jobId);
         }
+    }
+
+    private static boolean contentRangeStartsAt(String contentRange, long expectedStart) {
+        if (contentRange == null) return false;
+        String value = contentRange.trim();
+        if (!value.startsWith("bytes ")) return false;
+        int dash = value.indexOf('-', 6);
+        if (dash < 0) return false;
+        try {
+            return Long.parseLong(value.substring(6, dash).trim()) == expectedStart;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    private boolean restartPartialFromZero(String jobId, String urlString, File part) {
+        if (part.exists() && !part.delete()) {
+            fail(jobId, "UPDATE_PARTIAL_RESET_FAILED");
+            return false;
+        }
+        JSObject state = load(jobId);
+        if (state == null) return false;
+        state.put("bytesDownloaded", 0L);
+        state.remove("totalBytes");
+        state.remove("etag");
+        state.remove("lastModified");
+        save(state);
+        download(jobId, urlString, part);
+        return true;
     }
 
     private JSObject snapshot(String jobId, String state, String path, long bytes, Long total, String error) {
