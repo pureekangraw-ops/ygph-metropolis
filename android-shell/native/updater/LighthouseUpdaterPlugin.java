@@ -47,8 +47,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (jobId == null || jobId.isBlank()) return;
         JSObject snapshot = load(jobId);
         if (snapshot == null) return;
-        String state = snapshot.getString("state");
-        if ("PERMISSION_REQUIRED".equals(state)) {
+        if ("PERMISSION_REQUIRED".equals(snapshot.getString("state"))) {
             boolean permissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.O
                     || getContext().getPackageManager().canRequestPackageInstalls();
             if (!permissionGranted) return;
@@ -57,7 +56,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             prefs().edit().remove(PENDING_INSTALL_JOB).apply();
             return;
         }
-        if (!"WAITING_ANDROID_CONFIRMATION".equals(state)) return;
+        if (!"WAITING_ANDROID_CONFIRMATION".equals(snapshot.getString("state"))) return;
         try {
             reconcileInstalledJob(jobId, snapshot);
         } catch (Exception e) {
