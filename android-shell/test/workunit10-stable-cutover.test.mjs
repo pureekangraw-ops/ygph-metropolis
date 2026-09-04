@@ -146,3 +146,10 @@ test('stable bootstrap opens the canonical runtime bridge after device PIN unloc
   assert.match(source, /createTrustedBrainAdapter/);
   assert.match(source, /createTrustedBrainGate/);
 });
+
+test('stable bootstrap composes packaged canonical services and exposes them on the trusted session', async () => {
+  const source = await readFile(new URL('../www/trusted/bootstrap.mjs', import.meta.url), 'utf8');
+  assert.match(source, /from '\.\/source\/app\/app\/stable-service-composition\.mjs'/);
+  assert.match(source, /createStableAppServices\s*\(/);
+  assert.match(source, /\bservices\b/);
+});
