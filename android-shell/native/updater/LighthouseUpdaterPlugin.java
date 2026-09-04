@@ -33,6 +33,8 @@ import java.net.UnknownHostException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.cert.Certificate;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -47,6 +49,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private static final String PREFIX = "job:";
     private static final String PENDING_INSTALL_JOB = "pendingInstallJobId";
     private static final long PROGRESS_CHECKPOINT_MS = 500L;
+    private static final long SPEED_SAMPLE_WINDOW_MS = 3000L;
     private static final int MAX_NETWORK_RETRIES = 3;
     private static final long[] RETRY_BACKOFF_MS = new long[] { 1000L, 2000L, 4000L };
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -56,6 +59,16 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private final AtomicLong workerSequence = new AtomicLong();
     private final ConcurrentHashMap<String, Long> currentWorkerTokens = new ConcurrentHashMap<>();
     private final ThreadLocal<Long> executingWorkerToken = new ThreadLocal<>();
+
+    private static final class SpeedSample {
+        final long atMs;
+        final long bytes;
+
+        SpeedSample(long atMs, long bytes) {
+            this.atMs = atMs;
+            this.bytes = bytes;
+        }
+    }
 
     @Override
     protected void handleOnResume() {
@@ -153,6 +166,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             if (durableBytes == null || durableBytes != actualBytes) {
                 snapshot.put("state", "FAILED");
                 snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
+                snapshot.remove("speedBps");
                 save(snapshot);
             } else if (orphanedRetrying) {
                 recoverRetryingJob(jobId, snapshot, part);
@@ -162,6 +176,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 snapshot.put("state", "PAUSED");
                 snapshot.remove("nextRetryAt");
                 snapshot.remove("error");
+                snapshot.remove("speedBps");
                 save(snapshot);
             }
         }
@@ -188,6 +203,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 else snapshot.put("bytesDownloaded", 0L);
             }
             snapshot.put("state", "PAUSED");
+            snapshot.remove("speedBps");
             save(snapshot);
             InputStream activeStream = activeStreams.get(jobId);
             if (activeStream != null) {
@@ -229,6 +245,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (durableBytes == null || durableBytes != actualBytes) {
             snapshot.put("state", "FAILED");
             snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
+            snapshot.remove("speedBps");
             save(snapshot);
             call.reject("UPDATE_PARTIAL_FILE_MISMATCH");
             return;
@@ -236,6 +253,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         snapshot.put("state", "DOWNLOADING");
         snapshot.put("stagedPath", part.getAbsolutePath());
         snapshot.remove("stagedSha256");
+        snapshot.remove("speedBps");
         save(snapshot);
         launch(jobId, url, part);
         call.resolve(load(jobId));
@@ -410,6 +428,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             current.put("attempts", intValue(current, "attempts") + 1);
             current.put("lastAttemptAt", System.currentTimeMillis());
             current.remove("error");
+            current.remove("speedBps");
             save(current);
         }
         long workerToken = claimWorker(jobId);
@@ -491,6 +510,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 int read;
                 long downloaded = resumeAccepted ? existing : 0L;
                 long lastCheckpointAt = System.currentTimeMillis();
+                Deque<SpeedSample> speedSamples = new ArrayDeque<>();
+                speedSamples.addLast(new SpeedSample(lastCheckpointAt, downloaded));
                 while ((read = in.read(buffer)) != -1) {
                     synchronized (this) {
                         JSObject control = load(jobId);
@@ -505,8 +526,16 @@ public class LighthouseUpdaterPlugin extends Plugin {
                         JSObject state = load(jobId);
                         if (state == null) return;
                         if (!"DOWNLOADING".equals(state.getString("state")) || !isCurrentWorker(jobId)) return;
+                        speedSamples.addLast(new SpeedSample(now, downloaded));
+                        while (speedSamples.size() > 2 && now - speedSamples.peekFirst().atMs > SPEED_SAMPLE_WINDOW_MS) {
+                            speedSamples.removeFirst();
+                        }
+                        Long speedBps = rollingSpeedBps(speedSamples);
                         state.put("bytesDownloaded", downloaded);
                         if (total != null) state.put("totalBytes", total);
+                        else state.remove("totalBytes");
+                        if (speedBps != null) state.put("speedBps", speedBps);
+                        else state.remove("speedBps");
                         save(state);
                         lastCheckpointAt = now;
                     }
@@ -517,6 +546,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             done.put("state", "VERIFYING");
             done.put("verifiedBytes", 0L);
             done.put("bytesDownloaded", part.length());
+            done.remove("speedBps");
             save(done);
             completeVerification(jobId, part);
         } catch (Exception e) {
@@ -536,6 +566,17 @@ public class LighthouseUpdaterPlugin extends Plugin {
             Long workerToken = executingWorkerToken.get();
             if (workerToken != null && currentWorkerTokens.remove(jobId, workerToken)) activeDownloads.remove(jobId);
         }
+    }
+
+    private static Long rollingSpeedBps(Deque<SpeedSample> speedSamples) {
+        if (speedSamples == null || speedSamples.size() < 2) return null;
+        SpeedSample first = speedSamples.peekFirst();
+        SpeedSample last = speedSamples.peekLast();
+        if (first == null || last == null) return null;
+        long elapsedMs = last.atMs - first.atMs;
+        long transferred = last.bytes - first.bytes;
+        if (elapsedMs <= 0L || transferred < 0L) return null;
+        return Math.round((transferred * 1000.0d) / elapsedMs);
     }
 
     private static boolean contentRangeStartsAt(String contentRange, long expectedStart) {
@@ -568,6 +609,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         state.remove("totalBytes");
         state.remove("etag");
         state.remove("lastModified");
+        state.remove("speedBps");
         save(state);
         download(jobId, urlString, part);
         return true;
@@ -585,6 +627,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (expectedSha256 == null || !expectedSha256.equals(normalizeHex(stagedSha256))) {
             done.put("state", "FAILED");
             done.put("error", "UPDATE_ARTIFACT_MISMATCH");
+            done.remove("speedBps");
             save(done);
             return;
         }
@@ -602,6 +645,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         done.put("stagedPath", apk.getAbsolutePath());
         done.put("bytesDownloaded", apk.length());
         done.put("verifiedBytes", apk.length());
+        done.remove("speedBps");
         Long totalBytes = nullableLong(done, "totalBytes");
         if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
         done.put("state", "READY_TO_INSTALL");
@@ -652,6 +696,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 state.put("lastAttemptAt", System.currentTimeMillis());
                 state.remove("nextRetryAt");
                 state.remove("error");
+                state.remove("speedBps");
                 save(state);
                 download(jobId, url, part);
             } catch (InterruptedException interrupted) {
@@ -676,6 +721,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         state.put("retryAttempt", retryAttempt);
         state.put("nextRetryAt", nextRetryAt);
         state.put("error", error.getClass().getSimpleName());
+        state.remove("speedBps");
         save(state);
 
         try {
@@ -695,6 +741,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         state.put("lastAttemptAt", System.currentTimeMillis());
         state.remove("nextRetryAt");
         state.remove("error");
+        state.remove("speedBps");
         save(state);
         download(jobId, urlString, part);
         return true;
@@ -748,6 +795,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (state == null) return;
         state.put("state", "FAILED");
         state.put("error", error);
+        state.remove("speedBps");
         save(state);
     }
 
