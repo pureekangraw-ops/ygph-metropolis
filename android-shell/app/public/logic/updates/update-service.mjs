@@ -138,7 +138,7 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
     },
 
     async resumeInstallAfterPermission(jobId) {
-      return verifiedInstall(jobId, ['PERMISSION_REQUIRED']);
+      return verifiedInstall(jobId, ['READY_TO_INSTALL']);
     },
 
     async reconcileInstalled(jobId) {
