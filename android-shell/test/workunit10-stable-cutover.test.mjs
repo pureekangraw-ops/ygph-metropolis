@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGreenfieldState } from '../../greenfield/core.mjs';
 import { createMemoryVaultStore, commitEncryptedState } from '../../greenfield/persistence.mjs';
-import { createGreenfieldRuntime } from '../../greenfield/runtime.mjs';
+import { createCanonicalGreenfieldRuntime } from '../../greenfield/canonical-runtime-bridge.mjs';
 import { buildOtherIncomeWorkflow } from '../../greenfield/business-workflows.mjs';
 
 const PASSPHRASE = 'LH-cutover-runtime-passphrase';
@@ -12,7 +12,7 @@ async function fixture() {
   const store = createMemoryVaultStore();
   const state = createGreenfieldState({ now:NOW });
   await commitEncryptedState({ store, passphrase:PASSPHRASE, state, expectedDurableRevision:null });
-  return { store, runtime:createGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW }) };
+  return { store, runtime:createCanonicalGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW }) };
 }
 
 test('stable cutover exposes canonical multi-group mutation through the existing encrypted runtime owner', async () => {
@@ -47,7 +47,7 @@ test('canonical service metadata stays encrypted in the same durable vault acros
   assert.equal(after.meta?.canonicalServices?.['module-registry']?.marker, 'CANONICAL');
 
   runtime.close();
-  const reopened = createGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW });
+  const reopened = createCanonicalGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW });
   const reopenedMetadata = reopened.metadataStore();
   assert.deepEqual(await reopenedMetadata.get('module-registry'), { revision:1, marker:'CANONICAL' });
 
