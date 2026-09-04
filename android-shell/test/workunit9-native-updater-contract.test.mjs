@@ -99,6 +99,19 @@ test('native updater persists WAITING_ANDROID_CONFIRMATION before opening Androi
     'WAITING_ANDROID_CONFIRMATION must be durable before Android package installer is opened');
 });
 
+test('native updater persists pending installer job identity before Android handoff', () => {
+  const start = source.indexOf('public void requestInstall(PluginCall call)');
+  const end = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'requestInstall method must exist');
+  const method = source.slice(start, end);
+  const waitingStateIndex = method.indexOf('snapshot.put("state", "WAITING_ANDROID_CONFIRMATION")');
+  const saveIndex = method.indexOf('save(snapshot)', waitingStateIndex);
+  const pendingIndex = method.indexOf('putString(PENDING_INSTALL_JOB, jobId)');
+  const installerIndex = method.indexOf('startActivity(install)');
+  assert.ok(waitingStateIndex >= 0 && saveIndex > waitingStateIndex && pendingIndex > saveIndex && installerIndex > pendingIndex,
+    'pending installer job must be durable after WAITING state and before Android handoff');
+});
+
 test('installed readback is bound to the waiting job and compares PackageManager version against durable targetVersionCode', () => {
   const start = source.indexOf('public void reconcileInstalledVersion(PluginCall call)');
   const end = source.indexOf('private boolean requireState', start);
