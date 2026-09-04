@@ -255,22 +255,29 @@ public class LighthouseUpdaterPlugin extends Plugin {
         }
         snapshot.put("state", "READBACK");
         save(snapshot);
-        PackageManager pm = getContext().getPackageManager();
-        PackageInfo info = pm.getPackageInfo(getContext().getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
-        long installedVersionCode = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
-        String installedSignerSha256 = signerSha256(info);
-        snapshot.put("installedVersionCode", installedVersionCode);
-        snapshot.put("installedVersionName", info.versionName);
-        snapshot.put("installedSignerSha256", installedSignerSha256);
-        snapshot.put("readbackAt", System.currentTimeMillis());
-        if (installedVersionCode >= targetVersionCode) {
-            snapshot.put("state", "DONE");
-        } else {
-            snapshot.put("state", "READY_TO_INSTALL");
-            snapshot.put("message", "ยังไม่ได้ติดตั้ง");
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            PackageInfo info = pm.getPackageInfo(getContext().getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES);
+            long installedVersionCode = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+            String installedSignerSha256 = signerSha256(info);
+            snapshot.put("installedVersionCode", installedVersionCode);
+            snapshot.put("installedVersionName", info.versionName);
+            snapshot.put("installedSignerSha256", installedSignerSha256);
+            snapshot.put("readbackAt", System.currentTimeMillis());
+            if (installedVersionCode >= targetVersionCode) {
+                snapshot.put("state", "DONE");
+            } else {
+                snapshot.put("state", "READY_TO_INSTALL");
+                snapshot.put("message", "ยังไม่ได้ติดตั้ง");
+            }
+            save(snapshot);
+            return snapshot;
+        } catch (Exception e) {
+            snapshot.put("state", "WAITING_ANDROID_CONFIRMATION");
+            snapshot.put("error", "INSTALLED_READBACK_FAILED");
+            save(snapshot);
+            throw e;
         }
-        save(snapshot);
-        return snapshot;
     }
 
     private boolean requireState(PluginCall call, JSObject snapshot, String... allowedStates) {
