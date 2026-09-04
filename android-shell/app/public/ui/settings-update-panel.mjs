@@ -19,6 +19,39 @@ function viewFor(state) {
   return value;
 }
 
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function decimal(value, maximumFractionDigits = 1) {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits,
+    minimumFractionDigits:0,
+    useGrouping:false,
+  }).format(value);
+}
+
+function megabytes(bytes) {
+  const value = finiteNumber(bytes);
+  return value == null || value < 0 ? null : `${decimal(value / 1_000_000)} MB`;
+}
+
+function transferDetail(snapshot) {
+  const downloaded = megabytes(snapshot.bytesDownloaded) || '0 MB';
+  const total = megabytes(snapshot.totalBytes);
+  const speedValue = finiteNumber(snapshot.speedBps);
+  const speed = speedValue != null && speedValue >= 0 ? `${decimal(speedValue / 1_000_000)} MB/s` : null;
+  const percentValue = finiteNumber(snapshot.percent);
+  const percent = total && percentValue != null ? `${decimal(percentValue)}%` : null;
+  const parts = [];
+  if (total) parts.push(`${downloaded} / ${total}`);
+  else parts.push(`ดาวน์โหลดแล้ว ${downloaded}`);
+  if (speed) parts.push(speed);
+  if (percent) parts.push(percent);
+  return { text:parts.join(' · '), percentValue:percent ? percentValue : null };
+}
+
 export function createSettingsUpdatePanel({ document, onAction = () => {} } = {}) {
   if (!document?.createElement) throw new TypeError('UPDATE_PANEL_DOCUMENT_REQUIRED');
   if (typeof onAction !== 'function') throw new TypeError('UPDATE_PANEL_ACTION_HANDLER_REQUIRED');
@@ -29,18 +62,37 @@ export function createSettingsUpdatePanel({ document, onAction = () => {} } = {}
 
   const status = document.createElement('h3');
   status.dataset.role = 'update-status';
+  const progress = document.createElement('progress');
+  progress.dataset.role = 'update-progress';
+  progress.max = 100;
+  progress.hidden = true;
   const detail = document.createElement('p');
   detail.dataset.role = 'update-detail';
   const actions = document.createElement('div');
   actions.dataset.role = 'update-actions';
-  element.append(status, detail, actions);
+  element.append(status, progress, detail, actions);
 
   function render(snapshot = {}) {
     const state = String(snapshot.state || '').toUpperCase();
     const view = viewFor(state);
     element.dataset.state = state;
     status.textContent = view.message;
-    detail.textContent = state === 'FAILED' && snapshot.error ? String(snapshot.error) : '';
+
+    progress.hidden = state !== 'DOWNLOADING';
+    progress.removeAttribute('value');
+    progress.removeAttribute('aria-valuetext');
+    if (state === 'DOWNLOADING') {
+      const transfer = transferDetail(snapshot);
+      detail.textContent = transfer.text;
+      progress.setAttribute('aria-valuetext', transfer.text);
+      if (transfer.percentValue != null) {
+        const boundedPercent = Math.min(100, Math.max(0, transfer.percentValue));
+        progress.value = boundedPercent;
+      }
+    } else {
+      detail.textContent = state === 'FAILED' && snapshot.error ? String(snapshot.error) : '';
+    }
+
     actions.replaceChildren();
     for (const [action, label] of view.actions) {
       const button = document.createElement('button');
