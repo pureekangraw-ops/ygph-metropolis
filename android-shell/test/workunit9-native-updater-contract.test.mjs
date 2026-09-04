@@ -40,6 +40,23 @@ test('native updater refuses resume when durable downloaded bytes disagree with 
     'network resume must occur only after the partial-file consistency guard');
 });
 
+test('cancel deletes partial and staged APK plus durable job snapshot', () => {
+  const start = source.indexOf('public void discardDownload(PluginCall call)');
+  const end = source.indexOf('public void requestInstall(PluginCall call)');
+  assert.ok(start >= 0 && end > start, 'discardDownload method must exist');
+  const method = source.slice(start, end);
+  assert.match(method, /jobId \+ "\.apk\.part"/);
+  assert.match(method, /jobId \+ "\.apk"/);
+  assert.match(method, /remove\(PREFIX \+ jobId\)/);
+  assert.doesNotMatch(method, /save\(snapshot\)/);
+  const partDeleteIndex = method.indexOf('jobId + ".apk.part"');
+  const apkDeleteIndex = method.indexOf('jobId + ".apk"', partDeleteIndex + 1);
+  const snapshotDeleteIndex = method.indexOf('remove(PREFIX + jobId)', apkDeleteIndex);
+  const resolveIndex = method.indexOf('call.resolve(', snapshotDeleteIndex);
+  assert.ok(partDeleteIndex >= 0 && apkDeleteIndex > partDeleteIndex && snapshotDeleteIndex > apkDeleteIndex && resolveIndex > snapshotDeleteIndex,
+    'cancel must delete updater artifacts and durable snapshot before resolving');
+});
+
 test('native updater persists staged artifact identity before installer handoff', () => {
   assert.match(source, /"stagedSha256"/);
   assert.match(source, /sha256File\(/);
