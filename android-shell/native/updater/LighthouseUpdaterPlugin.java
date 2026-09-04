@@ -46,7 +46,18 @@ public class LighthouseUpdaterPlugin extends Plugin {
         String jobId = prefs().getString(PENDING_INSTALL_JOB, null);
         if (jobId == null || jobId.isBlank()) return;
         JSObject snapshot = load(jobId);
-        if (snapshot == null || !"WAITING_ANDROID_CONFIRMATION".equals(snapshot.getString("state"))) return;
+        if (snapshot == null) return;
+        String state = snapshot.getString("state");
+        if ("PERMISSION_REQUIRED".equals(state)) {
+            boolean permissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                    || getContext().getPackageManager().canRequestPackageInstalls();
+            if (!permissionGranted) return;
+            snapshot.put("state", "READY_TO_INSTALL");
+            save(snapshot);
+            prefs().edit().remove(PENDING_INSTALL_JOB).apply();
+            return;
+        }
+        if (!"WAITING_ANDROID_CONFIRMATION".equals(state)) return;
         try {
             reconcileInstalledJob(jobId, snapshot);
         } catch (Exception e) {
@@ -204,6 +215,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
             snapshot.put("state", "PERMISSION_REQUIRED");
             save(snapshot);
+            prefs().edit().putString(PENDING_INSTALL_JOB, jobId).apply();
             Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:" + getContext().getPackageName()));
             settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
