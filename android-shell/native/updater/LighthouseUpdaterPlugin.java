@@ -24,7 +24,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.cert.Certificate;
@@ -41,6 +45,8 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private static final String PREFIX = "job:";
     private static final String PENDING_INSTALL_JOB = "pendingInstallJobId";
     private static final long PROGRESS_CHECKPOINT_MS = 500L;
+    private static final int MAX_NETWORK_RETRIES = 3;
+    private static final long[] RETRY_BACKOFF_MS = new long[] { 1000L, 2000L, 4000L };
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Set<String> activeDownloads = ConcurrentHashMap.newKeySet();
 
@@ -99,6 +105,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         File part = new File(dir, jobId + ".apk.part");
         JSObject snapshot = snapshot(jobId, "DOWNLOADING", part.getAbsolutePath(), part.length(), null, null);
         snapshot.put("attempts", 0);
+        snapshot.put("retryAttempt", 0);
         snapshot.put("expectedSha256", expectedSha256);
         snapshot.put("targetVersionCode", targetVersionCode);
         snapshot.put("targetVersionName", targetVersionName);
@@ -469,6 +476,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
             save(done);
         } catch (Exception e) {
+            if (isRetryableNetworkError(e) && retryNetworkFailure(jobId, urlString, part, e)) return;
             fail(jobId, e.getClass().getSimpleName());
         } finally {
             if (connection != null) connection.disconnect();
@@ -503,6 +511,55 @@ public class LighthouseUpdaterPlugin extends Plugin {
         save(state);
         download(jobId, urlString, part);
         return true;
+    }
+
+    private boolean retryNetworkFailure(String jobId, String urlString, File part, Exception error) {
+        JSObject state = load(jobId);
+        if (state == null) return false;
+        int retryAttempt = intValue(state, "retryAttempt") + 1;
+        if (retryAttempt > MAX_NETWORK_RETRIES) return false;
+
+        long delayMs = RETRY_BACKOFF_MS[retryAttempt - 1];
+        long nextRetryAt = System.currentTimeMillis() + delayMs;
+        state.put("state", "RETRYING");
+        state.put("retryAttempt", retryAttempt);
+        state.put("nextRetryAt", nextRetryAt);
+        state.put("error", error.getClass().getSimpleName());
+        save(state);
+
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            fail(jobId, "RETRY_INTERRUPTED");
+            return true;
+        }
+
+        state = load(jobId);
+        if (state == null) return true;
+        if (!"RETRYING".equals(state.getString("state"))) return true;
+        state.put("state", "DOWNLOADING");
+        state.put("attempts", intValue(state, "attempts") + 1);
+        state.put("lastAttemptAt", System.currentTimeMillis());
+        state.remove("nextRetryAt");
+        state.remove("error");
+        save(state);
+        download(jobId, urlString, part);
+        return true;
+    }
+
+    private boolean isRetryableNetworkError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException
+                    || current instanceof ConnectException
+                    || current instanceof UnknownHostException
+                    || current instanceof SocketException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private JSObject snapshot(String jobId, String state, String path, long bytes, Long total, String error) {
