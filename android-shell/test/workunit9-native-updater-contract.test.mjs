@@ -147,6 +147,23 @@ test('shared installed readback compares PackageManager version against durable 
   assert.match(method, /return snapshot/);
 });
 
+test('failed installed readback restores waiting state so resume can retry', () => {
+  const start = source.indexOf('private JSObject reconcileInstalledJob');
+  const end = source.indexOf('private boolean requireState', start);
+  assert.ok(start >= 0 && end > start, 'shared installed reconciler must exist');
+  const method = source.slice(start, end);
+  const packageReadIndex = method.indexOf('getPackageInfo(');
+  const catchIndex = method.indexOf('catch (Exception e)');
+  const retryStateIndex = method.indexOf('snapshot.put("state", "WAITING_ANDROID_CONFIRMATION")', catchIndex);
+  const retryErrorIndex = method.indexOf('snapshot.put("error", "INSTALLED_READBACK_FAILED")', catchIndex);
+  const retrySaveIndex = method.indexOf('save(snapshot)', retryErrorIndex);
+  const throwIndex = method.indexOf('throw e', retrySaveIndex);
+  assert.ok(packageReadIndex >= 0 && catchIndex > packageReadIndex && retryStateIndex > catchIndex,
+    'readback failure must restore WAITING_ANDROID_CONFIRMATION after PackageManager failure');
+  assert.ok(retryErrorIndex > retryStateIndex && retrySaveIndex > retryErrorIndex && throwIndex > retrySaveIndex,
+    'retryable readback failure must be durably recorded before propagating the error');
+});
+
 test('native updater reconciles pending installer job on app resume', () => {
   const start = source.indexOf('protected void handleOnResume()');
   const end = source.indexOf('@PluginMethod', start);
