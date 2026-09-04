@@ -15,41 +15,51 @@ async function writeExecutable(path, text) {
   await chmod(path, 0o755);
 }
 
-test('signed APK evidence binds final bytes to canonical signer source build and IP notice', async () => {
+async function createVerifierFixture() {
   const dir = await mkdtemp(join(tmpdir(), 'lighthouse-provenance-'));
+  const apkPath = join(dir, 'lighthouse-release.apk');
+  const identityPath = join(dir, 'apk-identity.json');
+  const versionPath = join(dir, 'version.json');
+  const evidencePath = join(dir, 'apk-identity-evidence.json');
+  const ownershipNoticePath = join(dir, 'IP-NOTICE.md');
+  const apksigner = join(dir, 'apksigner');
+  const aapt = join(dir, 'aapt');
+  const apkBytes = Buffer.from('signed-apk-byte-fixture');
+  const notice = '# LIGHTHOUSE Intellectual Property Notice\nOwner: pureekangraw-ops\n';
+
+  await Promise.all([
+    writeFile(apkPath, apkBytes),
+    writeFile(identityPath, `${JSON.stringify({
+      identitySchemaVersion:1,
+      applicationId:'com.yggdrasil.lighthouse',
+      signerCertificateSha256:signer,
+      keyAliasLabel:'lighthouse-apk-release',
+    }, null, 2)}\n`, 'utf8'),
+    writeFile(versionPath, `${JSON.stringify({ versionCode:1005, versionName:'1.0.0' }, null, 2)}\n`, 'utf8'),
+    writeFile(ownershipNoticePath, notice, 'utf8'),
+    writeExecutable(apksigner, `Signer #1 certificate SHA-256 digest: ${signer}`),
+    writeExecutable(aapt, "package: name='com.yggdrasil.lighthouse' versionCode='1005' versionName='1.0.0'"),
+  ]);
+
+  return {
+    dir,
+    apkPath,
+    identityPath,
+    versionPath,
+    evidencePath,
+    ownershipNoticePath,
+    apksigner,
+    aapt,
+    apkBytes,
+    notice,
+  };
+}
+
+test('signed APK evidence binds final bytes to canonical signer source build and IP notice', async () => {
+  const fixture = await createVerifierFixture();
   try {
-    const apkPath = join(dir, 'lighthouse-release.apk');
-    const identityPath = join(dir, 'apk-identity.json');
-    const versionPath = join(dir, 'version.json');
-    const evidencePath = join(dir, 'apk-identity-evidence.json');
-    const ownershipNoticePath = join(dir, 'IP-NOTICE.md');
-    const apksigner = join(dir, 'apksigner');
-    const aapt = join(dir, 'aapt');
-    const apkBytes = Buffer.from('signed-apk-byte-fixture');
-    const notice = '# LIGHTHOUSE Intellectual Property Notice\nOwner: pureekangraw-ops\n';
-
-    await Promise.all([
-      writeFile(apkPath, apkBytes),
-      writeFile(identityPath, `${JSON.stringify({
-        identitySchemaVersion:1,
-        applicationId:'com.yggdrasil.lighthouse',
-        signerCertificateSha256:signer,
-        keyAliasLabel:'lighthouse-apk-release',
-      }, null, 2)}\n`, 'utf8'),
-      writeFile(versionPath, `${JSON.stringify({ versionCode:1005, versionName:'1.0.0' }, null, 2)}\n`, 'utf8'),
-      writeFile(ownershipNoticePath, notice, 'utf8'),
-      writeExecutable(apksigner, `Signer #1 certificate SHA-256 digest: ${signer}`),
-      writeExecutable(aapt, "package: name='com.yggdrasil.lighthouse' versionCode='1005' versionName='1.0.0'"),
-    ]);
-
     const evidence = await verifyApkIdentity({
-      apkPath,
-      identityPath,
-      versionPath,
-      apksigner,
-      aapt,
-      evidencePath,
-      ownershipNoticePath,
+      ...fixture,
       sourceCommit:'0123456789abcdef0123456789abcdef01234567',
       sourceRepository:'pureekangraw-ops/ygph-metropolis',
       sourceRef:'feat/lighthouse-1.0.0-rebuild',
@@ -66,14 +76,37 @@ test('signed APK evidence binds final bytes to canonical signer source build and
     assert.equal(evidence.applicationId, 'com.yggdrasil.lighthouse');
     assert.equal(evidence.signerCertificateSha256, signer);
     assert.equal(evidence.keyAliasLabel, 'lighthouse-apk-release');
-    assert.equal(evidence.apkSha256, createHash('sha256').update(apkBytes).digest('hex'));
+    assert.equal(evidence.apkSha256, createHash('sha256').update(fixture.apkBytes).digest('hex'));
     assert.equal(evidence.ownershipNoticePath, 'IP-NOTICE.md');
-    assert.equal(evidence.ownershipNoticeSha256, createHash('sha256').update(notice).digest('hex'));
+    assert.equal(evidence.ownershipNoticeSha256, createHash('sha256').update(fixture.notice).digest('hex'));
 
-    const durable = JSON.parse(await readFile(evidencePath, 'utf8'));
+    const durable = JSON.parse(await readFile(fixture.evidencePath, 'utf8'));
     assert.deepEqual(durable, evidence);
   } finally {
-    await rm(dir, { recursive:true, force:true });
+    await rm(fixture.dir, { recursive:true, force:true });
+  }
+});
+
+test('provenance verification fails closed when source or workflow metadata is incomplete', async () => {
+  const fixture = await createVerifierFixture();
+  try {
+    await assert.rejects(
+      () => verifyApkIdentity({
+        ...fixture,
+        sourceCommit:null,
+        sourceRepository:null,
+        sourceRef:null,
+        workflowRunId:null,
+        builtAt:null,
+      }),
+      error => {
+        assert.equal(error?.code, 'APK_PROVENANCE_METADATA_MISSING');
+        assert.deepEqual(error?.missing, ['sourceRepository', 'sourceRef', 'sourceCommit', 'workflowRunId', 'builtAt']);
+        return true;
+      },
+    );
+  } finally {
+    await rm(fixture.dir, { recursive:true, force:true });
   }
 });
 
