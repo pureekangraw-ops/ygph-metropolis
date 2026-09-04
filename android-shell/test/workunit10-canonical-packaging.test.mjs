@@ -9,7 +9,7 @@ const repoRoot = new URL('../../', import.meta.url);
 const publicRoot = new URL('../app/public/', import.meta.url);
 
 const CANONICAL_FILES = [
-  ['app/app-services.mjs', 'app/app-services.mjs'],
+  ['app/app-services.mjs', 'app/app/app-services.mjs'],
   ['logic/updates/update-service.mjs', 'app/logic/updates/update-service.mjs'],
   ['logic/updates/updater-backup-owner.mjs', 'app/logic/updates/updater-backup-owner.mjs'],
   ['ui/settings-update-panel.mjs', 'app/ui/settings-update-panel.mjs'],
