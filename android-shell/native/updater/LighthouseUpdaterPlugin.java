@@ -23,6 +23,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
@@ -38,6 +39,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 @CapacitorPlugin(name = "LighthouseUpdater")
 public class LighthouseUpdaterPlugin extends Plugin {
@@ -49,6 +51,11 @@ public class LighthouseUpdaterPlugin extends Plugin {
     private static final long[] RETRY_BACKOFF_MS = new long[] { 1000L, 2000L, 4000L };
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Set<String> activeDownloads = ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<String, HttpURLConnection> activeConnections = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, InputStream> activeStreams = new ConcurrentHashMap<>();
+    private final AtomicLong workerSequence = new AtomicLong();
+    private final ConcurrentHashMap<String, Long> currentWorkerTokens = new ConcurrentHashMap<>();
+    private final ThreadLocal<Long> executingWorkerToken = new ThreadLocal<>();
 
     @Override
     protected void handleOnResume() {
@@ -140,12 +147,15 @@ public class LighthouseUpdaterPlugin extends Plugin {
             if (durableBytes == null || durableBytes != actualBytes) {
                 snapshot.put("state", "FAILED");
                 snapshot.put("error", "UPDATE_PARTIAL_FILE_MISMATCH");
+                save(snapshot);
+            } else if (orphanedRetrying) {
+                recoverRetryingJob(jobId, snapshot, part);
             } else {
                 snapshot.put("state", "PAUSED");
                 snapshot.remove("nextRetryAt");
                 snapshot.remove("error");
+                save(snapshot);
             }
-            save(snapshot);
         }
         call.resolve(snapshot);
     }
@@ -171,6 +181,15 @@ public class LighthouseUpdaterPlugin extends Plugin {
             }
             snapshot.put("state", "PAUSED");
             save(snapshot);
+            InputStream activeStream = activeStreams.get(jobId);
+            if (activeStream != null) {
+                try {
+                    activeStream.close();
+                } catch (IOException ignored) {
+                }
+            }
+            HttpURLConnection activeConnection = activeConnections.get(jobId);
+            if (activeConnection != null) activeConnection.disconnect();
             call.resolve(snapshot);
         }
     }
@@ -222,7 +241,18 @@ public class LighthouseUpdaterPlugin extends Plugin {
             call.reject("UPDATE_JOB_NOT_FOUND");
             return;
         }
-        if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "READY_TO_INSTALL", "FAILED")) return;
+        if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "RETRYING", "VERIFYING", "READY_TO_INSTALL", "FAILED")) return;
+        Long cancelledWorker = currentWorkerTokens.remove(jobId);
+        if (cancelledWorker != null) activeDownloads.remove(jobId);
+        InputStream activeStream = activeStreams.get(jobId);
+        if (activeStream != null) {
+            try {
+                activeStream.close();
+            } catch (IOException ignored) {
+            }
+        }
+        HttpURLConnection activeConnection = activeConnections.get(jobId);
+        if (activeConnection != null) activeConnection.disconnect();
         String path = snapshot.getString("stagedPath");
         File dir = new File(getContext().getFilesDir(), "updates");
         if (path != null && !path.isBlank()) {
@@ -374,12 +404,22 @@ public class LighthouseUpdaterPlugin extends Plugin {
             current.remove("error");
             save(current);
         }
+        long workerToken = claimWorker(jobId);
         activeDownloads.add(jobId);
-        executor.execute(() -> download(jobId, url, part));
+        executor.execute(() -> {
+            executingWorkerToken.set(workerToken);
+            try {
+                download(jobId, url, part);
+            } finally {
+                executingWorkerToken.remove();
+                if (currentWorkerTokens.remove(jobId, workerToken)) activeDownloads.remove(jobId);
+            }
+        });
     }
 
     private void download(String jobId, String urlString, File part) {
         HttpURLConnection connection = null;
+        InputStream inputStream = null;
         try {
             long existing = part.exists() ? part.length() : 0L;
             JSObject durable = load(jobId);
@@ -398,7 +438,10 @@ public class LighthouseUpdaterPlugin extends Plugin {
                     connection.setRequestProperty("If-Range", validator);
                 }
             }
+            activeConnections.put(jobId, connection);
+            if (!isCurrentDownloadState(jobId)) return;
             connection.connect();
+            if (!isCurrentDownloadState(jobId)) return;
             int code = connection.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) {
                 fail(jobId, "HTTP_" + code);
@@ -414,6 +457,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                     && contentRangeStartsAt(contentRange, existing)
                     && validatorMatches;
             if (existing > 0 && !resumeAccepted) {
+                activeConnections.remove(jobId, connection);
                 connection.disconnect();
                 connection = null;
                 restartPartialFromZero(jobId, urlString, part);
@@ -421,7 +465,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
             }
 
             JSObject responseState = load(jobId);
-            if (responseState == null) return;
+            if (responseState == null || !isCurrentDownloadState(jobId)) return;
             if (responseEtag != null && !responseEtag.isBlank()) responseState.put("etag", responseEtag);
             else if (existing == 0) responseState.remove("etag");
             if (responseLastModified != null && !responseLastModified.isBlank()) responseState.put("lastModified", responseLastModified);
@@ -430,7 +474,10 @@ public class LighthouseUpdaterPlugin extends Plugin {
 
             long contentLength = connection.getContentLengthLong();
             Long total = contentLength >= 0 ? (resumeAccepted ? existing + contentLength : contentLength) : null;
-            try (InputStream in = connection.getInputStream();
+            inputStream = connection.getInputStream();
+            activeStreams.put(jobId, inputStream);
+            if (!isCurrentDownloadState(jobId)) return;
+            try (InputStream in = inputStream;
                  FileOutputStream out = new FileOutputStream(part, resumeAccepted)) {
                 byte[] buffer = new byte[64 * 1024];
                 int read;
@@ -439,7 +486,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 while ((read = in.read(buffer)) != -1) {
                     synchronized (this) {
                         JSObject control = load(jobId);
-                        if (control == null) return;
+                        if (control == null || !isCurrentWorker(jobId)) return;
                         String phase = control.getString("state");
                         if ("PAUSED".equals(phase) || "CANCELLED".equals(phase)) return;
                         out.write(buffer, 0, read);
@@ -449,7 +496,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                     if (now - lastCheckpointAt >= PROGRESS_CHECKPOINT_MS) {
                         JSObject state = load(jobId);
                         if (state == null) return;
-                        if (!"DOWNLOADING".equals(state.getString("state"))) return;
+                        if (!"DOWNLOADING".equals(state.getString("state")) || !isCurrentWorker(jobId)) return;
                         state.put("bytesDownloaded", downloaded);
                         if (total != null) state.put("totalBytes", total);
                         save(state);
@@ -458,7 +505,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
                 }
             }
             JSObject done = load(jobId);
-            if (done == null) return;
+            if (done == null || !isCurrentWorker(jobId) || !"DOWNLOADING".equals(done.getString("state"))) return;
             String stagedSha256 = sha256File(part);
             done.put("stagedSha256", stagedSha256);
             String expectedSha256 = normalizeHex(done.getString("expectedSha256"));
@@ -481,11 +528,21 @@ public class LighthouseUpdaterPlugin extends Plugin {
             if (totalBytes != null && totalBytes < apk.length()) done.put("totalBytes", apk.length());
             save(done);
         } catch (Exception e) {
+            if (!isCurrentWorker(jobId)) return;
+            JSObject state = load(jobId);
+            if (state == null) return;
+            String phase = state.getString("state");
+            if ("PAUSED".equals(phase) || "CANCELLED".equals(phase)) return;
             if (isRetryableNetworkError(e) && retryNetworkFailure(jobId, urlString, part, e)) return;
             fail(jobId, e.getClass().getSimpleName());
         } finally {
-            if (connection != null) connection.disconnect();
-            activeDownloads.remove(jobId);
+            if (inputStream != null) activeStreams.remove(jobId, inputStream);
+            if (connection != null) {
+                activeConnections.remove(jobId, connection);
+                connection.disconnect();
+            }
+            Long workerToken = executingWorkerToken.get();
+            if (workerToken != null && currentWorkerTokens.remove(jobId, workerToken)) activeDownloads.remove(jobId);
         }
     }
 
@@ -524,9 +581,49 @@ public class LighthouseUpdaterPlugin extends Plugin {
         return true;
     }
 
+    private void recoverRetryingJob(String jobId, JSObject snapshot, File part) {
+        Long durableRetryAt = nullableLong(snapshot, "nextRetryAt");
+        if (durableRetryAt == null) {
+            fail(jobId, "UPDATE_RETRY_SCHEDULE_MISSING");
+            return;
+        }
+        long nextRetryAt = durableRetryAt;
+        long delayMs = Math.max(0L, nextRetryAt - System.currentTimeMillis());
+        String url = snapshot.getString("url");
+        if (url == null || url.isBlank()) {
+            fail(jobId, "UPDATE_URL_REQUIRED");
+            return;
+        }
+        long workerToken = claimWorker(jobId);
+        activeDownloads.add(jobId);
+        executor.execute(() -> {
+            executingWorkerToken.set(workerToken);
+            try {
+                Thread.sleep(delayMs);
+                if (!isCurrentWorker(jobId)) return;
+                JSObject state = load(jobId);
+                if (state == null) return;
+                if (!"RETRYING".equals(state.getString("state"))) return;
+                state.put("state", "DOWNLOADING");
+                state.put("attempts", intValue(state, "attempts") + 1);
+                state.put("lastAttemptAt", System.currentTimeMillis());
+                state.remove("nextRetryAt");
+                state.remove("error");
+                save(state);
+                download(jobId, url, part);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                if (isCurrentWorker(jobId)) fail(jobId, "RETRY_INTERRUPTED");
+            } finally {
+                executingWorkerToken.remove();
+                if (currentWorkerTokens.remove(jobId, workerToken)) activeDownloads.remove(jobId);
+            }
+        });
+    }
+
     private boolean retryNetworkFailure(String jobId, String urlString, File part, Exception error) {
         JSObject state = load(jobId);
-        if (state == null) return false;
+        if (state == null || !isCurrentWorker(jobId)) return false;
         int retryAttempt = intValue(state, "retryAttempt") + 1;
         if (retryAttempt > MAX_NETWORK_RETRIES) return false;
 
@@ -542,10 +639,11 @@ public class LighthouseUpdaterPlugin extends Plugin {
             Thread.sleep(delayMs);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            fail(jobId, "RETRY_INTERRUPTED");
+            if (isCurrentWorker(jobId)) fail(jobId, "RETRY_INTERRUPTED");
             return true;
         }
 
+        if (!isCurrentWorker(jobId)) return true;
         state = load(jobId);
         if (state == null) return true;
         if (!"RETRYING".equals(state.getString("state"))) return true;
@@ -571,6 +669,24 @@ public class LighthouseUpdaterPlugin extends Plugin {
             current = current.getCause();
         }
         return false;
+    }
+
+    private long claimWorker(String jobId) {
+        long workerToken = workerSequence.incrementAndGet();
+        currentWorkerTokens.put(jobId, workerToken);
+        return workerToken;
+    }
+
+    private boolean isCurrentWorker(String jobId) {
+        Long executingToken = executingWorkerToken.get();
+        Long currentToken = currentWorkerTokens.get(jobId);
+        return executingToken != null && currentToken != null && executingToken.equals(currentToken);
+    }
+
+    private boolean isCurrentDownloadState(String jobId) {
+        if (!isCurrentWorker(jobId)) return false;
+        JSObject state = load(jobId);
+        return state != null && "DOWNLOADING".equals(state.getString("state"));
     }
 
     private JSObject snapshot(String jobId, String state, String path, long bytes, Long total, String error) {
