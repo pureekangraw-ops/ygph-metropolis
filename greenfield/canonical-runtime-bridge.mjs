@@ -21,6 +21,15 @@ function browserLifecycleSyncEnabled() {
   return typeof globalThis.window !== 'undefined';
 }
 
+function workflowEnvelope(input) {
+  if (Array.isArray(input)) return { commands:input, baseRevision:null };
+  const commands = input?.commands;
+  const baseRevision = input?.baseRevision ?? null;
+  if (!Array.isArray(commands) || commands.length === 0) throw new Error('EMPTY_WORKFLOW');
+  if (baseRevision != null && !Number.isSafeInteger(baseRevision)) throw new Error('INVALID_BASE_REVISION');
+  return { commands, baseRevision };
+}
+
 export function createCanonicalGreenfieldRuntime({
   store,
   passphrase,
@@ -37,14 +46,21 @@ export function createCanonicalGreenfieldRuntime({
   registerRideDomainCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
 
-  async function executeMultiGroupCommands(commands) {
-    if (!Array.isArray(commands) || commands.length === 0) throw new Error('EMPTY_WORKFLOW');
-    return coordinator.run(() => executeAtomicWorkflow({
-      store,
-      passphrase,
-      runtime:commandRuntime,
-      commands:structuredClone(commands),
-    }));
+  async function executeMultiGroupCommands(input) {
+    const { commands, baseRevision } = workflowEnvelope(input);
+    return coordinator.run(async () => {
+      if (baseRevision != null) {
+        const durable = await readEncryptedState({ store, passphrase });
+        if (!durable) throw new Error('GREENFIELD_NOT_INITIALIZED');
+        if (durable.revision !== baseRevision) throw new Error(`STALE_DURABLE_STATE:${baseRevision}/${durable.revision}`);
+      }
+      return executeAtomicWorkflow({
+        store,
+        passphrase,
+        runtime:commandRuntime,
+        commands:structuredClone(commands),
+      });
+    });
   }
 
   function metadataStore() {
