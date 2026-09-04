@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createGreenfieldState } from '../../greenfield/core.mjs';
 import { createMemoryVaultStore, commitEncryptedState } from '../../greenfield/persistence.mjs';
 import { createCanonicalGreenfieldRuntime } from '../../greenfield/canonical-runtime-bridge.mjs';
@@ -135,4 +136,13 @@ test('canonical Manual accepts its revision-bound command envelope for calendar 
   });
   assert.equal(result.status, 'VERIFIED');
   assert.equal((await runtime.readState()).domains.CALENDAR.records['CAL-CUTOVER-1']?.record?.status, 'OPEN');
+});
+
+test('stable bootstrap opens the canonical runtime bridge after device PIN unlock while preserving the legacy brain safety net', async () => {
+  const source = await readFile(new URL('../www/trusted/bootstrap.mjs', import.meta.url), 'utf8');
+  assert.match(source, /from '\.\/source\/greenfield\/canonical-runtime-bridge\.mjs'/);
+  assert.match(source, /openCanonicalGreenfieldRuntimeWithDevicePin\s*\(/);
+  assert.doesNotMatch(source, /openGreenfieldRuntimeWithDevicePin\s*\(/);
+  assert.match(source, /createTrustedBrainAdapter/);
+  assert.match(source, /createTrustedBrainGate/);
 });
