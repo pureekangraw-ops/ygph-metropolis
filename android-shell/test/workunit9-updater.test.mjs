@@ -16,7 +16,10 @@ function fixture(overrides = {}) {
   const verifier = overrides.verifier ?? {
     inspect: async path => (calls.push(['inspect', path]), { sha256:'sha', applicationId:'com.yggdrasil.lighthouse', versionName:'1.0.0', versionCode:1005, signerCertificateSha256:'signer' }),
   };
-  const backup = overrides.backup;
+  const backup = overrides.backup ?? {
+    exportBackup: async () => ({ revision:7, exportedAt:'2026-09-04T11:00:00.000Z', artifactHash:'backup-sha' }),
+    readback: async artifact => ({ revision:artifact.revision, exportedAt:artifact.exportedAt, artifactHash:artifact.artifactHash }),
+  };
   const service = createUpdateService({ native, verifier, backup, expectedIdentity:{ applicationId:'com.yggdrasil.lighthouse', signerCertificateSha256:'signer', minVersionCode:1005, artifactSha256:'sha' } });
   return { service, calls };
 }
@@ -139,8 +142,8 @@ test('permission return resumes from native-restored READY_TO_INSTALL state and 
 test('installer handoff requires successful backup durable readback when backup owner is configured', async () => {
   const calls = [];
   const backup = {
-    exportBackup: async () => (calls.push(['backup']), { revision:7, artifactHash:'backup-sha' }),
-    readback: async artifact => (calls.push(['backupReadback', artifact.artifactHash]), { revision:7, artifactHash:'backup-sha' }),
+    exportBackup: async () => (calls.push(['backup']), { revision:7, exportedAt:'2026-09-04T11:00:00.000Z', artifactHash:'backup-sha' }),
+    readback: async artifact => (calls.push(['backupReadback', artifact.artifactHash]), { revision:7, exportedAt:artifact.exportedAt, artifactHash:'backup-sha' }),
   };
   const { service } = fixture({ backup, native:{
     startDownload: async () => ({ jobId:'J1', state:'DOWNLOADING' }),
