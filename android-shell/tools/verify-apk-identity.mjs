@@ -51,6 +51,19 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function assertProvenanceMetadata(metadata) {
+  const missing = [];
+  for (const name of ['sourceRepository', 'sourceRef', 'sourceCommit', 'workflowRunId', 'builtAt']) {
+    if (!String(metadata?.[name] ?? '').trim()) missing.push(name);
+  }
+  if (missing.length > 0) {
+    const error = new Error('APK_PROVENANCE_METADATA_MISSING');
+    error.code = 'APK_PROVENANCE_METADATA_MISSING';
+    error.missing = missing;
+    throw error;
+  }
+}
+
 export async function verifyApkIdentity({
   apkPath,
   identityPath = new URL('../apk-identity.json', import.meta.url),
@@ -66,6 +79,8 @@ export async function verifyApkIdentity({
   evidencePath = null,
 } = {}) {
   if (!apkPath) throw new Error('APK_PATH_REQUIRED');
+  assertProvenanceMetadata({ sourceRepository, sourceRef, sourceCommit, workflowRunId, builtAt });
+
   const [identity, version, apkBytes, noticeBytes] = await Promise.all([
     readFile(identityPath, 'utf8').then(JSON.parse),
     readFile(versionPath, 'utf8').then(JSON.parse),
@@ -94,7 +109,7 @@ export async function verifyApkIdentity({
     sourceRepository,
     sourceRef,
     sourceCommit,
-    workflowRunId: workflowRunId == null ? null : String(workflowRunId),
+    workflowRunId: String(workflowRunId),
     builtAt,
     apkSha256: sha256(apkBytes),
     ...actual,
