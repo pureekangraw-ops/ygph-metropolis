@@ -176,11 +176,20 @@ public class LighthouseUpdaterPlugin extends Plugin {
             return;
         }
         if (!requireState(call, snapshot, "DOWNLOADING", "PAUSED", "READY_TO_INSTALL", "FAILED")) return;
-        snapshot.put("state", "CANCELLED");
-        save(snapshot);
         String path = snapshot.getString("stagedPath");
-        if (path != null) new File(path).delete();
-        call.resolve(snapshot);
+        File dir = new File(getContext().getFilesDir(), "updates");
+        if (path != null && !path.isBlank()) {
+            File staged = new File(path);
+            staged.delete();
+            if (staged.getParentFile() != null) dir = staged.getParentFile();
+        }
+        new File(dir, jobId + ".apk.part").delete();
+        new File(dir, jobId + ".apk").delete();
+        prefs().edit().remove(PREFIX + jobId).apply();
+        JSObject result = new JSObject();
+        result.put("jobId", jobId);
+        result.put("state", "CANCELLED");
+        call.resolve(result);
     }
 
     @PluginMethod
