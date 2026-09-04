@@ -141,8 +141,8 @@ export function createUpdateService({ native, verifier, backup, expectedIdentity
       return verifiedInstall(jobId, ['PERMISSION_REQUIRED']);
     },
 
-    async reconcileInstalled() {
-      return native.reconcileInstalledVersion();
+    async reconcileInstalled(jobId) {
+      return native.reconcileInstalledVersion(jobId);
     },
   });
 }
