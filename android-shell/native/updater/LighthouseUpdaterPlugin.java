@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 public class LighthouseUpdaterPlugin extends Plugin {
     private static final String PREFS = "lighthouse_updater_jobs";
     private static final String PREFIX = "job:";
+    private static final String PENDING_INSTALL_JOB = "pendingInstallJobId";
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @PluginMethod
@@ -204,6 +205,7 @@ public class LighthouseUpdaterPlugin extends Plugin {
         install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         snapshot.put("state", "WAITING_ANDROID_CONFIRMATION");
         save(snapshot);
+        prefs().edit().putString(PENDING_INSTALL_JOB, jobId).apply();
         getContext().startActivity(install);
         JSObject result = new JSObject();
         result.put("status", "REQUESTED");
