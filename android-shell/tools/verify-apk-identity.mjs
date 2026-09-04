@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -41,20 +42,35 @@ function run(command, args) {
   return result.stdout;
 }
 
+function pathLabel(value) {
+  const path = value instanceof URL ? fileURLToPath(value) : String(value ?? '');
+  return basename(path);
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 export async function verifyApkIdentity({
   apkPath,
   identityPath = new URL('../apk-identity.json', import.meta.url),
   versionPath = new URL('../version.json', import.meta.url),
+  ownershipNoticePath = new URL('../IP-NOTICE.md', import.meta.url),
   apksigner = process.env.APKSIGNER || 'apksigner',
   aapt = process.env.AAPT || 'aapt',
   sourceCommit = process.env.APK_SOURCE_COMMIT || process.env.GITHUB_SHA || null,
+  sourceRepository = process.env.APK_SOURCE_REPOSITORY || process.env.GITHUB_REPOSITORY || null,
+  sourceRef = process.env.APK_SOURCE_REF || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF || null,
+  workflowRunId = process.env.APK_WORKFLOW_RUN_ID || process.env.GITHUB_RUN_ID || null,
+  builtAt = process.env.APK_BUILD_TIME || new Date().toISOString(),
   evidencePath = null,
 } = {}) {
   if (!apkPath) throw new Error('APK_PATH_REQUIRED');
-  const [identity, version, apkBytes] = await Promise.all([
+  const [identity, version, apkBytes, noticeBytes] = await Promise.all([
     readFile(identityPath, 'utf8').then(JSON.parse),
     readFile(versionPath, 'utf8').then(JSON.parse),
     readFile(apkPath),
+    readFile(ownershipNoticePath),
   ]);
 
   const signerOutput = run(apksigner, ['verify', '--print-certs', apkPath]);
@@ -73,10 +89,18 @@ export async function verifyApkIdentity({
   assertApkIdentity(actual, expected);
 
   const evidence = {
+    provenanceSchemaVersion: 1,
     identitySchemaVersion: identity.identitySchemaVersion,
+    sourceRepository,
+    sourceRef,
     sourceCommit,
-    apkSha256: createHash('sha256').update(apkBytes).digest('hex'),
+    workflowRunId: workflowRunId == null ? null : String(workflowRunId),
+    builtAt,
+    apkSha256: sha256(apkBytes),
     ...actual,
+    keyAliasLabel: identity.keyAliasLabel ?? null,
+    ownershipNoticePath: pathLabel(ownershipNoticePath),
+    ownershipNoticeSha256: sha256(noticeBytes),
   };
   if (evidencePath) await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   return evidence;
