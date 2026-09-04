@@ -6,6 +6,7 @@ import {
   deactivateRuntimeSession,
   withRuntimeSession,
 } from './source/greenfield/runtime-session.mjs';
+import { createStableAppServices } from './source/app/app/stable-service-composition.mjs';
 import { routeMasterInputText } from './source/lighthouse/master-input-route.mjs';
 import {
   createRecoverySession,
@@ -51,6 +52,158 @@ function baht(amountSatang) {
   if (!Number.isSafeInteger(amount)) return null;
   const value = amount / 100;
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function normalizeJobId(value) {
+  const jobId = String(value ?? '').trim();
+  if (!jobId) throw new Error('UPDATE_JOB_ID_REQUIRED');
+  return jobId;
+}
+
+function nativeUpdaterPlugin() {
+  return globalThis.Capacitor?.Plugins?.LighthouseUpdater ?? null;
+}
+
+async function callNativeUpdater(method, input = {}) {
+  const plugin = nativeUpdaterPlugin();
+  const fn = plugin?.[method];
+  if (typeof fn !== 'function') throw new Error(`UPDATE_NATIVE_UNAVAILABLE:${method}`);
+  return fn.call(plugin, input);
+}
+
+async function hashBackupArtifact(value) {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle || typeof subtle.digest !== 'function') throw new Error('BACKUP_HASH_UNAVAILABLE');
+  const copy = structuredClone(value);
+  delete copy.artifactHash;
+  const bytes = new TextEncoder().encode(JSON.stringify(copy));
+  const digest = new Uint8Array(await subtle.digest('SHA-256', bytes));
+  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createStableBackupOwner(runtime) {
+  return frozen({
+    async exportBackup(options = {}) {
+      const raw = await runtime.exportBackup({ ...options, recoveryKey:null });
+      const artifact = structuredClone(raw);
+      delete artifact.recoveryKey;
+      const state = await runtime.readState();
+      if (!Number.isSafeInteger(state?.revision)) throw new Error('BACKUP_REVISION_UNAVAILABLE');
+      artifact.revision = state.revision;
+      artifact.artifactHash = await hashBackupArtifact(artifact);
+      return artifact;
+    },
+    async readback(artifact) {
+      if (!artifact || typeof artifact !== 'object') throw new Error('BACKUP_ARTIFACT_REQUIRED');
+      const actualHash = await hashBackupArtifact(artifact);
+      if (actualHash !== artifact.artifactHash) throw new Error('BACKUP_ARTIFACT_HASH_MISMATCH');
+      const state = await runtime.readState();
+      if (state?.revision !== artifact.revision) throw new Error('BACKUP_REVISION_READBACK_MISMATCH');
+      return frozen({
+        status:'VERIFIED',
+        revision:artifact.revision,
+        exportedAt:artifact.exportedAt,
+        artifactHash:artifact.artifactHash,
+      });
+    },
+    async restoreBackup(artifact, options = {}) {
+      if (!artifact || typeof artifact !== 'object') throw new Error('BACKUP_ARTIFACT_REQUIRED');
+      const actualHash = await hashBackupArtifact(artifact);
+      if (actualHash !== artifact.artifactHash) throw new Error('BACKUP_ARTIFACT_HASH_MISMATCH');
+      const portable = structuredClone(artifact);
+      delete portable.artifactHash;
+      delete portable.revision;
+      delete portable.recoveryKey;
+      const operation = await runtime.restoreBackup(portable, options);
+      const readback = await runtime.readState();
+      return frozen({ operation, readback });
+    },
+  });
+}
+
+function createStableEventOwner(runtime, now) {
+  const store = runtime.metadataStore();
+  const eventIdFactory = idFactory('EVT-LH');
+  return frozen({
+    async emit(event = {}) {
+      const current = (await store.get('event-log')) || { revision:0, items:[] };
+      const record = frozen({
+        eventId:String(event?.eventId || eventIdFactory()),
+        occurredAt:String(event?.occurredAt || now()),
+        ...structuredClone(event),
+      });
+      const next = {
+        revision:Number(current.revision || 0) + 1,
+        items:[...(Array.isArray(current.items) ? current.items : []), record].slice(-500),
+      };
+      await store.put('event-log', next);
+      const durable = await store.get('event-log');
+      const readback = durable?.items?.find(item => item.eventId === record.eventId);
+      if (!readback || durable.revision !== next.revision) throw new Error('EVENT_READBACK_FAILED');
+      return frozen({ status:'VERIFIED', eventId:record.eventId, readback:structuredClone(readback) });
+    },
+  });
+}
+
+function stableBrainText(payload, code) {
+  const text = String(payload?.text ?? payload?.input ?? payload?.message ?? '').trim();
+  if (!text) throw new Error(code);
+  return text;
+}
+
+async function routeThroughLegacyBrain(brain, payload, successStatus) {
+  const text = stableBrainText(payload, 'STABLE_BRAIN_INPUT_REQUIRED');
+  const result = await brain.send(text);
+  if (result?.status !== 'SUCCESS') throw new Error(`STABLE_BRAIN_NOT_COMPLETED:${result?.status || 'UNKNOWN'}`);
+  return frozen({
+    status:successStatus,
+    readback:structuredClone(result?.readback ?? result),
+  });
+}
+
+function createStableUpdateOwner(backup) {
+  async function snapshot(jobId) {
+    return callNativeUpdater('getJobSnapshot', { jobId:normalizeJobId(jobId) });
+  }
+
+  async function verifiedInstall(jobId) {
+    jobId = normalizeJobId(jobId);
+    const before = await snapshot(jobId);
+    if (!['READY_TO_INSTALL', 'PERMISSION_REQUIRED'].includes(before?.state)) {
+      throw new Error(`UPDATE_JOB_NOT_READY_TO_INSTALL:${before?.state || 'UNKNOWN'}`);
+    }
+    const artifact = await backup.exportBackup();
+    const backupReadback = await backup.readback(artifact);
+    const operation = await callNativeUpdater('requestInstall', { jobId });
+    return frozen({ ...operation, backupReadback });
+  }
+
+  return frozen({
+    isAvailable() {
+      const plugin = nativeUpdaterPlugin();
+      return Boolean(plugin && typeof plugin.getJobSnapshot === 'function' && typeof plugin.requestInstall === 'function');
+    },
+    async start(input = {}) {
+      return callNativeUpdater('startDownload', structuredClone(input));
+    },
+    snapshot,
+    async pause(jobId) {
+      return callNativeUpdater('pauseDownload', { jobId:normalizeJobId(jobId) });
+    },
+    async resume(jobId, url = null) {
+      const input = { jobId:normalizeJobId(jobId) };
+      if (url) input.url = String(url);
+      return callNativeUpdater('resumeDownload', input);
+    },
+    async cancel(jobId) {
+      return callNativeUpdater('discardDownload', { jobId:normalizeJobId(jobId) });
+    },
+    install:verifiedInstall,
+    resumeInstallAfterPermission:verifiedInstall,
+    async reconcileInstalled(jobId) {
+      return callNativeUpdater('reconcileInstalledVersion', { jobId:normalizeJobId(jobId) });
+    },
+  });
 }
 
 export function buildDurableRestoreNotice(state) {
@@ -148,26 +301,60 @@ export async function openTrustedBrain({
       now,
       recordErrorEvent:errorStatistics ? event => errorStatistics.record(event) : null,
     });
+
     let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      errorStatistics?.close();
+      errorStatistics = null;
+      if (active) {
+        deactivateRuntimeSession(runtime);
+        active = false;
+      }
+      runtime.close();
+    };
+
+    const backup = createStableBackupOwner(runtime);
+    const events = createStableEventOwner(runtime, now);
+    const updates = createStableUpdateOwner(backup);
+    const sessionOwner = frozen({
+      async lock() {
+        close();
+        return frozen({ status:'LOCKED' });
+      },
+    });
+    const recovery = frozen({
+      retry:payload => routeThroughLegacyBrain(brain, payload, 'RECOVERED'),
+    });
+    const query = async payload => frozen({
+      status:'VERIFIED',
+      query:structuredClone(payload ?? {}),
+      readback:structuredClone(await runtime.readState()),
+    });
+    const provider = payload => routeThroughLegacyBrain(brain, payload, 'VERIFIED');
+
+    const services = await createStableAppServices({
+      runtime,
+      session:sessionOwner,
+      recovery,
+      backup,
+      updates,
+      events,
+      query,
+      provider,
+      now,
+    });
 
     return frozen({
       runtime,
       brain,
+      services,
       async readErrorStatistics() {
         if (!errorStatistics) return emptyErrorStatistics();
         return errorStatistics.read();
       },
-      close() {
-        if (closed) return;
-        closed = true;
-        errorStatistics?.close();
-        errorStatistics = null;
-        if (active) {
-          deactivateRuntimeSession(runtime);
-          active = false;
-        }
-        runtime.close();
-      },
+      close,
     });
   } catch (error) {
     errorStatistics?.close();
