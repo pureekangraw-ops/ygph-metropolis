@@ -15,16 +15,14 @@ function guardedRuntime(runtime) {
   if (!runtime || typeof runtime.readState !== 'function' || typeof runtime.executeMultiGroupCommands !== 'function') {
     throw new TypeError('MANUAL_RUNTIME_REQUIRED');
   }
-  return new Proxy(runtime, {
-    get(target, property, receiver) {
-      if (property !== 'executeMultiGroupCommands') return Reflect.get(target, property, receiver);
-      return async (...args) => {
-        const result = await target.executeMultiGroupCommands(...args);
-        if (!VERIFIED_MUTATION_STATUSES.has(result?.status)) {
-          throw new Error(`MANUAL_MUTATION_NOT_VERIFIED:${result?.status ?? 'UNKNOWN'}`);
-        }
-        return result;
-      };
+  return Object.freeze({
+    ...runtime,
+    async executeMultiGroupCommands(...args) {
+      const result = await runtime.executeMultiGroupCommands(...args);
+      if (!VERIFIED_MUTATION_STATUSES.has(result?.status)) {
+        throw new Error(`MANUAL_MUTATION_NOT_VERIFIED:${result?.status ?? 'UNKNOWN'}`);
+      }
+      return result;
     },
   });
 }
