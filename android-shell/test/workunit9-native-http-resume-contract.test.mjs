@@ -29,6 +29,17 @@ test('partial bytes append only after validated 206 Content-Range response', () 
   assert.match(download, /new FileOutputStream\(part,\s*resumeAccepted\)/);
 });
 
+test('partial resume requires the response validator to match the durable validator', () => {
+  const responseEtagAt = download.indexOf('String responseEtag = connection.getHeaderField("ETag")');
+  const responseLastModifiedAt = download.indexOf('String responseLastModified = connection.getHeaderField("Last-Modified")');
+  const resumeDecisionAt = download.indexOf('boolean resumeAccepted =');
+  assert.ok(responseEtagAt >= 0 && responseLastModifiedAt >= 0, 'resume must read response validators');
+  assert.ok(responseEtagAt < resumeDecisionAt && responseLastModifiedAt < resumeDecisionAt, 'response validators must be read before deciding whether partial bytes can append');
+  assert.match(download, /boolean\s+validatorMatches\s*=\s*resumeValidatorMatches\(etag, lastModified, responseEtag, responseLastModified\)/);
+  assert.match(download, /boolean\s+resumeAccepted\s*=\s*existing\s*>\s*0[\s\S]*validatorMatches/);
+  assert.match(source, /private static boolean resumeValidatorMatches\(String etag, String lastModified, String responseEtag, String responseLastModified\)/);
+});
+
 test('invalid resume response discards partial bytes and restarts from byte zero', () => {
   assert.match(download, /existing\s*>\s*0\s*&&\s*!resumeAccepted/);
   assert.match(download, /restartPartialFromZero\(jobId, urlString, part\)/);
