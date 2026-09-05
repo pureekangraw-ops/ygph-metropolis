@@ -30,6 +30,7 @@ function readyResult(request) {
     status:'READY',
     reason:null,
     requiresConfirmation:true,
+    request:structuredClone(request),
     preview:previewFromRequest(request),
   });
 }
