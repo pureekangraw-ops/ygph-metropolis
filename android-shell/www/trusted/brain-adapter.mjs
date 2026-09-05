@@ -1,3 +1,5 @@
+import { preflightConfirmedLedgerRequest } from './source/app/logic/chat/confirmed-ledger-executor.mjs';
+
 function frozen(value) {
   return Object.freeze(value);
 }
@@ -30,6 +32,7 @@ function readyResult(request) {
     status:'READY',
     reason:null,
     requiresConfirmation:true,
+    request:structuredClone(request),
     preview:previewFromRequest(request),
   });
 }
@@ -52,6 +55,7 @@ export function createTrustedBrainAdapter({
   applySessionOwnerInput,
   rejoinRecoverySession,
   pathKernel,
+  requestPreflight = null,
   withRuntimeSession,
   requestIdFactory,
   inputIdFactory,
@@ -65,11 +69,15 @@ export function createTrustedBrainAdapter({
   if (!pathKernel || typeof pathKernel.preflight !== 'function' || typeof pathKernel.run !== 'function') {
     throw new TypeError('TRUSTED_BRAIN_PATH_KERNEL_REQUIRED');
   }
+  if (requestPreflight != null && typeof requestPreflight !== 'function') {
+    throw new TypeError('TRUSTED_BRAIN_REQUEST_PREFLIGHT_INVALID');
+  }
   if (typeof withRuntimeSession !== 'function') throw new TypeError('TRUSTED_BRAIN_RUNTIME_SESSION_REQUIRED');
   if (typeof requestIdFactory !== 'function') throw new TypeError('TRUSTED_BRAIN_REQUEST_ID_FACTORY_REQUIRED');
   if (typeof inputIdFactory !== 'function') throw new TypeError('TRUSTED_BRAIN_INPUT_ID_FACTORY_REQUIRED');
   if (typeof receivedAt !== 'function') throw new TypeError('TRUSTED_BRAIN_RECEIVED_AT_REQUIRED');
 
+  const preflightRequest = requestPreflight ?? preflightConfirmedLedgerRequest;
   let preparedRequest = null;
   let recoverySession = null;
   let executionInFlight = false;
@@ -83,7 +91,7 @@ export function createTrustedBrainAdapter({
   }
 
   function rememberReady(request) {
-    const preflight = pathKernel.preflight(request);
+    const preflight = preflightRequest(request);
     if (preflight?.status !== 'READY') {
       preparedRequest = null;
       return stoppedResult(preflight?.status ?? 'BLOCKED', preflight?.reason ?? 'NO_LEGAL_PATH');
@@ -153,7 +161,7 @@ export function createTrustedBrainAdapter({
       receivedAt:receivedAt(),
       timeZone,
       requestIdFactory,
-      capabilityPreflight:request => pathKernel.preflight(request),
+      capabilityPreflight:preflightRequest,
     });
 
     if (rejoined?.routed?.route === 'LOCAL_PATH' && rejoined?.routed?.status === 'READY') {
