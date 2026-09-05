@@ -1,3 +1,5 @@
+import { preflightConfirmedLedgerRequest } from './source/app/logic/chat/confirmed-ledger-executor.mjs';
+
 function frozen(value) {
   return Object.freeze(value);
 }
@@ -75,7 +77,7 @@ export function createTrustedBrainAdapter({
   if (typeof inputIdFactory !== 'function') throw new TypeError('TRUSTED_BRAIN_INPUT_ID_FACTORY_REQUIRED');
   if (typeof receivedAt !== 'function') throw new TypeError('TRUSTED_BRAIN_RECEIVED_AT_REQUIRED');
 
-  const preflightRequest = requestPreflight ?? (request => pathKernel.preflight(request));
+  const preflightRequest = requestPreflight ?? preflightConfirmedLedgerRequest;
   let preparedRequest = null;
   let recoverySession = null;
   let executionInFlight = false;
