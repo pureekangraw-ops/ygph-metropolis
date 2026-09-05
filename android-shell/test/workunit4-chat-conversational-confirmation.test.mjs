@@ -86,6 +86,67 @@ test('confirmed EXPENSE request is translated to the shared Manual Ledger facade
   assert.equal(result.readback.recordId, 'TX-LH-REQ-EXPENSE-42');
 });
 
+test('confirmed STORE_SALE request enters the shared Store workflow through Manual Ledger facade', async () => {
+  const { createConfirmedLedgerExecutor } = await import('../app/public/logic/chat/confirmed-ledger-executor.mjs');
+  const calls = [];
+  const manual = {
+    async addExpense() { throw new Error('EXPENSE_NOT_EXPECTED'); },
+    async storeSale(payload) {
+      calls.push(structuredClone(payload));
+      return { status:'VERIFIED', readback:{ owner:'STORE', saleId:payload.saleId, amountSatang:payload.amountSatang } };
+    },
+  };
+  const execute = createConfirmedLedgerExecutor({ manual });
+  const result = await execute({
+    version:'1', requestId:'REQ-STORE-42', action:'CREATE', object:'STORE_SALE',
+    fields:{ title:'สบู่', amountSatang:50000, quantity:1, receivedSatang:50000 },
+    requiredResult:{ kind:'STORE_SALE_WITH_LEDGER', effect:{ owner:'STORE', ledgerDirection:'IN', title:'สบู่', amountSatang:50000, quantity:1, receivedSatang:50000 } },
+  });
+
+  assert.equal(result.status, 'SUCCESS');
+  assert.deepEqual(calls, [{
+    workflowId:'WF-LH-REQ-STORE-42',
+    saleId:'SALE-LH-REQ-STORE-42',
+    ledgerTransactionId:'TX-LH-REQ-STORE-42',
+    title:'สบู่',
+    amountSatang:50000,
+    quantity:1,
+    receivedSatang:50000,
+    storeCostSatang:0,
+  }]);
+  assert.equal(result.readback.owner, 'STORE');
+});
+
+test('confirmed RIDE_JOB request enters the shared Ride workflow and stays Ride-owned', async () => {
+  const { createConfirmedLedgerExecutor } = await import('../app/public/logic/chat/confirmed-ledger-executor.mjs');
+  const calls = [];
+  const manual = {
+    async addExpense() { throw new Error('EXPENSE_NOT_EXPECTED'); },
+    async rideJob(payload) {
+      calls.push(structuredClone(payload));
+      return { status:'VERIFIED', readback:{ owner:'RIDE', jobId:payload.jobId, amountSatang:payload.amountSatang } };
+    },
+  };
+  const execute = createConfirmedLedgerExecutor({ manual });
+  const result = await execute({
+    version:'1', requestId:'REQ-RIDE-42', action:'CREATE', object:'RIDE_JOB',
+    fields:{ roundId:'ROUND-1', amountSatang:35000, paymentMode:'CASH', note:'' },
+    requiredResult:{ kind:'RIDE_JOB_WITH_LEDGER', effect:{ owner:'RIDE', ledgerDirection:'IN', amountSatang:35000, paymentMode:'CASH' } },
+  });
+
+  assert.equal(result.status, 'SUCCESS');
+  assert.deepEqual(calls, [{
+    workflowId:'WF-LH-REQ-RIDE-42',
+    roundId:'ROUND-1',
+    jobId:'JOB-LH-REQ-RIDE-42',
+    ledgerTransactionId:'TX-LH-REQ-RIDE-42',
+    amountSatang:35000,
+    paymentMode:'CASH',
+    note:'',
+  }]);
+  assert.equal(result.readback.owner, 'RIDE');
+});
+
 test('stable CHAT shows GO confirmation as conversation, mutates nothing before ยืนยัน, then commits after typed approval', async (t) => {
   await resetVault();
   await initializeTrustedFirstRun({
