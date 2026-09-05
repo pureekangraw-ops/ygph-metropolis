@@ -86,3 +86,14 @@ test('Manual facade sends every mutation through Ledger Gateway while reads stay
   assert.deepEqual(await facade.dashboard(), { balanceSatang:1254000 });
   assert.deepEqual(routed.map(item => item.operation), MUTATIONS);
 });
+
+test('Ledger Gateway cannot absorb module lifecycle authority', async () => {
+  const { manual, runtime } = fixture();
+  const gateway = createLedgerGateway({ manual, runtime });
+  for (const operation of ['installModule', 'removeModule', 'disableModule', 'enableModule', 'purgeModule']) {
+    await assert.rejects(
+      () => gateway.execute({ operation, payload:{ moduleId:'ledger' } }),
+      new RegExp(`LEDGER_GATEWAY_OPERATION_UNSUPPORTED:${operation}`),
+    );
+  }
+});
