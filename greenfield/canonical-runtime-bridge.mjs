@@ -7,6 +7,7 @@ import { createCommandRuntime } from './command-runtime.mjs';
 import { registerGreenfieldDomainCommands } from './domain-operations.mjs';
 import { registerStoreIncomeDomainCommand } from './store-income-domain.mjs';
 import { registerRideDomainCommands } from './ride-domain.mjs';
+import { registerOwnerCancellationCommands } from './owner-cancellation-domain.mjs';
 import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
 
@@ -46,6 +47,7 @@ export function createCanonicalGreenfieldRuntime({
   registerGreenfieldDomainCommands(commandRuntime, { now });
   registerStoreIncomeDomainCommand(commandRuntime, { now });
   registerRideDomainCommands(commandRuntime, { now });
+  registerOwnerCancellationCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
 
   async function executeMultiGroupCommands(input) {
