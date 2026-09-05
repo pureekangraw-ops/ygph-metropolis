@@ -5,6 +5,7 @@ import { unlockVaultPassphrase } from './device-unlock.mjs';
 import { createGreenfieldRuntime } from './runtime.mjs';
 import { createCommandRuntime } from './command-runtime.mjs';
 import { registerGreenfieldDomainCommands } from './domain-operations.mjs';
+import { registerStoreIncomeDomainCommand } from './store-income-domain.mjs';
 import { registerRideDomainCommands } from './ride-domain.mjs';
 import { executeAtomicWorkflow } from './workflow-runtime.mjs';
 import { createMutationCoordinator } from './mutation-coordinator.mjs';
@@ -43,6 +44,7 @@ export function createCanonicalGreenfieldRuntime({
   const runtime = createGreenfieldRuntime({ store, passphrase, lockManager, now, closeStore });
   const commandRuntime = createCommandRuntime();
   registerGreenfieldDomainCommands(commandRuntime, { now });
+  registerStoreIncomeDomainCommand(commandRuntime, { now });
   registerRideDomainCommands(commandRuntime, { now });
   const coordinator = createMutationCoordinator({ lockManager });
 
