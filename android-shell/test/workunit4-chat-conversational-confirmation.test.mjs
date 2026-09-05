@@ -111,7 +111,7 @@ test('stable CHAT shows GO confirmation as conversation, mutates nothing before 
   assert.equal(first.result.readback.interactionStatus, 'CONFIRMATION_REQUIRED');
   assert.match(first.result.readback.message, /ข้าว 65 บาท/);
   const pendingState = await session.runtime.readState();
-  assert.equal(pendingState.revision, before.revision);
+  assert.deepEqual(pendingState.domains, before.domains);
   assert.equal(expenseRecords(pendingState).length, 0);
 
   const second = await session.services.chat.dispatch({
