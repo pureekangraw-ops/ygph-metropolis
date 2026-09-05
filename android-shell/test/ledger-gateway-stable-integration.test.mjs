@@ -102,3 +102,70 @@ test('stable composition wires Manual facade and CHAT through one internal Ledge
   const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
   assert.deepEqual(Object.keys(services).sort(), ['backup','chat','events','manual','modules','recovery','session','updates']);
 });
+
+test('Store sale enters through Ledger Gateway while Store remains the record owner', async () => {
+  const runtime = await runtimeFixture();
+  const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
+
+  const result = await services.manual.storeSale({
+    workflowId:'WF-GATEWAY-STORE-1',
+    saleId:'SALE-GATEWAY-1',
+    ledgerTransactionId:'TX-GATEWAY-STORE-1',
+    title:'ขายสินค้า training witness',
+    amountSatang:50000,
+    receivedSatang:50000,
+    quantity:1,
+  });
+  assert.ok(['COMMITTED','RECOVERED','VERIFIED'].includes(result.status));
+  const durable = await runtime.readState();
+  assert.equal(durable.domains.STORE.records['SALE-GATEWAY-1']?.record?.amountSatang, 50000);
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-STORE-1']?.record?.amountSatang, 50000);
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-STORE-1']?.record?.sourceRef, 'STORE/SALE-GATEWAY-1');
+});
+
+test('Ride job enters through Ledger Gateway and stays RIDE-owned, never Outcome-owned', async () => {
+  const runtime = await runtimeFixture();
+  const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
+
+  await services.manual.rideStartRound({ workflowId:'WF-GATEWAY-RIDE-START', roundId:'ROUND-GATEWAY-1' });
+  const result = await services.manual.rideJob({
+    workflowId:'WF-GATEWAY-RIDE-JOB',
+    roundId:'ROUND-GATEWAY-1',
+    jobId:'JOB-GATEWAY-1',
+    ledgerTransactionId:'TX-GATEWAY-RIDE-1',
+    amountSatang:35000,
+    paymentMode:'CASH',
+    note:'training witness',
+  });
+  assert.ok(['COMMITTED','RECOVERED','VERIFIED'].includes(result.status));
+  const durable = await runtime.readState();
+  assert.equal(durable.domains.RIDE.records['JOB-GATEWAY-1']?.record?.amountSatang, 35000);
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-RIDE-1']?.record?.amountSatang, 35000);
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-RIDE-1']?.record?.sourceRef, 'RIDE/JOB-GATEWAY-1');
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-RIDE-1']?.record?.direction, 'IN');
+});
+
+test('CHAT Store sale uses the same Ledger Gateway behavior as MANUAL', async () => {
+  const runtime = await runtimeFixture();
+  const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
+  const response = await services.chat.dispatch({
+    requestId:'REQ-GATEWAY-STORE-CHAT',
+    route:'LEDGER_COMMAND',
+    payload:{
+      operation:'storeSale',
+      payload:{
+        workflowId:'WF-GATEWAY-STORE-CHAT',
+        saleId:'SALE-GATEWAY-CHAT',
+        ledgerTransactionId:'TX-GATEWAY-STORE-CHAT',
+        title:'ขายสินค้าผ่านแชต',
+        amountSatang:50000,
+        receivedSatang:50000,
+        quantity:1,
+      },
+    },
+  });
+  assert.equal(response.status, 'SUCCESS');
+  const durable = await runtime.readState();
+  assert.equal(durable.domains.STORE.records['SALE-GATEWAY-CHAT']?.record?.amountSatang, 50000);
+  assert.equal(durable.domains.LEDGER.records['TX-GATEWAY-STORE-CHAT']?.record?.amountSatang, 50000);
+});
