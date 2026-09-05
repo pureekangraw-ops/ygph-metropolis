@@ -1,4 +1,5 @@
 import { buildSaleWorkflow } from '../domains/business-workflows.mjs';
+import { buildStoreIncomeWorkflow } from '../domains/store-income-workflow.mjs';
 import { buildRideStartRoundWorkflow, buildRideJobWorkflow, buildRideEndRoundWorkflow } from '../domains/ride-workflows.mjs';
 
 const VERIFIED = new Set(['COMMITTED', 'RECOVERED', 'VERIFIED']);
@@ -11,11 +12,12 @@ export const MANUAL_MUTATION_OPERATIONS = Object.freeze([
 ]);
 
 export const GATEWAY_WORKFLOW_OPERATIONS = Object.freeze([
-  'storeSale', 'rideStartRound', 'rideJob', 'rideEndRound',
+  'storeSale', 'storeIncome', 'rideStartRound', 'rideJob', 'rideEndRound',
 ]);
 
 const WORKFLOW_BUILDERS = Object.freeze({
   storeSale:buildSaleWorkflow,
+  storeIncome:buildStoreIncomeWorkflow,
   rideStartRound:buildRideStartRoundWorkflow,
   rideJob:buildRideJobWorkflow,
   rideEndRound:buildRideEndRoundWorkflow,
