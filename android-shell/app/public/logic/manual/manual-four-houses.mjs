@@ -30,15 +30,13 @@ function guardedRuntime(runtime) {
 export function createManualFourHouses(runtime, { todayProvider = defaultTodayProvider } = {}) {
   if (typeof todayProvider !== 'function') throw new TypeError('MANUAL_TODAY_PROVIDER_REQUIRED');
   const safeRuntime = guardedRuntime(runtime);
-  const delegate = () => createDonorManual(safeRuntime, { today: String(todayProvider()) });
+  const delegate = () => createDonorManual(safeRuntime, { today:String(todayProvider()) });
   const stable = delegate();
 
-  return new Proxy(stable, {
-    get(target, property, receiver) {
-      if (property === 'calendarToday' || property === 'calendarUpcoming' || property === 'calendarOverdue') {
-        return (...args) => delegate()[property](...args);
-      }
-      return Reflect.get(target, property, receiver);
-    },
+  return Object.freeze({
+    ...stable,
+    calendarToday:(...args) => delegate().calendarToday(...args),
+    calendarUpcoming:(...args) => delegate().calendarUpcoming(...args),
+    calendarOverdue:(...args) => delegate().calendarOverdue(...args),
   });
 }

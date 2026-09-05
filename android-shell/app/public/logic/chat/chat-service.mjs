@@ -1,5 +1,5 @@
 const CHAT_STATE_KEY = 'chat-conversation-state';
-const ROUTES = new Set(['DIRECT_COMMAND', 'LOCAL_QUERY', 'LOCAL_MULTI_GROUP', 'RECOVERY', 'PROVIDER']);
+const ROUTES = new Set(['DIRECT_COMMAND', 'LEDGER_COMMAND', 'LOCAL_QUERY', 'LOCAL_MULTI_GROUP', 'RECOVERY', 'PROVIDER']);
 
 function clone(value) { return structuredClone(value); }
 function required(value, code) { const out = String(value ?? '').trim(); if (!out) throw new Error(code); return out; }
@@ -19,7 +19,7 @@ function normalizeIntent(intent) {
   };
 }
 
-export function createChatService({ store, modules, query = null, multiGroup = null, recovery = null, provider = null, now = () => new Date().toISOString() } = {}) {
+export function createChatService({ store, modules, ledger = null, query = null, multiGroup = null, recovery = null, provider = null, now = () => new Date().toISOString() } = {}) {
   if (!store || typeof store.get !== 'function' || typeof store.put !== 'function') throw new TypeError('CHAT_STORE_REQUIRED');
   if (!modules || typeof modules.execute !== 'function') throw new TypeError('CHAT_MODULE_SERVICE_REQUIRED');
 
@@ -47,6 +47,10 @@ export function createChatService({ store, modules, query = null, multiGroup = n
 
   async function executeRoute(intent) {
     if (intent.route === 'DIRECT_COMMAND') return modules.execute(intent.payload);
+    if (intent.route === 'LEDGER_COMMAND') {
+      if (!ledger || typeof ledger.execute !== 'function') throw new Error('CHAT_LEDGER_GATEWAY_REQUIRED');
+      return ledger.execute(intent.payload);
+    }
     if (intent.route === 'LOCAL_QUERY') {
       if (typeof query !== 'function') throw new Error('CHAT_QUERY_HANDLER_REQUIRED');
       return query(intent.payload);
@@ -69,7 +73,7 @@ export function createChatService({ store, modules, query = null, multiGroup = n
   function successResult(intent, raw) {
     const accepted = new Set(['VERIFIED', 'COMMITTED', 'RECOVERED']);
     if (!accepted.has(raw?.status)) throw new Error(`CHAT_RESULT_NOT_VERIFIED:${raw?.status || 'UNKNOWN'}`);
-    if ((intent.route === 'DIRECT_COMMAND' || intent.route === 'LOCAL_MULTI_GROUP') && raw?.readback == null) {
+    if (['DIRECT_COMMAND', 'LEDGER_COMMAND', 'LOCAL_MULTI_GROUP'].includes(intent.route) && raw?.readback == null) {
       throw new Error('CHAT_MUTATION_READBACK_REQUIRED');
     }
     return {
