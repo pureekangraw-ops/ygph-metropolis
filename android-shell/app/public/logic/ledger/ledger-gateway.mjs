@@ -1,6 +1,7 @@
 import { buildSaleWorkflow } from '../domains/business-workflows.mjs';
 import { buildStoreIncomeWorkflow } from '../domains/store-income-workflow.mjs';
 import { buildRideStartRoundWorkflow, buildRideReplaceRoundWorkflow, buildRideJobWorkflow, buildRideEndRoundWorkflow } from '../domains/ride-workflows.mjs';
+import { buildOwnerAwareReverseWorkflow } from '../domains/reverse-workflow.mjs';
 
 const VERIFIED = new Set(['COMMITTED', 'RECOVERED', 'VERIFIED']);
 
@@ -40,6 +41,10 @@ function activeRideRoundIds(state) {
     .map(record => String(record.recordId));
 }
 
+function ledgerRecords(state) {
+  return Object.values(state?.domains?.LEDGER?.records || {}).map(entry => entry?.record).filter(Boolean);
+}
+
 export function createLedgerGateway({ manual, runtime } = {}) {
   manual = requiredObject(manual, 'LEDGER_GATEWAY_MANUAL_REQUIRED');
   runtime = requiredObject(runtime, 'LEDGER_GATEWAY_RUNTIME_REQUIRED');
@@ -68,9 +73,26 @@ export function createLedgerGateway({ manual, runtime } = {}) {
     return executeWorkflow(plan);
   }
 
+  async function executeReverse(payload) {
+    const state = await runtime.readState();
+    if (state == null) throw new Error('LEDGER_GATEWAY_READBACK_REQUIRED');
+    const originalRecordId = String(payload?.originalRecordId || '').trim();
+    const originalRecord = state?.domains?.LEDGER?.records?.[originalRecordId]?.record;
+    if (!originalRecord || originalRecord.type !== 'TRANSACTION') throw new Error(`TRANSACTION_NOT_FOUND:${originalRecordId}`);
+    if (originalRecord.reversalOf) throw new Error(`CANNOT_REVERSE_REVERSAL:${originalRecordId}`);
+    if (ledgerRecords(state).some(record => record?.reversalOf === originalRecordId)) throw new Error(`TRANSACTION_ALREADY_REVERSED:${originalRecordId}`);
+    return executeWorkflow(buildOwnerAwareReverseWorkflow({
+      workflowId:payload.workflowId,
+      originalRecord,
+      reversalRecordId:payload.recordId,
+      reason:payload.reason,
+    }));
+  }
+
   async function execute({ operation, payload = {} } = {}) {
     const name = String(operation || '').trim();
     if (name === 'rideStartRound') return executeRideStartRound(payload);
+    if (name === 'reverse') return executeReverse(payload);
     const builder = WORKFLOW_BUILDERS[name];
     if (builder) return executeWorkflow(builder(structuredClone(payload)));
     if (!MANUAL_MUTATION_OPERATIONS.includes(name)) throw new Error(`LEDGER_GATEWAY_OPERATION_UNSUPPORTED:${name || 'EMPTY'}`);
