@@ -19,6 +19,21 @@ function expenseRequest(request) {
     (effect?.businessDate ?? null) === (request?.fields?.businessDate ?? null);
 }
 
+function otherIncomeRequest(request) {
+  const fields = request?.fields;
+  const effect = request?.requiredResult?.effect;
+  return request?.version === '1' &&
+    request?.action === 'CREATE' &&
+    request?.object === 'OTHER_INCOME' &&
+    request?.requiredResult?.kind === 'LEDGER_TRANSACTION' &&
+    effect?.owner === 'OTHER' &&
+    effect?.direction === 'IN' &&
+    effect?.subtype === 'OTHER_INCOME' &&
+    effect?.title === fields?.title &&
+    effect?.amountSatang === fields?.amountSatang &&
+    Number.isSafeInteger(fields?.amountSatang) && fields.amountSatang > 0;
+}
+
 function storeSaleRequest(request) {
   const fields = request?.fields;
   const effect = request?.requiredResult?.effect;
@@ -56,6 +71,7 @@ function rideJobRequest(request) {
 
 function supportedRequest(request) {
   if (expenseRequest(request)) return 'EXPENSE';
+  if (otherIncomeRequest(request)) return 'OTHER_INCOME';
   if (storeSaleRequest(request)) return 'STORE_SALE';
   if (rideJobRequest(request)) return 'RIDE_JOB';
   return null;
@@ -130,6 +146,17 @@ export function createConfirmedLedgerExecutor({ manual } = {}) {
         ...(request.fields.businessDate ? { businessDate:String(request.fields.businessDate) } : {}),
       };
       return verifiedResult(await manual.addExpense(payload));
+    }
+
+    if (otherIncomeRequest(request)) {
+      if (typeof manual.addIncome !== 'function') throw new TypeError('CONFIRMED_LEDGER_ADD_INCOME_REQUIRED');
+      return verifiedResult(await manual.addIncome({
+        workflowId:ids.workflowId,
+        recordId:ids.recordId,
+        title:String(request.fields.title),
+        amountSatang:Number(request.fields.amountSatang),
+        ...(request.fields.businessDate ? { businessDate:String(request.fields.businessDate) } : {}),
+      }));
     }
 
     if (storeSaleRequest(request)) {
