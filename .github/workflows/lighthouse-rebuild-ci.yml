@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/lighthouse-1.0.0-rebuild
+      - test/ledger-gateway-full-suite-baseline-20260905
   pull_request:
     paths:
       - 'android-shell/**'
@@ -32,6 +33,8 @@ jobs:
         run: npm run pretest
       - name: Run LIGHTHOUSE WorkUnit tests
         run: node --test test/workunit*.test.mjs
+      - name: Run full Android-shell regression
+        run: npm test
 
   android-native-shell:
     name: Native Android shell
