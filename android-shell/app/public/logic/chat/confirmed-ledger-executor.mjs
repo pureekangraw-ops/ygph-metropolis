@@ -19,12 +19,50 @@ function expenseRequest(request) {
     (effect?.businessDate ?? null) === (request?.fields?.businessDate ?? null);
 }
 
+function storeSaleRequest(request) {
+  const fields = request?.fields;
+  const effect = request?.requiredResult?.effect;
+  return request?.version === '1' &&
+    request?.action === 'CREATE' &&
+    request?.object === 'STORE_SALE' &&
+    request?.requiredResult?.kind === 'STORE_SALE_WITH_LEDGER' &&
+    effect?.owner === 'STORE' &&
+    effect?.ledgerDirection === 'IN' &&
+    effect?.title === fields?.title &&
+    effect?.amountSatang === fields?.amountSatang &&
+    effect?.quantity === fields?.quantity &&
+    effect?.receivedSatang === fields?.receivedSatang &&
+    Number.isSafeInteger(fields?.amountSatang) && fields.amountSatang > 0 &&
+    Number.isSafeInteger(fields?.quantity) && fields.quantity > 0 &&
+    Number.isSafeInteger(fields?.receivedSatang) && fields.receivedSatang > 0 &&
+    fields.receivedSatang <= fields.amountSatang;
+}
+
+function rideJobRequest(request) {
+  const fields = request?.fields;
+  const effect = request?.requiredResult?.effect;
+  return request?.version === '1' &&
+    request?.action === 'CREATE' &&
+    request?.object === 'RIDE_JOB' &&
+    request?.requiredResult?.kind === 'RIDE_JOB_WITH_LEDGER' &&
+    effect?.owner === 'RIDE' &&
+    effect?.ledgerDirection === 'IN' &&
+    effect?.amountSatang === fields?.amountSatang &&
+    effect?.paymentMode === fields?.paymentMode &&
+    typeof fields?.roundId === 'string' && fields.roundId.trim() &&
+    Number.isSafeInteger(fields?.amountSatang) && fields.amountSatang > 0 &&
+    fields?.paymentMode === 'CASH';
+}
+
 function operationIds(requestId) {
   const id = String(requestId ?? '').trim();
   if (!REQUEST_ID_PATTERN.test(id)) throw new Error('CONFIRMED_LEDGER_INVALID_REQUEST_ID');
   return {
     workflowId:`WF-LH-${id}`,
     recordId:`TX-LH-${id}`,
+    ledgerTransactionId:`TX-LH-${id}`,
+    saleId:`SALE-LH-${id}`,
+    jobId:`JOB-LH-${id}`,
   };
 }
 
@@ -42,18 +80,46 @@ export function createConfirmedLedgerExecutor({ manual } = {}) {
 
   return async function executeConfirmedLedgerRequest(request) {
     request = requiredObject(request, 'CONFIRMED_LEDGER_REQUEST_REQUIRED');
-    if (!expenseRequest(request)) {
-      throw new Error(`CONFIRMED_LEDGER_REQUEST_UNSUPPORTED:${String(request.action || 'UNKNOWN')}:${String(request.object || 'UNKNOWN')}`);
+    const ids = operationIds(request.requestId);
+
+    if (expenseRequest(request)) {
+      const payload = {
+        workflowId:ids.workflowId,
+        recordId:ids.recordId,
+        title:String(request.fields.title),
+        amountSatang:Number(request.fields.amountSatang),
+        ...(request.fields.businessDate ? { businessDate:String(request.fields.businessDate) } : {}),
+      };
+      return verifiedResult(await manual.addExpense(payload));
     }
 
-    const { workflowId, recordId } = operationIds(request.requestId);
-    const payload = {
-      workflowId,
-      recordId,
-      title:String(request.fields.title),
-      amountSatang:Number(request.fields.amountSatang),
-      ...(request.fields.businessDate ? { businessDate:String(request.fields.businessDate) } : {}),
-    };
-    return verifiedResult(await manual.addExpense(payload));
+    if (storeSaleRequest(request)) {
+      if (typeof manual.storeSale !== 'function') throw new TypeError('CONFIRMED_LEDGER_STORE_SALE_REQUIRED');
+      return verifiedResult(await manual.storeSale({
+        workflowId:ids.workflowId,
+        saleId:ids.saleId,
+        ledgerTransactionId:ids.ledgerTransactionId,
+        title:String(request.fields.title),
+        amountSatang:Number(request.fields.amountSatang),
+        quantity:Number(request.fields.quantity),
+        receivedSatang:Number(request.fields.receivedSatang),
+        storeCostSatang:Number(request.fields.storeCostSatang ?? 0),
+      }));
+    }
+
+    if (rideJobRequest(request)) {
+      if (typeof manual.rideJob !== 'function') throw new TypeError('CONFIRMED_LEDGER_RIDE_JOB_REQUIRED');
+      return verifiedResult(await manual.rideJob({
+        workflowId:ids.workflowId,
+        roundId:String(request.fields.roundId),
+        jobId:ids.jobId,
+        ledgerTransactionId:ids.ledgerTransactionId,
+        amountSatang:Number(request.fields.amountSatang),
+        paymentMode:'CASH',
+        note:String(request.fields.note ?? ''),
+      }));
+    }
+
+    throw new Error(`CONFIRMED_LEDGER_REQUEST_UNSUPPORTED:${String(request.action || 'UNKNOWN')}:${String(request.object || 'UNKNOWN')}`);
   };
 }
