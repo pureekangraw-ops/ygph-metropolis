@@ -1,5 +1,7 @@
 import { createAppServices } from './app-services.mjs';
 import { createManualFourHouses } from '../logic/manual/manual-four-houses.mjs';
+import { createManualLedgerFacade } from '../logic/manual/manual-ledger-facade.mjs';
+import { createLedgerGateway } from '../logic/ledger/ledger-gateway.mjs';
 import { createModuleControlPlane } from '../logic/modules/module-control-plane.mjs';
 import { createBundledModuleServices } from '../logic/modules/bundled-module-services.mjs';
 import { createChatService } from '../logic/chat/chat-service.mjs';
@@ -37,7 +39,9 @@ export async function createStableAppServices({
   if (typeof now !== 'function') throw new TypeError('STABLE_NOW_PROVIDER_REQUIRED');
 
   const store = runtime.metadataStore();
-  const manual = createManualFourHouses(runtime);
+  const manualOwner = createManualFourHouses(runtime);
+  const ledgerGateway = createLedgerGateway({ manual:manualOwner, runtime });
+  const manual = createManualLedgerFacade({ manual:manualOwner, gateway:ledgerGateway });
   const control = createModuleControlPlane({ store, now });
   await control.initialize();
   const apps = createBundledModuleServices({ manual });
@@ -52,19 +56,12 @@ export async function createStableAppServices({
     apps,
   });
 
-  async function multiGroup(payload) {
-    const commands = Array.isArray(payload) ? payload : payload?.commands;
-    if (!Array.isArray(commands) || commands.length === 0) throw new Error('CHAT_MULTI_GROUP_COMMANDS_REQUIRED');
-    const result = await runtime.executeMultiGroupCommands(commands);
-    const readback = result?.state ?? await runtime.readState();
-    return { ...result, readback:structuredClone(readback) };
-  }
-
   const chat = createChatService({
     store,
     modules,
+    ledger:ledgerGateway,
     query,
-    multiGroup,
+    multiGroup:ledgerGateway.executeWorkflow,
     recovery,
     provider,
     now,
