@@ -34,6 +34,22 @@ function otherIncomeRequest(request) {
     Number.isSafeInteger(fields?.amountSatang) && fields.amountSatang > 0;
 }
 
+function storeIncomeRequest(request) {
+  const fields = request?.fields;
+  const effect = request?.requiredResult?.effect;
+  return request?.version === '1' &&
+    request?.action === 'CREATE' &&
+    request?.object === 'STORE_INCOME' &&
+    request?.requiredResult?.kind === 'STORE_INCOME_WITH_LEDGER' &&
+    effect?.owner === 'STORE' &&
+    effect?.ledgerDirection === 'IN' &&
+    effect?.stockEffect === 'NONE' &&
+    effect?.title === fields?.title &&
+    effect?.amountSatang === fields?.amountSatang &&
+    fields?.quantity == null &&
+    Number.isSafeInteger(fields?.amountSatang) && fields.amountSatang > 0;
+}
+
 function storeSaleRequest(request) {
   const fields = request?.fields;
   const effect = request?.requiredResult?.effect;
@@ -72,6 +88,7 @@ function rideJobRequest(request) {
 function supportedRequest(request) {
   if (expenseRequest(request)) return 'EXPENSE';
   if (otherIncomeRequest(request)) return 'OTHER_INCOME';
+  if (storeIncomeRequest(request)) return 'STORE_INCOME';
   if (storeSaleRequest(request)) return 'STORE_SALE';
   if (rideJobRequest(request)) return 'RIDE_JOB';
   return null;
@@ -84,6 +101,7 @@ function operationIds(requestId) {
     workflowId:`WF-LH-${id}`,
     recordId:`TX-LH-${id}`,
     ledgerTransactionId:`TX-LH-${id}`,
+    storeIncomeId:`STORE-INCOME-LH-${id}`,
     saleId:`SALE-LH-${id}`,
     jobId:`JOB-LH-${id}`,
   };
@@ -156,6 +174,17 @@ export function createConfirmedLedgerExecutor({ manual } = {}) {
         title:String(request.fields.title),
         amountSatang:Number(request.fields.amountSatang),
         ...(request.fields.businessDate ? { businessDate:String(request.fields.businessDate) } : {}),
+      }));
+    }
+
+    if (storeIncomeRequest(request)) {
+      if (typeof manual.storeIncome !== 'function') throw new TypeError('CONFIRMED_LEDGER_STORE_INCOME_REQUIRED');
+      return verifiedResult(await manual.storeIncome({
+        workflowId:ids.workflowId,
+        storeIncomeId:ids.storeIncomeId,
+        ledgerTransactionId:ids.ledgerTransactionId,
+        title:String(request.fields.title),
+        amountSatang:Number(request.fields.amountSatang),
       }));
     }
 
