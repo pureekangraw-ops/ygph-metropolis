@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createGreenfieldState } from '../../greenfield/core.mjs';
 import { createMemoryVaultStore, commitEncryptedState } from '../../greenfield/persistence.mjs';
 import { createCanonicalGreenfieldRuntime } from '../../greenfield/canonical-runtime-bridge.mjs';
+import { buildStockAdjustmentWorkflow } from '../app/public/logic/domains/business-workflows.mjs';
 import { createChatService } from '../app/public/logic/chat/chat-service.mjs';
 import { createStableAppServices } from '../app/public/app/stable-service-composition.mjs';
 
@@ -23,6 +24,17 @@ async function runtimeFixture() {
   const state = createGreenfieldState({ now:NOW });
   await commitEncryptedState({ store, passphrase:PASSPHRASE, state, expectedDurableRevision:null });
   return createCanonicalGreenfieldRuntime({ store, passphrase:PASSPHRASE, lockManager:null, now:() => NOW });
+}
+
+async function seedStoreStock(runtime, suffix) {
+  const workflow = buildStockAdjustmentWorkflow({
+    workflowId:`WF-SEED-STOCK-${suffix}`,
+    recordId:`STOCK-SEED-${suffix}`,
+    title:'training fixture stock',
+    deltaQuantity:1,
+    reason:'test fixture',
+  });
+  await runtime.executeMultiGroupCommands(workflow.commands);
 }
 
 function externalOwners() {
@@ -105,6 +117,7 @@ test('stable composition wires Manual facade and CHAT through one internal Ledge
 
 test('Store sale enters through Ledger Gateway while Store remains the record owner', async () => {
   const runtime = await runtimeFixture();
+  await seedStoreStock(runtime, 'MANUAL');
   const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
 
   const result = await services.manual.storeSale({
@@ -147,6 +160,7 @@ test('Ride job enters through Ledger Gateway and stays RIDE-owned, never Outcome
 
 test('CHAT Store sale uses the same Ledger Gateway behavior as MANUAL', async () => {
   const runtime = await runtimeFixture();
+  await seedStoreStock(runtime, 'CHAT');
   const services = await createStableAppServices({ runtime, ...externalOwners(), now:() => NOW });
   const response = await services.chat.dispatch({
     requestId:'REQ-GATEWAY-STORE-CHAT',
