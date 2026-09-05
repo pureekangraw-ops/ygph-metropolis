@@ -39,14 +39,16 @@ test('Store non-sale income commits durable STORE + Ledger truth with no quantit
     amountSatang:30000,
   });
   assert.equal(result.status, 'VERIFIED');
-  assert.equal(result.readback.owner, 'STORE');
+  const readbackStore = result.readback?.domains?.STORE?.records?.['STORE-INCOME-DURABLE-1']?.record;
+  assert.equal(readbackStore?.source, 'STORE');
   const durable = await runtime.readState();
   const storeRecord = durable.domains.STORE.records['STORE-INCOME-DURABLE-1']?.record;
   const ledgerRecord = durable.domains.LEDGER.records['TX-STORE-INCOME-DURABLE-1']?.record;
+  assert.equal(storeRecord?.source, 'STORE');
   assert.equal(storeRecord?.type, 'INCOME');
   assert.equal(storeRecord?.amountSatang, 30000);
   assert.equal(Object.hasOwn(storeRecord, 'quantity'), false);
   assert.equal(ledgerRecord?.direction, 'IN');
-  assert.equal(ledgerRecord?.subtype, 'STORE_INCOME');
+  assert.equal(ledgerRecord?.detail, 'IN:STORE_INCOME');
   assert.equal(ledgerRecord?.sourceRef, 'STORE/STORE-INCOME-DURABLE-1');
 });
