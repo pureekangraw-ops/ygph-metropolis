@@ -7,6 +7,7 @@ import {
   withRuntimeSession,
 } from './source/greenfield/runtime-session.mjs';
 import { createStableAppServices } from './source/app/app/stable-service-composition.mjs';
+import { mountStableUi } from './source/app/ui/stable-ui-host.mjs';
 import { routeMasterInputText } from './source/lighthouse/master-input-route.mjs';
 import {
   createRecoverySession,
@@ -222,17 +223,17 @@ export function buildDurableRestoreNotice(state) {
 export function renderDurableRestoreNotice(documentRef, notice) {
   const message = String(notice ?? '').trim();
   if (!documentRef || !message) return false;
-  const log = documentRef.querySelector?.('[data-chat-log]');
+  const log = documentRef.querySelector?.('[data-chat-log], [data-role="stable-chat-log"]');
   if (!log) return false;
   const existing = log.querySelector?.('[data-durable-restore]');
   if (existing) {
     existing.textContent = message;
     return true;
   }
-  const empty = log.querySelector?.('[data-empty-state]');
+  const empty = log.querySelector?.('[data-empty-state], [data-empty-chat]');
   if (empty) empty.hidden = true;
   const node = documentRef.createElement('div');
-  node.className = 'message message-lighthouse';
+  node.className = 'message message-lighthouse stable-chat-item';
   node.setAttribute('data-durable-restore', '');
   node.textContent = message;
   log.append(node);
@@ -400,15 +401,6 @@ function authShell(documentRef, { title, copy, setup = false } = {}) {
   return overlay;
 }
 
-async function startTrustedPatchRuntime({ documentRef, indexedDBImpl, brain }) {
-  const { startPatchRuntime } = await import('../patch/patch-runtime.mjs');
-  return startPatchRuntime({
-    documentRef,
-    indexedDB:indexedDBImpl,
-    trustedBrain:brain,
-  });
-}
-
 export async function bootstrapTrustedApp({
   documentRef = globalThis.document,
   indexedDBImpl = globalThis.indexedDB,
@@ -446,12 +438,14 @@ export async function bootstrapTrustedApp({
   pinInput?.focus();
 
   let trustedSession = null;
-  let patchRuntime = null;
+  let stableUi = null;
   let disposed = false;
 
   const close = () => {
     if (disposed) return;
     disposed = true;
+    stableUi?.close();
+    stableUi = null;
     trustedSession?.close();
     trustedSession = null;
     overlay.remove();
@@ -482,15 +476,17 @@ export async function bootstrapTrustedApp({
         confirmTextImpl,
         documentRef,
       });
-      patchRuntime = await startTrustedPatchRuntime({
-        documentRef,
-        indexedDBImpl,
-        brain:trustedSession.brain,
+      stableUi = await mountStableUi({
+        window:documentRef.defaultView || globalThis.window,
+        document:documentRef,
+        services:trustedSession.services,
       });
       const restoreNotice = buildDurableRestoreNotice(await trustedSession.runtime.readState());
       renderDurableRestoreNotice(documentRef, restoreNotice);
       overlay.remove();
     } catch (error) {
+      stableUi?.close();
+      stableUi = null;
       trustedSession?.close();
       trustedSession = null;
       status.textContent = errorText(error);
@@ -501,7 +497,7 @@ export async function bootstrapTrustedApp({
   return frozen({
     status:setup ? 'SETUP_REQUIRED' : 'UNLOCK_REQUIRED',
     close,
-    get patchRuntime() { return patchRuntime; },
+    get stableUi() { return stableUi; },
   });
 }
 
