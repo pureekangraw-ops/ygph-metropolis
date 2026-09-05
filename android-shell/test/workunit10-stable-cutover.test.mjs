@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { JSDOM } from 'jsdom';
 import { indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import { createGreenfieldState } from '../../greenfield/core.mjs';
 import { createMemoryVaultStore, commitEncryptedState } from '../../greenfield/persistence.mjs';
@@ -48,6 +49,15 @@ function externalOwners() {
 async function loadComposition() {
   try {
     return await import('../app/public/app/stable-service-composition.mjs');
+  } catch (error) {
+    if (error?.code === 'ERR_MODULE_NOT_FOUND') return null;
+    throw error;
+  }
+}
+
+async function loadStableUiHost() {
+  try {
+    return await import('../app/public/ui/stable-ui-host.mjs');
   } catch (error) {
     if (error?.code === 'ERR_MODULE_NOT_FOUND') return null;
     throw error;
@@ -189,4 +199,43 @@ test('stable bootstrap composes packaged canonical services and exposes them on 
 
   assert.deepEqual(Object.keys(session.services || {}).sort(), ['backup','chat','events','manual','modules','recovery','session','updates']);
   assert.deepEqual((await session.services.modules.list()).map(item => item.moduleId), ['income','outcome','calendar','ledger']);
+});
+
+test('canonical UI host owns root navigation and renders MANUAL from the canonical module registry', async () => {
+  const ui = await loadStableUiHost();
+  assert.equal(typeof ui?.mountStableUi, 'function');
+
+  const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url:'https://lighthouse.local/' });
+  Object.defineProperty(dom.window, 'visualViewport', {
+    configurable:true,
+    value:{ height:720, addEventListener(){}, removeEventListener(){} },
+  });
+  const calls = [];
+  const services = {
+    modules:{
+      async list() {
+        calls.push('list');
+        return [
+          { moduleId:'income', name:'Income', version:'1.0.0' },
+          { moduleId:'outcome', name:'Outcome', version:'1.0.0' },
+          { moduleId:'calendar', name:'Calendar', version:'1.0.0' },
+          { moduleId:'ledger', name:'Ledger', version:'1.0.0' },
+        ];
+      },
+      async open({ moduleId }) {
+        return { opened:true, descriptor:{ moduleId, name:moduleId }, revision:1 };
+      },
+    },
+    chat:{ getState:async () => ({ revision:1, requests:{}, order:[] }), dispatch:async () => ({ status:'SUCCESS', result:{ status:'VERIFIED', readback:{} } }) },
+    session:{ lock:async () => ({ status:'LOCKED' }) },
+    backup:{ exportBackup:async () => ({}) },
+    updates:{ snapshot:async () => ({ state:'CHECKING' }) },
+  };
+
+  const host = await ui.mountStableUi({ window:dom.window, document:dom.window.document, services });
+  const tabs = [...dom.window.document.querySelectorAll('[data-role="bottom-nav"] [data-tab]')].map(node => node.dataset.tab);
+  assert.deepEqual(tabs, ['CHAT','MANUAL','SETTINGS']);
+  await host.selectRoot('MANUAL');
+  assert.deepEqual(calls, ['list']);
+  assert.deepEqual([...dom.window.document.querySelectorAll('[data-module-id]')].map(node => node.dataset.moduleId), ['income','outcome','calendar','ledger']);
 });
