@@ -23,6 +23,13 @@ function requestId(factory) {
   return factory();
 }
 
+function storeSaleTitle(target) {
+  if (typeof target !== 'string') return null;
+  const match = /^ขาย\s*(.+)$/u.exec(target.trim());
+  const title = match?.[1]?.trim() ?? '';
+  return title || null;
+}
+
 function queryMeaningRepresented(rawText, group, temporal) {
   // Remove only owned spans. Any unrepresented unit/time/context must survive
   // this check instead of being silently discarded to produce a search match.
@@ -82,9 +89,10 @@ export function prepareIntentPath(rawText, options = {}) {
 
   const targetSlot = slot(group, 'TARGET');
   const moneySlot = slot(group, 'MONEY');
-  const title = typeof targetSlot?.resolvedValue === 'string' ? targetSlot.resolvedValue.trim() : '';
+  const quantitySlot = slot(group, 'QUANTITY');
+  const rawTitle = typeof targetSlot?.resolvedValue === 'string' ? targetSlot.resolvedValue.trim() : '';
   const amountSatang = moneySlot?.resolvedValue?.amountSatang;
-  if (!title || !Number.isSafeInteger(amountSatang) || amountSatang <= 0) {
+  if (!rawTitle || !Number.isSafeInteger(amountSatang) || amountSatang <= 0) {
     return stopped('RECOVERY_REQUIRED', 'INTENT_REQUIRED_SLOT_UNRESOLVED', {
       parsed,
       group,
@@ -93,7 +101,61 @@ export function prepareIntentPath(rawText, options = {}) {
     });
   }
 
-  if (!DIRECT_EXPENSE_TERMS.has(title)) {
+  const storeTitle = storeSaleTitle(rawTitle);
+  if (storeTitle) {
+    if (group.intent !== 'COMMAND') {
+      return stopped('UNSUPPORTED', 'STORE_QUERY_NOT_CONNECTED', {
+        parsed,
+        group,
+        condition:group.condition ?? null,
+        temporal,
+      });
+    }
+    const quantity = quantitySlot?.resolvedValue?.value;
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      return stopped('RECOVERY_REQUIRED', 'STORE_QUANTITY_REQUIRED', {
+        parsed,
+        group,
+        condition:group.condition ?? null,
+        temporal,
+      });
+    }
+    const request = validatePathRequest({
+      version:'1',
+      source:'PATTERN',
+      requestId:requestId(options.requestIdFactory),
+      action:'CREATE',
+      object:'STORE_SALE',
+      fields:{
+        title:storeTitle,
+        amountSatang,
+        quantity,
+        receivedSatang:amountSatang,
+      },
+      requiredResult:{
+        kind:'STORE_SALE_WITH_LEDGER',
+        effect:{
+          owner:'STORE',
+          ledgerDirection:'IN',
+          title:storeTitle,
+          amountSatang,
+          quantity,
+          receivedSatang:amountSatang,
+        },
+      },
+    });
+    return frozenResult({
+      status:'READY',
+      reason:null,
+      request,
+      parsed,
+      group,
+      condition:group.condition ?? null,
+      temporal,
+    });
+  }
+
+  if (!DIRECT_EXPENSE_TERMS.has(rawTitle)) {
     return stopped('UNSUPPORTED', 'NO_CONNECTED_DIRECT_CAPABILITY', {
       parsed,
       group,
@@ -111,7 +173,7 @@ export function prepareIntentPath(rawText, options = {}) {
       status:'QUERY', reason:null, request:null, parsed, group, condition:null, temporal,
       intent:Object.freeze({
         version:'1', status:'READY', action:'QUERY', object:'EXPENSE',
-        fields:Object.freeze({ title, amountSatang, ...(businessDate ? { businessDate } : {}) }),
+        fields:Object.freeze({ title:rawTitle, amountSatang, ...(businessDate ? { businessDate } : {}) }),
       }),
     });
   }
@@ -122,7 +184,7 @@ export function prepareIntentPath(rawText, options = {}) {
     action:'CREATE',
     object:'EXPENSE',
     fields:{
-      title,
+      title:rawTitle,
       amountSatang,
       ...(businessDate ? { businessDate } : {}),
     },
@@ -131,7 +193,7 @@ export function prepareIntentPath(rawText, options = {}) {
       effect:{
         direction:'OUT',
         subtype:'EXPENSE',
-        title,
+        title:rawTitle,
         amountSatang,
         ...(businessDate ? { businessDate } : {}),
       },
