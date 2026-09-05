@@ -20,6 +20,17 @@ export function buildRideStartRoundWorkflow({ workflowId, roundId }) {
   return { workflowId, commands:[command(workflowId, 1, 'RIDE', 'RIDE_START_ROUND', { roundId }, `RIDE:${roundId}:START`)] };
 }
 
+export function buildRideReplaceRoundWorkflow({ workflowId, activeRoundId, roundId }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  activeRoundId = text(activeRoundId, 'INVALID_ACTIVE_RIDE_ROUND_ID');
+  roundId = text(roundId, 'INVALID_RIDE_ROUND_ID');
+  if (activeRoundId === roundId) throw new Error(`RIDE_REPLACEMENT_SAME_ROUND:${roundId}`);
+  return { workflowId, commands:[
+    command(workflowId, 1, 'RIDE', 'RIDE_END_ROUND', { roundId:activeRoundId }, `RIDE:${activeRoundId}:END`),
+    command(workflowId, 2, 'RIDE', 'RIDE_START_ROUND', { roundId }, `RIDE:${roundId}:START`),
+  ] };
+}
+
 export function buildRideEndRoundWorkflow({ workflowId, roundId }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   roundId = text(roundId, 'INVALID_RIDE_ROUND_ID');
