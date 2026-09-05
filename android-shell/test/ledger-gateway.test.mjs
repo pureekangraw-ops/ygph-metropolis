@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLedgerGateway } from '../app/public/logic/ledger/ledger-gateway.mjs';
+import { createManualLedgerFacade } from '../app/public/logic/manual/manual-ledger-facade.mjs';
 
 function fixture({ manualResult = { status:'VERIFIED', readback:{ recordId:'TX-1' } }, workflowResult = { status:'COMMITTED', state:{ revision:2 } } } = {}) {
   const calls = [];
@@ -58,4 +59,30 @@ test('gateway wraps legacy multi-group execution with durable readback', async (
   assert.equal(result.status, 'COMMITTED');
   assert.equal(result.readback.revision, 3);
   assert.deepEqual(calls.at(-1), ['readState']);
+});
+
+const MUTATIONS = [
+  'addIncome', 'setTarget', 'editTarget', 'createReceivable', 'receiveReceivable',
+  'addExpense', 'setCeiling', 'editCeiling', 'createObligation', 'payObligation',
+  'refund', 'reverse', 'createCalendarItem', 'editCalendar', 'rescheduleCalendar',
+  'completeCalendar', 'cancelCalendar', 'editLedgerMetadata', 'cancelExpected',
+];
+
+test('Manual facade sends every mutation through Ledger Gateway while reads stay on Manual owner', async () => {
+  const routed = [];
+  const manual = {
+    async dashboard() { return { balanceSatang:1254000 }; },
+    ...Object.fromEntries(MUTATIONS.map(name => [name, async () => { throw new Error(`BYPASS:${name}`); }])),
+  };
+  const gateway = {
+    async execute(input) { routed.push(structuredClone(input)); return { status:'VERIFIED', readback:{ operation:input.operation } }; },
+  };
+  const facade = createManualLedgerFacade({ manual, gateway });
+
+  for (const name of MUTATIONS) {
+    const result = await facade[name]({ marker:name });
+    assert.equal(result.readback.operation, name);
+  }
+  assert.deepEqual(await facade.dashboard(), { balanceSatang:1254000 });
+  assert.deepEqual(routed.map(item => item.operation), MUTATIONS);
 });
