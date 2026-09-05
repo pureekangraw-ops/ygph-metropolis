@@ -54,6 +54,13 @@ function rideJobRequest(request) {
     fields?.paymentMode === 'CASH';
 }
 
+function supportedRequest(request) {
+  if (expenseRequest(request)) return 'EXPENSE';
+  if (storeSaleRequest(request)) return 'STORE_SALE';
+  if (rideJobRequest(request)) return 'RIDE_JOB';
+  return null;
+}
+
 function operationIds(requestId) {
   const id = String(requestId ?? '').trim();
   if (!REQUEST_ID_PATTERN.test(id)) throw new Error('CONFIRMED_LEDGER_INVALID_REQUEST_ID');
@@ -72,6 +79,38 @@ function verifiedResult(result) {
   }
   if (result.readback == null) throw new Error('CONFIRMED_LEDGER_READBACK_REQUIRED');
   return Object.freeze({ status:'SUCCESS', readback:structuredClone(result.readback) });
+}
+
+export function preflightConfirmedLedgerRequest(request) {
+  try {
+    request = requiredObject(request, 'CONFIRMED_LEDGER_REQUEST_REQUIRED');
+    operationIds(request.requestId);
+    const object = supportedRequest(request);
+    if (!object) {
+      return Object.freeze({
+        status:'BLOCKED',
+        route:null,
+        capabilityId:null,
+        source:request?.source ?? null,
+        reason:`CONFIRMED_LEDGER_REQUEST_UNSUPPORTED:${String(request.action || 'UNKNOWN')}:${String(request.object || 'UNKNOWN')}`,
+      });
+    }
+    return Object.freeze({
+      status:'READY',
+      route:'LEDGER_GATEWAY',
+      capabilityId:`CONFIRMED_LEDGER_${object}`,
+      source:request?.source ?? null,
+      reason:null,
+    });
+  } catch (error) {
+    return Object.freeze({
+      status:'BLOCKED',
+      route:null,
+      capabilityId:null,
+      source:request?.source ?? null,
+      reason:String(error?.message || error || 'CONFIRMED_LEDGER_PREFLIGHT_FAILED'),
+    });
+  }
 }
 
 export function createConfirmedLedgerExecutor({ manual } = {}) {
