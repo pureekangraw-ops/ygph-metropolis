@@ -36,6 +36,7 @@ export function createTrustedBrainGate({
   brain,
   now = () => new Date().toISOString(),
   recordErrorEvent = null,
+  executeConfirmed = null,
 } = {}) {
   if (!brain || typeof brain.send !== 'function' || typeof brain.execute !== 'function') {
     throw new TypeError('TRUSTED_BRAIN_GATE_BRAIN_REQUIRED');
@@ -43,6 +44,9 @@ export function createTrustedBrainGate({
   if (typeof now !== 'function') throw new TypeError('TRUSTED_BRAIN_GATE_NOW_REQUIRED');
   if (recordErrorEvent != null && typeof recordErrorEvent !== 'function') {
     throw new TypeError('TRUSTED_BRAIN_ERROR_RECORDER_INVALID');
+  }
+  if (executeConfirmed != null && typeof executeConfirmed !== 'function') {
+    throw new TypeError('TRUSTED_BRAIN_CONFIRMED_EXECUTOR_INVALID');
   }
 
   let pending = null;
@@ -91,7 +95,12 @@ export function createTrustedBrainGate({
     try {
       let result;
       try {
-        result = await brain.execute();
+        if (executeConfirmed) {
+          if (!pending.request) result = stopped('ERROR', 'TRUSTED_CONFIRMATION_REQUEST_REQUIRED');
+          else result = await executeConfirmed(structuredClone(pending.request));
+        } else {
+          result = await brain.execute();
+        }
       } catch (error) {
         result = stopped('ERROR', errorReason(error));
       }
@@ -121,7 +130,13 @@ export function createTrustedBrainGate({
     if (result?.status === 'READY') {
       const preview = frozen({ ...(result.preview ?? {}) });
       const question = confirmationQuestion(preview);
-      pending = frozen({ preview, question, command, appVersion });
+      pending = frozen({
+        preview,
+        question,
+        request:result.request ? structuredClone(result.request) : null,
+        command,
+        appVersion,
+      });
       return frozen({ status:'CONFIRMATION_REQUIRED', preview, question });
     }
 
