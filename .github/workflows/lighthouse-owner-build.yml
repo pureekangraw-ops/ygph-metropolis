@@ -42,11 +42,14 @@ jobs:
       - name: Install Capacitor dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Stage existing repository application
-        run: npm run app:stage-existing
+      - name: Sync trusted packaged sources
+        run: npm run pretest
 
       - name: Run canonical WorkUnit contracts
-        run: npm test
+        run: node --test test/workunit*.test.mjs
+
+      - name: Stage existing repository application
+        run: npm run app:stage-existing
 
       - name: Generate Android project
         run: npx cap add android
