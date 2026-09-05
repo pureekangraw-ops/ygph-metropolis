@@ -6,7 +6,7 @@ on:
       target_ref:
         description: Branch or commit to build
         required: true
-        default: codex/package-existing-full-app-20260902
+        default: feat/lighthouse-1.0.0-rebuild
         type: string
 
 permissions:
@@ -105,16 +105,25 @@ jobs:
           echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
           echo "AAPT=$aapt" >> "$GITHUB_ENV"
 
-      - name: Verify final APK identity
-        run: APK_SOURCE_COMMIT="$(git rev-parse HEAD)" node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
+      - name: Verify final APK identity and build provenance
+        env:
+          APK_SOURCE_REPOSITORY: ${{ github.repository }}
+          APK_SOURCE_REF: ${{ inputs.target_ref }}
+          APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          export APK_SOURCE_COMMIT="$(git rev-parse HEAD)"
+          export APK_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
 
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-existing-full-app-1.0.3
+          name: lighthouse-1.0.0-candidate
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
+            android-shell/IP-NOTICE.md
           if-no-files-found: error
           retention-days: 14
