@@ -6,7 +6,6 @@ const repoRoot = resolve(shellRoot, '..');
 const wwwRoot = resolve(shellRoot, 'www');
 
 const requiredFiles = [
-  'index.html',
   'app.mjs',
   'styles.css',
   'manifest.webmanifest',
@@ -41,14 +40,19 @@ async function copyRequired(relative) {
 
 await mkdir(wwwRoot, { recursive: true });
 
-// Remove only previous staged/replacement application assets. Trust and Patch
-// directories are deliberately preserved as Android-owned infrastructure.
+// index.html is Android-owned infrastructure: it boots trusted/bootstrap.mjs.
+// Never replace it with the repository web shell during staging.
+if (!(await exists(resolve(wwwRoot, 'index.html')))) {
+  throw new Error('ANDROID_CANONICAL_ENTRYPOINT_MISSING:index.html');
+}
+
+// Remove only previous staged/replacement application assets. Trust, Patch,
+// and the canonical Android entrypoint are deliberately preserved.
 for (const relative of [
   'app',
   'ui',
   'greenfield',
   'lighthouse',
-  'index.html',
   'app.mjs',
   'styles.css',
   'manifest.webmanifest',
@@ -67,4 +71,4 @@ for (const relative of optionalFiles) {
   }
 }
 
-console.log('Staged existing repository application into android-shell/www');
+console.log('Staged repository application assets while preserving canonical Android entrypoint');
