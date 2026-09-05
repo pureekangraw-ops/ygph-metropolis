@@ -30,6 +30,12 @@ async function fixture() {
   return { runtime, services };
 }
 
+async function seedStoreStock(runtime, quantity = 1) {
+  await runtime.executeMultiGroupCommands([{ commandId:'SEED-STOCK:1', idempotencyKey:'SEED-STOCK:1', domain:'STORE', type:'STORE_CREATE_RECORD', payload:{ record:{
+    recordId:'SEED-STOCK', type:'STOCK_ADJUSTMENT', title:'test stock', amountSatang:null, quantity, status:'COMPLETED',
+  } } }]);
+}
+
 async function assertNoFakeIncomeOrOutcome(services) {
   const income = await services.manual.incomeSummary();
   const outcome = await services.manual.outcomeSummary();
@@ -39,6 +45,7 @@ async function assertNoFakeIncomeOrOutcome(services) {
 
 test('reversing a Store sale propagates cancellation to Store truth and projections', async () => {
   const { runtime, services } = await fixture();
+  await seedStoreStock(runtime, 1);
   await services.manual.storeSale({
     workflowId:'WF-SALE-REV-1', saleId:'SALE-REV-1', ledgerTransactionId:'TX-SALE-REV-1',
     title:'ขายสบู่', amountSatang:50000, quantity:1, receivedSatang:50000, storeCostSatang:0,
