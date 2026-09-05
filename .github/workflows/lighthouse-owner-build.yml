@@ -45,8 +45,8 @@ jobs:
       - name: Stage existing repository application
         run: npm run app:stage-existing
 
-      - name: Prove Android package is existing app, not replacement UI
-        run: node --test test/existing-full-app-package.test.mjs
+      - name: Run canonical WorkUnit contracts
+        run: npm test
 
       - name: Generate Android project
         run: npx cap add android
