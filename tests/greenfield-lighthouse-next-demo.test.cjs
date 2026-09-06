@@ -149,3 +149,36 @@ test('LIGHTHOUSE staging uses the owner-locked lighthouse artwork as app identit
   assert.match(manifest, /"name"\s*:\s*"LIGHTHOUSE"/);
   assert.match(manifest, /lighthouse-icon\.svg/);
 });
+
+test('Dashboard renders current demo cash truth from the shared state', () => {
+  const html = read(htmlPath);
+  const app = read(appPath);
+  for (const id of ['home-cash-value', 'home-income-value', 'home-expense-value', 'home-net-value']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(app, /function renderHomeTruth\(/);
+  assert.match(app, /state\.cash/);
+  assert.match(app, /state\.todayIncome/);
+  assert.match(app, /state\.todayExpense/);
+});
+
+test('MANUAL Store and History render the same products and transactions state', () => {
+  const app = read(appPath);
+  assert.match(app, /function renderStoreDetail\(/);
+  assert.match(app, /function renderHistoryDetail\(/);
+  assert.match(app, /state\.products/);
+  assert.match(app, /state\.transactions/);
+  assert.match(app, /เหลือ.*ชิ้น/);
+});
+
+test('sale cancellation is confirmed, append-only, and protected from double reversal', () => {
+  const app = read(appPath);
+  assert.match(app, /function ensureSaleReversalDialog\(/);
+  assert.match(app, /ยกเลิกรายการ/);
+  assert.match(app, /CANCELLED/);
+  assert.match(app, /REVERSAL/);
+  assert.match(app, /reversalOf/);
+  assert.match(app, /showModal\(/);
+  assert.doesNotMatch(app, /transactions\.splice\(/);
+  assert.doesNotMatch(app, /transactions\s*=\s*state\.transactions\.filter/);
+});
