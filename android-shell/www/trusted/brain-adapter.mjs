@@ -125,6 +125,7 @@ export function createTrustedBrainAdapter({
   rejoinRecoverySession,
   pathKernel,
   requestPreflight = null,
+  sideQueryHandler = null,
   withRuntimeSession,
   requestIdFactory,
   inputIdFactory,
@@ -140,6 +141,9 @@ export function createTrustedBrainAdapter({
   }
   if (requestPreflight != null && typeof requestPreflight !== 'function') {
     throw new TypeError('TRUSTED_BRAIN_REQUEST_PREFLIGHT_INVALID');
+  }
+  if (sideQueryHandler != null && typeof sideQueryHandler !== 'function') {
+    throw new TypeError('TRUSTED_BRAIN_SIDE_QUERY_HANDLER_INVALID');
   }
   if (typeof withRuntimeSession !== 'function') throw new TypeError('TRUSTED_BRAIN_RUNTIME_SESSION_REQUIRED');
   if (typeof requestIdFactory !== 'function') throw new TypeError('TRUSTED_BRAIN_REQUEST_ID_FACTORY_REQUIRED');
@@ -170,6 +174,14 @@ export function createTrustedBrainAdapter({
     recoverySession = null;
     if (!preserveIncomeConversation) incomeConversation = null;
     return readyResult(request);
+  }
+
+  async function trySideQuery(rawText) {
+    if (!sideQueryHandler) return null;
+    const result = await sideQueryHandler(rawText);
+    if (!result) return null;
+    if (result?.status !== 'SUCCESS' || result?.readback?.interactionStatus !== 'SIDE_QUERY_ANSWERED') return null;
+    return frozen(structuredClone(result));
   }
 
   function mapRoute(routed, baseRevision) {
@@ -277,6 +289,8 @@ export function createTrustedBrainAdapter({
         incomeConversation = { kind:'RIDE_OPEN', amountSatang:conversation.amountSatang };
         return clarificationResult(noRideRoundQuestion(), ['เปิดรอบ', 'ยกเลิก']);
       }
+      const sideQuery = await trySideQuery(answer);
+      if (sideQuery) return sideQuery;
       return clarificationResult(sourceQuestion(conversation.amountSatang), ['ร้าน', 'วิ่ง', 'อย่างอื่น']);
     }
 
