@@ -101,3 +101,48 @@ test('demo staging is isolated from the production asset allowlist and verifies 
   assert.match(workflow, /https:\/\/lighthouse-next-staging\.pureekangraw\.workers\.dev/);
   assert.match(workflow, /LIGHTHOUSE/);
 });
+
+test('registered product sale parser locks product then value then quantity', async () => {
+  const parserPath = path.join(root, 'lighthouse-next/store-sale.mjs');
+  assert.equal(fs.existsSync(parserPath), true, 'missing lighthouse-next/store-sale.mjs');
+  const { parseStoreSale } = await import(parserPath);
+  const products = [
+    { id: 'phone', name: 'มือถือ', aliases: ['โทรศัพท์', 'โทสับ'] },
+    { id: 'case', name: 'เคสมือถือ', aliases: ['เคส'] },
+  ];
+
+  assert.deepEqual(parseStoreSale('ขายมือถือ 566', products), {
+    productId: 'phone', productName: 'มือถือ', value: 566, quantity: null,
+  });
+  assert.deepEqual(parseStoreSale('ขายมือถือ 566 2', products), {
+    productId: 'phone', productName: 'มือถือ', value: 566, quantity: 2,
+  });
+  assert.deepEqual(parseStoreSale('ขายเคสมือถือ 299 3', products), {
+    productId: 'case', productName: 'เคสมือถือ', value: 299, quantity: 3,
+  });
+  assert.equal(parseStoreSale('ทิป 59', products), null);
+});
+
+test('Store sale flow is persisted, confirms before mutation, and protects stock truth', () => {
+  const app = read(appPath);
+  assert.match(app, /parseStoreSale/);
+  assert.match(app, /kind:\s*['"]STORE_SALE['"]/);
+  assert.match(app, /STORE_SALE_VALUE/);
+  assert.match(app, /STORE_SALE_QUANTITY/);
+  assert.match(app, /จำนวนไม่พอ|สินค้าไม่พอ/);
+  assert.match(app, /transactions/);
+  assert.match(app, /products/);
+});
+
+test('LIGHTHOUSE staging uses the owner-locked lighthouse artwork as app identity', () => {
+  const html = read(htmlPath);
+  const manifestPath = path.join(root, 'lighthouse-next/manifest.webmanifest');
+  const iconPath = path.join(root, 'lighthouse-next/assets/lighthouse-icon.svg');
+  assert.match(html, /manifest\.webmanifest/);
+  assert.match(html, /assets\/lighthouse-icon\.svg/);
+  assert.equal(fs.existsSync(manifestPath), true, 'missing lighthouse-next/manifest.webmanifest');
+  assert.equal(fs.existsSync(iconPath), true, 'missing lighthouse-next/assets/lighthouse-icon.svg');
+  const manifest = read(manifestPath);
+  assert.match(manifest, /"name"\s*:\s*"LIGHTHOUSE"/);
+  assert.match(manifest, /lighthouse-icon\.svg/);
+});
