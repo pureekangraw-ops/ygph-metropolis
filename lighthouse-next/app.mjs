@@ -1,3 +1,5 @@
+import { parseGeneralIncome } from './general-income.mjs';
+
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const AMBIGUITY_LOCK = 'BABA';
 
@@ -38,6 +40,20 @@ function cloneDefaults() {
   };
 }
 
+function normalizeStoredPending(pending) {
+  if (!pending || typeof pending !== 'object') return null;
+  if (pending.kind !== 'GENERAL_INCOME') return null;
+  if (!Number.isFinite(Number(pending.amount)) || Number(pending.amount) <= 0) return null;
+
+  const source = typeof pending.source === 'string' && pending.source.trim() ? pending.source.trim() : null;
+  return {
+    kind: 'GENERAL_INCOME',
+    stage: source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE',
+    amount: Number(pending.amount),
+    source,
+  };
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -47,7 +63,7 @@ function loadState() {
       ...cloneDefaults(),
       ...parsed,
       chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [],
-      pendingFlow: parsed.pendingFlow && typeof parsed.pendingFlow === 'object' ? parsed.pendingFlow : null,
+      pendingFlow: normalizeStoredPending(parsed.pendingFlow),
     };
   } catch {
     return cloneDefaults();
@@ -158,7 +174,7 @@ function addMessage(role, text, kind = role) {
 
 function ensureChatWelcome() {
   if (state.chatHistory.length) return;
-  addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nลองกรอกทีเดียว เช่น “วันนี้ได้ 500 จากร้าน ขายสบู่ 3 อัน” หรือถาม “วันนี้วันที่เท่าไร”');
+  addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายรับทั่วไปใช้แค่ “จำนวนเงิน + ที่มา” เช่น “ทิป 59” หรือ “ขายมือถือ 566”\nหรือถาม “วันนี้วันที่เท่าไร”');
 }
 
 function renderChat() {
@@ -189,13 +205,14 @@ function setChatActions(labels = []) {
 function renderChatActions() {
   const pending = state.pendingFlow;
   if (!pending) {
-    setChatActions(['วันนี้ได้ 500', 'วันนี้วันที่เท่าไร']);
+    setChatActions(['ทิป 59', 'ขายมือถือ 566', 'วันนี้วันที่เท่าไร']);
     return;
   }
-  if (pending.stage === 'SOURCE') setChatActions(['ร้าน', 'วิ่ง', 'อย่างอื่น']);
-  else if (pending.stage === 'STORE_OP') setChatActions(['ขายสินค้า', 'เงินเข้าร้านอย่างอื่น']);
-  else if (pending.stage === 'CONFIRM_SALE' || pending.stage === 'CONFIRM_STORE_INCOME' || pending.stage === 'CONFIRM_GENERIC_INCOME') setChatActions(['ยืนยัน', 'แก้ไข', 'ยกเลิก']);
-  else setChatActions(['วันนี้วันที่เท่าไร', 'ยกเลิก']);
+  if (pending.stage === 'CONFIRM_GENERAL_INCOME') {
+    setChatActions(['ยืนยัน', 'แก้ไข', 'ยกเลิก']);
+    return;
+  }
+  setChatActions(['วันนี้วันที่เท่าไร', 'ยกเลิก']);
 }
 
 function answerLocalSideQuery(text) {
@@ -206,113 +223,9 @@ function answerLocalSideQuery(text) {
 
 function pendingReminder(pending) {
   if (!pending) return '';
-  if (pending.stage === 'SALE_QTY' && pending.product) return `ยังรอจำนวนของ ${pending.product} อยู่`;
-  if (pending.stage === 'SALE_PRODUCT') return 'ยังรอชื่อสินค้าที่ขายอยู่';
-  if (pending.stage === 'STORE_OP') return `รายการเงินเข้า ฿${pending.amount} ยังรอว่ามาจากการขายสินค้าหรืออย่างอื่น`;
-  if (pending.stage === 'SOURCE') return `รายการเงินเข้า ฿${pending.amount} ยังรอที่มาอยู่`;
-  if (pending.stage.startsWith('CONFIRM')) return 'รายการเดิมยังรอการยืนยันอยู่';
+  if (pending.stage === 'GENERAL_INCOME_SOURCE') return `ยังรอที่มาของรายรับ ฿${pending.amount} อยู่`;
+  if (pending.stage === 'CONFIRM_GENERAL_INCOME') return 'รายรับเดิมยังรอการยืนยันอยู่';
   return 'ยังมีรายการเดิมค้างอยู่';
-}
-
-function sourceLabel(pending) {
-  if (pending.source === 'STORE') return 'ร้าน ✓';
-  if (pending.source === 'RIDE') return 'วิ่ง ✓';
-  if (pending.source === 'OTHER') return 'อย่างอื่น ✓';
-  return '—';
-}
-
-function productLabel(pending) {
-  if (pending.source && pending.source !== 'STORE') return 'ไม่ต้องกรอก';
-  if (pending.operation === 'STORE_INCOME') return 'ไม่ต้องกรอก';
-  return pending.product ? `${pending.product} ✓` : '—';
-}
-
-function quantityLabel(pending) {
-  if (pending.source && pending.source !== 'STORE') return 'ไม่ต้องกรอก';
-  if (pending.operation === 'STORE_INCOME') return 'ไม่ต้องกรอก';
-  return pending.quantity ? `${pending.quantity} ✓` : '—';
-}
-
-function missingIncomeFields(pending) {
-  if (!pending.source) return ['ได้เงินจากไหน', 'ถ้าจากร้าน: ขายอะไร', 'จำนวนกี่อัน'];
-  if (pending.source !== 'STORE') return [];
-  if (!pending.operation) return ['ขายสินค้าหรือเงินเข้าร้านอย่างอื่น', 'ถ้าขายสินค้า: ขายอะไร', 'จำนวนกี่อัน'];
-  if (pending.operation === 'STORE_INCOME') return [];
-
-  const fields = [];
-  if (!pending.product) fields.push('ขายอะไร');
-  if (!pending.quantity) fields.push('จำนวนกี่อัน');
-  return fields;
-}
-
-function deriveIncomeStage(pending) {
-  if (!pending.source) return 'SOURCE';
-  if (pending.source !== 'STORE') return 'CONFIRM_GENERIC_INCOME';
-  if (!pending.operation) return 'STORE_OP';
-  if (pending.operation === 'STORE_INCOME') return 'CONFIRM_STORE_INCOME';
-  if (!pending.product) return 'SALE_PRODUCT';
-  if (!pending.quantity) return 'SALE_QTY';
-  return 'CONFIRM_SALE';
-}
-
-function parseIncomeDetails(text) {
-  const clean = String(text || '').replace(/[“”"]/g, '').trim();
-  const details = { source: null, operation: null, product: null, quantity: null };
-
-  if (/เงินเข้าร้านอย่างอื่น/.test(clean)) {
-    details.source = 'STORE';
-    details.operation = 'STORE_INCOME';
-  } else if (/(?:จาก)?ร้าน|ขายสินค้า|ขาย/.test(clean)) {
-    details.source = 'STORE';
-  } else if (/(?:จาก)?วิ่ง|Lalamove|ลาล่า/i.test(clean)) {
-    details.source = 'RIDE';
-  } else if (/อย่างอื่น|อื่นๆ/.test(clean)) {
-    details.source = 'OTHER';
-  }
-
-  if (details.source === 'STORE' && details.operation !== 'STORE_INCOME' && /ขาย/.test(clean)) {
-    details.operation = 'SALE';
-  }
-
-  const quantityMatch = clean.match(/([0-9][0-9,]*)\s*(?:อัน|ชิ้น)/);
-  if (quantityMatch) {
-    const quantity = Number(quantityMatch[1].replaceAll(',', ''));
-    if (Number.isInteger(quantity) && quantity > 0 && quantity <= 9999) details.quantity = quantity;
-  }
-
-  const productMatch = clean.match(/ขาย(?:สินค้า)?\s*([^0-9\n]+?)(?=\s+[0-9][0-9,]*\s*(?:อัน|ชิ้น)(?:\s|$)|$)/);
-  if (productMatch) {
-    const product = productMatch[1].trim().replace(/[,.]+$/g, '').trim();
-    if (product && product.length <= 40 && product !== 'สินค้า') details.product = product;
-  }
-
-  return details;
-}
-
-function applyIncomeDetails(pending, details) {
-  if (!pending || !details) return;
-
-  if (details.source && details.source !== pending.source) {
-    pending.source = details.source;
-    if (details.source !== 'STORE') {
-      pending.operation = null;
-      pending.product = null;
-      pending.quantity = null;
-    }
-  }
-  if (details.operation) pending.operation = details.operation;
-  if (details.product) pending.product = details.product;
-  if (details.quantity) pending.quantity = details.quantity;
-
-  pending.stage = deriveIncomeStage(pending);
-  saveState();
-}
-
-function incomeProgressPrompt(pending) {
-  const missing = missingIncomeFields(pending);
-  const progress = `ข้อมูลที่รับแล้ว: เงิน ฿${pending.amount} ✓ · ที่มา ${sourceLabel(pending)} · สินค้า ${productLabel(pending)} · จำนวน ${quantityLabel(pending)}`;
-  if (!missing.length) return progress;
-  return `${progress}\nบอกเพิ่มได้เลย: ${missing.join(' · ')}\nพิมพ์รวมกันได้ เช่น “จากร้าน ขายสบู่ 3 อัน”`;
 }
 
 function resumePendingPrompt({ afterSideQuery = false } = {}) {
@@ -320,11 +233,12 @@ function resumePendingPrompt({ afterSideQuery = false } = {}) {
   if (!pending) return;
   if (afterSideQuery) addMessage('app', pendingReminder(pending), 'note');
 
-  pending.stage = deriveIncomeStage(pending);
-  if (pending.stage === 'CONFIRM_SALE') addMessage('app', `ยืนยันขาย ${pending.product} × ${pending.quantity} รวมเงินเข้า ฿${pending.amount}?`);
-  else if (pending.stage === 'CONFIRM_STORE_INCOME') addMessage('app', `ยืนยันเงินเข้าร้าน ฿${pending.amount}?`);
-  else if (pending.stage === 'CONFIRM_GENERIC_INCOME') addMessage('app', `ยืนยันเงินเข้า ฿${pending.amount}?`);
-  else addMessage('app', incomeProgressPrompt(pending));
+  if (pending.stage === 'CONFIRM_GENERAL_INCOME' && pending.source) {
+    addMessage('app', `ยืนยันรายรับ ฿${pending.amount} · ที่มา: ${pending.source}?`);
+  } else {
+    pending.stage = 'GENERAL_INCOME_SOURCE';
+    addMessage('app', `ข้อมูลที่รับแล้ว: เงิน ฿${pending.amount} ✓ · ที่มา —\nรบกวนบอกเพิ่ม: ที่มาของรายรับ`);
+  }
   saveState();
 }
 
@@ -332,18 +246,11 @@ function restorePending() {
   if (!state.pendingFlow) return;
   const last = state.chatHistory[state.chatHistory.length - 1];
   const reminder = pendingReminder(state.pendingFlow);
-  if (!last || (!last.text.includes(reminder) && !last.text.includes('บอกเพิ่มได้เลย') && !last.text.includes('ข้อมูลที่รับแล้ว') && !last.text.includes('ยืนยัน'))) {
+  if (!last || (!last.text.includes(reminder) && !last.text.includes('รบกวนบอกเพิ่ม: ที่มาของรายรับ') && !last.text.includes('ยืนยันรายรับ'))) {
     addMessage('app', 'กลับมาแล้ว — รายการที่ค้างยังอยู่', 'note');
     resumePendingPrompt();
   }
   if (state.activeRoot === 'chat') renderChat();
-}
-
-function parseIncomeAmount(text) {
-  const match = text.match(/(?:วันนี้ได้|ได้เงิน|เงินเข้า)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
-  if (!match) return null;
-  const amount = Number(match[1].replaceAll(',', ''));
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
 function cancelPending() {
@@ -354,14 +261,12 @@ function cancelPending() {
 
 function confirmPending() {
   const pending = state.pendingFlow;
-  if (!pending) return;
-  if (!pending.stage.startsWith('CONFIRM')) {
+  if (!pending || pending.stage !== 'CONFIRM_GENERAL_INCOME' || !pending.source) {
     addMessage('app', 'รายการยังไม่พร้อมยืนยัน');
     return;
   }
-  const summary = pending.stage === 'CONFIRM_SALE'
-    ? `เดโมบันทึก: ขาย ${pending.product} × ${pending.quantity} · เงินเข้า ฿${pending.amount}`
-    : `เดโมบันทึก: เงินเข้า ฿${pending.amount}`;
+
+  const summary = `เดโมบันทึก: รายรับ ฿${pending.amount} · ที่มา ${pending.source}`;
   state.pendingFlow = null;
   addMessage('app', `${summary}\nเป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน`);
   saveState();
@@ -370,17 +275,15 @@ function confirmPending() {
 function editPending() {
   const pending = state.pendingFlow;
   if (!pending) return;
-  if (pending.stage === 'CONFIRM_SALE') {
-    pending.quantity = null;
-  } else {
-    pending.source = null;
-    pending.operation = null;
-    pending.product = null;
-    pending.quantity = null;
-  }
-  pending.stage = deriveIncomeStage(pending);
+  pending.source = null;
+  pending.stage = 'GENERAL_INCOME_SOURCE';
   saveState();
   resumePendingPrompt();
+}
+
+function normalizePendingSource(text) {
+  const clean = String(text || '').replace(/[“”"]/g, '').replace(/\s+/g, ' ').trim();
+  return clean.replace(/^จาก\s*/u, '').trim();
 }
 
 function handlePendingInput(text) {
@@ -400,51 +303,20 @@ function handlePendingInput(text) {
     return;
   }
 
-  const details = parseIncomeDetails(clean);
-  if (details.source || details.operation || details.product || details.quantity) {
-    applyIncomeDetails(pending, details);
-    resumePendingPrompt();
-    return;
-  }
-
-  if (pending.stage === 'SOURCE') {
-    addMessage('app', incomeProgressPrompt(pending));
-    return;
-  }
-
-  if (pending.stage === 'STORE_OP') {
-    addMessage('app', incomeProgressPrompt(pending));
-    return;
-  }
-
-  if (pending.stage === 'SALE_PRODUCT') {
-    if (clean.length < 1 || clean.length > 40) {
-      addMessage('app', 'พิมพ์ชื่อสินค้าแบบสั้น ๆ ได้เลย');
+  if (pending.stage === 'GENERAL_INCOME_SOURCE') {
+    const source = normalizePendingSource(clean);
+    if (!source || source.length > 80) {
+      addMessage('app', 'รบกวนบอกเพิ่ม: ที่มาของรายรับ');
       return;
     }
-    pending.product = clean;
-    pending.stage = deriveIncomeStage(pending);
+    pending.source = source;
+    pending.stage = 'CONFIRM_GENERAL_INCOME';
     saveState();
     resumePendingPrompt();
     return;
   }
 
-  if (pending.stage === 'SALE_QTY') {
-    const quantity = Number(clean.replaceAll(',', ''));
-    if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 9999) {
-      addMessage('app', 'จำนวนต้องเป็นเลขเต็มมากกว่า 0');
-      return;
-    }
-    pending.quantity = quantity;
-    pending.stage = deriveIncomeStage(pending);
-    saveState();
-    resumePendingPrompt();
-    return;
-  }
-
-  if (pending.stage.startsWith('CONFIRM')) {
-    addMessage('app', 'เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
-  }
+  addMessage('app', 'เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
 }
 
 function handleChatInput(text) {
@@ -463,23 +335,20 @@ function handleChatInput(text) {
     return;
   }
 
-  const amount = parseIncomeAmount(clean);
-  if (amount) {
+  const parsed = parseGeneralIncome(clean);
+  if (parsed) {
     state.pendingFlow = {
-      kind: 'INCOME',
-      stage: 'SOURCE',
-      amount,
-      source: null,
-      operation: null,
-      product: null,
-      quantity: null,
+      kind: 'GENERAL_INCOME',
+      stage: parsed.source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE',
+      amount: parsed.amount,
+      source: parsed.source,
     };
-    applyIncomeDetails(state.pendingFlow, parseIncomeDetails(clean));
+    saveState();
     resumePendingPrompt();
     return;
   }
 
-  addMessage('app', 'ตอนนี้สนามนี้รองรับการลอง “วันนี้ได้ 500 จากร้าน ขายสบู่ 3 อัน” และ “วันนี้วันที่เท่าไร” ก่อน เพื่อทดสอบ flow ที่ล็อกไว้');
+  addMessage('app', 'ตอนนี้สนามนี้รองรับรายรับทั่วไปแบบ “จำนวนเงิน + ที่มา” เช่น “ทิป 59” หรือ “ขายมือถือ 566” และคำถาม “วันนี้วันที่เท่าไร”');
 }
 
 function submitChatText(text) {
