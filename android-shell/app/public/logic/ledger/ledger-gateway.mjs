@@ -1,5 +1,7 @@
 import { buildSaleWorkflow } from '../domains/business-workflows.mjs';
-import { buildRideStartRoundWorkflow, buildRideJobWorkflow, buildRideEndRoundWorkflow } from '../domains/ride-workflows.mjs';
+import { buildStoreIncomeWorkflow } from '../domains/store-income-workflow.mjs';
+import { buildRideStartRoundWorkflow, buildRideReplaceRoundWorkflow, buildRideJobWorkflow, buildRideEndRoundWorkflow } from '../domains/ride-workflows.mjs';
+import { buildOwnerAwareReverseWorkflow } from '../domains/reverse-workflow.mjs';
 
 const VERIFIED = new Set(['COMMITTED', 'RECOVERED', 'VERIFIED']);
 
@@ -11,12 +13,12 @@ export const MANUAL_MUTATION_OPERATIONS = Object.freeze([
 ]);
 
 export const GATEWAY_WORKFLOW_OPERATIONS = Object.freeze([
-  'storeSale', 'rideStartRound', 'rideJob', 'rideEndRound',
+  'storeSale', 'storeIncome', 'rideStartRound', 'rideJob', 'rideEndRound',
 ]);
 
 const WORKFLOW_BUILDERS = Object.freeze({
   storeSale:buildSaleWorkflow,
-  rideStartRound:buildRideStartRoundWorkflow,
+  storeIncome:buildStoreIncomeWorkflow,
   rideJob:buildRideJobWorkflow,
   rideEndRound:buildRideEndRoundWorkflow,
 });
@@ -30,6 +32,17 @@ function verifyMutation(result) {
   if (!VERIFIED.has(result?.status)) throw new Error(`LEDGER_GATEWAY_MUTATION_NOT_VERIFIED:${result?.status ?? 'UNKNOWN'}`);
   if (result.readback == null) throw new Error('LEDGER_GATEWAY_READBACK_REQUIRED');
   return result;
+}
+
+function activeRideRoundIds(state) {
+  return Object.values(state?.domains?.RIDE?.records || {})
+    .map(entry => entry?.record)
+    .filter(record => record?.type === 'ROUND' && record.status === 'ACTIVE')
+    .map(record => String(record.recordId));
+}
+
+function ledgerRecords(state) {
+  return Object.values(state?.domains?.LEDGER?.records || {}).map(entry => entry?.record).filter(Boolean);
 }
 
 export function createLedgerGateway({ manual, runtime } = {}) {
@@ -49,8 +62,37 @@ export function createLedgerGateway({ manual, runtime } = {}) {
     return { ...raw, readback:structuredClone(readback) };
   }
 
+  async function executeRideStartRound(payload) {
+    const state = await runtime.readState();
+    if (state == null) throw new Error('LEDGER_GATEWAY_READBACK_REQUIRED');
+    const activeIds = activeRideRoundIds(state);
+    if (activeIds.length > 1) throw new Error(`LEDGER_GATEWAY_RIDE_ACTIVE_ROUND_INVARIANT:${activeIds.join(',')}`);
+    const plan = activeIds.length === 1
+      ? buildRideReplaceRoundWorkflow({ ...structuredClone(payload), activeRoundId:activeIds[0] })
+      : buildRideStartRoundWorkflow(structuredClone(payload));
+    return executeWorkflow(plan);
+  }
+
+  async function executeReverse(payload) {
+    const state = await runtime.readState();
+    if (state == null) throw new Error('LEDGER_GATEWAY_READBACK_REQUIRED');
+    const originalRecordId = String(payload?.originalRecordId || '').trim();
+    const originalRecord = state?.domains?.LEDGER?.records?.[originalRecordId]?.record;
+    if (!originalRecord || originalRecord.type !== 'TRANSACTION') throw new Error(`TRANSACTION_NOT_FOUND:${originalRecordId}`);
+    if (originalRecord.reversalOf) throw new Error(`CANNOT_REVERSE_REVERSAL:${originalRecordId}`);
+    if (ledgerRecords(state).some(record => record?.reversalOf === originalRecordId)) throw new Error(`TRANSACTION_ALREADY_REVERSED:${originalRecordId}`);
+    return executeWorkflow(buildOwnerAwareReverseWorkflow({
+      workflowId:payload.workflowId,
+      originalRecord,
+      reversalRecordId:payload.recordId,
+      reason:payload.reason,
+    }));
+  }
+
   async function execute({ operation, payload = {} } = {}) {
     const name = String(operation || '').trim();
+    if (name === 'rideStartRound') return executeRideStartRound(payload);
+    if (name === 'reverse') return executeReverse(payload);
     const builder = WORKFLOW_BUILDERS[name];
     if (builder) return executeWorkflow(builder(structuredClone(payload)));
     if (!MANUAL_MUTATION_OPERATIONS.includes(name)) throw new Error(`LEDGER_GATEWAY_OPERATION_UNSUPPORTED:${name || 'EMPTY'}`);

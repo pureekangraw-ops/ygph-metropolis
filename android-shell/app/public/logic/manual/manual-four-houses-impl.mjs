@@ -34,7 +34,15 @@ function transactionDirection(record) {
 }
 
 function actualTransactions(state, direction = null) {
-  return records(state, 'LEDGER').filter(record => record.type === 'TRANSACTION' && (!direction || transactionDirection(record) === direction));
+  const transactions = records(state, 'LEDGER').filter(record => record.type === 'TRANSACTION');
+  const reversedOriginalIds = new Set(
+    transactions.filter(record => record.reversalOf).map(record => String(record.reversalOf)),
+  );
+  return transactions.filter(record =>
+    !record.reversalOf &&
+    !reversedOriginalIds.has(String(record.recordId)) &&
+    (!direction || transactionDirection(record) === direction)
+  );
 }
 
 function sumAmount(list) {

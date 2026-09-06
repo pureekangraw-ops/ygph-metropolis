@@ -7,6 +7,7 @@ import {
   withRuntimeSession,
 } from './source/greenfield/runtime-session.mjs';
 import { createStableAppServices } from './source/app/app/stable-service-composition.mjs';
+import { createConfirmedLedgerExecutor } from './source/app/logic/chat/confirmed-ledger-executor.mjs';
 import { mountStableUi } from './source/app/ui/stable-ui-host.mjs';
 import { routeMasterInputText } from './source/lighthouse/master-input-route.mjs';
 import {
@@ -152,9 +153,31 @@ function stableBrainText(payload, code) {
   return text;
 }
 
+function conversationalBrainReadback(result) {
+  if (result?.status === 'CONFIRMATION_REQUIRED') {
+    return frozen({
+      interactionStatus:'CONFIRMATION_REQUIRED',
+      message:String(result.question || 'กรุณาพิมพ์ ยืนยัน หรือ ยกเลิก'),
+      preview:structuredClone(result.preview ?? {}),
+    });
+  }
+  if (result?.status === 'CANCELLED') {
+    return frozen({ interactionStatus:'CANCELLED', message:'ยกเลิกแล้ว' });
+  }
+  if (result?.status === 'BLOCKED' && result?.reason === 'TRUSTED_CONFIRMATION_TEXT_INVALID') {
+    return frozen({
+      interactionStatus:'CONFIRMATION_REQUIRED',
+      message:String(result.question || 'กรุณาพิมพ์ ยืนยัน หรือ ยกเลิก'),
+    });
+  }
+  return null;
+}
+
 async function routeThroughLegacyBrain(brain, payload, successStatus) {
   const text = stableBrainText(payload, 'STABLE_BRAIN_INPUT_REQUIRED');
   const result = await brain.send(text);
+  const conversational = conversationalBrainReadback(result);
+  if (conversational) return frozen({ status:successStatus, readback:conversational });
   if (result?.status !== 'SUCCESS') throw new Error(`STABLE_BRAIN_NOT_COMPLETED:${result?.status || 'UNKNOWN'}`);
   return frozen({
     status:successStatus,
@@ -294,12 +317,17 @@ export async function openTrustedBrain({
       receivedAt:now,
       timeZone:'Asia/Bangkok',
     });
+    let confirmedLedgerExecutor = null;
     const brain = createTrustedBrainGate({
       brain:adapter,
       confirmImpl,
       confirmTextImpl,
       documentRef,
       now,
+      executeConfirmed:request => {
+        if (!confirmedLedgerExecutor) return frozen({ status:'ERROR', reason:'CONFIRMED_LEDGER_EXECUTOR_NOT_READY' });
+        return confirmedLedgerExecutor(request);
+      },
       recordErrorEvent:errorStatistics ? event => errorStatistics.record(event) : null,
     });
 
@@ -346,6 +374,7 @@ export async function openTrustedBrain({
       provider,
       now,
     });
+    confirmedLedgerExecutor = createConfirmedLedgerExecutor({ manual:services.manual });
 
     return frozen({
       runtime,
