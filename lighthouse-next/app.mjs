@@ -10,6 +10,17 @@ const DEFAULT_PRODUCTS = Object.freeze([
   { id: 'film', name: 'ฟิล์ม', aliases: ['ฟิล์มกันรอย'], stock: 12 },
 ]);
 
+const DEFAULT_OBLIGATIONS = Object.freeze([
+  {
+    id: 'next-expense',
+    title: 'ค่าใช้จ่ายก้อนถัดไป',
+    amount: 3200,
+    dueLabel: 'อีก 3 วัน',
+    dailyTarget: 1100,
+    status: 'OPEN',
+  },
+]);
+
 const DEFAULT_STATE = Object.freeze({
   sessionUnlocked: false,
   activeRoot: 'home',
@@ -17,8 +28,10 @@ const DEFAULT_STATE = Object.freeze({
   pendingFlow: null,
   manualView: null,
   products: DEFAULT_PRODUCTS,
+  obligations: DEFAULT_OBLIGATIONS,
   transactions: [],
   cash: 2450,
+  expectedIncome: 700,
   todayIncome: 1250,
   todayExpense: 380,
 });
@@ -30,9 +43,15 @@ const pinDots = [...root.querySelectorAll('.pin-dots span')];
 const pinStatus = root.querySelector('#pin-status');
 const homeDate = root.querySelector('#home-date');
 const homeCashValue = root.querySelector('#home-cash-value');
+const homeExpectedValue = root.querySelector('#home-expected-value');
 const homeIncomeValue = root.querySelector('#home-income-value');
 const homeExpenseValue = root.querySelector('#home-expense-value');
 const homeNetValue = root.querySelector('#home-net-value');
+const homeObligationTitle = root.querySelector('#home-obligation-title');
+const homeObligationDue = root.querySelector('#home-obligation-due');
+const homeObligationValue = root.querySelector('#home-obligation-value');
+const homeGapValue = root.querySelector('#home-gap-value');
+const homeTargetValue = root.querySelector('#home-target-value');
 const pageKicker = root.querySelector('#page-kicker');
 const chatThread = root.querySelector('#chat-thread');
 const chatActions = root.querySelector('#chat-actions');
@@ -51,6 +70,10 @@ function freshProducts() {
   return DEFAULT_PRODUCTS.map((product) => ({ ...product, aliases: [...product.aliases] }));
 }
 
+function freshObligations() {
+  return DEFAULT_OBLIGATIONS.map((obligation) => ({ ...obligation }));
+}
+
 function cloneDefaults() {
   return {
     sessionUnlocked: DEFAULT_STATE.sessionUnlocked,
@@ -59,8 +82,10 @@ function cloneDefaults() {
     pendingFlow: null,
     manualView: null,
     products: freshProducts(),
+    obligations: freshObligations(),
     transactions: [],
     cash: DEFAULT_STATE.cash,
+    expectedIncome: DEFAULT_STATE.expectedIncome,
     todayIncome: DEFAULT_STATE.todayIncome,
     todayExpense: DEFAULT_STATE.todayExpense,
   };
@@ -77,6 +102,24 @@ function normalizeStoredProducts(products) {
     const stored = products.find((product) => product?.id === baseline.id);
     const stock = Number(stored?.stock);
     return { ...baseline, stock: Number.isInteger(stock) && stock >= 0 ? stock : baseline.stock };
+  });
+}
+
+function normalizeStoredObligations(obligations) {
+  if (!Array.isArray(obligations)) return freshObligations();
+  return freshObligations().map((baseline) => {
+    const stored = obligations.find((obligation) => obligation?.id === baseline.id);
+    if (!stored) return baseline;
+    const amount = numberOr(stored.amount, baseline.amount);
+    const dailyTarget = numberOr(stored.dailyTarget, baseline.dailyTarget);
+    return {
+      ...baseline,
+      title: typeof stored.title === 'string' && stored.title.trim() ? stored.title.trim() : baseline.title,
+      amount: amount >= 0 ? amount : baseline.amount,
+      dueLabel: typeof stored.dueLabel === 'string' && stored.dueLabel.trim() ? stored.dueLabel.trim() : baseline.dueLabel,
+      dailyTarget: dailyTarget >= 0 ? dailyTarget : baseline.dailyTarget,
+      status: stored.status === 'CLOSED' ? 'CLOSED' : 'OPEN',
+    };
   });
 }
 
@@ -135,8 +178,10 @@ function loadState() {
       chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [],
       pendingFlow: normalizeStoredPending(parsed.pendingFlow),
       products: normalizeStoredProducts(parsed.products),
+      obligations: normalizeStoredObligations(parsed.obligations),
       transactions: normalizeStoredTransactions(parsed.transactions),
       cash: numberOr(parsed.cash, DEFAULT_STATE.cash),
+      expectedIncome: numberOr(parsed.expectedIncome, DEFAULT_STATE.expectedIncome),
       todayIncome: numberOr(parsed.todayIncome, DEFAULT_STATE.todayIncome),
       todayExpense: numberOr(parsed.todayExpense, DEFAULT_STATE.todayExpense),
     };
@@ -153,8 +198,10 @@ function saveState() {
     pendingFlow: state.pendingFlow,
     manualView: state.manualView,
     products: state.products,
+    obligations: state.obligations,
     transactions: state.transactions.slice(-100),
     cash: state.cash,
+    expectedIncome: state.expectedIncome,
     todayIncome: state.todayIncome,
     todayExpense: state.todayExpense,
   };
@@ -169,13 +216,35 @@ function formatBaht(value) {
   return `฿${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
+function financeSnapshot() {
+  const nextObligation = state.obligations.find((obligation) => obligation.status === 'OPEN') || null;
+  const net = state.todayIncome - state.todayExpense;
+  return {
+    cash: state.cash,
+    expectedIncome: state.expectedIncome,
+    todayIncome: state.todayIncome,
+    todayExpense: state.todayExpense,
+    net,
+    nextObligation,
+    gap: nextObligation ? Math.max(0, Number(nextObligation.amount || 0) - state.cash) : 0,
+  };
+}
+
 function renderHomeTruth() {
   if (!homeCashValue || !homeIncomeValue || !homeExpenseValue || !homeNetValue) return;
-  const net = state.todayIncome - state.todayExpense;
-  homeCashValue.textContent = formatBaht(state.cash);
-  homeIncomeValue.textContent = formatBaht(state.todayIncome);
-  homeExpenseValue.textContent = formatBaht(state.todayExpense);
-  homeNetValue.textContent = `${net >= 0 ? '+' : '-'}${formatBaht(Math.abs(net))}`;
+  const snapshot = financeSnapshot();
+  homeCashValue.textContent = formatBaht(snapshot.cash);
+  if (homeExpectedValue) homeExpectedValue.textContent = formatBaht(snapshot.expectedIncome);
+  homeIncomeValue.textContent = formatBaht(snapshot.todayIncome);
+  homeExpenseValue.textContent = formatBaht(snapshot.todayExpense);
+  homeNetValue.textContent = `${snapshot.net >= 0 ? '+' : '-'}${formatBaht(Math.abs(snapshot.net))}`;
+
+  const obligation = snapshot.nextObligation;
+  if (homeObligationTitle) homeObligationTitle.textContent = obligation?.title || 'ยังไม่มีภาระใกล้';
+  if (homeObligationDue) homeObligationDue.textContent = obligation ? `ครบกำหนดใน${obligation.dueLabel}` : 'ยังไม่มีกำหนด';
+  if (homeObligationValue) homeObligationValue.textContent = formatBaht(obligation?.amount || 0);
+  if (homeGapValue) homeGapValue.textContent = formatBaht(snapshot.gap);
+  if (homeTargetValue) homeTargetValue.textContent = obligation ? `หาเพิ่ม ${formatBaht(obligation.dailyTarget)}` : '—';
 }
 
 function resetDemoState() {
@@ -630,13 +699,8 @@ function submitChatText(text) {
 const manualContent = {
   finance: {
     title: 'การเงิน',
-    intro: 'เห็นเงินจริงและการเคลื่อนไหววันนี้แบบไม่ปนเงินที่ยังไม่เกิดขึ้น',
+    intro: 'เห็นเงินจริง การเคลื่อนไหว ภาระ และเป้าหมายในภาพเดียวกัน',
     rows: [],
-  },
-  obligations: {
-    title: 'ภาระ',
-    intro: 'เรียงสิ่งที่ต้องจัดการตามเวลาที่ใกล้และเงินที่ยังขาด',
-    rows: [['ก้อนถัดไป', '฿3,200'], ['ครบกำหนด', 'อีก 3 วัน'], ['ยังขาด', '฿750']],
   },
   store: {
     title: 'ร้านค้า',
@@ -651,7 +715,7 @@ const manualContent = {
   calendar: {
     title: 'ปฏิทิน',
     intro: 'ดูสิ่งที่ต้องทำตามวัน โดยรายละเอียดอยู่ในบ้านเดียวกัน',
-    rows: [['วันนี้', '1 รายการ'], ['อีก 3 วัน', 'ภาระ ฿3,200'], ['สัปดาห์นี้', '3 รายการ']],
+    rows: [],
   },
   ledger: {
     title: 'รายการทั้งหมด',
@@ -698,13 +762,26 @@ function renderStaticDetail(data, rows = data.rows) {
 
 function renderFinanceDetail() {
   const data = manualContent.finance;
-  const net = state.todayIncome - state.todayExpense;
-  renderStaticDetail(data, [
-    ['เงินจริง', formatBaht(state.cash)],
-    ['เงินเข้าวันนี้', formatBaht(state.todayIncome)],
-    ['เงินออกวันนี้', formatBaht(state.todayExpense)],
-    ['สุทธิวันนี้', `${net >= 0 ? '+' : '-'}${formatBaht(Math.abs(net))}`],
-  ]);
+  const snapshot = financeSnapshot();
+  const obligation = snapshot.nextObligation;
+  const rows = [
+    ['เงินจริง', formatBaht(snapshot.cash)],
+    ['คาดว่าจะเข้า', formatBaht(snapshot.expectedIncome)],
+    ['เงินเข้าวันนี้', formatBaht(snapshot.todayIncome)],
+    ['เงินออกวันนี้', formatBaht(snapshot.todayExpense)],
+    ['สุทธิวันนี้', `${snapshot.net >= 0 ? '+' : '-'}${formatBaht(Math.abs(snapshot.net))}`],
+  ];
+  if (obligation) {
+    rows.push(
+      ['ภาระใกล้สุด', `${obligation.title} · ${formatBaht(obligation.amount)}`],
+      ['ครบกำหนด', obligation.dueLabel],
+      ['ยังขาด', formatBaht(snapshot.gap)],
+      ['เป้าวันนี้', `หาเพิ่ม ${formatBaht(obligation.dailyTarget)}`],
+    );
+  } else {
+    rows.push(['ภาระใกล้สุด', 'ยังไม่มีรายการ']);
+  }
+  renderStaticDetail(data, rows);
 }
 
 function renderStoreDetail() {
@@ -718,6 +795,18 @@ function renderStoreDetail() {
     list.append(makeDetailRow(product.name, `เหลือ ${product.stock} ชิ้น`));
   }
   manualDetailContent.append(makeDetailHero(data), list);
+}
+
+function renderCalendarDetail() {
+  const data = manualContent.calendar;
+  const openObligations = state.obligations.filter((obligation) => obligation.status === 'OPEN');
+  const rows = openObligations.length
+    ? [
+        ['ภาระที่กำลังมา', `${openObligations.length} รายการ`],
+        ...openObligations.map((obligation) => [obligation.dueLabel, `${obligation.title} · ${formatBaht(obligation.amount)}`]),
+      ]
+    : [['กำหนดใกล้', 'ยังไม่มีรายการ']];
+  renderStaticDetail(data, rows);
 }
 
 function transactionLabel(transaction) {
@@ -797,6 +886,10 @@ function openManualTask(taskId) {
   }
   if (taskId === 'store') {
     renderStoreDetail();
+    return;
+  }
+  if (taskId === 'calendar') {
+    renderCalendarDetail();
     return;
   }
   if (taskId === 'ledger') {
