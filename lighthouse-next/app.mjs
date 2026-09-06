@@ -1,7 +1,14 @@
 import { parseGeneralIncome } from './general-income.mjs';
+import { parseStoreSale } from './store-sale.mjs';
 
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const AMBIGUITY_LOCK = 'BABA';
+
+const DEFAULT_PRODUCTS = Object.freeze([
+  { id: 'phone', name: 'มือถือ', aliases: ['โทรศัพท์', 'โทสับ'], stock: 5 },
+  { id: 'case', name: 'เคสมือถือ', aliases: ['เคส'], stock: 8 },
+  { id: 'film', name: 'ฟิล์ม', aliases: ['ฟิล์มกันรอย'], stock: 12 },
+]);
 
 const DEFAULT_STATE = Object.freeze({
   sessionUnlocked: false,
@@ -9,6 +16,11 @@ const DEFAULT_STATE = Object.freeze({
   chatHistory: [],
   pendingFlow: null,
   manualView: null,
+  products: DEFAULT_PRODUCTS,
+  transactions: [],
+  cash: 2450,
+  todayIncome: 1250,
+  todayExpense: 380,
 });
 
 const root = document.querySelector('#demo-root');
@@ -30,6 +42,10 @@ const resetDialog = root.querySelector('#reset-dialog');
 let pinBuffer = '';
 let state = loadState();
 
+function freshProducts() {
+  return DEFAULT_PRODUCTS.map((product) => ({ ...product, aliases: [...product.aliases] }));
+}
+
 function cloneDefaults() {
   return {
     sessionUnlocked: DEFAULT_STATE.sessionUnlocked,
@@ -37,21 +53,62 @@ function cloneDefaults() {
     chatHistory: [],
     pendingFlow: null,
     manualView: null,
+    products: freshProducts(),
+    transactions: [],
+    cash: DEFAULT_STATE.cash,
+    todayIncome: DEFAULT_STATE.todayIncome,
+    todayExpense: DEFAULT_STATE.todayExpense,
   };
+}
+
+function numberOr(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeStoredProducts(products) {
+  if (!Array.isArray(products)) return freshProducts();
+  return freshProducts().map((baseline) => {
+    const stored = products.find((product) => product?.id === baseline.id);
+    const stock = Number(stored?.stock);
+    return { ...baseline, stock: Number.isInteger(stock) && stock >= 0 ? stock : baseline.stock };
+  });
+}
+
+function storeSaleStage(pending) {
+  if (!Number.isFinite(Number(pending.value)) || Number(pending.value) <= 0) return 'STORE_SALE_VALUE';
+  if (!Number.isInteger(Number(pending.quantity)) || Number(pending.quantity) <= 0) return 'STORE_SALE_QUANTITY';
+  return 'CONFIRM_STORE_SALE';
 }
 
 function normalizeStoredPending(pending) {
   if (!pending || typeof pending !== 'object') return null;
-  if (pending.kind !== 'GENERAL_INCOME') return null;
-  if (!Number.isFinite(Number(pending.amount)) || Number(pending.amount) <= 0) return null;
 
-  const source = typeof pending.source === 'string' && pending.source.trim() ? pending.source.trim() : null;
-  return {
-    kind: 'GENERAL_INCOME',
-    stage: source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE',
-    amount: Number(pending.amount),
-    source,
-  };
+  if (pending.kind === 'GENERAL_INCOME') {
+    if (!Number.isFinite(Number(pending.amount)) || Number(pending.amount) <= 0) return null;
+    const source = typeof pending.source === 'string' && pending.source.trim() ? pending.source.trim() : null;
+    return {
+      kind: 'GENERAL_INCOME',
+      stage: source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE',
+      amount: Number(pending.amount),
+      source,
+    };
+  }
+
+  if (pending.kind === 'STORE_SALE' && pending.productId && pending.productName) {
+    const normalized = {
+      kind: 'STORE_SALE',
+      stage: pending.stage,
+      productId: String(pending.productId),
+      productName: String(pending.productName),
+      value: Number.isFinite(Number(pending.value)) && Number(pending.value) > 0 ? Number(pending.value) : null,
+      quantity: Number.isInteger(Number(pending.quantity)) && Number(pending.quantity) > 0 ? Number(pending.quantity) : null,
+    };
+    normalized.stage = storeSaleStage(normalized);
+    return normalized;
+  }
+
+  return null;
 }
 
 function loadState() {
@@ -64,6 +121,11 @@ function loadState() {
       ...parsed,
       chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [],
       pendingFlow: normalizeStoredPending(parsed.pendingFlow),
+      products: normalizeStoredProducts(parsed.products),
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions.slice(-100) : [],
+      cash: numberOr(parsed.cash, DEFAULT_STATE.cash),
+      todayIncome: numberOr(parsed.todayIncome, DEFAULT_STATE.todayIncome),
+      todayExpense: numberOr(parsed.todayExpense, DEFAULT_STATE.todayExpense),
     };
   } catch {
     return cloneDefaults();
@@ -77,6 +139,11 @@ function saveState() {
     chatHistory: state.chatHistory.slice(-80),
     pendingFlow: state.pendingFlow,
     manualView: state.manualView,
+    products: state.products,
+    transactions: state.transactions.slice(-100),
+    cash: state.cash,
+    todayIncome: state.todayIncome,
+    todayExpense: state.todayExpense,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -174,7 +241,7 @@ function addMessage(role, text, kind = role) {
 
 function ensureChatWelcome() {
   if (state.chatHistory.length) return;
-  addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายรับทั่วไปใช้แค่ “จำนวนเงิน + ที่มา” เช่น “ทิป 59” หรือ “ขายมือถือ 566”\nหรือถาม “วันนี้วันที่เท่าไร”');
+  addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายรับทั่วไปใช้ “จำนวนเงิน + ที่มา” เช่น “ทิป 59”\nสินค้าที่รู้จักใช้ “สินค้า + มูลค่า + จำนวน” เช่น “ขายมือถือ 566 2”\nหรือถาม “วันนี้วันที่เท่าไร”');
 }
 
 function renderChat() {
@@ -208,7 +275,7 @@ function renderChatActions() {
     setChatActions(['ทิป 59', 'ขายมือถือ 566', 'วันนี้วันที่เท่าไร']);
     return;
   }
-  if (pending.stage === 'CONFIRM_GENERAL_INCOME') {
+  if (pending.stage === 'CONFIRM_GENERAL_INCOME' || pending.stage === 'CONFIRM_STORE_SALE') {
     setChatActions(['ยืนยัน', 'แก้ไข', 'ยกเลิก']);
     return;
   }
@@ -223,9 +290,38 @@ function answerLocalSideQuery(text) {
 
 function pendingReminder(pending) {
   if (!pending) return '';
-  if (pending.stage === 'GENERAL_INCOME_SOURCE') return `ยังรอที่มาของรายรับ ฿${pending.amount} อยู่`;
-  if (pending.stage === 'CONFIRM_GENERAL_INCOME') return 'รายรับเดิมยังรอการยืนยันอยู่';
+  if (pending.kind === 'GENERAL_INCOME') {
+    if (pending.stage === 'GENERAL_INCOME_SOURCE') return `ยังรอที่มาของรายรับ ฿${pending.amount} อยู่`;
+    return 'รายรับเดิมยังรอการยืนยันอยู่';
+  }
+  if (pending.kind === 'STORE_SALE') {
+    if (pending.stage === 'STORE_SALE_VALUE') return `รายการ ${pending.productName} ยังรอมูลค่าอยู่`;
+    if (pending.stage === 'STORE_SALE_QUANTITY') return `รายการ ${pending.productName} ยังรอจำนวนอยู่`;
+    return `รายการขาย ${pending.productName} ยังรอการยืนยันอยู่`;
+  }
   return 'ยังมีรายการเดิมค้างอยู่';
+}
+
+function resumeGeneralIncomePrompt(pending) {
+  if (pending.stage === 'CONFIRM_GENERAL_INCOME' && pending.source) {
+    addMessage('app', `${pending.amount} บาท จาก${pending.source} — บันทึกไหม?`);
+  } else {
+    pending.stage = 'GENERAL_INCOME_SOURCE';
+    addMessage('app', `ข้อมูลที่รับแล้ว: เงิน ฿${pending.amount} ✓ · ที่มา —\nรบกวนบอกเพิ่ม: ที่มาของรายรับ`);
+  }
+}
+
+function resumeStoreSalePrompt(pending) {
+  pending.stage = storeSaleStage(pending);
+  if (pending.stage === 'STORE_SALE_VALUE') {
+    addMessage('app', `สินค้า ${pending.productName} ✓\nรบกวนบอกเพิ่ม: มูลค่าที่ขาย`);
+    return;
+  }
+  if (pending.stage === 'STORE_SALE_QUANTITY') {
+    addMessage('app', `${pending.productName} · ${pending.value} บาท ✓\nรบกวนบอกเพิ่ม: จำนวนสินค้า`);
+    return;
+  }
+  addMessage('app', `${pending.productName} · ${pending.value} บาท · ${pending.quantity} ชิ้น — บันทึกไหม?`);
 }
 
 function resumePendingPrompt({ afterSideQuery = false } = {}) {
@@ -233,12 +329,8 @@ function resumePendingPrompt({ afterSideQuery = false } = {}) {
   if (!pending) return;
   if (afterSideQuery) addMessage('app', pendingReminder(pending), 'note');
 
-  if (pending.stage === 'CONFIRM_GENERAL_INCOME' && pending.source) {
-    addMessage('app', `${pending.amount} บาท จาก${pending.source} — บันทึกไหม?`);
-  } else {
-    pending.stage = 'GENERAL_INCOME_SOURCE';
-    addMessage('app', `ข้อมูลที่รับแล้ว: เงิน ฿${pending.amount} ✓ · ที่มา —\nรบกวนบอกเพิ่ม: ที่มาของรายรับ`);
-  }
+  if (pending.kind === 'STORE_SALE') resumeStoreSalePrompt(pending);
+  else resumeGeneralIncomePrompt(pending);
   saveState();
 }
 
@@ -246,7 +338,13 @@ function restorePending() {
   if (!state.pendingFlow) return;
   const last = state.chatHistory[state.chatHistory.length - 1];
   const reminder = pendingReminder(state.pendingFlow);
-  if (!last || (!last.text.includes(reminder) && !last.text.includes('รบกวนบอกเพิ่ม: ที่มาของรายรับ') && !last.text.includes('— บันทึกไหม?'))) {
+  const lastText = last?.text || '';
+  const alreadyVisible = lastText.includes(reminder)
+    || lastText.includes('รบกวนบอกเพิ่ม: ที่มาของรายรับ')
+    || lastText.includes('รบกวนบอกเพิ่ม: มูลค่าที่ขาย')
+    || lastText.includes('รบกวนบอกเพิ่ม: จำนวนสินค้า')
+    || lastText.includes('— บันทึกไหม?');
+  if (!alreadyVisible) {
     addMessage('app', 'กลับมาแล้ว — รายการที่ค้างยังอยู่', 'note');
     resumePendingPrompt();
   }
@@ -259,23 +357,82 @@ function cancelPending() {
   saveState();
 }
 
-function confirmPending() {
-  const pending = state.pendingFlow;
-  if (!pending || pending.stage !== 'CONFIRM_GENERAL_INCOME' || !pending.source) {
-    addMessage('app', 'รายการยังไม่พร้อมยืนยัน');
+function confirmGeneralIncome(pending) {
+  state.pendingFlow = null;
+  state.cash += pending.amount;
+  state.todayIncome += pending.amount;
+  state.transactions.push({
+    id: `income-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: 'INCOME',
+    status: 'ACTIVE',
+    value: pending.amount,
+    source: pending.source,
+    createdAt: new Date().toISOString(),
+  });
+  addMessage('app', `บันทึกแล้ว ${pending.amount} บาท · ${pending.source}`);
+}
+
+function confirmStoreSale(pending) {
+  const product = state.products.find((item) => item.id === pending.productId);
+  if (!product) {
+    state.pendingFlow = null;
+    addMessage('app', 'ไม่พบสินค้านี้แล้ว — ยังไม่มีข้อมูลถูกเปลี่ยน');
+    return;
+  }
+  if (pending.quantity > product.stock) {
+    pending.quantity = null;
+    pending.stage = 'STORE_SALE_QUANTITY';
+    saveState();
+    addMessage('app', `สินค้าไม่พอ — ${product.name} เหลือ ${product.stock} ชิ้น`);
+    resumeStoreSalePrompt(pending);
     return;
   }
 
+  product.stock -= pending.quantity;
+  state.cash += pending.value;
+  state.todayIncome += pending.value;
+  state.transactions.push({
+    id: `sale-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: 'SALE',
+    status: 'ACTIVE',
+    productId: product.id,
+    productName: product.name,
+    quantity: pending.quantity,
+    value: pending.value,
+    createdAt: new Date().toISOString(),
+  });
   state.pendingFlow = null;
-  addMessage('app', `บันทึกแล้ว ${pending.amount} บาท · ${pending.source}`);
-  saveState();
+  addMessage('app', `บันทึกแล้ว ${product.name} · ${pending.value} บาท · ${pending.quantity} ชิ้น`);
+}
+
+function confirmPending() {
+  const pending = state.pendingFlow;
+  if (!pending) {
+    addMessage('app', 'รายการยังไม่พร้อมยืนยัน');
+    return;
+  }
+  if (pending.kind === 'GENERAL_INCOME' && pending.stage === 'CONFIRM_GENERAL_INCOME' && pending.source) {
+    confirmGeneralIncome(pending);
+    return;
+  }
+  if (pending.kind === 'STORE_SALE' && pending.stage === 'CONFIRM_STORE_SALE' && pending.value && pending.quantity) {
+    confirmStoreSale(pending);
+    return;
+  }
+  addMessage('app', 'รายการยังไม่พร้อมยืนยัน');
 }
 
 function editPending() {
   const pending = state.pendingFlow;
   if (!pending) return;
-  pending.source = null;
-  pending.stage = 'GENERAL_INCOME_SOURCE';
+  if (pending.kind === 'STORE_SALE') {
+    pending.value = null;
+    pending.quantity = null;
+    pending.stage = 'STORE_SALE_VALUE';
+  } else {
+    pending.source = null;
+    pending.stage = 'GENERAL_INCOME_SOURCE';
+  }
   saveState();
   resumePendingPrompt();
 }
@@ -283,6 +440,66 @@ function editPending() {
 function normalizePendingSource(text) {
   const clean = String(text || '').replace(/[“”"]/g, '').replace(/\s+/g, ' ').trim();
   return clean.replace(/^จาก\s*/u, '').trim();
+}
+
+function parsePositiveMoney(text) {
+  const match = String(text || '').match(/(?:฿\s*)?([0-9][0-9,]*(?:\.[0-9]{1,2})?)(?:\s*บาท)?/u);
+  if (!match) return null;
+  const value = Number(match[1].replaceAll(',', ''));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function parsePositiveQuantity(text) {
+  const match = String(text || '').match(/([0-9][0-9,]*)/u);
+  if (!match) return null;
+  const value = Number(match[1].replaceAll(',', ''));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function handleStorePendingInput(pending, clean) {
+  if (pending.stage === 'STORE_SALE_VALUE') {
+    const value = parsePositiveMoney(clean);
+    if (!value) {
+      addMessage('app', 'รบกวนบอกเพิ่ม: มูลค่าที่ขาย');
+      return;
+    }
+    pending.value = value;
+    pending.stage = 'STORE_SALE_QUANTITY';
+    saveState();
+    resumeStoreSalePrompt(pending);
+    return;
+  }
+
+  if (pending.stage === 'STORE_SALE_QUANTITY') {
+    const quantity = parsePositiveQuantity(clean);
+    if (!quantity) {
+      addMessage('app', 'รบกวนบอกเพิ่ม: จำนวนสินค้า');
+      return;
+    }
+    pending.quantity = quantity;
+    pending.stage = 'CONFIRM_STORE_SALE';
+    saveState();
+    resumeStoreSalePrompt(pending);
+    return;
+  }
+
+  addMessage('app', 'เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
+}
+
+function handleGeneralIncomePendingInput(pending, clean) {
+  if (pending.stage === 'GENERAL_INCOME_SOURCE') {
+    const source = normalizePendingSource(clean);
+    if (!source || source.length > 80) {
+      addMessage('app', 'รบกวนบอกเพิ่ม: ที่มาของรายรับ');
+      return;
+    }
+    pending.source = source;
+    pending.stage = 'CONFIRM_GENERAL_INCOME';
+    saveState();
+    resumeGeneralIncomePrompt(pending);
+    return;
+  }
+  addMessage('app', 'เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
 }
 
 function handlePendingInput(text) {
@@ -302,20 +519,29 @@ function handlePendingInput(text) {
     return;
   }
 
-  if (pending.stage === 'GENERAL_INCOME_SOURCE') {
-    const source = normalizePendingSource(clean);
-    if (!source || source.length > 80) {
-      addMessage('app', 'รบกวนบอกเพิ่ม: ที่มาของรายรับ');
-      return;
-    }
-    pending.source = source;
-    pending.stage = 'CONFIRM_GENERAL_INCOME';
-    saveState();
-    resumePendingPrompt();
-    return;
+  if (pending.kind === 'STORE_SALE') handleStorePendingInput(pending, clean);
+  else handleGeneralIncomePendingInput(pending, clean);
+}
+
+function beginStoreSale(parsed) {
+  if (parsed.ambiguous) {
+    const names = parsed.candidates.map((candidate) => candidate.productName).join(' / ');
+    addMessage('app', `เจอสินค้าที่เป็นไปได้มากกว่าหนึ่งรายการ: ${names}\nรบกวนพิมพ์ชื่อสินค้าให้ชัดขึ้น`);
+    return true;
   }
 
-  addMessage('app', 'เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
+  state.pendingFlow = {
+    kind: 'STORE_SALE',
+    stage: 'STORE_SALE_VALUE',
+    productId: parsed.productId,
+    productName: parsed.productName,
+    value: parsed.value,
+    quantity: parsed.quantity,
+  };
+  state.pendingFlow.stage = storeSaleStage(state.pendingFlow);
+  saveState();
+  resumePendingPrompt();
+  return true;
 }
 
 function handleChatInput(text) {
@@ -334,6 +560,12 @@ function handleChatInput(text) {
     return;
   }
 
+  const storeSale = parseStoreSale(clean, state.products);
+  if (storeSale) {
+    beginStoreSale(storeSale);
+    return;
+  }
+
   const parsed = parseGeneralIncome(clean);
   if (parsed) {
     state.pendingFlow = {
@@ -347,7 +579,7 @@ function handleChatInput(text) {
     return;
   }
 
-  addMessage('app', 'ตอนนี้สนามนี้รองรับรายรับทั่วไปแบบ “จำนวนเงิน + ที่มา” เช่น “ทิป 59” หรือ “ขายมือถือ 566” และคำถาม “วันนี้วันที่เท่าไร”');
+  addMessage('app', 'ตอนนี้สนามนี้รองรับรายรับทั่วไปแบบ “จำนวนเงิน + ที่มา”, การขายสินค้าที่รู้จักแบบ “สินค้า + มูลค่า + จำนวน” และคำถาม “วันนี้วันที่เท่าไร”');
 }
 
 function submitChatText(text) {
