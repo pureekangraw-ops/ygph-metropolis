@@ -29,6 +29,10 @@ const appShell = root.querySelector('#app-shell');
 const pinDots = [...root.querySelectorAll('.pin-dots span')];
 const pinStatus = root.querySelector('#pin-status');
 const homeDate = root.querySelector('#home-date');
+const homeCashValue = root.querySelector('#home-cash-value');
+const homeIncomeValue = root.querySelector('#home-income-value');
+const homeExpenseValue = root.querySelector('#home-expense-value');
+const homeNetValue = root.querySelector('#home-net-value');
 const pageKicker = root.querySelector('#page-kicker');
 const chatThread = root.querySelector('#chat-thread');
 const chatActions = root.querySelector('#chat-actions');
@@ -40,6 +44,7 @@ const manualDetailContent = root.querySelector('#manual-detail-content');
 const resetDialog = root.querySelector('#reset-dialog');
 
 let pinBuffer = '';
+let pendingReversalSaleId = null;
 let state = loadState();
 
 function freshProducts() {
@@ -73,6 +78,14 @@ function normalizeStoredProducts(products) {
     const stock = Number(stored?.stock);
     return { ...baseline, stock: Number.isInteger(stock) && stock >= 0 ? stock : baseline.stock };
   });
+}
+
+function normalizeStoredTransactions(transactions) {
+  if (!Array.isArray(transactions)) return [];
+  return transactions
+    .filter((transaction) => transaction && transaction.id && transaction.type)
+    .slice(-100)
+    .map((transaction) => ({ ...transaction }));
 }
 
 function storeSaleStage(pending) {
@@ -122,7 +135,7 @@ function loadState() {
       chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [],
       pendingFlow: normalizeStoredPending(parsed.pendingFlow),
       products: normalizeStoredProducts(parsed.products),
-      transactions: Array.isArray(parsed.transactions) ? parsed.transactions.slice(-100) : [],
+      transactions: normalizeStoredTransactions(parsed.transactions),
       cash: numberOr(parsed.cash, DEFAULT_STATE.cash),
       todayIncome: numberOr(parsed.todayIncome, DEFAULT_STATE.todayIncome),
       todayExpense: numberOr(parsed.todayExpense, DEFAULT_STATE.todayExpense),
@@ -152,11 +165,26 @@ function saveState() {
   }
 }
 
+function formatBaht(value) {
+  return `฿${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
+
+function renderHomeTruth() {
+  if (!homeCashValue || !homeIncomeValue || !homeExpenseValue || !homeNetValue) return;
+  const net = state.todayIncome - state.todayExpense;
+  homeCashValue.textContent = formatBaht(state.cash);
+  homeIncomeValue.textContent = formatBaht(state.todayIncome);
+  homeExpenseValue.textContent = formatBaht(state.todayExpense);
+  homeNetValue.textContent = `${net >= 0 ? '+' : '-'}${formatBaht(Math.abs(net))}`;
+}
+
 function resetDemoState() {
   state = cloneDefaults();
+  pendingReversalSaleId = null;
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
   pinBuffer = '';
   renderPinDots();
+  renderHomeTruth();
   manualDetail.hidden = true;
   manualHub.hidden = false;
   showPin();
@@ -179,6 +207,7 @@ function showPin() {
 function showApp() {
   pinScreen.hidden = true;
   appShell.hidden = false;
+  renderHomeTruth();
   selectRoot(state.activeRoot || 'home');
   restorePending();
 }
@@ -225,12 +254,13 @@ function selectRoot(rootId) {
   });
 
   pageKicker.textContent = next === 'home' ? 'วันนี้' : next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : 'ดูแลแอป';
+  if (next === 'home') renderHomeTruth();
   if (next === 'chat') {
     ensureChatWelcome();
     renderChat();
     requestAnimationFrame(() => chatInput.focus({ preventScroll: true }));
   }
-  if (next === 'manual' && !state.manualView) showManualHub();
+  if (next === 'manual') restoreManualView();
 }
 
 function addMessage(role, text, kind = role) {
@@ -357,6 +387,11 @@ function cancelPending() {
   saveState();
 }
 
+function refreshTruthSurfaces() {
+  renderHomeTruth();
+  if (state.activeRoot === 'manual' && state.manualView) openManualTask(state.manualView);
+}
+
 function confirmGeneralIncome(pending) {
   state.pendingFlow = null;
   state.cash += pending.amount;
@@ -370,6 +405,7 @@ function confirmGeneralIncome(pending) {
     createdAt: new Date().toISOString(),
   });
   addMessage('app', `บันทึกแล้ว ${pending.amount} บาท · ${pending.source}`);
+  refreshTruthSurfaces();
 }
 
 function confirmStoreSale(pending) {
@@ -403,6 +439,7 @@ function confirmStoreSale(pending) {
   });
   state.pendingFlow = null;
   addMessage('app', `บันทึกแล้ว ${product.name} · ${pending.value} บาท · ${pending.quantity} ชิ้น`);
+  refreshTruthSurfaces();
 }
 
 function confirmPending() {
@@ -594,7 +631,7 @@ const manualContent = {
   finance: {
     title: 'การเงิน',
     intro: 'เห็นเงินจริงและการเคลื่อนไหววันนี้แบบไม่ปนเงินที่ยังไม่เกิดขึ้น',
-    rows: [['เงินจริง', '฿2,450'], ['เงินเข้าวันนี้', '฿1,250'], ['เงินออกวันนี้', '฿380'], ['สุทธิวันนี้', '+฿870']],
+    rows: [],
   },
   obligations: {
     title: 'ภาระ',
@@ -603,8 +640,8 @@ const manualContent = {
   },
   store: {
     title: 'ร้านค้า',
-    intro: 'สรุปการขาย สต็อก และเงินค้างรับด้วยภาษางานจริง',
-    rows: [['ขายวันนี้', '3 รายการ'], ['สต็อกที่ต้องดู', '2 รายการ'], ['เงินค้างรับ', '฿450']],
+    intro: 'สรุปการขายและสต็อกจากข้อมูลก้อนเดียวกับแชต',
+    rows: [],
   },
   ride: {
     title: 'งานวิ่ง',
@@ -618,8 +655,8 @@ const manualContent = {
   },
   ledger: {
     title: 'รายการทั้งหมด',
-    intro: 'ย้อนดูหลักฐานเงินเข้าและเงินออกจากรายการเดียวกัน',
-    rows: [['เงินเข้า', '+฿500'], ['ค่าเดินทาง', '-฿120'], ['อาหาร', '-฿80']],
+    intro: 'ย้อนดูรายการเดิมพร้อมหลักฐานการยกเลิก โดยไม่ลบทิ้ง',
+    rows: [],
   },
 };
 
@@ -628,6 +665,121 @@ function showManualHub() {
   manualHub.hidden = false;
   manualDetail.hidden = true;
   saveState();
+}
+
+function makeDetailHero(data) {
+  const hero = document.createElement('div');
+  hero.className = 'detail-hero';
+  const title = document.createElement('h2');
+  title.textContent = data.title;
+  const intro = document.createElement('p');
+  intro.textContent = data.intro;
+  hero.append(title, intro);
+  return hero;
+}
+
+function makeDetailRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'detail-row';
+  const left = document.createElement('span');
+  left.textContent = label;
+  const right = document.createElement('strong');
+  right.textContent = value;
+  row.append(left, right);
+  return row;
+}
+
+function renderStaticDetail(data, rows = data.rows) {
+  const list = document.createElement('div');
+  list.className = 'detail-list';
+  for (const [label, value] of rows) list.append(makeDetailRow(label, value));
+  manualDetailContent.append(makeDetailHero(data), list);
+}
+
+function renderFinanceDetail() {
+  const data = manualContent.finance;
+  const net = state.todayIncome - state.todayExpense;
+  renderStaticDetail(data, [
+    ['เงินจริง', formatBaht(state.cash)],
+    ['เงินเข้าวันนี้', formatBaht(state.todayIncome)],
+    ['เงินออกวันนี้', formatBaht(state.todayExpense)],
+    ['สุทธิวันนี้', `${net >= 0 ? '+' : '-'}${formatBaht(Math.abs(net))}`],
+  ]);
+}
+
+function renderStoreDetail() {
+  const data = manualContent.store;
+  const list = document.createElement('div');
+  list.className = 'detail-list';
+  const activeSales = state.transactions.filter((transaction) => transaction.type === 'SALE' && transaction.status === 'ACTIVE');
+  const salesValue = activeSales.reduce((total, transaction) => total + Number(transaction.value || 0), 0);
+  list.append(makeDetailRow('ยอดขายที่บันทึก', `${activeSales.length} รายการ · ${formatBaht(salesValue)}`));
+  for (const product of state.products) {
+    list.append(makeDetailRow(product.name, `เหลือ ${product.stock} ชิ้น`));
+  }
+  manualDetailContent.append(makeDetailHero(data), list);
+}
+
+function transactionLabel(transaction) {
+  if (transaction.type === 'SALE') return transaction.productName || 'ขายสินค้า';
+  if (transaction.type === 'INCOME') return transaction.source || 'รายรับ';
+  if (transaction.type === 'REVERSAL') return `ย้อนรายการ · ${transaction.productName || 'สินค้า'}`;
+  return 'รายการ';
+}
+
+function transactionValue(transaction) {
+  const raw = Number(transaction.value || 0);
+  if (transaction.type === 'REVERSAL') return `-${formatBaht(Math.abs(raw))}`;
+  return `+${formatBaht(Math.abs(raw))}`;
+}
+
+function renderHistoryDetail() {
+  const data = manualContent.ledger;
+  const list = document.createElement('div');
+  list.className = 'detail-list history-list';
+  const transactions = [...state.transactions].reverse();
+
+  if (!transactions.length) {
+    list.append(makeDetailRow('ประวัติ', 'ยังไม่มีรายการ'));
+  }
+
+  for (const transaction of transactions) {
+    const row = document.createElement('div');
+    row.className = 'detail-row history-row';
+    const copy = document.createElement('span');
+    copy.className = 'history-copy';
+    const title = document.createElement('strong');
+    title.textContent = transactionLabel(transaction);
+    const detail = document.createElement('small');
+    if (transaction.type === 'SALE') {
+      detail.textContent = `${transaction.quantity} ชิ้น · ${transaction.status === 'CANCELLED' ? 'ยกเลิกแล้ว' : 'บันทึกแล้ว'}`;
+    } else if (transaction.type === 'REVERSAL') {
+      detail.textContent = 'คืนสต็อกและยอดเงินแล้ว';
+    } else {
+      detail.textContent = 'รายรับทั่วไป';
+    }
+    copy.append(title, detail);
+
+    const actions = document.createElement('div');
+    actions.className = 'history-actions';
+    const value = document.createElement('strong');
+    value.textContent = transactionValue(transaction);
+    actions.append(value);
+
+    if (transaction.type === 'SALE' && transaction.status === 'ACTIVE') {
+      const cancelButton = document.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.className = 'history-cancel';
+      cancelButton.textContent = 'ยกเลิกรายการ';
+      cancelButton.addEventListener('click', () => requestSaleReversal(transaction.id));
+      actions.append(cancelButton);
+    }
+
+    row.append(copy, actions);
+    list.append(row);
+  }
+
+  manualDetailContent.append(makeDetailHero(data), list);
 }
 
 function openManualTask(taskId) {
@@ -639,32 +791,92 @@ function openManualTask(taskId) {
   manualDetail.hidden = false;
   manualDetailContent.replaceChildren();
 
-  const hero = document.createElement('div');
-  hero.className = 'detail-hero';
-  const title = document.createElement('h2');
-  title.textContent = data.title;
-  const intro = document.createElement('p');
-  intro.textContent = data.intro;
-  hero.append(title, intro);
-
-  const list = document.createElement('div');
-  list.className = 'detail-list';
-  for (const [label, value] of data.rows) {
-    const row = document.createElement('div');
-    row.className = 'detail-row';
-    const left = document.createElement('span');
-    left.textContent = label;
-    const right = document.createElement('strong');
-    right.textContent = value;
-    row.append(left, right);
-    list.append(row);
+  if (taskId === 'finance') {
+    renderFinanceDetail();
+    return;
   }
-  manualDetailContent.append(hero, list);
+  if (taskId === 'store') {
+    renderStoreDetail();
+    return;
+  }
+  if (taskId === 'ledger') {
+    renderHistoryDetail();
+    return;
+  }
+  renderStaticDetail(data);
 }
 
 function restoreManualView() {
   if (state.manualView && manualContent[state.manualView]) openManualTask(state.manualView);
   else showManualHub();
+}
+
+function confirmSaleReversal(saleId) {
+  const sale = state.transactions.find((transaction) => transaction.id === saleId && transaction.type === 'SALE');
+  if (!sale || sale.status !== 'ACTIVE') return false;
+  const alreadyReversed = state.transactions.some((transaction) => transaction.type === 'REVERSAL' && transaction.reversalOf === sale.id);
+  if (alreadyReversed) return false;
+
+  const product = state.products.find((item) => item.id === sale.productId);
+  if (product) product.stock += Number(sale.quantity || 0);
+  state.cash -= Number(sale.value || 0);
+  state.todayIncome -= Number(sale.value || 0);
+  sale.status = 'CANCELLED';
+  sale.cancelledAt = new Date().toISOString();
+  state.transactions.push({
+    id: `reversal-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type: 'REVERSAL',
+    status: 'ACTIVE',
+    reversalOf: sale.id,
+    productId: sale.productId,
+    productName: sale.productName,
+    quantity: sale.quantity,
+    value: -Number(sale.value || 0),
+    createdAt: new Date().toISOString(),
+  });
+  saveState();
+  refreshTruthSurfaces();
+  return true;
+}
+
+function ensureSaleReversalDialog() {
+  let dialog = root.querySelector('#sale-reversal-dialog');
+  if (dialog) return dialog;
+
+  dialog = document.createElement('dialog');
+  dialog.id = 'sale-reversal-dialog';
+  dialog.className = 'confirm-dialog';
+  dialog.innerHTML = `
+    <form method="dialog">
+      <div class="dialog-beacon" aria-hidden="true">✦</div>
+      <h2>ยกเลิกรายการ?</h2>
+      <p>ยอดเงินและจำนวนสินค้าจะถูกย้อนกลับ และประวัติเดิมจะยังอยู่</p>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary-button">ยังไม่ยกเลิก</button>
+        <button value="confirm" class="danger-button" data-confirm-sale-reversal>ยืนยันยกเลิกรายการ</button>
+      </div>
+    </form>`;
+
+  dialog.querySelector('[data-confirm-sale-reversal]').addEventListener('click', () => {
+    if (pendingReversalSaleId) confirmSaleReversal(pendingReversalSaleId);
+    pendingReversalSaleId = null;
+  });
+  dialog.addEventListener('close', () => { pendingReversalSaleId = null; });
+  root.append(dialog);
+  return dialog;
+}
+
+function requestSaleReversal(saleId) {
+  const sale = state.transactions.find((transaction) => transaction.id === saleId && transaction.type === 'SALE' && transaction.status === 'ACTIVE');
+  if (!sale) return;
+  pendingReversalSaleId = saleId;
+  const dialog = ensureSaleReversalDialog();
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else if (window.confirm(`ยกเลิกรายการ ${sale.productName}?`)) {
+    confirmSaleReversal(saleId);
+    pendingReversalSaleId = null;
+  }
 }
 
 root.querySelectorAll('[data-pin]').forEach((button) => {
@@ -706,6 +918,7 @@ root.querySelector('#confirm-reset').addEventListener('click', () => {
 });
 
 homeDate.textContent = formatThaiDate(new Date());
+renderHomeTruth();
 restoreManualView();
 renderPinDots();
 
