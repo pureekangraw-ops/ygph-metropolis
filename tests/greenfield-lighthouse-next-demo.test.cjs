@@ -7,6 +7,7 @@ const root = process.cwd();
 const htmlPath = path.join(root, 'lighthouse-next/index.html');
 const cssPath = path.join(root, 'lighthouse-next/styles.css');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const incomeParserPath = path.join(root, 'lighthouse-next/general-income.mjs');
 const stagingConfigPath = path.join(root, 'wrangler.lighthouse-next-staging.jsonc');
 const deployWorkflowPath = path.join(root, '.github/workflows/greenfield-deploy-gate.yml');
 
@@ -15,10 +16,11 @@ function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
 
-test('LIGHTHOUSE next demo ships the three isolated static source files', () => {
+test('LIGHTHOUSE next demo ships its isolated static source files', () => {
   assert.equal(fs.existsSync(htmlPath), true, 'missing lighthouse-next/index.html');
   assert.equal(fs.existsSync(cssPath), true, 'missing lighthouse-next/styles.css');
   assert.equal(fs.existsSync(appPath), true, 'missing lighthouse-next/app.mjs');
+  assert.equal(fs.existsSync(incomeParserPath), true, 'missing lighthouse-next/general-income.mjs');
 });
 
 test('user surface is LIGHTHOUSE, Dashboard-first, with exactly four root nav labels', () => {
@@ -55,28 +57,19 @@ test('CHAT encodes Ambiguity Lock B-A-B-A and a supported local side-query remin
   const app = read(appPath);
   assert.match(app, /AMBIGUITY_LOCK\s*=\s*['"]BABA['"]/);
   assert.match(app, /วันนี้วันที่เท่าไร/);
-  assert.match(app, /ยังรอจำนวนของ/);
+  assert.match(app, /ยังรอที่มาของรายรับ/);
   assert.match(app, /answerLocalSideQuery/);
 });
 
-test('CHAT tells the user every remaining sale field instead of revealing one internal stage at a time', () => {
+test('CHAT general income asks only for amount plus source and never forces a store-or-ride selector', () => {
   const app = read(appPath);
-  assert.match(app, /function missingIncomeFields/);
-  assert.match(app, /บอกเพิ่มได้เลย/);
-  for (const label of ['ได้เงินจากไหน', 'ขายอะไร', 'จำนวนกี่อัน']) assert.match(app, new RegExp(label));
-  assert.match(app, /ข้อมูลที่รับแล้ว/);
-  assert.match(app, /✓/);
-  assert.match(app, /—/);
-});
-
-test('CHAT can parse a one-shot sale sentence and advance directly to sale confirmation when all fields are present', () => {
-  const app = read(appPath);
-  assert.match(app, /function parseIncomeDetails/);
-  assert.match(app, /function applyIncomeDetails/);
-  assert.match(app, /จากร้าน/);
-  assert.match(app, /ขาย/);
-  assert.match(app, /อัน/);
-  assert.match(app, /CONFIRM_SALE/);
+  assert.match(app, /parseGeneralIncome/);
+  assert.match(app, /รบกวนบอกเพิ่ม: ที่มาของรายรับ/);
+  assert.match(app, /ยืนยันรายรับ/);
+  assert.match(app, /ทิป 59/);
+  assert.match(app, /ขายมือถือ 566/);
+  assert.doesNotMatch(app, /setChatActions\(\['ร้าน', 'วิ่ง', 'อย่างอื่น'\]\)/);
+  assert.doesNotMatch(app, /ได้เงินจากไหน|ขายสินค้าหรือเงินเข้าร้านอย่างอื่น/);
 });
 
 test('MANUAL exposes user jobs and Settings labels the environment as fake/local demo data', () => {
