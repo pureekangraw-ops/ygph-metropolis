@@ -7,6 +7,8 @@ const root = process.cwd();
 const htmlPath = path.join(root, 'lighthouse-next/index.html');
 const cssPath = path.join(root, 'lighthouse-next/styles.css');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const stagingConfigPath = path.join(root, 'wrangler.lighthouse-next-staging.jsonc');
+const deployWorkflowPath = path.join(root, '.github/workflows/greenfield-deploy-gate.yml');
 
 function read(file) {
   assert.equal(fs.existsSync(file), true, `missing ${path.relative(root, file)}`);
@@ -64,4 +66,17 @@ test('MANUAL exposes user jobs and Settings labels the environment as fake/local
   }
   assert.match(html, /ข้อมูลจำลอง/);
   assert.match(html, /รีเซ็ตเดโม/);
+});
+
+test('demo staging is isolated from the production asset allowlist and verifies its own public URL', () => {
+  const config = read(stagingConfigPath);
+  const workflow = read(deployWorkflowPath);
+  const productionIgnore = read(path.join(root, '.assetsignore'));
+
+  assert.match(config, /"name"\s*:\s*"lighthouse-next-staging"/);
+  assert.match(config, /"directory"\s*:\s*"\.\/lighthouse-next"/);
+  assert.doesNotMatch(productionIgnore, /lighthouse-next/);
+  assert.match(workflow, /wrangler\.lighthouse-next-staging\.jsonc/);
+  assert.match(workflow, /https:\/\/lighthouse-next-staging\.pureekangraw\.workers\.dev/);
+  assert.match(workflow, /LIGHTHOUSE/);
 });
