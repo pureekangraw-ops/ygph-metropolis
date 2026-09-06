@@ -19,7 +19,7 @@ async function resetVault() {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, { sideQueryHandler = null } = {}) {
   await resetVault();
   await initializeTrustedFirstRun({
     recoveryCode:RECOVERY_CODE,
@@ -33,6 +33,7 @@ async function fixture(t) {
     lockManager:null,
     now:() => '2026-09-06T04:30:01.000Z',
     documentRef:null,
+    sideQueryHandler,
   });
   t.after(async () => { session.close(); await resetVault(); });
   return session;
@@ -70,6 +71,39 @@ test('วันนี้ได้ 500 pauses for income owner and cannot be over
 
   const durable = await session.runtime.readState();
   assert.deepEqual(durable.domains, before.domains);
+});
+
+test('pending income can answer a non-mutation side query and resume the same 500 flow', async (t) => {
+  const sideQueryHandler = async rawText => {
+    if (rawText !== 'พรุ่งนี้ฝนตกไหม') return null;
+    return {
+      status:'SUCCESS',
+      readback:{
+        interactionStatus:'SIDE_QUERY_ANSWERED',
+        message:'พรุ่งนี้มีโอกาสฝนตก',
+      },
+    };
+  };
+  const session = await fixture(t, { sideQueryHandler });
+  const before = await session.runtime.readState();
+
+  await chat(session, 'UI-SIDE-1', 'วันนี้ได้ 500');
+  const side = await chat(session, 'UI-SIDE-2', 'พรุ่งนี้ฝนตกไหม');
+  assert.equal(side.status, 'SUCCESS');
+  assert.equal(side.result.readback.interactionStatus, 'SIDE_QUERY_ANSWERED');
+  assert.equal(side.result.readback.message, 'พรุ่งนี้มีโอกาสฝนตก');
+
+  const afterSide = await session.runtime.readState();
+  assert.deepEqual(afterSide.domains, before.domains);
+
+  const resumed = await chat(session, 'UI-SIDE-3', 'ร้าน');
+  assert.equal(resumed.status, 'SUCCESS');
+  assert.equal(resumed.result.readback.interactionStatus, 'CLARIFICATION_REQUIRED');
+  assert.match(resumed.result.readback.message, /ขายสินค้า/);
+  assert.match(resumed.result.readback.message, /เงินเข้าร้านอย่างอื่น/);
+
+  const afterResume = await session.runtime.readState();
+  assert.deepEqual(afterResume.domains, before.domains);
 });
 
 test('วันนี้ได้ 500 → อย่างอื่น prepares OTHER_INCOME and mutates only after typed confirmation', async (t) => {
