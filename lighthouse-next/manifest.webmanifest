@@ -1,0 +1,17 @@
+{
+  "name": "LIGHTHOUSE",
+  "short_name": "LIGHTHOUSE",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111d",
+  "theme_color": "#07111d",
+  "icons": [
+    {
+      "src": "./assets/lighthouse-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
