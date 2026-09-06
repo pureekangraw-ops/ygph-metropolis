@@ -83,6 +83,21 @@ function storeSaleDetails(rawText) {
   return frozen({ title, quantity });
 }
 
+function storeSaleProduct(rawText) {
+  const input = text(rawText).replace(/^ขาย\s*/u, '').trim();
+  if (!input || /[0-9๐-๙]/u.test(input)) return null;
+  return input;
+}
+
+function storeSaleQuantity(rawText) {
+  const input = text(rawText);
+  const match = /^([0-9๐-๙,]+)\s*(?:กล่อง|ชิ้น|อัน)?$/u.exec(input);
+  if (!match) return null;
+  const numeric = parseNumericText(match[1]);
+  const quantity = numeric.state === 'RESOLVED' ? numeric.value : null;
+  return Number.isSafeInteger(quantity) && quantity > 0 ? quantity : null;
+}
+
 function sourceQuestion(amountSatang) {
   return `เงิน ${Number(amountSatang) / 100} บาทนี้มาจาก ร้าน / วิ่ง / อย่างอื่น ?`;
 }
@@ -93,6 +108,10 @@ function storeOperationQuestion() {
 
 function storeSaleDetailsQuestion(amountSatang) {
   return `ขายอะไร จำนวนเท่าไร? ยอดรวม ${Number(amountSatang) / 100} บาท`;
+}
+
+function storeSaleQuantityQuestion(amountSatang, title) {
+  return `${String(title)} จำนวนเท่าไร? ยอดรวม ${Number(amountSatang) / 100} บาท`;
 }
 
 function noRideRoundQuestion() {
@@ -283,6 +302,20 @@ export function createTrustedBrainAdapter({
     if (conversation.kind === 'STORE_SALE_DETAILS') {
       const details = storeSaleDetails(answer);
       if (details) return rememberReady(storeSaleRequest(conversation.amountSatang, details));
+
+      if (conversation.title) {
+        const quantity = storeSaleQuantity(answer);
+        if (quantity) {
+          return rememberReady(storeSaleRequest(conversation.amountSatang, { title:conversation.title, quantity }));
+        }
+        return clarificationResult(storeSaleQuantityQuestion(conversation.amountSatang, conversation.title), []);
+      }
+
+      const title = storeSaleProduct(answer);
+      if (title) {
+        incomeConversation = { kind:'STORE_SALE_DETAILS', amountSatang:conversation.amountSatang, title };
+        return clarificationResult(storeSaleQuantityQuestion(conversation.amountSatang, title), []);
+      }
       return clarificationResult(storeSaleDetailsQuestion(conversation.amountSatang), []);
     }
 
