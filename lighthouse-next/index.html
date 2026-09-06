@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111d">
+  <title>LIGHTHOUSE</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/lighthouse-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./owner-polish.css">
+</head>
+<body>
+  <main id="demo-root">
+    <section id="pin-screen" class="pin-screen" aria-labelledby="pin-title">
+      <div class="pin-brand" aria-hidden="true">
+        <img class="pin-app-icon" src="./assets/lighthouse-icon.svg" alt="">
+      </div>
+      <div class="pin-copy">
+        <p class="eyebrow">LIGHTHOUSE</p>
+        <h1 id="pin-title">ก้าวต่อไปของคุณ</h1>
+        <p class="muted">ใส่ PIN 4 หลัก</p>
+      </div>
+      <div class="pin-dots" aria-label="จำนวนหลักของ PIN">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <p id="pin-status" class="pin-status" aria-live="polite">สนามทดสอบนี้ใช้ PIN 4 หลักใดก็ได้</p>
+      <div class="pin-pad" aria-label="แป้น PIN">
+        <button type="button" class="pin-key" data-pin="1">1</button>
+        <button type="button" class="pin-key" data-pin="2">2</button>
+        <button type="button" class="pin-key" data-pin="3">3</button>
+        <button type="button" class="pin-key" data-pin="4">4</button>
+        <button type="button" class="pin-key" data-pin="5">5</button>
+        <button type="button" class="pin-key" data-pin="6">6</button>
+        <button type="button" class="pin-key" data-pin="7">7</button>
+        <button type="button" class="pin-key" data-pin="8">8</button>
+        <button type="button" class="pin-key" data-pin="9">9</button>
+        <span class="pin-spacer" aria-hidden="true"></span>
+        <button type="button" class="pin-key" data-pin="0">0</button>
+        <button type="button" id="pin-backspace" class="pin-key pin-key-soft" aria-label="ลบตัวเลขล่าสุด">⌫</button>
+      </div>
+    </section>
+
+    <section id="app-shell" class="app-shell" hidden>
+      <header class="app-header">
+        <div class="compact-brand" aria-label="LIGHTHOUSE">
+          <span class="mini-beacon" aria-hidden="true">✦</span>
+          <span>LIGHTHOUSE</span>
+        </div>
+        <p id="page-kicker" class="page-kicker">วันนี้</p>
+      </header>
+
+      <div id="page-home" class="app-page active" data-root="home">
+        <section class="home-hero" aria-labelledby="cash-title">
+          <p id="cash-title" class="section-label">เงินจริง</p>
+          <p class="cash-value" id="home-cash-value">฿2,450</p>
+          <p class="cash-note">ใช้ได้จริงตอนนี้</p>
+          <div class="expected-row">
+            <span>คาดว่าจะเข้า</span><strong id="home-expected-value">฿700</strong>
+          </div>
+        </section>
+
+        <section class="today-section" aria-labelledby="today-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">ภาพวันนี้</p>
+              <h2 id="today-title">วันนี้</h2>
+            </div>
+            <span class="date-chip" id="home-date">—</span>
+          </div>
+          <div class="metric-grid">
+            <article class="metric-card"><span>เงินเข้า</span><strong id="home-income-value">฿1,250</strong></article>
+            <article class="metric-card"><span>เงินออก</span><strong id="home-expense-value">฿380</strong></article>
+            <article class="metric-card metric-wide"><span>สุทธิ</span><strong id="home-net-value">+฿870</strong></article>
+          </div>
+        </section>
+
+        <section class="next-step-card" aria-labelledby="next-step-title">
+          <div class="next-step-light" aria-hidden="true"></div>
+          <p class="eyebrow">ก้าวถัดไป</p>
+          <h2 id="next-step-title">ภาระใกล้ที่สุด</h2>
+          <div class="obligation-main">
+            <div><strong id="home-obligation-title">ค่าใช้จ่ายก้อนถัดไป</strong><span id="home-obligation-due">ครบกำหนดในอีก 3 วัน</span></div>
+            <strong class="obligation-amount" id="home-obligation-value">฿3,200</strong>
+          </div>
+          <div class="gap-row"><span>ยังขาด</span><strong id="home-gap-value">฿750</strong></div>
+          <div class="target-row"><span>เป้าวันนี้</span><strong id="home-target-value">หาเพิ่ม ฿1,100</strong></div>
+        </section>
+      </div>
+
+      <div id="page-chat" class="app-page chat-page" data-root="chat" hidden>
+        <div class="page-title-block">
+          <p class="eyebrow">คุยแบบที่คุณพูด</p>
+          <h1>แชต</h1>
+        </div>
+        <div id="chat-thread" class="chat-thread" aria-live="polite"></div>
+        <div id="chat-actions" class="chat-actions" aria-label="คำตอบด่วน"></div>
+        <form id="chat-form" class="chat-composer">
+          <label class="sr-only" for="chat-input">พิมพ์สิ่งที่ต้องการ</label>
+          <textarea id="chat-input" rows="1" maxlength="160" placeholder="พิมพ์สิ่งที่ต้องการ…"></textarea>
+          <button type="submit" class="send-button" aria-label="ส่งข้อความ">↑</button>
+        </form>
+      </div>
+
+      <div id="page-manual" class="app-page" data-root="manual" hidden>
+        <div id="manual-hub">
+          <div class="page-title-block">
+            <p class="eyebrow">เลือกงานแล้วทำได้เลย</p>
+            <h1>MANUAL</h1>
+          </div>
+          <div class="task-grid">
+            <button type="button" class="task-card" data-task="finance"><span class="task-icon">฿</span><span><strong>การเงิน</strong><small>เงินจริง เงินเข้าออก ภาระ และเป้าหมาย</small></span><b>›</b></button>
+            <button type="button" class="task-card" data-task="store"><span class="task-icon">◇</span><span><strong>ร้านค้า</strong><small>ยอดขาย สต็อก และเงินค้างรับ</small></span><b>›</b></button>
+            <button type="button" class="task-card" data-task="ride"><span class="task-icon">↗</span><span><strong>งานวิ่ง</strong><small>รอบงาน รายได้ และค่าใช้จ่าย</small></span><b>›</b></button>
+            <button type="button" class="task-card" data-task="calendar"><span class="task-icon">□</span><span><strong>ปฏิทิน</strong><small>ดูสิ่งที่ต้องทำตามวัน</small></span><b>›</b></button>
+            <button type="button" class="task-card" data-task="ledger"><span class="task-icon">≡</span><span><strong>รายการทั้งหมด</strong><small>ย้อนดูเงินเข้าและเงินออก</small></span><b>›</b></button>
+          </div>
+        </div>
+        <section id="manual-detail" class="manual-detail" hidden>
+          <button type="button" id="manual-back" class="back-button">‹ กลับ</button>
+          <div id="manual-detail-content"></div>
+        </section>
+      </div>
+
+      <div id="page-settings" class="app-page" data-root="settings" hidden>
+        <div class="page-title-block">
+          <p class="eyebrow">ดูแล LIGHTHOUSE</p>
+          <h1>ตั้งค่า</h1>
+        </div>
+        <section class="settings-panel">
+          <div class="settings-row">
+            <span><strong>ข้อมูลจำลอง</strong><small>ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น</small></span>
+            <span class="status-pill">ทดสอบ</span>
+          </div>
+          <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>รีเซ็ตเดโม</strong><small>ล้างบทสนทนาและสถานะทดลอง</small></span><b>›</b></button>
+        </section>
+        <section class="about-card">
+          <div class="about-beacon" aria-hidden="true">✦</div>
+          <div><p class="eyebrow">LIGHTHOUSE</p><h2>Your next step.</h2><p>ช่วยให้เห็นสถานการณ์ แล้วพาไปยังสิ่งที่ควรทำต่อโดยไม่เพิ่มภาระให้คนใช้</p></div>
+        </section>
+      </div>
+
+      <nav id="bottom-nav" class="bottom-nav" aria-label="เมนูหลัก">
+        <button type="button" class="nav-item active" data-root-target="home"><span aria-hidden="true">⌂</span><small>หน้าหลัก</small></button>
+        <button type="button" class="nav-item" data-root-target="chat"><span aria-hidden="true">◌</span><small>แชต</small></button>
+        <button type="button" class="nav-item" data-root-target="manual"><span aria-hidden="true">✦</span><small>MANUAL</small></button>
+        <button type="button" class="nav-item" data-root-target="settings"><span aria-hidden="true">⚙</span><small>ตั้งค่า</small></button>
+      </nav>
+    </section>
+
+    <dialog id="reset-dialog" class="confirm-dialog">
+      <form method="dialog">
+        <div class="dialog-beacon" aria-hidden="true">✦</div>
+        <h2>เริ่มสนามใหม่?</h2>
+        <p>บทสนทนาและสถานะทดลองในเครื่องนี้จะถูกล้าง</p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button">ยังไม่ล้าง</button>
+          <button id="confirm-reset" value="confirm" class="danger-button">ล้างข้อมูลทดลอง</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

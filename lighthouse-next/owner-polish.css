@@ -1,0 +1,15 @@
+.pin-app-icon {
+  width: min(220px, 64vw);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 28px;
+  display: block;
+  margin: 0 auto;
+}
+
+.history-cancel {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  touch-action: manipulation;
+}
