@@ -234,7 +234,7 @@ function resumePendingPrompt({ afterSideQuery = false } = {}) {
   if (afterSideQuery) addMessage('app', pendingReminder(pending), 'note');
 
   if (pending.stage === 'CONFIRM_GENERAL_INCOME' && pending.source) {
-    addMessage('app', `ยืนยันรายรับ ฿${pending.amount} · ที่มา: ${pending.source}?`);
+    addMessage('app', `${pending.amount} บาท จาก${pending.source} — บันทึกไหม?`);
   } else {
     pending.stage = 'GENERAL_INCOME_SOURCE';
     addMessage('app', `ข้อมูลที่รับแล้ว: เงิน ฿${pending.amount} ✓ · ที่มา —\nรบกวนบอกเพิ่ม: ที่มาของรายรับ`);
@@ -246,7 +246,7 @@ function restorePending() {
   if (!state.pendingFlow) return;
   const last = state.chatHistory[state.chatHistory.length - 1];
   const reminder = pendingReminder(state.pendingFlow);
-  if (!last || (!last.text.includes(reminder) && !last.text.includes('รบกวนบอกเพิ่ม: ที่มาของรายรับ') && !last.text.includes('ยืนยันรายรับ'))) {
+  if (!last || (!last.text.includes(reminder) && !last.text.includes('รบกวนบอกเพิ่ม: ที่มาของรายรับ') && !last.text.includes('— บันทึกไหม?'))) {
     addMessage('app', 'กลับมาแล้ว — รายการที่ค้างยังอยู่', 'note');
     resumePendingPrompt();
   }
@@ -266,9 +266,8 @@ function confirmPending() {
     return;
   }
 
-  const summary = `เดโมบันทึก: รายรับ ฿${pending.amount} · ที่มา ${pending.source}`;
   state.pendingFlow = null;
-  addMessage('app', `${summary}\nเป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน`);
+  addMessage('app', `บันทึกแล้ว ${pending.amount} บาท · ${pending.source}`);
   saveState();
 }
 
