@@ -65,7 +65,7 @@ test('CHAT general income asks only for amount plus source and never forces a st
   const app = read(appPath);
   assert.match(app, /parseGeneralIncome/);
   assert.match(app, /รบกวนบอกเพิ่ม: ที่มาของรายรับ/);
-  assert.match(app, /ยืนยันรายรับ/);
+  assert.match(app, /บันทึกไหม/);
   assert.match(app, /ทิป 59/);
   assert.match(app, /ขายมือถือ 566/);
   assert.doesNotMatch(app, /setChatActions\(\['ร้าน', 'วิ่ง', 'อย่างอื่น'\]\)/);
