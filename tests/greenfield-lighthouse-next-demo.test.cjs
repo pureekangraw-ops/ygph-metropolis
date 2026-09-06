@@ -72,6 +72,14 @@ test('CHAT general income asks only for amount plus source and never forces a st
   assert.doesNotMatch(app, /ได้เงินจากไหน|ขายสินค้าหรือเงินเข้าร้านอย่างอื่น/);
 });
 
+test('CHAT confirmation and success copy read like conversation, not system output', () => {
+  const app = read(appPath);
+  assert.match(app, /บาท จาก\$\{pending\.source\} — บันทึกไหม\?/);
+  assert.match(app, /บันทึกแล้ว \$\{pending\.amount\} บาท · \$\{pending\.source\}/);
+  assert.doesNotMatch(app, /เดโมบันทึก:/);
+  assert.doesNotMatch(app, /เป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน/);
+});
+
 test('MANUAL exposes user jobs and Settings labels the environment as fake/local demo data', () => {
   const html = read(htmlPath);
   for (const label of ['การเงิน', 'ภาระ', 'ร้านค้า', 'งานวิ่ง', 'ปฏิทิน', 'รายการทั้งหมด']) {
