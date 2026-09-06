@@ -92,8 +92,8 @@ button{-webkit-tap-highlight-color:transparent}
 .gap-row strong{color:var(--gold)}
 .target-row strong{color:var(--cyan)}
 
-.chat-page{display:flex;flex-direction:column;min-height:calc(100dvh - var(--nav-height) - 104px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-.chat-thread{flex:1;display:flex;flex-direction:column;gap:10px;overflow:auto;padding:4px 2px 14px;scrollbar-width:none}
+.chat-page{display:flex;flex-direction:column;height:calc(100dvh - var(--nav-height) - 104px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0}
+.chat-thread{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;padding:4px 2px 14px;scrollbar-width:none}
 .chat-thread::-webkit-scrollbar{display:none}
 .message{max-width:86%;padding:12px 14px;border-radius:18px;font-size:15px;line-height:1.42;white-space:pre-wrap}
 .message.user{align-self:flex-end;background:linear-gradient(135deg,rgba(255,216,138,.17),rgba(255,255,255,.06));border:1px solid rgba(255,216,138,.18);border-bottom-right-radius:6px}
