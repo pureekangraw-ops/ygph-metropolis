@@ -3,42 +3,33 @@ const assert = require('node:assert/strict');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 
-const moduleUrl = pathToFileURL(path.join(process.cwd(), 'lighthouse-next/chat-intake.mjs')).href;
+const moduleUrl = pathToFileURL(path.join(process.cwd(), 'lighthouse-next/general-income.mjs')).href;
 
-async function loadIntake() {
+async function loadIncomeParser() {
   return import(`${moduleUrl}?t=${Date.now()}`);
 }
 
-test('store shorthand without the word ขาย infers product, quantity, and sale operation', async () => {
-  const { parseIncomeDetails, mergeIncomeDetails, deriveIncomeStage } = await loadIntake();
-  const pending = {
-    kind: 'INCOME', amount: 500, source: null, operation: null, product: null, quantity: null,
-  };
+test('general income is amount plus human-language source with no forced route category', async () => {
+  const { parseGeneralIncome } = await loadIncomeParser();
 
-  const merged = mergeIncomeDetails(pending, parseIncomeDetails('จากร้าน สบู่ 3 อัน'));
-
-  assert.equal(merged.source, 'STORE');
-  assert.equal(merged.operation, 'SALE');
-  assert.equal(merged.product, 'สบู่');
-  assert.equal(merged.quantity, 3);
-  assert.equal(deriveIncomeStage(merged), 'CONFIRM_SALE');
+  assert.deepEqual(parseGeneralIncome('ทิป 59'), { amount: 59, source: 'ทิป' });
+  assert.deepEqual(parseGeneralIncome('ขายมือถือ 566'), { amount: 566, source: 'ขายมือถือ' });
+  assert.deepEqual(Object.keys(parseGeneralIncome('ทิป 59')).sort(), ['amount', 'source']);
 });
 
-test('partial shorthand asks only for the field that is still missing', async () => {
-  const { parseIncomeDetails, mergeIncomeDetails, missingIncomeFields } = await loadIntake();
-  const base = { kind: 'INCOME', amount: 500, source: null, operation: null, product: null, quantity: null };
+test('general income can keep only the missing source pending', async () => {
+  const { parseGeneralIncome } = await loadIncomeParser();
 
-  const productOnly = mergeIncomeDetails(base, parseIncomeDetails('จากร้าน สบู่'));
-  assert.deepEqual(missingIncomeFields(productOnly), ['จำนวนกี่อัน']);
-
-  const quantityOnly = mergeIncomeDetails(base, parseIncomeDetails('จากร้าน 3 อัน'));
-  assert.deepEqual(missingIncomeFields(quantityOnly), ['ขายอะไร']);
+  assert.deepEqual(parseGeneralIncome('วันนี้ได้ 500'), { amount: 500, source: null });
+  assert.deepEqual(parseGeneralIncome('ได้เงิน 300 จากเพื่อน'), { amount: 300, source: 'เพื่อน' });
 });
 
-test('complete store shorthand has no duplicate missing-field prompt', async () => {
-  const { parseIncomeDetails, mergeIncomeDetails, missingIncomeFields } = await loadIntake();
-  const base = { kind: 'INCOME', amount: 500, source: null, operation: null, product: null, quantity: null };
-  const merged = mergeIncomeDetails(base, parseIncomeDetails('จากร้าน สบู่ 3 อัน'));
+test('tip remains ordinary income source text instead of becoming a ride-specific branch', async () => {
+  const { parseGeneralIncome } = await loadIncomeParser();
+  const parsed = parseGeneralIncome('ทิป 59');
 
-  assert.deepEqual(missingIncomeFields(merged), []);
+  assert.equal(parsed.source, 'ทิป');
+  assert.equal('route' in parsed, false);
+  assert.equal('category' in parsed, false);
+  assert.equal('owner' in parsed, false);
 });
