@@ -59,6 +59,26 @@ test('CHAT encodes Ambiguity Lock B-A-B-A and a supported local side-query remin
   assert.match(app, /answerLocalSideQuery/);
 });
 
+test('CHAT tells the user every remaining sale field instead of revealing one internal stage at a time', () => {
+  const app = read(appPath);
+  assert.match(app, /function missingIncomeFields/);
+  assert.match(app, /บอกเพิ่มได้เลย/);
+  for (const label of ['ได้เงินจากไหน', 'ขายอะไร', 'จำนวนกี่อัน']) assert.match(app, new RegExp(label));
+  assert.match(app, /ข้อมูลที่รับแล้ว/);
+  assert.match(app, /✓/);
+  assert.match(app, /—/);
+});
+
+test('CHAT can parse a one-shot sale sentence and advance directly to sale confirmation when all fields are present', () => {
+  const app = read(appPath);
+  assert.match(app, /function parseIncomeDetails/);
+  assert.match(app, /function applyIncomeDetails/);
+  assert.match(app, /จากร้าน/);
+  assert.match(app, /ขาย/);
+  assert.match(app, /อัน/);
+  assert.match(app, /CONFIRM_SALE/);
+});
+
 test('MANUAL exposes user jobs and Settings labels the environment as fake/local demo data', () => {
   const html = read(htmlPath);
   for (const label of ['การเงิน', 'ภาระ', 'ร้านค้า', 'งานวิ่ง', 'ปฏิทิน', 'รายการทั้งหมด']) {
