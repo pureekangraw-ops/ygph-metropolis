@@ -1,5 +1,6 @@
 import { parseGeneralIncome } from './general-income.mjs';
 import { parseStoreSale } from './store-sale.mjs';
+import { formatThaiBangkokDate } from './bangkok-date.mjs';
 
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const AMBIGUITY_LOCK = 'BABA';
@@ -259,14 +260,6 @@ function resetDemoState() {
   showPin();
 }
 
-function formatThaiDate(date = new Date()) {
-  try {
-    return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
-  } catch {
-    return date.toLocaleDateString();
-  }
-}
-
 function showPin() {
   pinScreen.hidden = false;
   appShell.hidden = true;
@@ -384,7 +377,7 @@ function renderChatActions() {
 function answerLocalSideQuery(text) {
   const normalized = text.replace(/[?？]/g, '').trim();
   if (normalized !== 'วันนี้วันที่เท่าไร') return null;
-  return `วันนี้ ${formatThaiDate(new Date())}`;
+  return `วันนี้ ${formatThaiBangkokDate(new Date())}`;
 }
 
 function pendingReminder(pending) {
@@ -1010,7 +1003,7 @@ root.querySelector('#confirm-reset').addEventListener('click', () => {
   window.setTimeout(resetDemoState, 0);
 });
 
-homeDate.textContent = formatThaiDate(new Date());
+homeDate.textContent = formatThaiBangkokDate(new Date());
 renderHomeTruth();
 restoreManualView();
 renderPinDots();
