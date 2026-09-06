@@ -25,10 +25,13 @@ test('user surface is LIGHTHOUSE, Dashboard-first, with exactly four root nav la
   for (const label of ['เงินจริง', 'เงินเข้า', 'เงินออก', 'สุทธิ', 'ภาระใกล้ที่สุด', 'ยังขาด', 'เป้าวันนี้']) {
     assert.match(html, new RegExp(label));
   }
+  const nav = html.match(/<nav id="bottom-nav"[\s\S]*?<\/nav>/)?.[0];
+  assert.ok(nav, 'bottom root navigation must exist');
   for (const label of ['หน้าหลัก', 'แชต', 'MANUAL', 'ตั้งค่า']) {
-    const matches = html.match(new RegExp(`>${label}<`, 'g')) || [];
-    assert.equal(matches.length, 1, `${label} must appear exactly once as a root nav label`);
+    const matches = nav.match(new RegExp(`>${label}<`, 'g')) || [];
+    assert.equal(matches.length, 1, `${label} must appear exactly once in bottom root navigation`);
   }
+  assert.equal((nav.match(/data-root-target=/g) || []).length, 4, 'bottom root navigation must contain exactly four root controls');
   assert.doesNotMatch(html, /เปิดแชต|เปิด MANUAL/);
 });
 
