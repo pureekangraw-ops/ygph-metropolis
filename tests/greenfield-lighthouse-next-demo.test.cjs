@@ -182,3 +182,16 @@ test('sale cancellation is confirmed, append-only, and protected from double rev
   assert.doesNotMatch(app, /transactions\.splice\(/);
   assert.doesNotMatch(app, /transactions\s*=\s*state\.transactions\.filter/);
 });
+
+test('owner-locked app icon and transaction history have explicit mobile polish', () => {
+  const html = read(htmlPath);
+  const polishPath = path.join(root, 'lighthouse-next/owner-polish.css');
+  assert.match(html, /owner-polish\.css/);
+  assert.equal(fs.existsSync(polishPath), true, 'missing lighthouse-next/owner-polish.css');
+  const polish = read(polishPath);
+  assert.match(polish, /\.pin-app-icon\s*\{/);
+  assert.match(polish, /aspect-ratio\s*:\s*1/);
+  assert.match(polish, /object-fit\s*:\s*cover/);
+  assert.match(polish, /\.history-cancel\s*\{/);
+  assert.match(polish, /min-height\s*:\s*44px/);
+});
