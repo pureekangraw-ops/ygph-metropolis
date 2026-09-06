@@ -56,7 +56,7 @@
           <p class="cash-value" id="home-cash-value">฿2,450</p>
           <p class="cash-note">ใช้ได้จริงตอนนี้</p>
           <div class="expected-row">
-            <span>คาดว่าจะเข้า</span><strong>฿700</strong>
+            <span>คาดว่าจะเข้า</span><strong id="home-expected-value">฿700</strong>
           </div>
         </section>
 
@@ -80,11 +80,11 @@
           <p class="eyebrow">ก้าวถัดไป</p>
           <h2 id="next-step-title">ภาระใกล้ที่สุด</h2>
           <div class="obligation-main">
-            <div><strong>ค่าใช้จ่ายก้อนถัดไป</strong><span>ครบกำหนดในอีก 3 วัน</span></div>
-            <strong class="obligation-amount">฿3,200</strong>
+            <div><strong id="home-obligation-title">ค่าใช้จ่ายก้อนถัดไป</strong><span id="home-obligation-due">ครบกำหนดในอีก 3 วัน</span></div>
+            <strong class="obligation-amount" id="home-obligation-value">฿3,200</strong>
           </div>
-          <div class="gap-row"><span>ยังขาด</span><strong>฿750</strong></div>
-          <div class="target-row"><span>เป้าวันนี้</span><strong>หาเพิ่ม ฿1,100</strong></div>
+          <div class="gap-row"><span>ยังขาด</span><strong id="home-gap-value">฿750</strong></div>
+          <div class="target-row"><span>เป้าวันนี้</span><strong id="home-target-value">หาเพิ่ม ฿1,100</strong></div>
         </section>
       </div>
 
@@ -161,6 +161,5 @@
     </dialog>
   </main>
   <script type="module" src="./app.mjs"></script>
-  <script type="module" src="./manual-finance-merge.mjs"></script>
 </body>
 </html>
