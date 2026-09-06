@@ -24,7 +24,8 @@ test('finance and obligations are one MANUAL user surface, not a patched second 
 test('Dashboard Finance and Calendar derive obligation pressure from the same demo state', () => {
   const app = read(appPath);
 
-  assert.match(app, /obligations:\s*\[/);
+  assert.match(app, /const DEFAULT_OBLIGATIONS\s*=\s*Object\.freeze\(\[/);
+  assert.match(app, /obligations:\s*DEFAULT_OBLIGATIONS/);
   assert.match(app, /function financeSnapshot\(/);
   assert.match(app, /function renderHomeTruth\([\s\S]*financeSnapshot\(/);
   assert.match(app, /function renderFinanceDetail\([\s\S]*financeSnapshot\(/);
