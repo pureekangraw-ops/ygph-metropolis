@@ -1,123 +1,107 @@
 # LIGHTHOUSE User-First Demo Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Current authority:** USER-FIRST PRODUCT PRINCIPLE — OWNER LOCK 2026-09-06, amended by Owner decisions through 2026-09-07.
 
-**Goal:** Build a mobile-first, interactive LIGHTHOUSE UX proving slice at `/lighthouse-next/` with local/fake state only, ready for Cloudflare PR staging and owner tap-testing.
+**Goal:** Build and iteratively refine a mobile-first LIGHTHOUSE UX proving slice at `/lighthouse-next/` with local/fake state only, ready for Cloudflare PR staging and Owner tap-testing.
 
-**Architecture:** Keep the existing repository and production root untouched. Add an isolated static demo under `lighthouse-next/` with one HTML shell, one CSS design system, one JavaScript state/interaction owner, and Node contract tests. The demo persists only its own namespaced localStorage state to prove pending continuity; no existing domain/ledger runtime is called.
+**Architecture:** Keep production root untouched. The isolated demo lives under `lighthouse-next/`. User-facing complexity stays small while state/routing rules remain internal. Demo localStorage proves interaction continuity only; it is not production truth.
 
-**Tech Stack:** HTML5, CSS, vanilla ES module JavaScript, Node 22 test runner, existing Cloudflare assets staging.
+**Tech Stack:** HTML5, CSS, vanilla ES modules, Node 22 test runner, existing Cloudflare staging workflow.
 
 **Spec:** `docs/superpowers/specs/2026-09-06-lighthouse-user-first-demo-design.md`
 
-## Global Constraints
+## Current Owner Locks
 
-- Product name is `LIGHTHOUSE`.
-- User surface roots are exactly `หน้าหลัก | แชต | MANUAL | ตั้งค่า`.
-- Dashboard is the post-PIN root and contains no duplicate CHAT/MANUAL entry buttons.
-- No GO persona in CHAT.
-- No user-facing Registry/capability/owner/gateway/durable readback/actor/route/manifest vocabulary.
-- Demo data is local/fake only and is clearly identified as such in Settings.
-- Ambiguity Lock is Q1=B, Q2=A, Q3=B, Q4=A.
-- Brand DNA is dark foundation + warm beacon + restrained prism accents; readability wins over decoration.
+- Product name: `LIGHTHOUSE`.
+- App icon authority: Owner-selected lighthouse artwork.
+- User roots exactly: `หน้าหลัก | แชต | MANUAL | ตั้งค่า`.
+- Dashboard is post-PIN root; no duplicate CHAT/MANUAL entry buttons.
+- No GO persona or architecture vocabulary on normal surfaces.
+- Ambiguity Lock: `BABA`.
+- General income: `จำนวนเงิน + ที่มา` only.
+- Registered Store sale: `สินค้า → มูลค่า → จำนวน`; first number after proven product is value.
+- Confirmation before Store mutation.
+- Finance and obligations are one user job; no separate `ภาระ` MANUAL tile.
+- Visible MANUAL tasks: `การเงิน | ร้านค้า | งานวิ่ง | ปฏิทิน | รายการทั้งหมด`.
+- Dashboard, Finance and Calendar derive obligation pressure from the same demo state.
+- Sale cancellation is append-only reversal, not history deletion.
+- Demo PIN 4 digits is interaction-only; it does not define production authentication.
+- Production deploy/release/device acceptance remain Owner Gates.
 
 ---
 
-### Task 1: Lock demo surface contracts with RED tests
+### Task 1: Surface contracts and isolated demo
 
-**Files:**
-- Create: `tests/greenfield-lighthouse-next-demo.test.cjs`
-- Later create: `lighthouse-next/index.html`
-- Later create: `lighthouse-next/styles.css`
-- Later create: `lighthouse-next/app.mjs`
+- [x] Add source-level tests for isolated demo files.
+- [x] Lock LIGHTHOUSE Dashboard-first surface and exactly four root nav labels.
+- [x] Hide architecture vocabulary and GO persona chrome.
+- [x] Keep demo state under its own localStorage namespace.
+- [x] Add isolated Cloudflare staging config and workflow verification.
 
-**Interfaces:**
-- Consumes: Node built-ins `fs`, `path`, `node:test`, `node:assert/strict`
-- Produces: source-level contract that the demo must satisfy
+### Task 2: PIN, app frame, Dashboard and branding
 
-- [ ] Write tests asserting the three demo source files exist.
-- [ ] Assert HTML contains `LIGHTHOUSE`, Dashboard root content labels, and exactly four root nav labels.
-- [ ] Assert HTML does not contain forbidden architecture vocabulary or GO persona chrome.
-- [ ] Assert app source contains namespaced localStorage persistence and explicit pending restore.
-- [ ] Assert app source contains the Q1–Q4 behavior lock marker `BABA` and side-query reminder behavior.
-- [ ] Run `node --test tests/greenfield-lighthouse-next-demo.test.cjs` and verify RED because the demo files do not exist.
-- [ ] Commit only the failing test: `test: lock LIGHTHOUSE next demo contracts`.
+- [x] Build mobile PIN screen and four-root app shell.
+- [x] Enter Dashboard after demo unlock.
+- [x] Show real cash separately from expected income.
+- [x] Show today in/out/net, nearest obligation, gap and daily target.
+- [x] Apply Owner-locked LIGHTHOUSE app identity to manifest/icon/PIN branding.
+- [x] Keep touch targets and mobile polish explicit.
 
-### Task 2: Build PIN + App Frame + Dashboard
+### Task 3: CHAT meaning and continuity
 
-**Files:**
-- Create: `lighthouse-next/index.html`
-- Create: `lighthouse-next/styles.css`
-- Create: `lighthouse-next/app.mjs`
+- [x] Encode `BABA` side-query/deep-pending behavior.
+- [x] Restore pending after reload.
+- [x] Support local side query `วันนี้วันที่เท่าไร` without replacing pending.
+- [x] Implement general income as amount + source only.
+- [x] Avoid forced Store/Ride/category selection for ordinary income.
+- [x] Route proven registered products to Store invisibly.
+- [x] Lock Store sale order `product → value → quantity`.
+- [x] Show confirmation before Store sale mutation.
+- [x] Stop sale when stock is insufficient.
 
-**Interfaces:**
-- Produces DOM ids: `pin-screen`, `app-shell`, `page-home`, `page-chat`, `page-manual`, `page-settings`, `bottom-nav`
-- Produces state helpers: `loadState()`, `saveState()`, `resetDemoState()`, `selectRoot(rootId)`
+### Task 4: Shared demo truth across user surfaces
 
-- [ ] Implement semantic HTML with PIN screen and four app roots.
-- [ ] Implement mobile-first CSS with lighthouse/beacon visual language, safe spacing, 44px controls, no horizontal page scroll, and reduced-motion fallback.
-- [ ] Implement PIN pad accepting any four digits in demo and transition to Dashboard.
-- [ ] Implement Dashboard fixture where `เงินจริง` excludes `คาดว่าจะเข้า`, plus today in/out/net, nearest obligation, gap, and daily target.
-- [ ] Implement bottom nav with exactly four working roots and no duplicate CHAT/MANUAL Dashboard buttons.
-- [ ] Run focused test; fix until GREEN for frame/dashboard contracts.
+- [x] Sale confirmation updates cash, today income, stock and transaction state.
+- [x] Dashboard reads current cash state instead of fixed copy.
+- [x] MANUAL > ร้านค้า reads the same products/transactions state.
+- [x] MANUAL > รายการทั้งหมด reads the same transaction state.
+- [x] Sale cancellation creates reversal, restores cash/stock, preserves original record and blocks double reversal.
+- [x] Merge `ภาระ` into MANUAL > การเงิน.
+- [x] Remove the old hidden obligations route and patch script.
+- [x] Give obligations one shared demo state used by Dashboard, Finance and Calendar.
+- [x] Compute `ยังขาด` from obligation amount versus current real cash.
 
-### Task 3: Implement CHAT pending + Ambiguity Lock B/A/B/A
+### Task 5: MANUAL and Settings
 
-**Files:**
-- Modify: `lighthouse-next/index.html`
-- Modify: `lighthouse-next/app.mjs`
-- Modify: `tests/greenfield-lighthouse-next-demo.test.cjs`
+- [x] Keep visible MANUAL tasks user-job based: Finance, Store, Ride, Calendar, All transactions.
+- [x] Make each visible task open a real demo view with working Back.
+- [x] Keep Settings limited to local/fake status, about and confirmed reset.
+- [x] Omit unsupported production updater/backup controls rather than faking success.
 
-**Interfaces:**
-- Produces pending shape `{ kind, stage, amount, source, operation, product, quantity }`
-- Produces `handleChatInput(text)`, `resumePendingPrompt()`, `answerLocalSideQuery(text)`
+### Task 6: Verification and Owner mobile loop
 
-- [ ] Add RED tests for `BABA`, local side-query capability, reminder copy, and localStorage pending restore.
-- [ ] Verify RED.
-- [ ] Implement fixture: `วันนี้ได้ 500` → source → store operation → product → quantity → confirmation.
-- [ ] Implement supported side query `วันนี้วันที่เท่าไร` using local date only.
-- [ ] While in deep pending, answer the side query without replacing pending, append a short reminder, then keep the same pending prompt active.
-- [ ] Persist pending before/after each meaningful transition and restore it on reload.
-- [ ] Run focused tests until GREEN.
+- [x] Run repository tests/syntax/UTF-8/config gates after each meaningful behavior change.
+- [x] Deploy isolated LIGHTHOUSE demo to staging without touching production.
+- [ ] Verify the latest head staging deploy after the most recent Finance shared-truth refactor.
+- [ ] Owner tap-tests latest staging on phone.
+- [ ] Collect UX/behavior feedback and repeat RED → GREEN → staging.
+- [ ] Move to package/release/device gates only after Owner accepts the web proving slice.
 
-### Task 4: Implement MANUAL and Settings without dead controls
+## Current staging contract
 
-**Files:**
-- Modify: `lighthouse-next/index.html`
-- Modify: `lighthouse-next/app.mjs`
-- Modify: `lighthouse-next/styles.css`
-- Modify: `tests/greenfield-lighthouse-next-demo.test.cjs`
+Staging host:
 
-**Interfaces:**
-- MANUAL destinations: finance, obligations, store, ride, calendar, ledger
-- Settings actions: reset demo, about/demo status
+`https://lighthouse-next-staging.pureekangraw.workers.dev/`
 
-- [ ] Add RED tests that all six task destinations are represented as user jobs, not module ids.
-- [ ] Add RED test that reset requires a confirmation step.
-- [ ] Verify RED.
-- [ ] Implement six task cards with meaningful local demo detail views and working Back.
-- [ ] Implement Settings with clear `ข้อมูลจำลอง` status and confirmed demo reset.
-- [ ] Ensure every visible button has a listener; omit unsupported updater/backup actions rather than fake them.
-- [ ] Run focused tests until GREEN.
+Use a commit cache-bust query (`?v=<sha>`) for each Owner test round.
 
-### Task 5: Full regression and PR staging
+## Explicitly out of scope for this web proving slice
 
-**Files:**
-- No production source changes expected.
-- Create PR from `work/metro-new-20260906` to `main` as Draft for staging only.
+- Production auth/encryption truth
+- Production durable Ledger wiring
+- Real external provider/weather/network behavior
+- Android process death / OS permissions / physical Back behavior
+- APK build/sign/install/update
+- Production backup/restore and rollback proof
 
-**Interfaces:**
-- Demo URL path: `/lighthouse-next/`
-- Expected staging host from existing workflow: `https://ygph-metropolis-staging.pureekangraw.workers.dev`
-
-- [ ] Run/observe repository PR workflow `npm run deploy:gate` through GitHub Actions.
-- [ ] If a test fails, inspect job logs, fix only the demonstrated cause, and rerun.
-- [ ] Confirm staging deploy job succeeds.
-- [ ] Verify the static demo path is published under the staging host.
-- [ ] Give owner the staging URL for mobile tap-testing and collect only UX/behavior feedback before production wiring.
-
-## Self-review
-
-- Spec coverage: PIN, Dashboard, 4 roots, CHAT B/A/B/A, reload continuity, MANUAL, Settings, brand DNA, accessibility and staging are each covered.
-- Scope: production Ledger/auth/updater/Android gates are intentionally excluded from this demo and remain later WorkUnits.
-- No placeholder implementation steps are required for this proving slice.
+These remain later production/device verification gates and cannot be passed by the browser demo.
