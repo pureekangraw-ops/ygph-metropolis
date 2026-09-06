@@ -41,7 +41,10 @@ test('user surface is LIGHTHOUSE, Dashboard-first, with exactly four root nav la
 
 test('normal demo surface hides architecture vocabulary and GO persona chrome', () => {
   const html = read(htmlPath);
-  const visibleText = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '');
+  const visibleText = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ');
   assert.doesNotMatch(visibleText, /Module Registry|Ledger Gateway|durable readback|\bcapability\b|\bowner\b|\bactor\b|\bmanifest\b|GO\s*(ออนไลน์|online|avatar)/i);
 });
 
