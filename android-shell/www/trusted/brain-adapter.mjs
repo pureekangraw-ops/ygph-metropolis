@@ -21,9 +21,10 @@ function routedReason(routed, fallback = 'TRUSTED_BRAIN_ROUTE_STOPPED') {
 }
 
 function previewFromRequest(request) {
+  const amountSatang = Number(request?.fields?.amountSatang);
   return frozen({
     title:String(request?.fields?.title ?? ''),
-    amountSatang:Number(request?.fields?.amountSatang ?? 0),
+    ...(Number.isSafeInteger(amountSatang) ? { amountSatang } : {}),
     ...(request?.fields?.businessDate ? { businessDate:request.fields.businessDate } : {}),
   });
 }
@@ -95,7 +96,7 @@ function storeSaleDetailsQuestion(amountSatang) {
 }
 
 function noRideRoundQuestion() {
-  return 'ยังไม่มีรอบวิ่งที่เปิดอยู่ จึงยังบันทึกรายได้วิ่งไม่ได้';
+  return 'ยังไม่มีรอบวิ่งที่เปิดอยู่ จะเปิดรอบใหม่ไหม?';
 }
 
 export function createTrustedBrainAdapter({
@@ -140,7 +141,7 @@ export function createTrustedBrainAdapter({
     });
   }
 
-  function rememberReady(request) {
+  function rememberReady(request, { preserveIncomeConversation = false } = {}) {
     const preflight = preflightRequest(request);
     if (preflight?.status !== 'READY') {
       preparedRequest = null;
@@ -148,7 +149,7 @@ export function createTrustedBrainAdapter({
     }
     preparedRequest = request;
     recoverySession = null;
-    incomeConversation = null;
+    if (!preserveIncomeConversation) incomeConversation = null;
     return readyResult(request);
   }
 
@@ -212,6 +213,16 @@ export function createTrustedBrainAdapter({
     };
   }
 
+  function rideStartRoundRequest() {
+    const requestId = requestIdFactory();
+    const roundId = `ROUND-LH-${requestId}`;
+    return {
+      version:'1', source:'PATTERN', requestId, action:'CREATE', object:'RIDE_START_ROUND',
+      fields:{ title:'เปิดรอบวิ่ง', roundId },
+      requiredResult:{ kind:'RIDE_ROUND', effect:{ owner:'RIDE', status:'ACTIVE', roundId } },
+    };
+  }
+
   function rideJobRequest(amountSatang, roundId) {
     return {
       version:'1', source:'PATTERN', requestId:requestIdFactory(), action:'CREATE', object:'RIDE_JOB',
@@ -244,9 +255,18 @@ export function createTrustedBrainAdapter({
           .filter(record => record?.type === 'ROUND' && record.status === 'ACTIVE');
         if (activeRounds.length === 1) return rememberReady(rideJobRequest(conversation.amountSatang, String(activeRounds[0].recordId)));
         if (activeRounds.length > 1) return stoppedResult('BLOCKED', 'RIDE_ACTIVE_ROUND_INVARIANT');
-        return clarificationResult(noRideRoundQuestion(), []);
+        incomeConversation = { kind:'RIDE_OPEN', amountSatang:conversation.amountSatang };
+        return clarificationResult(noRideRoundQuestion(), ['เปิดรอบ', 'ยกเลิก']);
       }
       return clarificationResult(sourceQuestion(conversation.amountSatang), ['ร้าน', 'วิ่ง', 'อย่างอื่น']);
+    }
+
+    if (conversation.kind === 'RIDE_OPEN') {
+      if (answer === 'เปิดรอบ' || answer === 'เปิด') {
+        incomeConversation = { kind:'INCOME_SOURCE', amountSatang:conversation.amountSatang };
+        return rememberReady(rideStartRoundRequest(), { preserveIncomeConversation:true });
+      }
+      return clarificationResult(noRideRoundQuestion(), ['เปิดรอบ', 'ยกเลิก']);
     }
 
     if (conversation.kind === 'STORE_OPERATION') {
