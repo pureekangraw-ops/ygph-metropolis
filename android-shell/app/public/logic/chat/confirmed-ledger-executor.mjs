@@ -69,6 +69,19 @@ function storeSaleRequest(request) {
     fields.receivedSatang <= fields.amountSatang;
 }
 
+function rideStartRoundRequest(request) {
+  const fields = request?.fields;
+  const effect = request?.requiredResult?.effect;
+  return request?.version === '1' &&
+    request?.action === 'CREATE' &&
+    request?.object === 'RIDE_START_ROUND' &&
+    request?.requiredResult?.kind === 'RIDE_ROUND' &&
+    effect?.owner === 'RIDE' &&
+    effect?.status === 'ACTIVE' &&
+    effect?.roundId === fields?.roundId &&
+    typeof fields?.roundId === 'string' && fields.roundId.trim();
+}
+
 function rideJobRequest(request) {
   const fields = request?.fields;
   const effect = request?.requiredResult?.effect;
@@ -90,6 +103,7 @@ function supportedRequest(request) {
   if (otherIncomeRequest(request)) return 'OTHER_INCOME';
   if (storeIncomeRequest(request)) return 'STORE_INCOME';
   if (storeSaleRequest(request)) return 'STORE_SALE';
+  if (rideStartRoundRequest(request)) return 'RIDE_START_ROUND';
   if (rideJobRequest(request)) return 'RIDE_JOB';
   return null;
 }
@@ -103,6 +117,7 @@ function operationIds(requestId) {
     ledgerTransactionId:`TX-LH-${id}`,
     storeIncomeId:`STORE-INCOME-LH-${id}`,
     saleId:`SALE-LH-${id}`,
+    roundId:`ROUND-LH-${id}`,
     jobId:`JOB-LH-${id}`,
   };
 }
@@ -199,6 +214,14 @@ export function createConfirmedLedgerExecutor({ manual } = {}) {
         quantity:Number(request.fields.quantity),
         receivedSatang:Number(request.fields.receivedSatang),
         storeCostSatang:Number(request.fields.storeCostSatang ?? 0),
+      }));
+    }
+
+    if (rideStartRoundRequest(request)) {
+      if (typeof manual.rideStartRound !== 'function') throw new TypeError('CONFIRMED_LEDGER_RIDE_START_REQUIRED');
+      return verifiedResult(await manual.rideStartRound({
+        workflowId:ids.workflowId,
+        roundId:String(request.fields.roundId || ids.roundId),
       }));
     }
 
