@@ -26,6 +26,8 @@ jobs:
         run: npm run deploy:gate
       - name: Validate Wrangler production config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
+      - name: Validate isolated LIGHTHOUSE demo staging config
+        run: npx --yes wrangler@4.126.0 deploy --dry-run --config wrangler.lighthouse-next-staging.jsonc
 
   staging:
     name: Deploy Master Input candidate to staging
@@ -61,6 +63,26 @@ jobs:
           code="$(curl --silent --show-error --output "$RUNNER_TEMP/interpret.json" --write-out '%{http_code}' -X POST "$base/api/v1/interpret" -H 'content-type: application/json' --data '{"version":"1","text":"staging gate","context":{}}')"
           test "$code" = "503"
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.code!=="INTERPRETER_NOT_CONFIGURED"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/interpret.json"
+      - name: Deploy isolated LIGHTHOUSE next demo staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.126.0"
+          command: deploy --config wrangler.lighthouse-next-staging.jsonc
+      - name: Verify LIGHTHOUSE next demo staging
+        run: |
+          base="https://lighthouse-next-staging.pureekangraw.workers.dev"
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            code="$(curl --silent --show-error --output "$RUNNER_TEMP/lighthouse-next.html" --write-out '%{http_code}' "$base/" || true)"
+            if [ "$code" = "200" ] && grep -q 'LIGHTHOUSE' "$RUNNER_TEMP/lighthouse-next.html"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
 
   deploy:
     name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
