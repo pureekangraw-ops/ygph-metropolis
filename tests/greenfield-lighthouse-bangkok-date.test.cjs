@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const root = process.cwd();
 const modulePath = path.join(root, 'lighthouse-next/bangkok-date.mjs');
+const appPath = path.join(root, 'lighthouse-next/app.mjs');
 
 test('LIGHTHOUSE date follows Asia/Bangkok across the UTC day boundary', async () => {
   assert.equal(fs.existsSync(modulePath), true, 'missing lighthouse-next/bangkok-date.mjs');
@@ -15,4 +16,11 @@ test('LIGHTHOUSE date follows Asia/Bangkok across the UTC day boundary', async (
 
   assert.match(formatThaiBangkokDate(beforeBangkokMidnight), /6\s*ก\.ย\.\s*2569/);
   assert.match(formatThaiBangkokDate(afterBangkokMidnight), /7\s*ก\.ย\.\s*2569/);
+});
+
+test('LIGHTHOUSE app uses the Bangkok date owner for Dashboard and CHAT date answers', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /import\s*\{\s*formatThaiBangkokDate\s*\}\s*from\s*['"]\.\/bangkok-date\.mjs['"]/);
+  assert.match(app, /return `วันนี้ \$\{formatThaiBangkokDate\(new Date\(\)\)\}`/);
+  assert.match(app, /homeDate\.textContent\s*=\s*formatThaiBangkokDate\(new Date\(\)\)/);
 });
