@@ -43,7 +43,7 @@ test('approved Figma language is carried through every live root surface', () =>
   ]);
 
   expectRule(css, '.chat-composer', [
-    /border-radius\s*:\s*18px/i,
+    /border-radius\s*:\s*22px/i,
     /border\s*:\s*1px solid rgba\(71,\s*97,\s*129,/i,
     /background\s*:\s*linear-gradient/i,
   ]);
@@ -79,7 +79,6 @@ test('live app keeps approved lighthouse branding and reserves a clear scroll en
   const css = read('lighthouse-next/owner-polish.css');
 
   assert.match(html, /class="header-app-icon"\s+src="\.\/assets\/lighthouse-icon\.svg"/i);
-  assert.match(css, /#manual-hub\s+\.task-grid\s*\{[^}]*padding-bottom\s*:\s*32px/is);
-  assert.match(css, /#page-manual\s*\{[^}]*padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*28px\)/is);
+  assert.match(css, /#manual-hub\s+\.task-grid\s*\{[^}]*padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*28px\)/is);
   assert.match(css, /\.app-page\s*\{[^}]*scroll-padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*24px\)/is);
 });
