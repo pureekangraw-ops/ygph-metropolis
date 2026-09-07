@@ -127,3 +127,138 @@ body {
   border-radius: 14px;
   touch-action: manipulation;
 }
+
+/* Owner-approved restrained cosmic direction: keep the app usable first,
+   then carry the LIGHTHOUSE identity through the brand, icon rings and active states. */
+.header-app-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid rgba(245, 158, 11, .32);
+  box-shadow: 0 0 16px rgba(245, 158, 11, .13);
+}
+
+.compact-brand {
+  gap: 10px;
+  letter-spacing: .08em;
+}
+
+#manual-hub .page-title-block {
+  position: relative;
+  padding-bottom: 24px;
+}
+
+#manual-hub .page-title-block::after {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), rgba(245, 158, 11, .18));
+  box-shadow: 0 0 12px rgba(245, 158, 11, .2);
+}
+
+#manual-hub .task-grid {
+  gap: 12px;
+  padding-bottom: 32px;
+}
+
+.task-card {
+  min-height: 102px;
+  grid-template-columns: 64px minmax(0, 1fr) 18px;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(71, 97, 129, .58);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
+}
+
+.task-card:active {
+  border-color: rgba(245, 158, 11, .42);
+  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+}
+
+.task-card strong {
+  font-size: 20px;
+  letter-spacing: -.01em;
+}
+
+.task-card small {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.task-card > b {
+  color: #9fb1cc;
+  font-size: 27px;
+  font-weight: 400;
+}
+
+.task-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 19px;
+  border: 1px solid transparent;
+  background: linear-gradient(#0d1725, #0d1725) padding-box,
+    conic-gradient(from 215deg, rgba(6, 182, 212, .9), rgba(139, 92, 246, .78), rgba(245, 158, 11, .92), rgba(6, 182, 212, .9)) border-box;
+  box-shadow: inset 0 0 20px rgba(245, 158, 11, .05), 0 0 18px rgba(6, 182, 212, .06);
+  color: #ffb02e;
+}
+
+.task-icon .ui-icon {
+  width: 27px;
+  height: 27px;
+  stroke-width: 1.75;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .32));
+}
+
+.bottom-nav {
+  width: min(700px, calc(100% - 20px));
+  border: 1px solid rgba(71, 97, 129, .46);
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  background: linear-gradient(180deg, rgba(8, 20, 33, .97), rgba(4, 12, 21, .98));
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.nav-item {
+  border: 1px solid transparent;
+  border-radius: 20px;
+}
+
+.nav-item.active {
+  border: 1px solid rgba(245, 158, 11, .46);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .13), rgba(245, 158, 11, .05));
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, .05), 0 0 16px rgba(245, 158, 11, .09);
+}
+
+.nav-item.active small {
+  color: #f6b43b;
+}
+
+@media (max-width: 380px) {
+  .task-card {
+    min-height: 94px;
+    grid-template-columns: 56px minmax(0, 1fr) 16px;
+    gap: 12px;
+    padding: 12px 13px;
+  }
+
+  .task-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 17px;
+  }
+
+  .task-card strong {
+    font-size: 18px;
+  }
+
+  .task-card small {
+    font-size: 12px;
+  }
+}
