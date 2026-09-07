@@ -15,6 +15,7 @@ test('live LIGHTHOUSE adopts the approved preview visual system and a compact in
   const html = read('lighthouse-next/index.html');
   const polish = read('lighthouse-next/owner-polish.css');
   const app = read('lighthouse-next/app.mjs');
+  const sendControl = read('lighthouse-next/send-control.mjs');
 
   assert.match(polish, /--bg\s*:\s*#0B0E14/i, 'live surface should use the approved cosmic dark background token');
   assert.match(polish, /--panel\s*:\s*#1E293B/i, 'live cards should use the approved slate surface token');
@@ -24,12 +25,13 @@ test('live LIGHTHOUSE adopts the approved preview visual system and a compact in
 
   assert.match(html, /id="chat-send"[^>]*class="send-button"[^>]*disabled/i, 'send control must start disabled when the composer is empty');
   assert.match(html, /class="send-icon"/, 'send control should use the new paper-plane icon instead of the oversized arrow glyph');
+  assert.match(html, /src="\.\/send-control\.mjs"/, 'live page should load the focused send-control behavior');
 
   assert.match(polish, /\.chat-composer\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,1fr\)\s+44px[^}]*gap\s*:\s*6px[^}]*padding\s*:\s*4px[^}]*border-radius\s*:\s*18px/is, 'composer should be one compact capsule with the action inside it');
   assert.match(polish, /\.send-button\s*\{[^}]*width\s*:\s*44px[^}]*height\s*:\s*44px[^}]*border-radius\s*:\s*14px/is, 'send button should be compact and touch-safe');
   assert.match(polish, /\.send-button:disabled\s*\{[^}]*opacity\s*:/is, 'disabled send state must be visually distinct');
 
-  assert.match(app, /const chatSend = root\.querySelector\('#chat-send'\)/, 'app must own the send control state');
-  assert.match(app, /chatSend\.disabled\s*=\s*!chatInput\.value\.trim\(\)/, 'send availability must follow whether the input contains text');
+  assert.match(sendControl, /const chatSend = document\.querySelector\('#chat-send'\)/, 'focused send controller must own the button state');
+  assert.match(sendControl, /chatSend\.disabled\s*=\s*!chatInput\.value\.trim\(\)/, 'send availability must follow whether the input contains text');
   assert.match(app, /event\.key === 'Enter' && !event\.shiftKey/, 'Enter should continue to send');
 });
