@@ -54,6 +54,9 @@ jobs:
       - name: Generate Android project
         run: npx cap add android
 
+      - name: Materialize approved Android launcher icons
+        run: npm run android:icons
+
       - name: Sync exact staged web assets
         run: npx cap sync android
 
