@@ -55,11 +55,11 @@ button{-webkit-tap-highlight-color:transparent}
 .pin-key-soft{color:var(--muted)}
 .pin-spacer{width:64px;height:56px}
 
-.app-shell{min-height:100dvh;padding:calc(16px + env(safe-area-inset-top)) 16px calc(var(--nav-height) + 24px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto;position:relative}
-.app-header{display:flex;justify-content:space-between;align-items:center;min-height:50px;margin-bottom:14px}
-.compact-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:850;letter-spacing:.12em}
+.app-shell{width:100%;min-height:100dvh;padding:calc(16px + env(safe-area-inset-top)) 16px calc(var(--nav-height) + 24px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto;position:relative}
+.app-header{display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:0;min-height:50px;margin-bottom:14px}
+.compact-brand{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;font-weight:850;letter-spacing:.12em}
 .mini-beacon{color:var(--gold);font-size:18px;text-shadow:0 0 12px rgba(255,216,138,.4)}
-.page-kicker{font-size:12px;color:var(--muted);margin:0}
+.page-kicker{flex:0 1 auto;min-width:0;white-space:nowrap;font-size:12px;color:var(--muted);margin:0}
 .app-page{min-width:0;animation:page-in .22s ease}
 .app-page h1{font-size:30px;margin:0;font-weight:760}
 .app-page h2{font-size:20px;margin:0;font-weight:720}
@@ -92,17 +92,17 @@ button{-webkit-tap-highlight-color:transparent}
 .gap-row strong{color:var(--gold)}
 .target-row strong{color:var(--cyan)}
 
-.chat-page{display:flex;flex-direction:column;height:calc(100dvh - var(--nav-height) - 104px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0}
-.chat-thread{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;padding:4px 2px 14px;scrollbar-width:none}
+.chat-page{display:flex;flex-direction:column;width:100%;min-width:0;max-width:100%;height:calc(100dvh - var(--nav-height) - 104px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;overflow-x:hidden}
+.chat-thread{width:100%;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:auto;padding:4px 2px 14px;scrollbar-width:none}
 .chat-thread::-webkit-scrollbar{display:none}
-.message{max-width:86%;padding:12px 14px;border-radius:18px;font-size:15px;line-height:1.42;white-space:pre-wrap}
+.message{max-width:86%;padding:12px 14px;border-radius:18px;font-size:15px;line-height:1.42;white-space:pre-wrap;overflow-wrap:anywhere}
 .message.user{align-self:flex-end;background:linear-gradient(135deg,rgba(255,216,138,.17),rgba(255,255,255,.06));border:1px solid rgba(255,216,138,.18);border-bottom-right-radius:6px}
 .message.app{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:6px}
 .message.note{align-self:flex-start;background:rgba(102,228,255,.07);border:1px solid rgba(102,228,255,.18);color:#d6f8ff;font-size:13px}
-.chat-actions{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.chat-actions{width:100%;min-width:0;display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
 .chat-actions::-webkit-scrollbar{display:none}
 .chat-chip{flex:0 0 auto;min-height:42px;padding:0 14px;border:1px solid rgba(255,216,138,.18);border-radius:999px;background:rgba(255,216,138,.06);cursor:pointer}
-.chat-composer{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:9px;align-items:end;padding-top:8px;border-top:1px solid var(--line)}
+.chat-composer{width:100%;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:9px;align-items:end;padding-top:8px;border-top:1px solid var(--line)}
 .chat-composer textarea{width:100%;min-height:48px;max-height:118px;resize:none;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--text);padding:12px 14px;font-size:16px;line-height:1.35}
 .send-button{width:48px;height:48px;border:none;border-radius:16px;background:linear-gradient(135deg,var(--gold),#ffb531);color:#241807;font-size:24px;font-weight:800;cursor:pointer;box-shadow:0 0 20px rgba(255,189,74,.12)}
 
