@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#07111d">
+  <meta name="theme-color" content="#0B0E14">
   <title>LIGHTHOUSE</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/lighthouse-icon.svg" type="image/svg+xml">
@@ -98,7 +98,12 @@
         <form id="chat-form" class="chat-composer">
           <label class="sr-only" for="chat-input">พิมพ์สิ่งที่ต้องการ</label>
           <textarea id="chat-input" rows="1" maxlength="160" placeholder="พิมพ์สิ่งที่ต้องการ…"></textarea>
-          <button type="submit" class="send-button" aria-label="ส่งข้อความ">↑</button>
+          <button id="chat-send" class="send-button" type="submit" aria-label="ส่งข้อความ" disabled>
+            <svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12 20 4l-5 16-3-6-8-2Z"></path>
+              <path d="m12 14 4-6"></path>
+            </svg>
+          </button>
         </form>
       </div>
 
@@ -161,5 +166,6 @@
     </dialog>
   </main>
   <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./send-control.mjs"></script>
 </body>
 </html>
