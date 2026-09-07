@@ -20,6 +20,11 @@ export async function applyAndroidVersion({
     throw new Error('APK_VERSION_NAME_INVALID');
   }
 
+  assertUpgradeVersion({
+    baselineVersionCode: version.baselineVersionCode,
+    candidateVersionCode: version.versionCode,
+  });
+
   const before = await readFile(gradlePath, 'utf8');
   let after = before.replace(/versionCode\s+\d+/, `versionCode ${version.versionCode}`);
   after = after.replace(/versionName\s+["'][^"']+["']/, `versionName "${version.versionName}"`);
