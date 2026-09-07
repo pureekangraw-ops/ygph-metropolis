@@ -24,6 +24,40 @@ jobs:
         run: npm ci
       - name: Run Greenfield tests, syntax, and UTF-8 gates
         run: npm run deploy:gate
+      - name: Install Android shell dependencies
+        working-directory: android-shell
+        run: npm install --no-audit --no-fund
+      - name: Run Android shell tests
+        working-directory: android-shell
+        run: npm test
+      - name: Stage LIGHTHOUSE Android payload
+        working-directory: android-shell
+        run: npm run app:stage-next
+      - name: Verify staged LIGHTHOUSE byte identity
+        run: |
+          node <<'NODE'
+          const { createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
+          const { join } = require('node:path');
+
+          const files = [
+            'index.html',
+            'app.mjs',
+            'styles.css',
+            'owner-polish.css',
+            'assets/lighthouse-icon.svg',
+          ];
+
+          const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+
+          for (const file of files) {
+            const source = join('lighthouse-next', file);
+            const staged = join('android-shell', 'www', file);
+            if (sha256(source) !== sha256(staged)) {
+              throw new Error(`LIGHTHOUSE_STAGE_HASH_MISMATCH:${file}`);
+            }
+          }
+          NODE
       - name: Validate Wrangler production config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
       - name: Validate isolated LIGHTHOUSE demo staging config
