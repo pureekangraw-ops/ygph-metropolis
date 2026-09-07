@@ -1,3 +1,21 @@
+:root {
+  --bg: #0B0E14;
+  --bg-deep: #06080d;
+  --panel: #1E293B;
+  --panel-2: #111827;
+  --text: #F8FAFC;
+  --muted: #94A3B8;
+  --line: #334155;
+  --gold: #F59E0B;
+  --gold-strong: #F59E0B;
+  --cyan: #06B6D4;
+  --violet: #8B5CF6;
+}
+
+body {
+  background: radial-gradient(circle at 50% -10%, rgba(30, 41, 59, .86), var(--bg) 32%, var(--bg-deep) 82%);
+}
+
 .pin-app-icon {
   width: min(220px, 64vw);
   aspect-ratio: 1;
@@ -5,6 +23,69 @@
   border-radius: 28px;
   display: block;
   margin: 0 auto;
+}
+
+.chat-composer {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 44px;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 18px;
+  align-items: end;
+  border: 1px solid var(--line);
+  background: rgba(30, 41, 59, .82);
+}
+
+.chat-composer textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 118px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-composer textarea:focus {
+  outline: none;
+}
+
+.send-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(135deg, #F59E0B, #f7b62f);
+  color: #17110a;
+  box-shadow: none;
+  transition: opacity .15s ease, transform .12s ease, filter .15s ease;
+}
+
+.send-button:disabled {
+  opacity: .32;
+  filter: saturate(.5);
+  cursor: default;
+  box-shadow: none;
+}
+
+.send-button:not(:disabled):active {
+  transform: scale(.96);
+}
+
+.send-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .history-cancel {
