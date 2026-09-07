@@ -31,5 +31,6 @@ test('bottom navigation has a contained active pill and MANUAL content clears th
 
   assert.match(polish, /\.bottom-nav\s*\{[^}]*border-radius\s*:\s*28px 28px 0 0/is);
   assert.match(polish, /\.nav-item\.active\s*\{[^}]*border\s*:\s*1px solid[^}]*box-shadow/is);
-  assert.match(polish, /#manual-hub\s+\.task-grid\s*\{[^}]*padding-bottom\s*:\s*32px/is);
+  assert.match(polish, /#manual-hub\s+\.task-grid\s*\{[^}]*padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*28px\)/is);
+  assert.match(polish, /\.app-page\s*\{[^}]*scroll-padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*24px\)/is);
 });
