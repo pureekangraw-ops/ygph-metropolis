@@ -6,7 +6,7 @@ on:
       target_ref:
         description: Branch or commit to build
         required: true
-        default: feat/lighthouse-1.0.0-rebuild
+        default: work/metro-new-20260906
         type: string
 
 permissions:
@@ -39,29 +39,26 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Install Capacitor dependencies
+      - name: Install locked Android shell dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Sync trusted packaged sources
-        run: npm run pretest
+      - name: Run Android shell contracts
+        run: node --test test/*.test.mjs
 
-      - name: Run canonical WorkUnit contracts
-        run: node --test test/workunit*.test.mjs
-
-      - name: Stage existing repository application
-        run: npm run app:stage-existing
+      - name: Stage owner-approved LIGHTHOUSE next
+        run: npm run app:stage-next
 
       - name: Generate Android project
         run: npx cap add android
-
-      - name: Materialize approved Android launcher icons
-        run: npm run android:icons
 
       - name: Sync exact staged web assets
         run: npx cap sync android
 
       - name: Apply canonical Android version
         run: node tools/set-android-version.mjs
+
+      - name: Materialize approved Android launcher icons
+        run: npm run android:icons
 
       - name: Apply generated Android security baseline
         run: npm run android:security:apply
@@ -125,7 +122,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-1.0.0-candidate
+          name: lighthouse-1.0.0-owner-test
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
