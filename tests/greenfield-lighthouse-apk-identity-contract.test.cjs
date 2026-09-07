@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { pathToFileURL } = require('node:url');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -16,8 +17,32 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
   assert.equal(version.versionCode, 1006);
   assert.ok(version.versionCode > version.baselineVersionCode);
 
-  const source = fs.readFileSync(versionToolPath, 'utf8');
-  assert.match(source, /assertUpgradeVersion\(\{\s*baselineVersionCode:\s*version\.baselineVersionCode,\s*candidateVersionCode:\s*version\.versionCode\s*\}\)/s);
+  const { assertUpgradeVersion, applyAndroidVersion } = await import(pathToFileURL(versionToolPath));
+  assert.doesNotThrow(() => assertUpgradeVersion({
+    baselineVersionCode: version.baselineVersionCode,
+    candidateVersionCode: version.versionCode,
+  }));
+  assert.throws(() => assertUpgradeVersion({
+    baselineVersionCode: 1006,
+    candidateVersionCode: 1006,
+  }), /APK_VERSION_NOT_MONOTONIC/);
+
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'lighthouse-apk-version-'));
+  const invalidVersionPath = path.join(tempRoot, 'version.json');
+  const gradlePath = path.join(tempRoot, 'build.gradle');
+  const originalGradle = 'android { defaultConfig { versionCode 1\nversionName "0.0.1" } }\n';
+  fs.writeFileSync(invalidVersionPath, JSON.stringify({
+    baselineVersionCode: 1006,
+    versionCode: 1006,
+    versionName: '1.0.0-invalid',
+  }), 'utf8');
+  fs.writeFileSync(gradlePath, originalGradle, 'utf8');
+
+  await assert.rejects(
+    applyAndroidVersion({ versionPath: invalidVersionPath, gradlePath }),
+    /APK_VERSION_NOT_MONOTONIC/,
+  );
+  assert.equal(fs.readFileSync(gradlePath, 'utf8'), originalGradle, 'invalid upgrade must not mutate Gradle');
 });
 
 test('APK identity verifier fails closed on package signer and version drift', async () => {
