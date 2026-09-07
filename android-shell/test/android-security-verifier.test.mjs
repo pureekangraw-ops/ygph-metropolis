@@ -76,20 +76,29 @@ test('backup, cleartext, and debug release posture fail closed', () => {
   assert.throws(() => verifyAndroidSecurity({ manifestText: debuggable, capacitorConfig: config }), /ANDROID_SECURITY_DEBUGGABLE_RELEASE/);
 });
 
-test('security applicator hardens generated Capacitor manifest without changing component topology', async () => {
+test('security applicator hardens generated Capacitor manifest and MainActivity without changing component topology', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lh-security-'));
   const manifestPath = join(root, 'app/src/main/AndroidManifest.xml');
+  const javaRoot = join(root, 'app/src/main/java/com/yggdrasil/lighthouse');
+  const mainActivityPath = join(javaRoot, 'MainActivity.java');
   await mkdir(join(root, 'app/src/main'), { recursive: true });
+  await mkdir(javaRoot, { recursive: true });
+
   const insecure = SAFE_MANIFEST
     .replace('android:allowBackup="false"', 'android:allowBackup="true"')
     .replace('android:usesCleartextTraffic="false" ', '');
   await writeFile(manifestPath, insecure, 'utf8');
+  await writeFile(mainActivityPath, `package com.yggdrasil.lighthouse;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n`, 'utf8');
 
   const beforeComponents = inspectAndroidSecurity({ manifestText: SAFE_MANIFEST, capacitorConfig: config }).components;
   await applyAndroidSecurityBaseline(root);
   const hardened = await readFile(manifestPath, 'utf8');
+  const activity = await readFile(mainActivityPath, 'utf8');
   assert.match(hardened, /android:allowBackup="false"/);
   assert.match(hardened, /android:usesCleartextTraffic="false"/);
+  assert.match(activity, /setSupportZoom\(false\)/);
+  assert.match(activity, /setBuiltInZoomControls\(false\)/);
+  assert.match(activity, /setDisplayZoomControls\(false\)/);
   const after = inspectAndroidSecurity({ manifestText: hardened, capacitorConfig: config });
   assert.deepEqual(after.components, beforeComponents);
 });
