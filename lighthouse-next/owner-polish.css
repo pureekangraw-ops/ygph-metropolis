@@ -88,6 +88,39 @@ body {
   stroke-linejoin: round;
 }
 
+.ui-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  vector-effect: non-scaling-stroke;
+}
+
+.nav-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+
+.nav-item .ui-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.nav-item.active .nav-icon {
+  color: var(--gold);
+}
+
+.task-icon .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+
 .history-cancel {
   min-height: 44px;
   padding: 10px 14px;
