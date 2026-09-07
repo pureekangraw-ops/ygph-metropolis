@@ -25,6 +25,8 @@
 - Visible MANUAL tasks: `การเงิน | ร้านค้า | งานวิ่ง | ปฏิทิน | รายการทั้งหมด`.
 - Dashboard, Finance and Calendar derive obligation pressure from the same demo state.
 - Sale cancellation is append-only reversal, not history deletion.
+- LIGHTHOUSE day/date surfaces follow `Asia/Bangkok`.
+- Mobile chat/header/actions/composer stay horizontally contained inside the viewport.
 - Demo PIN 4 digits is interaction-only; it does not define production authentication.
 - Production deploy/release/device acceptance remain Owner Gates.
 
@@ -82,7 +84,7 @@
 
 - [x] Run repository tests/syntax/UTF-8/config gates after each meaningful behavior change.
 - [x] Deploy isolated LIGHTHOUSE demo to staging without touching production.
-- [ ] Verify the latest head staging deploy after the most recent Finance shared-truth refactor.
+- [x] Verify the latest head staging deploy after the most recent shared-truth/date/mobile-containment refinements.
 - [ ] Owner tap-tests latest staging on phone.
 - [ ] Collect UX/behavior feedback and repeat RED → GREEN → staging.
 - [ ] Move to package/release/device gates only after Owner accepts the web proving slice.
