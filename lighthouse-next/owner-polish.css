@@ -13,7 +13,10 @@
 }
 
 body {
-  background: radial-gradient(circle at 50% -10%, rgba(30, 41, 59, .86), var(--bg) 32%, var(--bg-deep) 82%);
+  background:
+    radial-gradient(circle at 82% 6%, rgba(6, 182, 212, .07), transparent 24%),
+    radial-gradient(circle at 18% 20%, rgba(139, 92, 246, .055), transparent 28%),
+    radial-gradient(circle at 50% -10%, rgba(30, 41, 59, .86), var(--bg) 32%, var(--bg-deep) 82%);
 }
 
 .pin-app-icon {
@@ -25,6 +28,10 @@ body {
   margin: 0 auto;
 }
 
+.app-page {
+  scroll-padding-bottom: calc(var(--nav-height) + 24px);
+}
+
 .chat-composer {
   width: 100%;
   min-width: 0;
@@ -32,10 +39,11 @@ body {
   grid-template-columns: minmax(0,1fr) 44px;
   gap: 6px;
   padding: 4px;
-  border-radius: 18px;
+  border-radius: 22px;
   align-items: end;
-  border: 1px solid var(--line);
-  background: rgba(30, 41, 59, .82);
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
 }
 
 .chat-composer textarea {
@@ -44,8 +52,9 @@ body {
   max-height: 118px;
   padding: 11px 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 17px;
   background: transparent;
+  color: var(--text);
   box-shadow: none;
 }
 
@@ -56,14 +65,14 @@ body {
 .send-button {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
   background: linear-gradient(135deg, #F59E0B, #f7b62f);
   color: #17110a;
-  box-shadow: none;
+  box-shadow: 0 0 15px rgba(245, 158, 11, .12);
   transition: opacity .15s ease, transform .12s ease, filter .15s ease;
 }
 
@@ -128,8 +137,8 @@ body {
   touch-action: manipulation;
 }
 
-/* Owner-approved restrained cosmic direction: keep the app usable first,
-   then carry the LIGHTHOUSE identity through the brand, icon rings and active states. */
+/* Owner-approved restrained cosmic direction: app usability stays primary.
+   LIGHTHOUSE identity appears through the approved mark, icon rings, dark navy panels and gold active states. */
 .header-app-icon {
   width: 32px;
   height: 32px;
@@ -145,11 +154,48 @@ body {
   letter-spacing: .08em;
 }
 
+.home-hero {
+  border: 1px solid rgba(71, 97, 129, .62);
+  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(7, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 16px 38px rgba(0, 0, 0, .10);
+}
+
+.home-hero::after {
+  border-color: rgba(6, 182, 212, .14);
+  box-shadow: 0 0 34px rgba(6, 182, 212, .035);
+}
+
+.metric-card {
+  border: 1px solid rgba(71, 97, 129, .54);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .96), rgba(8, 17, 29, .94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.metric-wide {
+  border-color: rgba(6, 182, 212, .26);
+}
+
+.next-step-card {
+  border: 1px solid rgba(245, 158, 11, .34);
+  background: linear-gradient(145deg, rgba(28, 27, 31, .96), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 36px rgba(0, 0, 0, .08);
+}
+
+.next-step-light {
+  width: 3px;
+  background: linear-gradient(var(--gold), var(--cyan), var(--violet));
+  box-shadow: 0 0 14px rgba(245, 158, 11, .20);
+}
+
+#page-chat .page-title-block,
+#page-settings .page-title-block,
 #manual-hub .page-title-block {
   position: relative;
   padding-bottom: 24px;
 }
 
+#page-chat .page-title-block::after,
+#page-settings .page-title-block::after,
 #manual-hub .page-title-block::after {
   content: "";
   display: block;
@@ -161,9 +207,36 @@ body {
   box-shadow: 0 0 12px rgba(245, 158, 11, .2);
 }
 
+.message.app {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.message.user {
+  border: 1px solid rgba(245, 158, 11, .34);
+  background: linear-gradient(145deg, rgba(55, 38, 19, .74), rgba(28, 24, 24, .90));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.message.note {
+  border-color: rgba(6, 182, 212, .26);
+  background: linear-gradient(145deg, rgba(6, 182, 212, .08), rgba(8, 17, 29, .94));
+}
+
+.chat-chip {
+  border-color: rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .94));
+}
+
+.chat-chip:active {
+  border-color: rgba(245, 158, 11, .42);
+  background: rgba(245, 158, 11, .09);
+}
+
 #manual-hub .task-grid {
   gap: 12px;
-  padding-bottom: 32px;
+  padding-bottom: calc(var(--nav-height) + 28px);
 }
 
 .task-card {
@@ -216,6 +289,54 @@ body {
   filter: drop-shadow(0 0 5px rgba(245, 158, 11, .32));
 }
 
+.detail-hero {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 30px rgba(0, 0, 0, .08);
+}
+
+.detail-row {
+  border: 1px solid rgba(71, 97, 129, .50);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .93));
+}
+
+.back-button {
+  color: #f6b43b;
+}
+
+.settings-panel {
+  gap: 12px;
+}
+
+.settings-row {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.settings-button {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.settings-button:active {
+  border-color: rgba(245, 158, 11, .38);
+  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+}
+
+.about-card {
+  border: 1px solid rgba(245, 158, 11, .28);
+  background: linear-gradient(145deg, rgba(27, 27, 33, .96), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 14px 32px rgba(0, 0, 0, .08);
+}
+
+.about-beacon {
+  border-color: rgba(245, 158, 11, .34);
+  background: radial-gradient(circle, rgba(245, 158, 11, .12), rgba(6, 182, 212, .04));
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, .06);
+}
+
 .bottom-nav {
   width: min(700px, calc(100% - 20px));
   border: 1px solid rgba(71, 97, 129, .46);
@@ -260,5 +381,16 @@ body {
 
   .task-card small {
     font-size: 12px;
+  }
+
+  .home-hero,
+  .next-step-card,
+  .detail-hero,
+  .about-card {
+    border-radius: 21px;
+  }
+
+  .message {
+    max-width: 90%;
   }
 }
