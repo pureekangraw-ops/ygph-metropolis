@@ -2,27 +2,21 @@ name: LIGHTHOUSE Owner Build
 
 on:
   workflow_dispatch:
-    inputs:
-      target_ref:
-        description: Branch or commit to build
-        required: true
-        default: work/metro-new-20260906
-        type: string
 
 permissions:
   contents: read
 
 jobs:
-  build-owner-selected-ref:
+  build-owner-approved-ref:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: android-shell
     steps:
-      - name: Checkout owner-selected ref
+      - name: Checkout owner-approved LIGHTHOUSE ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.target_ref }}
+          ref: work/metro-new-20260906
 
       - name: Show exact source commit
         run: git rev-parse HEAD
@@ -111,7 +105,7 @@ jobs:
       - name: Verify final APK identity and build provenance
         env:
           APK_SOURCE_REPOSITORY: ${{ github.repository }}
-          APK_SOURCE_REF: ${{ inputs.target_ref }}
+          APK_SOURCE_REF: work/metro-new-20260906
           APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
