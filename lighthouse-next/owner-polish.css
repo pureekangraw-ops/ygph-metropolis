@@ -1,0 +1,396 @@
+:root {
+  --bg: #0B0E14;
+  --bg-deep: #06080d;
+  --panel: #1E293B;
+  --panel-2: #111827;
+  --text: #F8FAFC;
+  --muted: #94A3B8;
+  --line: #334155;
+  --gold: #F59E0B;
+  --gold-strong: #F59E0B;
+  --cyan: #06B6D4;
+  --violet: #8B5CF6;
+}
+
+body {
+  background:
+    radial-gradient(circle at 82% 6%, rgba(6, 182, 212, .07), transparent 24%),
+    radial-gradient(circle at 18% 20%, rgba(139, 92, 246, .055), transparent 28%),
+    radial-gradient(circle at 50% -10%, rgba(30, 41, 59, .86), var(--bg) 32%, var(--bg-deep) 82%);
+}
+
+.pin-app-icon {
+  width: min(220px, 64vw);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 28px;
+  display: block;
+  margin: 0 auto;
+}
+
+.app-page {
+  scroll-padding-bottom: calc(var(--nav-height) + 24px);
+}
+
+.chat-composer {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 44px;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 22px;
+  align-items: end;
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
+}
+
+.chat-composer textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 118px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.chat-composer textarea:focus {
+  outline: none;
+}
+
+.send-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(135deg, #F59E0B, #f7b62f);
+  color: #17110a;
+  box-shadow: 0 0 15px rgba(245, 158, 11, .12);
+  transition: opacity .15s ease, transform .12s ease, filter .15s ease;
+}
+
+.send-button:disabled {
+  opacity: .32;
+  filter: saturate(.5);
+  cursor: default;
+  box-shadow: none;
+}
+
+.send-button:not(:disabled):active {
+  transform: scale(.96);
+}
+
+.send-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  vector-effect: non-scaling-stroke;
+}
+
+.nav-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+
+.nav-item .ui-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.nav-item.active .nav-icon {
+  color: var(--gold);
+}
+
+.task-icon .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.history-cancel {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  touch-action: manipulation;
+}
+
+/* Owner-approved restrained cosmic direction: app usability stays primary.
+   LIGHTHOUSE identity appears through the approved mark, icon rings, dark navy panels and gold active states. */
+.header-app-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid rgba(245, 158, 11, .32);
+  box-shadow: 0 0 16px rgba(245, 158, 11, .13);
+}
+
+.compact-brand {
+  gap: 10px;
+  letter-spacing: .08em;
+}
+
+.home-hero {
+  border: 1px solid rgba(71, 97, 129, .62);
+  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(7, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 16px 38px rgba(0, 0, 0, .10);
+}
+
+.home-hero::after {
+  border-color: rgba(6, 182, 212, .14);
+  box-shadow: 0 0 34px rgba(6, 182, 212, .035);
+}
+
+.metric-card {
+  border: 1px solid rgba(71, 97, 129, .54);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .96), rgba(8, 17, 29, .94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.metric-wide {
+  border-color: rgba(6, 182, 212, .26);
+}
+
+.next-step-card {
+  border: 1px solid rgba(245, 158, 11, .34);
+  background: linear-gradient(145deg, rgba(28, 27, 31, .96), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 36px rgba(0, 0, 0, .08);
+}
+
+.next-step-light {
+  width: 3px;
+  background: linear-gradient(var(--gold), var(--cyan), var(--violet));
+  box-shadow: 0 0 14px rgba(245, 158, 11, .20);
+}
+
+#page-chat .page-title-block,
+#page-settings .page-title-block,
+#manual-hub .page-title-block {
+  position: relative;
+  padding-bottom: 24px;
+}
+
+#page-chat .page-title-block::after,
+#page-settings .page-title-block::after,
+#manual-hub .page-title-block::after {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), rgba(245, 158, 11, .18));
+  box-shadow: 0 0 12px rgba(245, 158, 11, .2);
+}
+
+.message.app {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.message.user {
+  border: 1px solid rgba(245, 158, 11, .34);
+  background: linear-gradient(145deg, rgba(55, 38, 19, .74), rgba(28, 24, 24, .90));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.message.note {
+  border-color: rgba(6, 182, 212, .26);
+  background: linear-gradient(145deg, rgba(6, 182, 212, .08), rgba(8, 17, 29, .94));
+}
+
+.chat-chip {
+  border-color: rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .94));
+}
+
+.chat-chip:active {
+  border-color: rgba(245, 158, 11, .42);
+  background: rgba(245, 158, 11, .09);
+}
+
+#manual-hub .task-grid {
+  gap: 12px;
+  padding-bottom: calc(var(--nav-height) + 28px);
+}
+
+.task-card {
+  min-height: 102px;
+  grid-template-columns: 64px minmax(0, 1fr) 18px;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(71, 97, 129, .58);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
+}
+
+.task-card:active {
+  border-color: rgba(245, 158, 11, .42);
+  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+}
+
+.task-card strong {
+  font-size: 20px;
+  letter-spacing: -.01em;
+}
+
+.task-card small {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.task-card > b {
+  color: #9fb1cc;
+  font-size: 27px;
+  font-weight: 400;
+}
+
+.task-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 19px;
+  border: 1px solid transparent;
+  background: linear-gradient(#0d1725, #0d1725) padding-box,
+    conic-gradient(from 215deg, rgba(6, 182, 212, .9), rgba(139, 92, 246, .78), rgba(245, 158, 11, .92), rgba(6, 182, 212, .9)) border-box;
+  box-shadow: inset 0 0 20px rgba(245, 158, 11, .05), 0 0 18px rgba(6, 182, 212, .06);
+  color: #ffb02e;
+}
+
+.task-icon .ui-icon {
+  width: 27px;
+  height: 27px;
+  stroke-width: 1.75;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .32));
+}
+
+.detail-hero {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(8, 17, 29, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 30px rgba(0, 0, 0, .08);
+}
+
+.detail-row {
+  border: 1px solid rgba(71, 97, 129, .50);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .93));
+}
+
+.back-button {
+  color: #f6b43b;
+}
+
+.settings-panel {
+  gap: 12px;
+}
+
+.settings-row {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.settings-button {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.settings-button:active {
+  border-color: rgba(245, 158, 11, .38);
+  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+}
+
+.about-card {
+  border: 1px solid rgba(245, 158, 11, .28);
+  background: linear-gradient(145deg, rgba(27, 27, 33, .96), rgba(8, 17, 29, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 14px 32px rgba(0, 0, 0, .08);
+}
+
+.about-beacon {
+  border-color: rgba(245, 158, 11, .34);
+  background: radial-gradient(circle, rgba(245, 158, 11, .12), rgba(6, 182, 212, .04));
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, .06);
+}
+
+.bottom-nav {
+  width: min(700px, calc(100% - 20px));
+  border: 1px solid rgba(71, 97, 129, .46);
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  background: linear-gradient(180deg, rgba(8, 20, 33, .97), rgba(4, 12, 21, .98));
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.nav-item {
+  border: 1px solid transparent;
+  border-radius: 20px;
+}
+
+.nav-item.active {
+  border: 1px solid rgba(245, 158, 11, .46);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .13), rgba(245, 158, 11, .05));
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, .05), 0 0 16px rgba(245, 158, 11, .09);
+}
+
+.nav-item.active small {
+  color: #f6b43b;
+}
+
+@media (max-width: 380px) {
+  .task-card {
+    min-height: 94px;
+    grid-template-columns: 56px minmax(0, 1fr) 16px;
+    gap: 12px;
+    padding: 12px 13px;
+  }
+
+  .task-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 17px;
+  }
+
+  .task-card strong {
+    font-size: 18px;
+  }
+
+  .task-card small {
+    font-size: 12px;
+  }
+
+  .home-hero,
+  .next-step-card,
+  .detail-hero,
+  .about-card {
+    border-radius: 21px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+}
