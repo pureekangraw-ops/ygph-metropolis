@@ -5,7 +5,8 @@ const assert = require('node:assert/strict');
 const workflow = fs.readFileSync('.github/workflows/lighthouse-owner-build.yml', 'utf8');
 
 test('Owner Build packages lighthouse-next and cannot publish production', () => {
-  assert.match(workflow, /default:\s*work\/metro-new-20260906/);
+  assert.match(workflow, /ref:\s*work\/metro-new-20260906/);
+  assert.doesNotMatch(workflow, /\binputs:\s*\n|inputs\.target_ref/);
   assert.match(workflow, /node --test test\/\*\.test\.mjs/);
   assert.match(workflow, /npm run app:stage-next/);
   assert.match(workflow, /npm run android:icons/);
