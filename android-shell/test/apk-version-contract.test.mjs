@@ -10,15 +10,15 @@ async function readVersion() {
 
 test('Android APK version has the owner-test source of truth', async () => {
   const version = await readVersion();
-  assert.equal(version.versionCode, 1006);
-  assert.equal(version.versionName, '1.0.0-owner.1');
+  assert.equal(version.versionCode, 1007);
+  assert.equal(version.versionName, '1.0.0-owner.2');
   assert.equal(version.owner, 'ANDROID_APK');
   assert.equal(version.patchVersionDerived, false);
 });
 
-test('candidate versionCode must be greater than canonical donor baseline', async () => {
+test('candidate versionCode must be greater than the installed owner-test candidate', async () => {
   const { assertUpgradeVersion } = await import('../tools/set-android-version.mjs');
-  assert.doesNotThrow(() => assertUpgradeVersion({ baselineVersionCode: 1005, candidateVersionCode: 1006 }));
-  assert.throws(() => assertUpgradeVersion({ baselineVersionCode: 1006, candidateVersionCode: 1006 }), /APK_VERSION_NOT_MONOTONIC/);
-  assert.throws(() => assertUpgradeVersion({ baselineVersionCode: 1007, candidateVersionCode: 1006 }), /APK_VERSION_NOT_MONOTONIC/);
+  assert.doesNotThrow(() => assertUpgradeVersion({ baselineVersionCode: 1006, candidateVersionCode: 1007 }));
+  assert.throws(() => assertUpgradeVersion({ baselineVersionCode: 1007, candidateVersionCode: 1007 }), /APK_VERSION_NOT_MONOTONIC/);
+  assert.throws(() => assertUpgradeVersion({ baselineVersionCode: 1008, candidateVersionCode: 1007 }), /APK_VERSION_NOT_MONOTONIC/);
 });

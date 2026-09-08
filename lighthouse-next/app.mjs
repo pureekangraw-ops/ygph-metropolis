@@ -1014,3 +1014,30 @@ else showPin();
 // BABA = CHAT answers only supported local side queries, preserves deep pending,
 // reminds the user that the original item is still waiting, and restores it after reload.
 void AMBIGUITY_LOCK;
+
+const visualViewport = window.visualViewport;
+let keyboardBaselineHeight = visualViewport?.height || window.innerHeight;
+
+function syncKeyboardViewport() {
+  const viewportHeight = visualViewport?.height || window.innerHeight;
+  const inputFocused = document.activeElement === chatInput;
+  if (!inputFocused) {
+    keyboardBaselineHeight = viewportHeight;
+    root.classList.toggle('keyboard-open', false);
+    return;
+  }
+  const keyboardOpen = keyboardBaselineHeight - viewportHeight > 120;
+  root.classList.toggle('keyboard-open', keyboardOpen);
+}
+
+if (visualViewport) {
+  visualViewport.addEventListener('resize', syncKeyboardViewport);
+  visualViewport.addEventListener('scroll', syncKeyboardViewport);
+}
+window.addEventListener('resize', syncKeyboardViewport);
+chatInput.addEventListener('focus', syncKeyboardViewport);
+chatInput.addEventListener('blur', () => {
+  root.classList.toggle('keyboard-open', false);
+  keyboardBaselineHeight = visualViewport?.height || window.innerHeight;
+});
+syncKeyboardViewport();

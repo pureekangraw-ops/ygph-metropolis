@@ -14,17 +14,17 @@ const versionToolPath = path.join(ROOT, 'android-shell', 'tools', 'set-android-v
 test('Android candidate records and enforces the canonical upgrade baseline', async () => {
   const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
   assert.equal(version.baselineVersionCode, 1005);
-  assert.equal(version.versionCode, 1006);
-  assert.ok(version.versionCode > version.baselineVersionCode);
+  assert.equal(version.versionCode, 1007);
+  assert.ok(version.versionCode > 1006, 'keyboard-fix candidate must install over owner-test vc1006');
 
   const { assertUpgradeVersion, applyAndroidVersion } = await import(pathToFileURL(versionToolPath));
   assert.doesNotThrow(() => assertUpgradeVersion({
-    baselineVersionCode: version.baselineVersionCode,
+    baselineVersionCode: 1006,
     candidateVersionCode: version.versionCode,
   }));
   assert.throws(() => assertUpgradeVersion({
-    baselineVersionCode: 1006,
-    candidateVersionCode: 1006,
+    baselineVersionCode: 1007,
+    candidateVersionCode: 1007,
   }), /APK_VERSION_NOT_MONOTONIC/);
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'lighthouse-apk-version-'));
@@ -32,8 +32,8 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
   const gradlePath = path.join(tempRoot, 'build.gradle');
   const originalGradle = 'android { defaultConfig { versionCode 1\nversionName "0.0.1" } }\n';
   fs.writeFileSync(invalidVersionPath, JSON.stringify({
-    baselineVersionCode: 1006,
-    versionCode: 1006,
+    baselineVersionCode: 1007,
+    versionCode: 1007,
     versionName: '1.0.0-invalid',
   }), 'utf8');
   fs.writeFileSync(gradlePath, originalGradle, 'utf8');
@@ -54,13 +54,13 @@ test('APK identity verifier fails closed on package signer and version drift', a
   const expected = {
     applicationId: identity.applicationId,
     signerCertificateSha256: identity.signerCertificateSha256,
-    versionCode: 1006,
-    versionName: '1.0.0-owner.1',
+    versionCode: 1007,
+    versionName: '1.0.0-owner.2',
   };
   assert.doesNotThrow(() => assertApkIdentity(expected, expected));
   assert.throws(() => assertApkIdentity({ ...expected, applicationId: 'bad.id' }, expected), /APK_APPLICATION_ID_MISMATCH/);
   assert.throws(() => assertApkIdentity({ ...expected, signerCertificateSha256: '0'.repeat(64) }, expected), /APK_SIGNER_MISMATCH/);
-  assert.throws(() => assertApkIdentity({ ...expected, versionCode: 1005 }, expected), /APK_VERSION_CODE_MISMATCH/);
+  assert.throws(() => assertApkIdentity({ ...expected, versionCode: 1006 }, expected), /APK_VERSION_CODE_MISMATCH/);
 });
 
 test('final APK verifier owns hash and provenance evidence after signed-byte verification', () => {
