@@ -173,4 +173,44 @@ if (providerReady) {
   });
 }
 
-// Later tasks intentionally extend this file with same-app browser-surface contracts.
+test('GO Client is one mode of the existing root app, not a second HTML app', () => {
+  assert.equal(fs.existsSync('go-client/index.html'), false);
+  assert.ok(fs.existsSync(htmlPath));
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  assert.match(html, /go-client\.css/);
+  assert.match(html, /id="goClientShell"/);
+  assert.match(html, /ระบบกึ่ง AI/);
+  assert.match(html, /id="goClientForm"/);
+  assert.match(html, /id="goClientInput"/);
+  assert.match(html, /id="goClientFiles"[^>]*multiple/);
+  assert.match(html, /id="goClientHelp"/);
+  assert.match(html, /data-go-client-package="STARTER"/);
+  assert.match(html, /data-go-client-package="STANDARD"/);
+  assert.match(html, /data-go-client-package="BUSINESS"/);
+});
+
+test('root app explicitly skips owner bootstrap when client mode is active', () => {
+  const rootApp = fs.readFileSync('app.mjs', 'utf8');
+  assert.match(rootApp, /from '\.\/ui\/go-client\.mjs'/);
+  assert.match(rootApp, /if \(isGoClientMode\(\)\)/);
+  assert.match(rootApp, /activateGoClientMode\(\)/);
+  const clientBranch = rootApp.indexOf('if (isGoClientMode())');
+  const bootstrap = rootApp.lastIndexOf('bootstrapEntry()');
+  assert.ok(clientBranch >= 0 && bootstrap > clientBranch, 'client-mode gate must exist before owner bootstrap call');
+});
+
+test('client browser module uses same-origin interpreter and filename metadata only', () => {
+  assert.ok(fs.existsSync(appPath), `missing ${appPath}`);
+  assert.ok(fs.existsSync(stylePath), `missing ${stylePath}`);
+  const source = fs.readFileSync(appPath, 'utf8');
+  assert.match(source, /\.\/go-client-flow\.mjs/);
+  assert.match(source, /\/api\/v1\/interpret/);
+  assert.match(source, /surface:'GO_CLIENT'/);
+  assert.match(source, /mapMaterialToChecklist/);
+  assert.match(source, /buildJobSummary/);
+  assert.doesNotMatch(source, /OPENAI_API_KEY/);
+  assert.doesNotMatch(source, /api\.openai\.com/);
+  assert.doesNotMatch(source, /openGreenfieldRuntime/);
+  assert.doesNotMatch(source, /\.arrayBuffer\(/);
+  assert.doesNotMatch(source, /file\.text\(/);
+});
