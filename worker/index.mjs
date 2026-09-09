@@ -4,19 +4,42 @@ import { enforceInterpretRateLimit } from './rate-limit.mjs';
 import { gateIntentProposal } from '../master-input/intent-contract.mjs';
 import { InterpreterProviderError, interpretTextWithOpenAI } from '../master-input/interpreter-provider.mjs';
 import { gateGoClientProposal, interpretGoClientTextWithOpenAI } from '../master-input/go-client-interpreter-provider.mjs';
+import { gateGoClientManagerDecision, interpretGoClientManagerWithOpenAI } from '../master-input/go-client-manager-provider.mjs';
 
-function isGoClient(input) {
-  return String(input?.context?.surface || '').trim().toUpperCase() === 'GO_CLIENT';
+function surfaceOf(input) {
+  return String(input?.context?.surface || '').trim().toUpperCase();
 }
 
 async function interpretRequest(input, env, deps) {
   const explicitlyEnabled = String(env?.INTERPRETER_PROVIDER_ENABLED || '').trim().toLowerCase() === 'true';
-  const hasInjectedProvider = typeof deps?.interpretText === 'function' || typeof deps?.interpretGoClientText === 'function';
+  const hasInjectedProvider = typeof deps?.interpretText === 'function'
+    || typeof deps?.interpretGoClientText === 'function'
+    || typeof deps?.interpretGoClientManager === 'function';
   const injectedTestProvider = hasInjectedProvider && env?.INTERPRETER_PROVIDER_ENABLED == null;
   const apiKey = typeof env?.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
   if ((!explicitlyEnabled && !injectedTestProvider) || !apiKey) throw new InterpreterProviderError('INTERPRETER_NOT_CONFIGURED', 503);
 
-  if (isGoClient(input)) {
+  const surface = surfaceOf(input);
+  if (surface === 'GO_CLIENT_MANAGER') {
+    const packet = input?.context?.managerPacket;
+    if (!packet || typeof packet !== 'object' || Array.isArray(packet)) throw new InterpreterProviderError('INTERPRETER_INVALID_INPUT', 400);
+    const interpretGoClientManager = typeof deps?.interpretGoClientManager === 'function' ? deps.interpretGoClientManager : interpretGoClientManagerWithOpenAI;
+    let decision;
+    try {
+      decision = await interpretGoClientManager({ apiKey, packet });
+    } catch (error) {
+      if (error instanceof InterpreterProviderError) throw error;
+      throw new InterpreterProviderError('INTERPRETER_PROVIDER_ERROR', 502);
+    }
+    try {
+      return { surface:'GO_CLIENT_MANAGER', ...gateGoClientManagerDecision(decision) };
+    } catch (error) {
+      if (error instanceof InterpreterProviderError) throw error;
+      throw new InterpreterProviderError('INTERPRETER_INVALID_OUTPUT', 502);
+    }
+  }
+
+  if (surface === 'GO_CLIENT') {
     const interpretGoClientText = typeof deps?.interpretGoClientText === 'function' ? deps.interpretGoClientText : interpretGoClientTextWithOpenAI;
     let proposal;
     try {
