@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const root = process.cwd();
 const bridgePath = path.join(root, 'lighthouse-next/runtime-ledger.mjs');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const htmlPath = path.join(root, 'lighthouse-next/index.html');
 
 async function loadBridge() {
   assert.equal(fs.existsSync(bridgePath), true, 'missing lighthouse-next/runtime-ledger.mjs');
@@ -190,4 +191,20 @@ test('login loads real Ledger truth before showing the app', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   assert.match(app, /ledgerTruth\s*=\s*await ledgerBridge\.readLedgerTruth\(\)/);
   assert.match(app, /if \(unlocked\) runtimeGate\.lock\(\)/);
+});
+
+test('Home finance starts with placeholders so demo money never flashes before Ledger truth loads', () => {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  for (const id of [
+    'home-cash-value',
+    'home-expected-value',
+    'home-income-value',
+    'home-expense-value',
+    'home-net-value',
+    'home-obligation-value',
+    'home-gap-value',
+    'home-target-value',
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["'][^>]*>—<`), `${id} must start as a placeholder`);
+  }
 });
