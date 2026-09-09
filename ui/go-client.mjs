@@ -1,6 +1,7 @@
 import {
   detectLocalIntent,
   resolveSalesResponse,
+  resolveManagerDecision,
   getChecklist,
   mapMaterialToChecklist,
   evaluateChecklist,
@@ -33,6 +34,8 @@ const state = {
   estimateAccepted:false,
   lastClientMessage:null,
   managerPacket:null,
+  managerMode:'AUTO',
+  managerBusy:false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -379,7 +382,22 @@ function updateDesiredDate() {
   renderSummary();
 }
 
-function callManager(reason = 'OTHER', source = 'CLIENT') {
+async function requestManagerDecision(packet) {
+  const response = await fetch('/api/v1/interpret', {
+    method:'POST',
+    headers:{ 'content-type':'application/json' },
+    body:JSON.stringify({
+      version:'1',
+      text:'manager peek',
+      context:{surface:'GO_CLIENT_MANAGER',managerPacket:packet},
+    }),
+  });
+  if (!response.ok) throw new Error('GO_CLIENT_MANAGER_FAILED');
+  return response.json();
+}
+
+async function callManager(reason = 'OTHER', source = 'CLIENT') {
+  if (state.managerBusy) return null;
   const packet = buildManagerPacket({
     ...state,
     recentMessages:state.messages,
@@ -387,8 +405,32 @@ function callManager(reason = 'OTHER', source = 'CLIENT') {
   }, reason, source);
   state.managerPacket = packet;
   globalThis.dispatchEvent(new CustomEvent('ygph:go-client-manager-call', { detail:packet }));
-  addMessage('assistant', 'รับทราบครับ ส่งเคสนี้ให้ GO ช่วยดูแล้ว โดยจะเริ่มจากบริบทที่จำเป็นที่สุดก่อน ถ้าต้องลงลึกค่อยเปิดข้อมูลเพิ่มครับ');
-  return packet;
+  const helpButton = $('goClientHelp');
+  state.managerBusy = true;
+  if (helpButton) helpButton.disabled = true;
+  try {
+    const resolved = resolveManagerDecision(await requestManagerDecision(packet), state);
+    if (resolved.disposition === 'WHISPER') {
+      state.managerMode = 'AUTO';
+      addMessage('assistant', resolved.text);
+      return resolved;
+    }
+    if (resolved.disposition === 'DIRECT_REPLY') {
+      state.managerMode = 'AUTO';
+      addMessage('assistant', resolved.text);
+      return resolved;
+    }
+    state.managerMode = 'TAKEOVER';
+    addMessage('assistant', resolved.text);
+    return resolved;
+  } catch {
+    state.managerMode = 'AUTO';
+    addMessage('assistant', 'ตอนนี้เรียก GO มาดูเคสไม่ได้ครับ คุณยังพิมพ์รายละเอียดต่อได้ตามปกติ แล้วระบบจะช่วยพา Flow ต่อจากข้อมูลที่มี');
+    return null;
+  } finally {
+    state.managerBusy = false;
+    if (helpButton) helpButton.disabled = false;
+  }
 }
 
 async function classifyWithApi(text) {
@@ -434,6 +476,11 @@ async function handleClientText(text) {
   addMessage('user', value);
   maybeMarkComplete(value);
 
+  if (state.managerMode === 'TAKEOVER') {
+    await callManager('TAKEOVER_CONTINUE', 'CLIENT');
+    return;
+  }
+
   let route = detectLocalIntent(value);
   if (route.jobType && !state.jobType) state.jobType = route.jobType;
   if (route.package && GO_CLIENT_PACKAGES[route.package]) state.package = route.package;
@@ -447,7 +494,7 @@ async function handleClientText(text) {
   }
 
   if (route.wantsManager || route.intent === 'HELP') {
-    callManager(route.intent === 'HELP' ? 'CLIENT_HELP' : route.intent, 'CLIENT');
+    await callManager(route.intent === 'HELP' ? 'CLIENT_HELP' : route.intent, 'CLIENT');
     return;
   }
 
@@ -515,7 +562,7 @@ function bindControls() {
   $('goClientEstimateButton').addEventListener('click', runEstimate);
   $('goClientDesiredDate').addEventListener('change', updateDesiredDate);
   $('goClientConfirm').addEventListener('click', confirmJob);
-  $('goClientHelp').addEventListener('click', () => callManager('CLIENT_HELP', 'CLIENT'));
+  $('goClientHelp').addEventListener('click', () => { void callManager('CLIENT_HELP', 'CLIENT'); });
 }
 
 export function activateGoClientMode() {
