@@ -98,8 +98,9 @@ test('demo staging is isolated from the production asset allowlist and verifies 
   const productionIgnore = read(path.join(root, '.assetsignore'));
 
   assert.match(config, /"name"\s*:\s*"lighthouse-next-staging"/);
-  assert.match(config, /"directory"\s*:\s*"\.\/lighthouse-next"/);
+  assert.match(config, /"directory"\s*:\s*"\.\/\.lighthouse-next-staging"/);
   assert.doesNotMatch(productionIgnore, /lighthouse-next/);
+  assert.match(workflow, /stage-lighthouse-next-bundle\.mjs \.lighthouse-next-staging/);
   assert.match(workflow, /wrangler\.lighthouse-next-staging\.jsonc/);
   assert.match(workflow, /https:\/\/lighthouse-next-staging\.pureekangraw\.workers\.dev/);
   assert.match(workflow, /LIGHTHOUSE/);

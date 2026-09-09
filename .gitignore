@@ -1,4 +1,5 @@
 .worktrees/
+.lighthouse-next-staging/
 node_modules/
 .dev.vars
 .dev.vars.*

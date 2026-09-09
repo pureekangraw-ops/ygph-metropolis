@@ -43,6 +43,7 @@ jobs:
           const files = [
             'index.html',
             'app.mjs',
+            'runtime-gate.mjs',
             'styles.css',
             'owner-polish.css',
             'assets/lighthouse-icon.svg',
@@ -52,7 +53,7 @@ jobs:
 
           for (const file of files) {
             const source = join('lighthouse-next', file);
-            const staged = join('android-shell', 'www', file);
+            const staged = join('android-shell', 'www', 'lighthouse-next', file);
             if (sha256(source) !== sha256(staged)) {
               throw new Error(`LIGHTHOUSE_STAGE_HASH_MISMATCH:${file}`);
             }
@@ -60,6 +61,8 @@ jobs:
           NODE
       - name: Validate Wrangler production config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
+      - name: Stage isolated LIGHTHOUSE bundle for validation
+        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-next-staging
       - name: Validate isolated LIGHTHOUSE demo staging config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --config wrangler.lighthouse-next-staging.jsonc
 
@@ -97,6 +100,8 @@ jobs:
           code="$(curl --silent --show-error --output "$RUNNER_TEMP/interpret.json" --write-out '%{http_code}' -X POST "$base/api/v1/interpret" -H 'content-type: application/json' --data '{"version":"1","text":"staging gate","context":{}}')"
           test "$code" = "503"
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.code!=="INTERPRETER_NOT_CONFIGURED"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/interpret.json"
+      - name: Stage isolated LIGHTHOUSE bundle for deploy
+        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-next-staging
       - name: Deploy isolated LIGHTHOUSE next demo staging
         uses: cloudflare/wrangler-action@v3
         with:
