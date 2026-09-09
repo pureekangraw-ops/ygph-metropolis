@@ -33,5 +33,5 @@ test('live LIGHTHOUSE adopts the approved preview visual system and a compact in
 
   assert.match(sendControl, /const chatSend = document\.querySelector\('#chat-send'\)/, 'focused send controller must own the button state');
   assert.match(sendControl, /chatSend\.disabled\s*=\s*!chatInput\.value\.trim\(\)/, 'send availability must follow whether the input contains text');
-  assert.match(app, /event\.key === 'Enter' && !event\.shiftKey/, 'Enter should continue to send');
+  assert.match(app, /event\.key\s*===\s*['"]Enter['"]\s*&&\s*!event\.shiftKey/, 'Enter should continue to send');
 });
