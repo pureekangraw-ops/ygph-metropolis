@@ -151,24 +151,23 @@ test('LIGHTHOUSE staging uses the owner-locked lighthouse artwork as app identit
   assert.match(manifest, /lighthouse-icon\.svg/);
 });
 
-test('Dashboard renders current demo cash truth from the shared state', () => {
+test('Dashboard renders real cash truth from ledgerTruth', () => {
   const html = read(htmlPath);
   const app = read(appPath);
   for (const id of ['home-cash-value', 'home-income-value', 'home-expense-value', 'home-net-value']) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(app, /function renderHomeTruth\(/);
-  assert.match(app, /state\.cash/);
-  assert.match(app, /state\.todayIncome/);
-  assert.match(app, /state\.todayExpense/);
+  assert.match(app, /ledgerTruth/);
+  assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
 });
 
-test('MANUAL Store and History render the same products and transactions state', () => {
+test('MANUAL Store keeps demo products while History uses real Ledger transactions', () => {
   const app = read(appPath);
   assert.match(app, /function renderStoreDetail\(/);
-  assert.match(app, /function renderHistoryDetail\(/);
   assert.match(app, /state\.products/);
-  assert.match(app, /state\.transactions/);
+  assert.match(app, /function renderHistoryDetail\(/);
+  assert.match(app, /ledgerTruth\?\.transactions/);
   assert.match(app, /เหลือ.*ชิ้น/);
 });
 

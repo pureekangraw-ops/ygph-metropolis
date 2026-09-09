@@ -8,6 +8,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'owner-polish.css',
   'app.mjs',
   'runtime-gate.mjs',
+  'runtime-ledger.mjs',
   'send-control.mjs',
   'general-income.mjs',
   'store-sale.mjs',
@@ -18,6 +19,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
 export const GREENFIELD_ENTRYPOINTS = Object.freeze([
   'runtime.mjs',
   'runtime-session.mjs',
+  'calculation-authority.mjs',
 ]);
 
 const REQUIRED_ASSETS = Object.freeze([

@@ -35,12 +35,18 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   const stagedGreenfield = join(shellRoot, 'www', 'greenfield');
 
   assert.equal(await exists(join(stagedLighthouse, 'runtime-gate.mjs')), true, 'runtime-gate.mjs must live under www/lighthouse-next');
+  assert.equal(await exists(join(stagedLighthouse, 'runtime-ledger.mjs')), true, 'runtime-ledger.mjs must be staged');
   assert.equal(await exists(join(stagedGreenfield, 'runtime.mjs')), true, 'greenfield/runtime.mjs must be staged');
   assert.equal(await exists(join(stagedGreenfield, 'runtime-session.mjs')), true, 'greenfield/runtime-session.mjs must be staged');
+  assert.equal(await exists(join(stagedGreenfield, 'calculation-authority.mjs')), true, 'calculation-authority.mjs must be staged');
 
   assert.deepEqual(
     await readFile(join(stagedLighthouse, 'runtime-gate.mjs')),
     await readFile(join(repoRoot, 'lighthouse-next', 'runtime-gate.mjs')),
+  );
+  assert.deepEqual(
+    await readFile(join(stagedLighthouse, 'runtime-ledger.mjs')),
+    await readFile(join(repoRoot, 'lighthouse-next', 'runtime-ledger.mjs')),
   );
   assert.deepEqual(
     await readFile(join(stagedGreenfield, 'runtime.mjs')),
@@ -49,6 +55,10 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   assert.deepEqual(
     await readFile(join(stagedGreenfield, 'runtime-session.mjs')),
     await readFile(join(repoRoot, 'greenfield', 'runtime-session.mjs')),
+  );
+  assert.deepEqual(
+    await readFile(join(stagedGreenfield, 'calculation-authority.mjs')),
+    await readFile(join(repoRoot, 'greenfield', 'calculation-authority.mjs')),
   );
 });
 
