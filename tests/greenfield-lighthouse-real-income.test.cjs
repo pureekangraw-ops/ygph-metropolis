@@ -136,3 +136,27 @@ test('readLedgerTruth delegates daily cash truth to Greenfield calculation autho
   assert.equal(truth.netSatang, 1500);
   assert.deepEqual(truth.transactions.map(item => item.recordId), ['TX-NEW','TX-OLD']);
 });
+
+test('CHAT general-income confirmation delegates to real Ledger with stable retry identity', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /from ['"]\.\/runtime-ledger\.mjs['"]/);
+  assert.match(app, /createLighthouseLedgerBridge/);
+  assert.match(app, /workflowId/);
+  assert.match(app, /ledgerTransactionId/);
+  assert.match(app, /await ledgerBridge\.recordOtherIncome\(/);
+  assert.match(app, /ยังบันทึกไม่สำเร็จ รายการยังค้างอยู่ ลองอีกครั้งได้/);
+  assert.match(app, /แอปถูกล็อก กรุณาเข้าสู่ระบบแล้วลองยืนยันอีกครั้ง/);
+});
+
+test('real general-income confirmation does not mutate demo finance authority', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  const start = app.indexOf('async function confirmGeneralIncome(pending)');
+  const end = app.indexOf('function confirmStoreSale', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const body = app.slice(start, end);
+  assert.match(body, /ledgerBridge\.recordOtherIncome/);
+  assert.doesNotMatch(body, /state\.cash\s*\+=/);
+  assert.doesNotMatch(body, /state\.todayIncome\s*\+=/);
+  assert.doesNotMatch(body, /state\.transactions\.push/);
+});
