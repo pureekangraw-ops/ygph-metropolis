@@ -43,7 +43,7 @@ const CHECKLISTS = Object.freeze({
       { id:'project_list', label:'รายการผลงานที่ต้องการนำเสนอ', required:true },
       { id:'project_details', label:'รายละเอียดแต่ละผลงาน / บทบาท / Scope', required:true },
       { id:'project_visuals', label:'รูปภาพของแต่ละงาน', required:true },
-      { id:'results', label:'ผลลัพธ์ธ์ของงานที่ยืนยันได้', required:false },
+      { id:'results', label:'ผลลัพธ์ของงานที่ยืนยันได้', required:false },
       { id:'project_meta', label:'ชื่อลูกค้า / ปี / สถานที่', required:false },
       { id:'before_after', label:'Before–After', required:false },
       { id:'reference', label:'Portfolio เดิม / Reference', required:false },
