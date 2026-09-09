@@ -1,7 +1,7 @@
 # GO Client — Fastwork Presentation Design
 
 Date: 2026-09-09
-Status: owner-approved design
+Status: owner-approved design, corrected for same-app integration
 
 ## Purpose
 
@@ -21,11 +21,28 @@ Current supported job types:
 
 Client owns content, facts, numbers, claims and intended message. The service may organize, simplify, reorder, layout and visualize client-provided content when source data supports it. It must not invent missing facts, business strategy, statistics, claims or research from scratch as normal scope.
 
-## Architecture
+## Architecture — same app, same delivery
 
-GO Client is split into two operational parts.
+GO Client lives inside the existing YGPH METROPOLIS production web application and Cloudflare Worker delivery. It is **not** a second app, Worker, deployment, provider stack or credential stack.
 
-### Part A — Client surface
+The existing root `index.html` remains the single document. A client surface is selected by an explicit public mode such as `?surface=client`. In client mode the owner login/workspace is not shown and no Greenfield owner Runtime is opened. Owner mode remains unchanged and keeps the existing PIN/runtime flow.
+
+Implementation is isolated in focused UI modules so GO Client can evolve without mixing client state into STORE / RIDE / FINANCE / CALENDAR truth.
+
+Shared infrastructure:
+- same production repository and release/deploy gate
+- same Cloudflare Worker
+- same `/api/v1/interpret` endpoint
+- same `OPENAI_API_KEY`
+- same interpreter rate limiter
+- same static asset delivery
+
+Separated state/authority:
+- GO Client session state is client-conversation/intake state only
+- it must not read or mutate owner Greenfield Runtime data
+- no client content becomes Ledger/Store/Ride/Calendar truth
+
+## Part A — Client surface
 
 A client-facing chat experience with a visible notice that the chat is semi-AI. The client can type naturally; they are not forced through a linear menu.
 
@@ -47,7 +64,7 @@ Primary sales intents:
 
 The system routes each message to the relevant response node. A buy/start intent enters intake. A request for an estimate may use a lighter pre-estimate path before full intake.
 
-### Part B — GO manager
+## Part B — GO manager
 
 The client always has an emergency/help control: `ขอให้ GO ช่วยดู`.
 
@@ -86,7 +103,7 @@ Errors caused by us (typos, omissions from source, wrong numbers/text versus sou
    - explicit client description
    - filename/folder name
    - file type/metadata
-   - lightweight header/title/first-page inspection only when needed
+   - lightweight file inspection only when needed and supported
 7. A file may satisfy multiple checklist items.
 8. Mark checklist state with:
    - RECEIVED
@@ -129,7 +146,9 @@ GO may request deeper context only if the packet is insufficient.
 
 ## API/runtime rule
 
-Reuse the existing same-origin interpreter API and current OpenAI provider/runtime path. Do not create a second AI provider stack. GO Client should add domain/routing behavior around the existing interpreter rather than replacing the existing endpoint.
+Reuse the existing same-origin interpreter API and current OpenAI provider/runtime path. Do not create a second AI provider stack. `/api/v1/interpret` may branch on `context.surface === 'GO_CLIENT'` to a GO Client-specific strict classifier, but the transport, secret, rate limiter and Worker remain the existing ones.
+
+GO Client public mode must not unlock, read or write the owner Greenfield Runtime.
 
 ## Safety / authority brakes
 
@@ -140,16 +159,18 @@ Reuse the existing same-origin interpreter API and current OpenAI provider/runti
 - Do not repeatedly ask for content the client says does not exist.
 - Do not commit to a new price, deadline or special condition outside standard rules without GO review.
 - If customer risk becomes material, optimize for resolving the customer case rather than minimizing API cost.
+- Client mode and owner Runtime authority remain separated even though they ship in the same application.
 
 ## Success criteria
 
 A normal client can:
-1. ask natural sales questions,
-2. select or request a package estimate,
-3. submit a brief/materials,
-4. receive only necessary missing-item requests,
-5. see and confirm a concise final job summary,
-6. move to the real contact/deep-planning handoff,
+1. open the same deployed application directly in client mode without entering the owner PIN flow,
+2. ask natural sales questions,
+3. select or request a package estimate,
+4. submit a brief/materials,
+5. receive only necessary missing-item requests,
+6. see and confirm a concise final job summary,
+7. move to the real contact/deep-planning handoff,
 without being forced through a long questionnaire.
 
 GO can be summoned with one help action, peek cheaply, whisper guidance behind the scenes, and escalate to direct reply/takeover only when needed.
