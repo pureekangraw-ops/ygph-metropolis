@@ -10,6 +10,7 @@ const htmlPath = 'index.html';
 const stylePath = 'go-client.css';
 
 const flowReady = fs.existsSync(flowPath);
+const providerReady = fs.existsSync(providerPath);
 
 test('GO Client flow kernel exists inside the existing app', () => {
   assert.ok(flowReady, `missing ${flowPath}`);
@@ -89,4 +90,87 @@ if (flowReady) {
   });
 }
 
-// Later tasks intentionally extend this file with API and same-app browser-surface contracts.
+test('GO Client interpreter provider exists in the existing master-input stack', () => {
+  assert.ok(providerReady, `missing ${providerPath}`);
+});
+
+if (providerReady) {
+  test('GO Client adapter uses the same model family and strict Structured Outputs', async () => {
+    const { buildGoClientInterpretRequest, GO_CLIENT_PROVIDER_MODEL } = await import('../master-input/go-client-interpreter-provider.mjs');
+    const { INTERPRETER_PROVIDER_MODEL } = await import('../master-input/interpreter-provider.mjs');
+    const request = buildGoClientInterpretRequest('ราคาเท่าไรครับ', { stage:'SALES' });
+    assert.equal(GO_CLIENT_PROVIDER_MODEL, INTERPRETER_PROVIDER_MODEL);
+    assert.equal(request.model, INTERPRETER_PROVIDER_MODEL);
+    assert.equal(request.store, false);
+    assert.equal(request.text.format.type, 'json_schema');
+    assert.equal(request.text.format.strict, true);
+    const schemaText = JSON.stringify(request.text.format.schema);
+    assert.equal(schemaText.includes('runtimeMethod'), false);
+    assert.equal(schemaText.includes('commands'), false);
+    assert.equal(schemaText.includes('domain'), false);
+    assert.equal(schemaText.includes('PRICE'), true);
+    assert.equal(schemaText.includes('COMPANY_PROFILE'), true);
+  });
+
+  test('GO Client adapter parses strict result and does not leak private prompt in errors', async () => {
+    const { interpretGoClientTextWithOpenAI } = await import('../master-input/go-client-interpreter-provider.mjs');
+    const goodFetch = async (_url, options) => {
+      const sent = JSON.parse(options.body);
+      assert.equal(options.headers.authorization, 'Bearer TEST_KEY');
+      assert.equal(JSON.stringify(sent).includes('SECRET CLIENT TEXT'), true);
+      const result = {
+        intent:'PRICE', jobType:'COMPANY_PROFILE', package:null,
+        pageCount:null, desiredDate:null, wantsEstimate:false,
+        wantsManager:false, clientConfirmedComplete:false,
+      };
+      return new Response(JSON.stringify({ output:[{ type:'message', content:[{ type:'output_text', text:JSON.stringify(result) }] }] }), { status:200, headers:{'content-type':'application/json'} });
+    };
+    const result = await interpretGoClientTextWithOpenAI({ apiKey:'TEST_KEY', text:'SECRET CLIENT TEXT', context:{stage:'SALES'}, fetchImpl:goodFetch });
+    assert.equal(result.intent, 'PRICE');
+    assert.equal(result.jobType, 'COMPANY_PROFILE');
+
+    const badFetch = async () => new Response(JSON.stringify({ output:[{ type:'message', content:[{ type:'output_text', text:'not-json' }] }] }), { status:200, headers:{'content-type':'application/json'} });
+    await assert.rejects(() => interpretGoClientTextWithOpenAI({ apiKey:'TEST_KEY', text:'PRIVATE CLIENT MATERIAL', fetchImpl:badFetch }), error => {
+      assert.equal(error.code, 'INTERPRETER_INVALID_OUTPUT');
+      assert.equal(String(error.message).includes('PRIVATE CLIENT MATERIAL'), false);
+      return true;
+    });
+  });
+
+  test('same /api/v1/interpret endpoint branches GO_CLIENT without changing legacy interpreter', async () => {
+    const { handleApiRequest } = await import('../worker/index.mjs');
+    let legacyCalls = 0;
+    let clientCalls = 0;
+    const env = {
+      OPENAI_API_KEY:'TEST_KEY',
+      INTERPRET_RATE_LIMITER:{ async limit(){ return { success:true }; } },
+    };
+    const deps = {
+      interpretText:async () => { legacyCalls += 1; return { action:'CREATE', object:'EXPENSE', fields:{ title:'ข้าว', amountBaht:65, paymentMode:null, note:null } }; },
+      interpretGoClientText:async () => { clientCalls += 1; return { intent:'PRICE', jobType:null, package:null, pageCount:null, desiredDate:null, wantsEstimate:false, wantsManager:false, clientConfirmedComplete:false }; },
+    };
+
+    const clientResponse = await handleApiRequest(new Request('https://metro.example/api/v1/interpret', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body:JSON.stringify({ version:'1', text:'ราคาเท่าไร', context:{surface:'GO_CLIENT',stage:'SALES'} }),
+    }), env, deps);
+    assert.equal(clientResponse.status, 200);
+    const clientBody = await clientResponse.json();
+    assert.equal(clientBody.intent, 'PRICE');
+    assert.equal(clientBody.surface, 'GO_CLIENT');
+    assert.equal(clientCalls, 1);
+    assert.equal(legacyCalls, 0);
+
+    const legacyResponse = await handleApiRequest(new Request('https://metro.example/api/v1/interpret', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body:JSON.stringify({ version:'1', text:'ข้าว 65', context:{} }),
+    }), env, deps);
+    assert.equal(legacyResponse.status, 200);
+    const legacyBody = await legacyResponse.json();
+    assert.equal(legacyBody.object, 'EXPENSE');
+    assert.equal(legacyCalls, 1);
+    assert.equal(clientCalls, 1);
+  });
+}
+
+// Later tasks intentionally extend this file with same-app browser-surface contracts.
