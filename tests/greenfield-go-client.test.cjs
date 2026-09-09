@@ -3,21 +3,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const flowPath = 'go-client/flow.mjs';
-const providerPath = 'go-client/interpreter-provider.mjs';
-const appPath = 'go-client/app.mjs';
-const htmlPath = 'go-client/index.html';
-const stylePath = 'go-client/styles.css';
+const flowPath = 'ui/go-client-flow.mjs';
+const providerPath = 'master-input/go-client-interpreter-provider.mjs';
+const appPath = 'ui/go-client.mjs';
+const htmlPath = 'index.html';
+const stylePath = 'go-client.css';
 
 const flowReady = fs.existsSync(flowPath);
 
-test('GO Client flow kernel exists', () => {
+test('GO Client flow kernel exists inside the existing app', () => {
   assert.ok(flowReady, `missing ${flowPath}`);
 });
 
 if (flowReady) {
   test('package estimate follows published page thresholds and never invents page count', async () => {
-    const { estimatePackage } = await import('../go-client/flow.mjs');
+    const { estimatePackage } = await import('../ui/go-client-flow.mjs');
     assert.deepEqual(estimatePackage({ pageCount:5 }), { package:'STARTER', priceBaht:490, pageCount:5, extraPages:0 });
     assert.deepEqual(estimatePackage({ pageCount:10 }), { package:'STANDARD', priceBaht:790, pageCount:10, extraPages:0 });
     assert.deepEqual(estimatePackage({ pageCount:20 }), { package:'BUSINESS', priceBaht:1390, pageCount:20, extraPages:0 });
@@ -26,7 +26,7 @@ if (flowReady) {
   });
 
   test('local sales router catches cheap obvious intents before API fallback', async () => {
-    const { detectLocalIntent } = await import('../go-client/flow.mjs');
+    const { detectLocalIntent } = await import('../ui/go-client-flow.mjs');
     assert.equal(detectLocalIntent('ราคาเท่าไรครับ').intent, 'PRICE');
     assert.equal(detectLocalIntent('แก้งานได้กี่รอบ').intent, 'REVISION');
     assert.equal(detectLocalIntent('ขอให้ GO ช่วยดู').intent, 'HELP');
@@ -35,7 +35,7 @@ if (flowReady) {
   });
 
   test('checklists are fixed per supported job type with a general fallback', async () => {
-    const { getChecklist } = await import('../go-client/flow.mjs');
+    const { getChecklist } = await import('../ui/go-client-flow.mjs');
     const company = getChecklist('COMPANY_PROFILE');
     assert.equal(company.jobType, 'COMPANY_PROFILE');
     assert.ok(company.items.some(item => item.id === 'company_info' && item.required));
@@ -47,7 +47,7 @@ if (flowReady) {
   });
 
   test('filename/type mapping can satisfy multiple checklist items without reading file content', async () => {
-    const { getChecklist, mapMaterialToChecklist } = await import('../go-client/flow.mjs');
+    const { getChecklist, mapMaterialToChecklist } = await import('../ui/go-client-flow.mjs');
     const checklist = getChecklist('COMPANY_PROFILE');
     const result = mapMaterialToChecklist({ name:'company_services_contact.docx', type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, checklist);
     assert.ok(result.matchedItemIds.includes('company_info'));
@@ -56,7 +56,7 @@ if (flowReady) {
   });
 
   test('client complete-as-provided stops repeated asking but does not fake readiness', async () => {
-    const { getChecklist, evaluateChecklist } = await import('../go-client/flow.mjs');
+    const { getChecklist, evaluateChecklist } = await import('../ui/go-client-flow.mjs');
     const checklist = getChecklist('PROPOSAL');
     const state = {
       receivedItemIds:new Set(['visuals']),
@@ -70,7 +70,7 @@ if (flowReady) {
   });
 
   test('manager packet is compact and keeps only operational context', async () => {
-    const { buildManagerPacket } = await import('../go-client/flow.mjs');
+    const { buildManagerPacket } = await import('../ui/go-client-flow.mjs');
     const packet = buildManagerPacket({
       stage:'ESTIMATE',
       lastClientMessage:'พี่ครับ ราคานี้แรงไปนิด',
@@ -89,4 +89,4 @@ if (flowReady) {
   });
 }
 
-// Later tasks intentionally extend this file with API and browser-surface contracts.
+// Later tasks intentionally extend this file with API and same-app browser-surface contracts.
