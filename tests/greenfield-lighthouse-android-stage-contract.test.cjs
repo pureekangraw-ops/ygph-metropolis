@@ -15,6 +15,7 @@ const runtimeFiles = [
   'owner-polish.css',
   'app.mjs',
   'runtime-gate.mjs',
+  'runtime-ledger.mjs',
   'send-control.mjs',
   'general-income.mjs',
   'store-sale.mjs',
@@ -44,7 +45,7 @@ test('Android stage is owned by the shared LIGHTHOUSE bundle and preserves runti
     assert.deepEqual(staged, source, `staged bytes drifted for ${relative}`);
   }
 
-  for (const relative of ['runtime.mjs', 'runtime-session.mjs']) {
+  for (const relative of ['runtime.mjs', 'runtime-session.mjs', 'calculation-authority.mjs']) {
     const source = await fsp.readFile(path.join(root, 'greenfield', relative));
     const staged = await fsp.readFile(path.join(shellRoot, 'www', 'greenfield', relative));
     assert.deepEqual(staged, source, `staged Greenfield bytes drifted for ${relative}`);
