@@ -360,9 +360,8 @@ function runEstimate() {
     const result = estimatePackage({ pageCount:raw, selectedPackage:state.package });
     if (result) {
       if (result.packageMismatch) {
-        const selectedPackage = result.selectedPackage;
         state.estimate = result;
-        state.package = selectedPackage;
+        state.package = result.package;
       } else {
         state.estimate = { ...result, turnaroundDays:null };
         state.package = result.package;
