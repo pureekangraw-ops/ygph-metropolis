@@ -1,6 +1,7 @@
 import './theme-shell.mjs';
 import './reset-all-ui.mjs';
 import './obligation-import-ui.mjs';
+import { isGoClientMode, activateGoClientMode } from './go-client.mjs';
 
 export const APP_RELEASE='5.2.6';
 export const UPDATE_LOG=Object.freeze([
@@ -15,6 +16,11 @@ export const UPDATE_LOG=Object.freeze([
 
 const $=id=>document.getElementById(id);
 let serviceWorkerState='กำลังตรวจสอบ';
+
+if(isGoClientMode()){
+  try{sessionStorage.removeItem('metro-auto-unlock-pin');}catch{}
+  activateGoClientMode();
+}
 
 function ensureServiceWorkerNode(){
   const version=$('systemVersion');
