@@ -3,12 +3,36 @@ import { errorResponse, jsonResponse, makeRequestId } from './http.mjs';
 import { enforceInterpretRateLimit } from './rate-limit.mjs';
 import { gateIntentProposal } from '../master-input/intent-contract.mjs';
 import { InterpreterProviderError, interpretTextWithOpenAI } from '../master-input/interpreter-provider.mjs';
+import { gateGoClientProposal, interpretGoClientTextWithOpenAI } from '../master-input/go-client-interpreter-provider.mjs';
+
+function isGoClient(input) {
+  return String(input?.context?.surface || '').trim().toUpperCase() === 'GO_CLIENT';
+}
 
 async function interpretRequest(input, env, deps) {
   const explicitlyEnabled = String(env?.INTERPRETER_PROVIDER_ENABLED || '').trim().toLowerCase() === 'true';
-  const injectedTestProvider = typeof deps?.interpretText === 'function' && env?.INTERPRETER_PROVIDER_ENABLED == null;
+  const hasInjectedProvider = typeof deps?.interpretText === 'function' || typeof deps?.interpretGoClientText === 'function';
+  const injectedTestProvider = hasInjectedProvider && env?.INTERPRETER_PROVIDER_ENABLED == null;
   const apiKey = typeof env?.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
   if ((!explicitlyEnabled && !injectedTestProvider) || !apiKey) throw new InterpreterProviderError('INTERPRETER_NOT_CONFIGURED', 503);
+
+  if (isGoClient(input)) {
+    const interpretGoClientText = typeof deps?.interpretGoClientText === 'function' ? deps.interpretGoClientText : interpretGoClientTextWithOpenAI;
+    let proposal;
+    try {
+      proposal = await interpretGoClientText({ apiKey, text:input.text, context:input.context });
+    } catch (error) {
+      if (error instanceof InterpreterProviderError) throw error;
+      throw new InterpreterProviderError('INTERPRETER_PROVIDER_ERROR', 502);
+    }
+    try {
+      return { surface:'GO_CLIENT', ...gateGoClientProposal(proposal) };
+    } catch (error) {
+      if (error instanceof InterpreterProviderError) throw error;
+      throw new InterpreterProviderError('INTERPRETER_INVALID_OUTPUT', 502);
+    }
+  }
+
   const interpretText = typeof deps?.interpretText === 'function' ? deps.interpretText : interpretTextWithOpenAI;
   let proposal;
   try {
