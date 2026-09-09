@@ -10,6 +10,7 @@
 !/sw.js
 !/icon-192.png
 !/icon-512.png
+!/go-client.css
 !/ui/
 !/ui/action-popups.mjs
 !/ui/app.mjs
@@ -27,6 +28,8 @@
 !/ui/icons.mjs
 !/ui/master-input.mjs
 !/ui/master-input.css
+!/ui/go-client.mjs
+!/ui/go-client-flow.mjs
 !/greenfield/
 !/greenfield/action-contract.mjs
 !/greenfield/calculation-authority.mjs
