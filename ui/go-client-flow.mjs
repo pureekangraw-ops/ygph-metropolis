@@ -43,7 +43,7 @@ const CHECKLISTS = Object.freeze({
       { id:'project_list', label:'รายการผลงานที่ต้องการนำเสนอ', required:true },
       { id:'project_details', label:'รายละเอียดแต่ละผลงาน / บทบาท / Scope', required:true },
       { id:'project_visuals', label:'รูปภาพของแต่ละงาน', required:true },
-      { id:'results', label:'ผลลัพธ์ของงานที่ยืนยันได้', required:false },
+      { id:'results', label:'ผลลัพธ์ธ์ของงานที่ยืนยันได้', required:false },
       { id:'project_meta', label:'ชื่อลูกค้า / ปี / สถานที่', required:false },
       { id:'before_after', label:'Before–After', required:false },
       { id:'reference', label:'Portfolio เดิม / Reference', required:false },
@@ -153,6 +153,20 @@ export function resolveSalesResponse(intent, state = {}) {
     text:SALES_RESPONSES[key] || SALES_RESPONSES.UNKNOWN,
     nextStage:key === 'START' || key === 'PRE_ESTIMATE' ? 'INTAKE' : state.stage || 'SALES',
   };
+}
+
+export function resolveManagerDecision(decision, state = {}) {
+  const disposition = String(decision?.disposition || '').toUpperCase();
+  if (!['WHISPER','DIRECT_REPLY','TAKEOVER'].includes(disposition)) throw new Error('INVALID_MANAGER_DECISION');
+  if (disposition === 'WHISPER') {
+    const signalIntent = String(decision?.signalIntent || '').toUpperCase();
+    if (!signalIntent) throw new Error('INVALID_MANAGER_DECISION');
+    const response = resolveSalesResponse(signalIntent, state);
+    return { ...decision, disposition, managerVisible:false, text:response.text };
+  }
+  const text = String(decision?.managerReply || '').trim();
+  if (!text) throw new Error('INVALID_MANAGER_DECISION');
+  return { ...decision, disposition, managerVisible:true, text };
 }
 
 export function getChecklist(jobType) {
