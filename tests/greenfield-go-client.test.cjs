@@ -41,7 +41,6 @@ if (flowReady) {
     assert.equal(company.jobType, 'COMPANY_PROFILE');
     assert.ok(company.items.some(item => item.id === 'company_info' && item.required));
     assert.ok(company.items.some(item => item.id === 'logo_visuals'));
-
     const fallback = getChecklist('OTHER');
     assert.equal(fallback.jobType, 'OTHER');
     assert.ok(fallback.items.some(item => item.id === 'primary_content' && item.required));
@@ -59,10 +58,7 @@ if (flowReady) {
   test('client complete-as-provided stops repeated asking but does not fake readiness', async () => {
     const { getChecklist, evaluateChecklist } = await import('../ui/go-client-flow.mjs');
     const checklist = getChecklist('PROPOSAL');
-    const state = {
-      receivedItemIds:new Set(['visuals']),
-      clientConfirmedComplete:true,
-    };
+    const state = { receivedItemIds:new Set(['visuals']), clientConfirmedComplete:true };
     const result = evaluateChecklist(checklist, state);
     assert.equal(result.completeAsProvided, true);
     assert.equal(result.ready, false);
@@ -141,15 +137,11 @@ if (providerReady) {
     const { handleApiRequest } = await import('../worker/index.mjs');
     let legacyCalls = 0;
     let clientCalls = 0;
-    const env = {
-      OPENAI_API_KEY:'TEST_KEY',
-      INTERPRET_RATE_LIMITER:{ async limit(){ return { success:true }; } },
-    };
+    const env = { OPENAI_API_KEY:'TEST_KEY', INTERPRET_RATE_LIMITER:{ async limit(){ return { success:true }; } } };
     const deps = {
       interpretText:async () => { legacyCalls += 1; return { action:'CREATE', object:'EXPENSE', fields:{ title:'ข้าว', amountBaht:65, paymentMode:null, note:null } }; },
       interpretGoClientText:async () => { clientCalls += 1; return { intent:'PRICE', jobType:null, package:null, pageCount:null, desiredDate:null, wantsEstimate:false, wantsManager:false, clientConfirmedComplete:false }; },
     };
-
     const clientResponse = await handleApiRequest(new Request('https://metro.example/api/v1/interpret', {
       method:'POST', headers:{'content-type':'application/json'},
       body:JSON.stringify({ version:'1', text:'ราคาเท่าไร', context:{surface:'GO_CLIENT',stage:'SALES'} }),
@@ -181,14 +173,15 @@ test('GO Client is one mode of the existing root app, not a second HTML app', ()
   assert.match(html, /id="workspace"/);
 });
 
-test('root app explicitly skips owner bootstrap when client mode is active', () => {
+test('existing app boot chain activates client mode before root auto-unlock can run', () => {
   const rootApp = fs.readFileSync('app.mjs', 'utf8');
-  assert.match(rootApp, /from '\.\/ui\/go-client\.mjs'/);
-  assert.match(rootApp, /if \(isGoClientMode\(\)\)/);
-  assert.match(rootApp, /activateGoClientMode\(\)/);
-  const clientBranch = rootApp.indexOf('if (isGoClientMode())');
-  const bootstrap = rootApp.lastIndexOf('bootstrapEntry()');
-  assert.ok(clientBranch >= 0 && bootstrap > clientBranch, 'client-mode gate must exist before owner bootstrap call');
+  const release = fs.readFileSync('ui/release-status.mjs', 'utf8');
+  assert.match(rootApp, /import '\.\/ui\/release-status\.mjs'/);
+  assert.match(release, /from '\.\/go-client\.mjs'/);
+  assert.match(release, /isGoClientMode\(\)/);
+  assert.match(release, /activateGoClientMode\(\)/);
+  assert.match(release, /sessionStorage\.removeItem\(['"]metro-auto-unlock-pin['"]\)/);
+  assert.doesNotMatch(release, /openGreenfieldRuntime/);
 });
 
 test('client browser module creates the public shell in the same document and uses filename metadata only', () => {
@@ -197,7 +190,7 @@ test('client browser module creates the public shell in the same document and us
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(source, /\.\/go-client-flow\.mjs/);
   assert.match(source, /go-client\.css/);
-  assert.match(source, /id="goClientShell"/);
+  assert.match(source, /goClientShell/);
   assert.match(source, /ระบบกึ่ง AI/);
   assert.match(source, /id="goClientForm"/);
   assert.match(source, /id="goClientInput"/);
