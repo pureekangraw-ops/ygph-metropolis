@@ -160,3 +160,34 @@ test('real general-income confirmation does not mutate demo finance authority', 
   assert.doesNotMatch(body, /state\.todayIncome\s*\+=/);
   assert.doesNotMatch(body, /state\.transactions\.push/);
 });
+
+test('Home finance renders from ledgerTruth instead of demo cash defaults', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /ledgerTruth\.balanceSatang/);
+  assert.match(app, /ledgerTruth\.todayInSatang/);
+  assert.match(app, /ledgerTruth\.todayOutSatang/);
+  assert.match(app, /ledgerTruth\.netSatang/);
+  const start = app.indexOf('function renderHomeTruth()');
+  const end = app.indexOf('function resetDemoState', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const body = app.slice(start, end);
+  assert.doesNotMatch(body, /state\.cash|state\.todayIncome|state\.todayExpense/);
+});
+
+test('Manual Ledger history renders real Ledger transactions only', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  const start = app.indexOf('function renderHistoryDetail()');
+  const end = app.indexOf('function openManualTask', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const body = app.slice(start, end);
+  assert.match(body, /ledgerTruth\?\.transactions/);
+  assert.doesNotMatch(body, /state\.transactions/);
+});
+
+test('login loads real Ledger truth before showing the app', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /ledgerTruth\s*=\s*await ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(app, /if \(unlocked\) runtimeGate\.lock\(\)/);
+});
