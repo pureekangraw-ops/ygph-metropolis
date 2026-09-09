@@ -252,16 +252,24 @@ export function evaluateChecklist(checklist, checklistState = {}) {
 
 export function estimatePackage({ pageCount, selectedPackage = null } = {}) {
   if (!Number.isInteger(pageCount) || pageCount <= 0) return null;
-  let packageId = 'BUSINESS';
-  if (pageCount <= PACKAGES.STARTER.maxPages) packageId = 'STARTER';
-  else if (pageCount <= PACKAGES.STANDARD.maxPages) packageId = 'STANDARD';
-  const extraPages = Math.max(0, pageCount - PACKAGES.BUSINESS.maxPages);
-  const priceBaht = PACKAGES[packageId].priceBaht + (packageId === 'BUSINESS' ? extraPages * ADDITIONAL_PAGE_BAHT : 0);
-  const result = { package:packageId, priceBaht, pageCount, extraPages };
+  const candidates = Object.values(PACKAGES).map((pkg, index) => {
+    const extraPages = Math.max(0, pageCount - pkg.maxPages);
+    return {
+      package:pkg.id,
+      priceBaht:pkg.priceBaht + extraPages * ADDITIONAL_PAGE_BAHT,
+      pageCount,
+      extraPages,
+      index,
+    };
+  });
+  candidates.sort((left, right) => left.priceBaht - right.priceBaht || left.index - right.index);
+  const { index:unusedIndex, ...best } = candidates[0];
+  void unusedIndex;
+  const result = { ...best };
   const selected = normalizePackage(selectedPackage);
   if (selected) {
     result.selectedPackage = selected;
-    result.packageMismatch = selected !== packageId;
+    result.packageMismatch = selected !== result.package;
   }
   return result;
 }
