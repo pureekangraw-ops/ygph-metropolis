@@ -4,9 +4,9 @@
 
 **Goal:** Make LIGHTHOUSE CHAT general-income confirmation write one verified real Greenfield Ledger `OTHER_INCOME` transaction, then render Home finance truth and Manual Ledger history from real Ledger state instead of demo money.
 
-**Architecture:** Keep CHAT parsing and Store demo behavior where they are. Add one focused `lighthouse-next/runtime-ledger.mjs` bridge that is the only new LIGHTHOUSE boundary to the active Greenfield runtime session; it writes `runtime.otherIncome(...)`, verifies exact durable readback, and projects finance truth with Greenfield `projectFinancialTruth(...)`. `app.mjs` owns pending CHAT state and stable retry IDs, while the shared Web/Android bundle stages the new bridge plus the calculation-authority dependency byte-identically.
+**Architecture:** Keep CHAT parsing and Store demo behavior where they are. Add one focused `lighthouse-next/runtime-ledger.mjs` bridge as the only new LIGHTHOUSE boundary to the active Greenfield runtime session; it writes `runtime.otherIncome(...)`, verifies exact durable readback, and projects finance truth with Greenfield `projectFinancialTruth(...)`. `app.mjs` owns pending CHAT state and stable retry IDs, while the shared Web/Android bundle stages the new bridge plus `calculation-authority.mjs` byte-identically.
 
-**Tech Stack:** JavaScript ES modules, Node.js 22 `node:test`, Greenfield encrypted runtime/session, Capacitor Android shell, shared deterministic staging bundle, GitHub Actions Greenfield Deploy Gate.
+**Tech Stack:** JavaScript ES modules, Node.js 22 `node:test`, Greenfield encrypted runtime/session, Capacitor Android shell, deterministic shared staging bundle, GitHub Actions Greenfield Deploy Gate.
 
 **Spec:** `docs/superpowers/specs/2026-09-09-lighthouse-chat-real-income-ledger-design.md`
 
@@ -34,14 +34,15 @@
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: `withRuntimeSession(operation)` from `greenfield/runtime-session.mjs`; `projectFinancialTruth(state, ledgerBalanceSatang, today)` from `greenfield/calculation-authority.mjs`; `runtime.otherIncome(input)`, `runtime.readState()`, and `runtime.project()` from the active Greenfield runtime.
+- Consumes: `withRuntimeSession(operation)` from `greenfield/runtime-session.mjs`.
+- Consumes: `projectFinancialTruth(state, ledgerBalanceSatang, today)` from `greenfield/calculation-authority.mjs`.
 - Produces: `createLighthouseLedgerBridge(deps?)`.
 - Produces: `bridge.recordOtherIncome({ workflowId, ledgerTransactionId, source, amountBaht }) -> Promise<{ status:'VERIFIED', recovered:boolean, record, truth }>`.
 - Produces: `bridge.readLedgerTruth() -> Promise<{ revision, balanceSatang, todayInSatang, todayOutSatang, netSatang, transactions }>`.
 
 - [ ] **Step 1: Write the failing bridge tests**
 
-Create `tests/greenfield-lighthouse-real-income.test.cjs` with focused tests for exact satang conversion, exact readback, locked-session failure, mismatch failure, duplicate-command recovery, and truth projection:
+Create `tests/greenfield-lighthouse-real-income.test.cjs`:
 
 ```js
 const test = require('node:test');
@@ -51,18 +52,21 @@ const fs = require('node:fs');
 
 const root = process.cwd();
 const bridgePath = path.join(root, 'lighthouse-next/runtime-ledger.mjs');
+const appPath = path.join(root, 'lighthouse-next/app.mjs');
 
 async function loadBridge() {
   assert.equal(fs.existsSync(bridgePath), true, 'missing lighthouse-next/runtime-ledger.mjs');
   return import(`${bridgePath}?t=${Date.now()}-${Math.random()}`);
 }
 
-function ledgerState(record, revision = 7) {
+function ledgerState(records = [], revision = 7) {
   return {
     revision,
     domains: {
-      LEDGER: { records: record ? { [record.recordId]: { record } } : {} },
-      STORE: { records: {} }, CALENDAR: { records: {} }, RIDE: { records: {} },
+      LEDGER: { records:Object.fromEntries(records.map(record => [record.recordId, { record }])) },
+      STORE: { records:{} },
+      CALENDAR: { records:{} },
+      RIDE: { records:{} },
     },
   };
 }
@@ -77,7 +81,7 @@ test('recordOtherIncome writes exact satang and requires exact durable readback'
   };
   const runtime = {
     async otherIncome(input) { calls.push(input); return { status:'COMMITTED' }; },
-    async readState() { return ledgerState(record); },
+    async readState() { return ledgerState([record]); },
     project() { return { ledgerBalanceSatang:15925 }; },
   };
   const bridge = createLighthouseLedgerBridge({
@@ -98,9 +102,8 @@ test('recordOtherIncome writes exact satang and requires exact durable readback'
   assert.equal(result.truth.balanceSatang, 15925);
 });
 
-test('locked runtime fails before any mutation', async () => {
+test('locked runtime fails before a runtime mutation is available', async () => {
   const { createLighthouseLedgerBridge } = await loadBridge();
-  let mutated = false;
   const bridge = createLighthouseLedgerBridge({
     withSession: async () => { throw new Error('RUNTIME_SESSION_LOCKED'); },
     projectFinancial: () => { throw new Error('not used'); },
@@ -109,7 +112,6 @@ test('locked runtime fails before any mutation', async () => {
     bridge.recordOtherIncome({ workflowId:'WF', ledgerTransactionId:'TX', source:'ทิป', amountBaht:59 }),
     /RUNTIME_SESSION_LOCKED/,
   );
-  assert.equal(mutated, false);
 });
 
 test('readback mismatch fails closed', async () => {
@@ -120,7 +122,7 @@ test('readback mismatch fails closed', async () => {
   };
   const runtime = {
     async otherIncome() {},
-    async readState() { return ledgerState(bad); },
+    async readState() { return ledgerState([bad]); },
     project() { return { ledgerBalanceSatang:5800 }; },
   };
   const bridge = createLighthouseLedgerBridge({
@@ -133,7 +135,7 @@ test('readback mismatch fails closed', async () => {
   );
 });
 
-test('duplicate command retry recovers by readback without a second success path', async () => {
+test('duplicate command retry recovers through exact readback', async () => {
   const { createLighthouseLedgerBridge } = await loadBridge();
   const record = {
     recordId:'TX-LH-3', type:'TRANSACTION', direction:'IN', amountSatang:5900,
@@ -141,7 +143,7 @@ test('duplicate command retry recovers by readback without a second success path
   };
   const runtime = {
     async otherIncome() { throw new Error('DUPLICATE_COMMAND:WF-LH-3:LEDGER:TX-LH-3'); },
-    async readState() { return ledgerState(record); },
+    async readState() { return ledgerState([record]); },
     project() { return { ledgerBalanceSatang:5900 }; },
   };
   const bridge = createLighthouseLedgerBridge({
@@ -159,8 +161,7 @@ test('readLedgerTruth delegates daily cash truth to Greenfield calculation autho
   const { createLighthouseLedgerBridge } = await loadBridge();
   const oldRecord = { recordId:'TX-OLD', type:'TRANSACTION', direction:'OUT', amountSatang:1000, title:'เก่า', detail:'OUT:EXPENSE', createdAt:'2026-09-08T02:00:00.000Z' };
   const newRecord = { recordId:'TX-NEW', type:'TRANSACTION', direction:'IN', amountSatang:2500, title:'ใหม่', detail:'IN:OTHER_INCOME', createdAt:'2026-09-09T03:00:00.000Z' };
-  const state = ledgerState(oldRecord);
-  state.domains.LEDGER.records['TX-NEW'] = { record:newRecord };
+  const state = ledgerState([oldRecord, newRecord]);
   const seen = [];
   const runtime = {
     async readState() { return state; },
@@ -194,7 +195,7 @@ node --test tests/greenfield-lighthouse-real-income.test.cjs
 
 Expected: FAIL because `lighthouse-next/runtime-ledger.mjs` does not exist.
 
-- [ ] **Step 3: Implement the minimal runtime bridge**
+- [ ] **Step 3: Implement the minimal bridge**
 
 Create `lighthouse-next/runtime-ledger.mjs`:
 
@@ -253,12 +254,12 @@ function buildTruth(runtime, state, projectFinancial, now) {
     .map(record => structuredClone(record))
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   return Object.freeze({
-    revision: state.revision ?? null,
+    revision:state.revision ?? null,
     balanceSatang,
     todayInSatang,
     todayOutSatang,
-    netSatang: todayInSatang - todayOutSatang,
-    transactions: Object.freeze(transactions),
+    netSatang:todayInSatang - todayOutSatang,
+    transactions:Object.freeze(transactions),
   });
 }
 
@@ -284,8 +285,8 @@ export function createLighthouseLedgerBridge(deps = {}) {
       let recovered = false;
       try {
         await runtime.otherIncome({
-          workflowId: workflow,
-          ledgerTransactionId: transaction,
+          workflowId:workflow,
+          ledgerTransactionId:transaction,
           title,
           amountSatang,
         });
@@ -293,21 +294,15 @@ export function createLighthouseLedgerBridge(deps = {}) {
         if (!duplicateCommand(error)) throw error;
         recovered = true;
       }
-
       const state = await runtime.readState();
       if (!state) throw new Error('LIGHTHOUSE_LEDGER_STATE_REQUIRED');
       const record = verifyOtherIncome(state, {
-        ledgerTransactionId: transaction,
-        source: title,
+        ledgerTransactionId:transaction,
+        source:title,
         amountSatang,
       });
       const truth = buildTruth(runtime, state, projectFinancial, now);
-      return Object.freeze({
-        status:'VERIFIED',
-        recovered,
-        record:structuredClone(record),
-        truth,
-      });
+      return Object.freeze({ status:'VERIFIED', recovered, record:structuredClone(record), truth });
     });
   }
 
@@ -315,19 +310,15 @@ export function createLighthouseLedgerBridge(deps = {}) {
 }
 ```
 
-- [ ] **Step 4: Add syntax coverage for the new module**
+- [ ] **Step 4: Add syntax coverage**
 
-Modify `package.json` so `check:syntax` includes:
+Add this command to `package.json` `check:syntax`, beside `runtime-gate.mjs`:
 
-```json
-"node --check lighthouse-next/runtime-ledger.mjs"
+```text
+node --check lighthouse-next/runtime-ledger.mjs
 ```
 
-Place it beside the existing `node --check lighthouse-next/runtime-gate.mjs` check.
-
-- [ ] **Step 5: Run bridge tests and syntax check to verify GREEN**
-
-Run:
+- [ ] **Step 5: Run the bridge tests and syntax check to verify GREEN**
 
 ```bash
 node --test tests/greenfield-lighthouse-real-income.test.cjs
@@ -354,18 +345,15 @@ git commit -m "feat: add LIGHTHOUSE real ledger bridge"
 
 **Interfaces:**
 - Consumes: `createLighthouseLedgerBridge()` from Task 1.
-- Consumes: `bridge.recordOtherIncome({ workflowId, ledgerTransactionId, source, amountBaht })`.
-- Produces: stable non-secret `workflowId` and `ledgerTransactionId` stored only inside a pending `GENERAL_INCOME` item.
-- Produces: async confirmation flow that keeps the pending item on every failure and clears it only after bridge status `VERIFIED`.
+- Produces: stable non-secret `workflowId` and `ledgerTransactionId` inside pending `GENERAL_INCOME` state.
+- Produces: async confirmation that clears pending state only after `VERIFIED` readback.
 
-- [ ] **Step 1: Add failing source-contract tests for the real confirmation boundary**
+- [ ] **Step 1: Add failing source-contract tests**
 
-Append tests to `tests/greenfield-lighthouse-real-income.test.cjs` that read `lighthouse-next/app.mjs` and require the bridge, stable IDs, no local finance mutation in `confirmGeneralIncome`, and failure copy:
+Append to `tests/greenfield-lighthouse-real-income.test.cjs`:
 
 ```js
-const appPath = path.join(root, 'lighthouse-next/app.mjs');
-
-test('CHAT general-income confirmation delegates to real Ledger and keeps stable retry identity', () => {
+test('CHAT general-income confirmation delegates to real Ledger with stable retry identity', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   assert.match(app, /from ['"]\.\/runtime-ledger\.mjs['"]/);
   assert.match(app, /createLighthouseLedgerBridge/);
@@ -376,9 +364,13 @@ test('CHAT general-income confirmation delegates to real Ledger and keeps stable
   assert.match(app, /แอปถูกล็อก กรุณาเข้าสู่ระบบแล้วลองยืนยันอีกครั้ง/);
 });
 
-test('real general-income confirmation no longer mutates demo cash or demo transaction history', () => {
+test('real general-income confirmation does not mutate demo finance authority', () => {
   const app = fs.readFileSync(appPath, 'utf8');
-  const body = app.match(/async function confirmGeneralIncome\(pending\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const start = app.indexOf('async function confirmGeneralIncome(pending)');
+  const end = app.indexOf('function confirmStoreSale', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const body = app.slice(start, end);
   assert.match(body, /ledgerBridge\.recordOtherIncome/);
   assert.doesNotMatch(body, /state\.cash\s*\+=/);
   assert.doesNotMatch(body, /state\.todayIncome\s*\+=/);
@@ -386,21 +378,25 @@ test('real general-income confirmation no longer mutates demo cash or demo trans
 });
 ```
 
-Also update the existing `CHAT confirmation and success copy` test in `tests/greenfield-lighthouse-next-demo.test.cjs` so it still checks the same conversational success copy but no longer assumes demo-local mutation is the authority.
+In `tests/greenfield-lighthouse-next-demo.test.cjs`, keep the conversational-copy assertions exactly as:
 
-- [ ] **Step 2: Run focused tests and verify RED**
+```js
+assert.match(app, /บาท จาก\$\{pending\.source\} — บันทึกไหม\?/);
+assert.match(app, /บันทึกแล้ว \$\{pending\.amount\} บาท · \$\{pending\.source\}/);
+assert.doesNotMatch(app, /เดโมบันทึก:/);
+```
 
-Run:
+- [ ] **Step 2: Run the focused tests and verify RED**
 
 ```bash
 node --test tests/greenfield-lighthouse-real-income.test.cjs tests/greenfield-lighthouse-next-demo.test.cjs
 ```
 
-Expected: FAIL because `app.mjs` does not import/use the real Ledger bridge and `confirmGeneralIncome` is still synchronous demo mutation.
+Expected: FAIL because `app.mjs` still performs demo-local income mutation.
 
-- [ ] **Step 3: Add bridge state and stable pending identity to `app.mjs`**
+- [ ] **Step 3: Add bridge state and stable pending identity**
 
-Add the import and module state:
+Add to `lighthouse-next/app.mjs`:
 
 ```mjs
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
@@ -408,11 +404,7 @@ import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 const ledgerBridge = createLighthouseLedgerBridge();
 let ledgerTruth = null;
 let realIncomeCommitBusy = false;
-```
 
-Add stable non-secret identity helpers:
-
-```mjs
 function newOperationId(prefix) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${suffix}`;
@@ -426,7 +418,7 @@ function ensureGeneralIncomeIdentity(pending) {
 }
 ```
 
-Update `normalizeStoredPending(...)` so `GENERAL_INCOME` restores these fields when present:
+Change the `GENERAL_INCOME` return inside `normalizeStoredPending(...)` to preserve IDs:
 
 ```mjs
 const workflowId = typeof pending.workflowId === 'string' && pending.workflowId.trim() ? pending.workflowId.trim() : null;
@@ -441,7 +433,7 @@ return {
 };
 ```
 
-- [ ] **Step 4: Replace demo mutation with verified async real-Ledger confirmation**
+- [ ] **Step 4: Replace general-income demo mutation with verified async write**
 
 Replace `confirmGeneralIncome` with:
 
@@ -465,12 +457,9 @@ async function confirmGeneralIncome(pending) {
     refreshTruthSurfaces();
   } catch (error) {
     const code = String(error?.message || error || '');
-    addMessage(
-      'app',
-      code === 'RUNTIME_SESSION_LOCKED'
-        ? 'แอปถูกล็อก กรุณาเข้าสู่ระบบแล้วลองยืนยันอีกครั้ง'
-        : 'ยังบันทึกไม่สำเร็จ รายการยังค้างอยู่ ลองอีกครั้งได้',
-    );
+    addMessage('app', code === 'RUNTIME_SESSION_LOCKED'
+      ? 'แอปถูกล็อก กรุณาเข้าสู่ระบบแล้วลองยืนยันอีกครั้ง'
+      : 'ยังบันทึกไม่สำเร็จ รายการยังค้างอยู่ ลองอีกครั้งได้');
     saveState();
   } finally {
     realIncomeCommitBusy = false;
@@ -479,13 +468,24 @@ async function confirmGeneralIncome(pending) {
 }
 ```
 
-Do not add any `state.cash +=`, `state.todayIncome +=`, or `state.transactions.push(...)` inside this function.
+- [ ] **Step 5: Make the CHAT call chain async and block duplicate taps**
 
-- [ ] **Step 5: Make the CHAT call chain await confirmation and guard double taps**
-
-Update the relevant functions so real confirmation can finish before final re-render:
+Replace `setChatActions`, `confirmPending`, `handlePendingInput`, `handleChatInput`, and `submitChatText` with these exact bodies:
 
 ```mjs
+function setChatActions(labels = []) {
+  chatActions.replaceChildren();
+  for (const label of labels) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chat-chip';
+    button.textContent = label;
+    button.disabled = realIncomeCommitBusy;
+    button.addEventListener('click', () => { void submitChatText(label); });
+    chatActions.append(button);
+  }
+}
+
 async function confirmPending() {
   const pending = state.pendingFlow;
   if (!pending) return addMessage('app','รายการยังไม่พร้อมยืนยัน');
@@ -504,11 +504,60 @@ async function handlePendingInput(text) {
   if (clean === 'ยกเลิก') return cancelPending();
   if (clean === 'ยืนยัน') return confirmPending();
   if (clean === 'แก้ไข') return editPending();
-  // Keep the existing STORE_SALE and GENERAL_INCOME_SOURCE branches unchanged below this point.
+  if (pending.kind === 'STORE_SALE') {
+    if (pending.stage === 'STORE_SALE_VALUE') {
+      const value = parsePositiveMoney(clean);
+      if (!value) return addMessage('app','รบกวนบอกเพิ่ม: มูลค่าที่ขาย');
+      pending.value = value;
+      pending.stage = 'STORE_SALE_QUANTITY';
+      saveState();
+      return resumeStoreSalePrompt(pending);
+    }
+    if (pending.stage === 'STORE_SALE_QUANTITY') {
+      const quantity = parsePositiveQuantity(clean);
+      if (!quantity) return addMessage('app','รบกวนบอกเพิ่ม: จำนวนสินค้า');
+      pending.quantity = quantity;
+      pending.stage = 'CONFIRM_STORE_SALE';
+      saveState();
+      return resumeStoreSalePrompt(pending);
+    }
+  } else if (pending.stage === 'GENERAL_INCOME_SOURCE') {
+    const source = normalizePendingSource(clean);
+    if (!source || source.length > 80) return addMessage('app','รบกวนบอกเพิ่ม: ที่มาของรายรับ');
+    pending.source = source;
+    pending.stage = 'CONFIRM_GENERAL_INCOME';
+    saveState();
+    return resumeGeneralIncomePrompt(pending);
+  }
+  addMessage('app','เลือก “ยืนยัน”, “แก้ไข” หรือ “ยกเลิก”');
 }
 
 async function handleChatInput(text) {
-  // Keep current parsing order and side-query behavior; await handlePendingInput(clean) when pending exists.
+  const clean = text.trim();
+  if (!clean) return;
+  const sideAnswer = answerLocalSideQuery(clean);
+  if (sideAnswer) {
+    addMessage('app', sideAnswer);
+    if (state.pendingFlow) resumePendingPrompt({ afterSideQuery:true });
+    return;
+  }
+  if (state.pendingFlow) return handlePendingInput(clean);
+  const storeSale = parseStoreSale(clean, state.products);
+  if (storeSale) return beginStoreSale(storeSale);
+  const parsed = parseGeneralIncome(clean);
+  if (parsed) {
+    state.pendingFlow = {
+      kind:'GENERAL_INCOME',
+      stage:parsed.source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE',
+      amount:parsed.amount,
+      source:parsed.source,
+      workflowId:null,
+      ledgerTransactionId:null,
+    };
+    saveState();
+    return resumePendingPrompt();
+  }
+  addMessage('app','ตอนนี้สนามนี้รองรับรายรับทั่วไปแบบ “จำนวนเงิน + ที่มา”, การขายสินค้าที่รู้จักแบบ “สินค้า + มูลค่า + จำนวน” และคำถาม “วันนี้วันที่เท่าไร”');
 }
 
 async function submitChatText(text) {
@@ -521,34 +570,26 @@ async function submitChatText(text) {
 }
 ```
 
-Update chat action buttons so they cannot trigger another commit while one is in flight:
+Replace the chat form listener with:
 
 ```mjs
-function setChatActions(labels = []) {
-  chatActions.replaceChildren();
-  for (const label of labels) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'chat-chip';
-    button.textContent = label;
-    button.disabled = realIncomeCommitBusy;
-    button.addEventListener('click', () => { void submitChatText(label); });
-    chatActions.append(button);
-  }
-}
+chatForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const value = chatInput.value;
+  chatInput.value = '';
+  if (chatSend) chatSend.disabled = true;
+  await submitChatText(value);
+  chatInput.focus({ preventScroll:true });
+});
 ```
 
-Update the form listener to await `submitChatText(value)` while preserving keyboard focus behavior.
-
-- [ ] **Step 6: Run focused CHAT tests to verify GREEN**
-
-Run:
+- [ ] **Step 6: Run focused CHAT regressions to verify GREEN**
 
 ```bash
 node --test tests/greenfield-lighthouse-real-income.test.cjs tests/greenfield-lighthouse-next-demo.test.cjs tests/greenfield-lighthouse-runtime-gate.test.cjs
 ```
 
-Expected: all focused tests PASS; Store parse/confirm source contracts remain green.
+Expected: all focused tests PASS; Store sale parse/confirm contracts remain green.
 
 - [ ] **Step 7: Commit Task 2**
 
@@ -568,13 +609,13 @@ git commit -m "feat: route LIGHTHOUSE income to real ledger"
 - Modify: `tests/greenfield-lighthouse-next-demo.test.cjs`
 
 **Interfaces:**
-- Consumes: `bridge.readLedgerTruth()` and the `truth` returned from successful `recordOtherIncome(...)`.
+- Consumes: `bridge.readLedgerTruth()` and the `truth` returned by Task 2.
 - Produces: `ledgerTruth` as the only authority for Home cash, today income, today expense, net, and Manual Ledger history.
-- Preserves: Store demo state under `state.products`, `state.transactions`, local Store confirm/reversal code, and Calendar demo state; these may not contribute to real finance totals.
+- Preserves: Store demo state under `state.products` and `state.transactions`; Store demo values may not feed real finance totals.
 
-- [ ] **Step 1: Write failing truth-surface contracts**
+- [ ] **Step 1: Add failing truth-surface tests**
 
-Add/update tests so they require real truth and reject demo authority:
+Append to `tests/greenfield-lighthouse-real-income.test.cjs`:
 
 ```js
 test('Home finance renders from ledgerTruth instead of demo cash defaults', () => {
@@ -583,33 +624,46 @@ test('Home finance renders from ledgerTruth instead of demo cash defaults', () =
   assert.match(app, /ledgerTruth\.todayInSatang/);
   assert.match(app, /ledgerTruth\.todayOutSatang/);
   assert.match(app, /ledgerTruth\.netSatang/);
-  const renderBody = app.match(/function renderHomeTruth\(\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.doesNotMatch(renderBody, /state\.cash|state\.todayIncome|state\.todayExpense/);
+  const start = app.indexOf('function renderHomeTruth()');
+  const end = app.indexOf('function resetDemoState', start);
+  const body = app.slice(start, end);
+  assert.doesNotMatch(body, /state\.cash|state\.todayIncome|state\.todayExpense/);
 });
 
 test('Manual Ledger history renders real Ledger transactions only', () => {
   const app = fs.readFileSync(appPath, 'utf8');
-  const historyBody = app.match(/function renderHistoryDetail\(\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(historyBody, /ledgerTruth\?\.transactions/);
-  assert.doesNotMatch(historyBody, /state\.transactions/);
+  const start = app.indexOf('function renderHistoryDetail()');
+  const end = app.indexOf('function openManualTask', start);
+  const body = app.slice(start, end);
+  assert.match(body, /ledgerTruth\?\.transactions/);
+  assert.doesNotMatch(body, /state\.transactions/);
 });
 
 test('login loads real Ledger truth before showing the app', () => {
   const app = fs.readFileSync(appPath, 'utf8');
-  assert.match(app, /await ledgerBridge\.readLedgerTruth\(\)/);
-  assert.match(app, /runtimeGate\.lock\(\)/);
+  assert.match(app, /ledgerTruth = await ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(app, /if \(unlocked\) runtimeGate\.lock\(\)/);
 });
 ```
 
-Update the existing Dashboard and MANUAL tests in `tests/greenfield-lighthouse-next-demo.test.cjs`:
+Replace the old Dashboard assertion block in `tests/greenfield-lighthouse-next-demo.test.cjs` with:
 
-- Dashboard must no longer require `state.cash`, `state.todayIncome`, or `state.todayExpense` in `renderHomeTruth`.
-- MANUAL Store must still require `state.products`.
-- MANUAL Ledger History must require `ledgerTruth.transactions`, not `state.transactions`.
+```js
+assert.match(app, /function renderHomeTruth\(/);
+assert.match(app, /ledgerTruth/);
+assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
+```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+Replace the MANUAL Store/History assertions with:
 
-Run:
+```js
+assert.match(app, /function renderStoreDetail\(/);
+assert.match(app, /state\.products/);
+assert.match(app, /function renderHistoryDetail\(/);
+assert.match(app, /ledgerTruth\?\.transactions/);
+```
+
+- [ ] **Step 2: Run truth-surface tests and verify RED**
 
 ```bash
 node --test tests/greenfield-lighthouse-real-income.test.cjs tests/greenfield-lighthouse-next-demo.test.cjs
@@ -617,9 +671,9 @@ node --test tests/greenfield-lighthouse-real-income.test.cjs tests/greenfield-li
 
 Expected: FAIL because Home and Manual History still read demo state.
 
-- [ ] **Step 3: Load Ledger truth immediately after successful login and clear it on lock**
+- [ ] **Step 3: Load Ledger truth after login and clear it on lock**
 
-Restructure `submitLogin` so the app is shown only after truth loads:
+Replace `submitLogin` and `lockApp` with:
 
 ```mjs
 async function submitLogin(event) {
@@ -640,11 +694,9 @@ async function submitLogin(event) {
     if (unlocked) runtimeGate.lock();
     ledgerTruth = null;
     const code = String(error?.message || error || '');
-    showLoginGate(
-      code.startsWith('LIGHTHOUSE_LEDGER_') || code === 'RUNTIME_SESSION_LOCKED'
-        ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่'
-        : authMessage(error),
-    );
+    showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code === 'RUNTIME_SESSION_LOCKED'
+      ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่'
+      : authMessage(error));
   } finally {
     devicePassword.value = '';
     setAuthBusy(false);
@@ -660,9 +712,9 @@ function lockApp() {
 }
 ```
 
-- [ ] **Step 4: Make Home finance read only `ledgerTruth`**
+- [ ] **Step 4: Render Home real-money values from satang truth only**
 
-Replace the real-money portion of `financeSnapshot()` and `renderHomeTruth()` with satang-backed values:
+Replace `financeSnapshot()` and `renderHomeTruth()` with:
 
 ```mjs
 function formatSatang(value) {
@@ -687,7 +739,6 @@ function renderHomeTruth() {
   homeNetValue.textContent = snapshot
     ? `${snapshot.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(snapshot.netSatang))}`
     : '—';
-
   homeExpectedValue.textContent = '—';
   homeObligationTitle.textContent = 'ยังไม่เชื่อมข้อมูลจริง';
   homeObligationDue.textContent = '—';
@@ -697,13 +748,42 @@ function renderHomeTruth() {
 }
 ```
 
-Update the initial text inside `lighthouse-next/index.html` for these Home values to `—` so demo money cannot flash before runtime truth is loaded.
+In `lighthouse-next/index.html`, make the initial value for each of these IDs exactly `—`:
+
+```html
+<strong id="home-cash-value">—</strong>
+<strong id="home-expected-value">—</strong>
+<strong id="home-income-value">—</strong>
+<strong id="home-expense-value">—</strong>
+<strong id="home-net-value">—</strong>
+<strong id="home-obligation-value">—</strong>
+<strong id="home-gap-value">—</strong>
+<strong id="home-target-value">—</strong>
+```
+
+The existing surrounding cards and labels remain in place.
 
 - [ ] **Step 5: Render Manual finance and Ledger history from real truth**
 
-Make `renderFinanceDetail()` use `financeSnapshot()` and show placeholders for obligation/forecast fields that are not migrated.
+Replace `renderFinanceDetail()` with:
 
-Replace `renderHistoryDetail()` so it reads real transactions only:
+```mjs
+function renderFinanceDetail() {
+  const data = manualContent.finance;
+  const snapshot = financeSnapshot();
+  const rows = [
+    ['เงินจริง', snapshot ? formatSatang(snapshot.cashSatang) : '—'],
+    ['เงินเข้าวันนี้', snapshot ? formatSatang(snapshot.todayIncomeSatang) : '—'],
+    ['เงินออกวันนี้', snapshot ? formatSatang(snapshot.todayExpenseSatang) : '—'],
+    ['สุทธิ', snapshot ? `${snapshot.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(snapshot.netSatang))}` : '—'],
+    ['ภาระใกล้สุด', 'ยังไม่เชื่อมข้อมูลจริง'],
+    ['คาดว่าจะเข้า', '—'],
+  ];
+  renderStaticDetail(data, rows);
+}
+```
+
+Replace `renderHistoryDetail()` and add its two helpers:
 
 ```mjs
 function ledgerHistoryValue(transaction) {
@@ -741,17 +821,22 @@ function renderHistoryDetail() {
 }
 ```
 
-Keep `renderStoreDetail()`, `confirmStoreSale()`, `confirmSaleReversal()`, and Store demo parsing unchanged in this task.
+Do not change these Store demo functions in Task 3:
 
-- [ ] **Step 6: Run focused truth and regression tests to verify GREEN**
+```text
+renderStoreDetail
+confirmStoreSale
+confirmSaleReversal
+requestSaleReversal
+```
 
-Run:
+- [ ] **Step 6: Run truth and Store regressions to verify GREEN**
 
 ```bash
 node --test tests/greenfield-lighthouse-real-income.test.cjs tests/greenfield-lighthouse-next-demo.test.cjs tests/greenfield-lighthouse-runtime-gate.test.cjs
 ```
 
-Expected: all focused tests PASS; Dashboard/History contracts now point at real truth while Store demo contracts remain green.
+Expected: all focused tests PASS; Store sale source contracts remain green.
 
 - [ ] **Step 7: Commit Task 3**
 
@@ -762,7 +847,7 @@ git commit -m "feat: render LIGHTHOUSE finance from real ledger"
 
 ---
 
-### Task 4: Stage the real-Ledger bridge identically for Web and Android
+### Task 4: Stage the bridge identically for Web and Android
 
 **Files:**
 - Modify: `scripts/stage-lighthouse-next-bundle.mjs`
@@ -770,22 +855,33 @@ git commit -m "feat: render LIGHTHOUSE finance from real ledger"
 - Modify: `android-shell/test/lighthouse-next-package.test.mjs`
 
 **Interfaces:**
-- Consumes: shared bundle constants `LIGHTHOUSE_RUNTIME_FILES` and `GREENFIELD_ENTRYPOINTS`.
+- Consumes: `LIGHTHOUSE_RUNTIME_FILES` and `GREENFIELD_ENTRYPOINTS`.
 - Produces: staged `lighthouse-next/runtime-ledger.mjs` and `greenfield/calculation-authority.mjs` for both isolated Web and Android.
-- Preserves: forbidden-tree exclusions including `greenfield/master-input-router.mjs`.
+- Preserves: forbidden exclusion of `greenfield/master-input-router.mjs`.
 
-- [ ] **Step 1: Write failing package/staging expectations**
+- [ ] **Step 1: Write failing staging expectations**
 
-In `tests/greenfield-lighthouse-android-stage-contract.test.cjs`, add `runtime-ledger.mjs` to `runtimeFiles` and require byte identity for `calculation-authority.mjs`:
+Change `runtimeFiles` in `tests/greenfield-lighthouse-android-stage-contract.test.cjs` to:
 
 ```js
 const runtimeFiles = [
-  'index.html', 'styles.css', 'owner-polish.css', 'app.mjs',
-  'runtime-gate.mjs', 'runtime-ledger.mjs', 'send-control.mjs',
-  'general-income.mjs', 'store-sale.mjs', 'bangkok-date.mjs',
+  'index.html',
+  'styles.css',
+  'owner-polish.css',
+  'app.mjs',
+  'runtime-gate.mjs',
+  'runtime-ledger.mjs',
+  'send-control.mjs',
+  'general-income.mjs',
+  'store-sale.mjs',
+  'bangkok-date.mjs',
   'manifest.webmanifest',
 ];
+```
 
+Change its Greenfield byte-identity loop to:
+
+```js
 for (const relative of ['runtime.mjs', 'runtime-session.mjs', 'calculation-authority.mjs']) {
   const source = await fsp.readFile(path.join(root, 'greenfield', relative));
   const staged = await fsp.readFile(path.join(shellRoot, 'www', 'greenfield', relative));
@@ -793,11 +889,11 @@ for (const relative of ['runtime.mjs', 'runtime-session.mjs', 'calculation-autho
 }
 ```
 
-In `android-shell/test/lighthouse-next-package.test.mjs`, add assertions that:
+Add to the first package test in `android-shell/test/lighthouse-next-package.test.mjs`:
 
 ```mjs
-assert.equal(await exists(join(stagedLighthouse, 'runtime-ledger.mjs')), true);
-assert.equal(await exists(join(stagedGreenfield, 'calculation-authority.mjs')), true);
+assert.equal(await exists(join(stagedLighthouse, 'runtime-ledger.mjs')), true, 'runtime-ledger.mjs must be staged');
+assert.equal(await exists(join(stagedGreenfield, 'calculation-authority.mjs')), true, 'calculation-authority.mjs must be staged');
 assert.deepEqual(
   await readFile(join(stagedLighthouse, 'runtime-ledger.mjs')),
   await readFile(join(repoRoot, 'lighthouse-next', 'runtime-ledger.mjs')),
@@ -808,22 +904,18 @@ assert.deepEqual(
 );
 ```
 
-Keep the existing forbidden assertion for `greenfield/master-input-router.mjs`.
-
 - [ ] **Step 2: Run staging tests and verify RED**
-
-Run:
 
 ```bash
 node --test tests/greenfield-lighthouse-android-stage-contract.test.cjs
 cd android-shell && npm test
 ```
 
-Expected: FAIL because `runtime-ledger.mjs` is not in `LIGHTHOUSE_RUNTIME_FILES` and `calculation-authority.mjs` is not an explicit Greenfield entrypoint.
+Expected: FAIL because the new app bridge and calculation authority are not in the shared staging lists yet.
 
-- [ ] **Step 3: Extend the shared deterministic bundle lists**
+- [ ] **Step 3: Extend the shared deterministic staging lists**
 
-Modify `scripts/stage-lighthouse-next-bundle.mjs`:
+Change `scripts/stage-lighthouse-next-bundle.mjs` to include:
 
 ```mjs
 export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
@@ -847,18 +939,14 @@ export const GREENFIELD_ENTRYPOINTS = Object.freeze([
 ]);
 ```
 
-Do not add `master-input-router.mjs`.
-
-- [ ] **Step 4: Run shared Web/Android staging tests to verify GREEN**
-
-Run:
+- [ ] **Step 4: Run Web/Android staging tests to verify GREEN**
 
 ```bash
 node --test tests/greenfield-lighthouse-android-stage-contract.test.cjs
 cd android-shell && npm test && npm run app:stage-next
 ```
 
-Expected: PASS; staged app and Greenfield dependency bytes match source, and forbidden trees stay absent.
+Expected: PASS; staged bytes match source and the existing forbidden-tree test still rejects `greenfield/master-input-router.mjs`.
 
 - [ ] **Step 5: Commit Task 4**
 
@@ -869,19 +957,17 @@ git commit -m "build: stage LIGHTHOUSE real ledger runtime"
 
 ---
 
-### Task 5: Full gate, scope containment, and review checkpoint
+### Task 5: Full gate, scope containment, and owner review checkpoint
 
 **Files:**
-- Verify only; no product/release source change expected.
-- Review: all files changed since `main`.
+- Verify only; no release/version source change expected.
 
 **Interfaces:**
-- Consumes: completed Tasks 1–4.
-- Produces: fresh full-test evidence and a reviewable branch/PR; does not merge automatically.
+- Consumes: Tasks 1–4.
+- Produces: fresh full-test evidence and a Draft PR against `main`.
+- Does not merge automatically.
 
 - [ ] **Step 1: Run the complete focused LIGHTHOUSE regression set**
-
-Run:
 
 ```bash
 node --test \
@@ -893,9 +979,7 @@ node --test \
 
 Expected: 0 failures.
 
-- [ ] **Step 2: Run the Android shell test/staging gate**
-
-Run:
+- [ ] **Step 2: Run Android shell tests and staging**
 
 ```bash
 cd android-shell
@@ -908,8 +992,6 @@ Expected: all Android shell tests PASS and staging exits 0.
 
 - [ ] **Step 3: Run the repository deploy gate fresh**
 
-Run:
-
 ```bash
 npm run deploy:gate
 ```
@@ -917,8 +999,6 @@ npm run deploy:gate
 Expected: `npm test`, syntax checks, and UTF-8 checks all exit 0.
 
 - [ ] **Step 4: Verify scope containment**
-
-Run:
 
 ```bash
 git diff --name-only main...HEAD
@@ -940,45 +1020,41 @@ android-shell/test/lighthouse-next-package.test.mjs
 package.json
 ```
 
-Explicitly verify these forbidden files are absent from the diff:
+Run this forbidden-file check:
 
 ```bash
 forbidden='RELEASE_MANIFEST.json|release/lighthouse-update.json|android-shell/version.json|.github/workflows/lighthouse-owner-build.yml'
 git diff --name-only main...HEAD | grep -E "$forbidden" && exit 1 || true
 ```
 
-- [ ] **Step 5: Open or refresh a Draft PR to `main` and wait for CI**
+Expected: no forbidden path is printed.
 
-If using GitHub CLI:
+- [ ] **Step 5: Open or refresh one Draft PR to `main`**
+
+Use this metadata:
+
+```text
+base: main
+head: feat/lighthouse-real-income-ledger-20260909
+title: LIGHTHOUSE real general income ledger
+body: Moves only CHAT general income to verified Greenfield Ledger truth. Home finance and Manual Ledger history read real Ledger state. Store sale remains demo-only. No release/version/APK scope.
+```
+
+If using GitHub CLI, the equivalent command is:
 
 ```bash
-gh pr create \
-  --draft \
-  --base main \
-  --head feat/lighthouse-real-income-ledger-20260909 \
+gh pr create --draft --base main --head feat/lighthouse-real-income-ledger-20260909 \
   --title "LIGHTHOUSE real general income ledger" \
   --body "Moves only CHAT general income to verified Greenfield Ledger truth. Home finance and Manual Ledger history read real Ledger state. Store sale remains demo-only. No release/version/APK scope."
 ```
 
-If the PR already exists, update its body instead of creating a duplicate. If executing through the connected GitHub tool rather than CLI, use the equivalent Draft PR action with the same base, head, title, and body.
+- [ ] **Step 6: Verify CI on the exact Draft PR head**
 
-Expected: Draft PR is open against `main`; Greenfield Deploy Gate is triggered.
-
-- [ ] **Step 6: Verify the exact PR head CI before reporting checkpoint completion**
-
-Confirm the workflow run head SHA equals the branch head, then require:
-
-```text
-Greenfield safety gate: success
-Deploy Master Input candidate to staging: success or intentionally skipped according to event type
-Isolated LIGHTHOUSE bundle validation/deploy: success where the PR workflow runs it
-```
-
-Do not infer success from an older workflow run.
+Require the workflow run head SHA to equal the current branch head. Then require the PR workflow jobs that execute for this event to finish successfully, including Greenfield safety and isolated LIGHTHOUSE staging/deploy validation. Do not use an older run as evidence.
 
 - [ ] **Step 7: Stop for owner review; do not merge**
 
-Report in simple Thai:
+Report in simple Thai with exactly these facts:
 
 ```text
 Checkpoint ผ่าน/ไม่ผ่าน
