@@ -177,16 +177,8 @@ test('GO Client is one mode of the existing root app, not a second HTML app', ()
   assert.equal(fs.existsSync('go-client/index.html'), false);
   assert.ok(fs.existsSync(htmlPath));
   const html = fs.readFileSync(htmlPath, 'utf8');
-  assert.match(html, /go-client\.css/);
-  assert.match(html, /id="goClientShell"/);
-  assert.match(html, /ระบบกึ่ง AI/);
-  assert.match(html, /id="goClientForm"/);
-  assert.match(html, /id="goClientInput"/);
-  assert.match(html, /id="goClientFiles"[^>]*multiple/);
-  assert.match(html, /id="goClientHelp"/);
-  assert.match(html, /data-go-client-package="STARTER"/);
-  assert.match(html, /data-go-client-package="STANDARD"/);
-  assert.match(html, /data-go-client-package="BUSINESS"/);
+  assert.match(html, /id="gate"/);
+  assert.match(html, /id="workspace"/);
 });
 
 test('root app explicitly skips owner bootstrap when client mode is active', () => {
@@ -199,11 +191,21 @@ test('root app explicitly skips owner bootstrap when client mode is active', () 
   assert.ok(clientBranch >= 0 && bootstrap > clientBranch, 'client-mode gate must exist before owner bootstrap call');
 });
 
-test('client browser module uses same-origin interpreter and filename metadata only', () => {
+test('client browser module creates the public shell in the same document and uses filename metadata only', () => {
   assert.ok(fs.existsSync(appPath), `missing ${appPath}`);
   assert.ok(fs.existsSync(stylePath), `missing ${stylePath}`);
   const source = fs.readFileSync(appPath, 'utf8');
   assert.match(source, /\.\/go-client-flow\.mjs/);
+  assert.match(source, /go-client\.css/);
+  assert.match(source, /id="goClientShell"/);
+  assert.match(source, /ระบบกึ่ง AI/);
+  assert.match(source, /id="goClientForm"/);
+  assert.match(source, /id="goClientInput"/);
+  assert.match(source, /id="goClientFiles"[^>]*multiple/);
+  assert.match(source, /id="goClientHelp"/);
+  assert.match(source, /data-go-client-package="STARTER"/);
+  assert.match(source, /data-go-client-package="STANDARD"/);
+  assert.match(source, /data-go-client-package="BUSINESS"/);
   assert.match(source, /\/api\/v1\/interpret/);
   assert.match(source, /surface:'GO_CLIENT'/);
   assert.match(source, /mapMaterialToChecklist/);
