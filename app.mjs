@@ -352,12 +352,17 @@ async function bootstrapEntry() {
   }
 }
 
-const autoPin = sessionStorage.getItem('metro-auto-unlock-pin');
-if (autoPin) {
+const isGoClientSurface = new URL(globalThis.location.href).searchParams.get('surface') === 'client';
+if (isGoClientSurface) {
   sessionStorage.removeItem('metro-auto-unlock-pin');
-  lastDevicePin = autoPin;
-  $('devicePin').value = autoPin;
-  queueMicrotask(() => $('unlockBtn').click());
 } else {
-  void bootstrapEntry();
+  const autoPin = sessionStorage.getItem('metro-auto-unlock-pin');
+  if (autoPin) {
+    sessionStorage.removeItem('metro-auto-unlock-pin');
+    lastDevicePin = autoPin;
+    $('devicePin').value = autoPin;
+    queueMicrotask(() => $('unlockBtn').click());
+  } else {
+    void bootstrapEntry();
+  }
 }
