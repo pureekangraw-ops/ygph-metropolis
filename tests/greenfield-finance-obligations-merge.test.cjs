@@ -21,11 +21,16 @@ test('MANUAL combines finance and obligations into one user task', () => {
   assert.doesNotMatch(app, /\bobligations:\s*\{\s*title:\s*['"]ภาระ['"]/u);
 });
 
-test('finance detail carries the next obligation, gap, and daily target from shared state', () => {
+test('finance detail keeps the obligation slot but does not present demo obligation values as real truth', () => {
   const app = read(appPath);
   assert.match(app, /function financeSnapshot\(/);
-  assert.match(app, /renderFinanceDetail\([\s\S]*ภาระใกล้สุด/);
-  assert.match(app, /renderFinanceDetail\([\s\S]*ยังขาด/);
-  assert.match(app, /renderFinanceDetail\([\s\S]*เป้าวันนี้/);
-  assert.match(app, /state\.obligations/);
+  const start = app.indexOf('function renderFinanceDetail()');
+  const end = app.indexOf('function renderStoreDetail', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const body = app.slice(start, end);
+  assert.match(body, /ภาระใกล้สุด/);
+  assert.match(body, /ยังไม่เชื่อมข้อมูลจริง/);
+  assert.match(body, /คาดว่าจะเข้า/);
+  assert.doesNotMatch(body, /ยังขาด|เป้าวันนี้|state\.obligations/);
 });
