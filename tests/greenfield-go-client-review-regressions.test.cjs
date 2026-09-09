@@ -53,5 +53,11 @@ test('client surface blocks owner bootstrap instead of merely clearing auto-unlo
 
 test('package mismatch adopts the recalculated package for subsequent API and manager context', () => {
   const clientSource = fs.readFileSync('ui/go-client.mjs', 'utf8');
-  assert.match(clientSource, /if \(result\.packageMismatch\)[\s\S]*state\.estimate\s*=\s*result;[\s\S]*state\.package\s*=\s*result\.package;/);
+  const mismatchStart = clientSource.indexOf('if (result.packageMismatch)');
+  const mismatchEnd = clientSource.indexOf('} else {', mismatchStart);
+  assert.ok(mismatchStart >= 0 && mismatchEnd > mismatchStart, 'runEstimate must keep an explicit mismatch branch');
+  const mismatchBranch = clientSource.slice(mismatchStart, mismatchEnd);
+  assert.match(mismatchBranch, /state\.estimate\s*=\s*result;/);
+  assert.match(mismatchBranch, /state\.package\s*=\s*result\.package;/);
+  assert.doesNotMatch(mismatchBranch, /state\.package\s*=\s*selectedPackage;/);
 });
