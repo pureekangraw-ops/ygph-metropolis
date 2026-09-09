@@ -14,6 +14,7 @@ const runtimeFiles = [
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'runtime-gate.mjs',
   'send-control.mjs',
   'general-income.mjs',
   'store-sale.mjs',
@@ -21,7 +22,7 @@ const runtimeFiles = [
   'manifest.webmanifest',
 ];
 
-test('Android stage is owned by lighthouse-next and preserves runtime bytes', async () => {
+test('Android stage is owned by the shared LIGHTHOUSE bundle and preserves runtime bytes', async () => {
   assert.equal(fs.existsSync(stageTool), true, 'missing android-shell/tools/stage-lighthouse-next.mjs');
   const mod = await import(pathToFileURL(stageTool).href);
   assert.deepEqual([...mod.RUNTIME_FILES], runtimeFiles);
@@ -30,7 +31,7 @@ test('Android stage is owned by lighthouse-next and preserves runtime bytes', as
 
   for (const relative of runtimeFiles) {
     const source = await fsp.readFile(path.join(root, 'lighthouse-next', relative));
-    const staged = await fsp.readFile(path.join(shellRoot, 'www', relative));
+    const staged = await fsp.readFile(path.join(shellRoot, 'www', 'lighthouse-next', relative));
     assert.deepEqual(staged, source, `staged bytes drifted for ${relative}`);
   }
 
@@ -39,11 +40,17 @@ test('Android stage is owned by lighthouse-next and preserves runtime bytes', as
     'assets/lighthouse-icon-maskable.svg',
   ]) {
     const source = await fsp.readFile(path.join(root, 'lighthouse-next', relative));
-    const staged = await fsp.readFile(path.join(shellRoot, 'www', relative));
+    const staged = await fsp.readFile(path.join(shellRoot, 'www', 'lighthouse-next', relative));
     assert.deepEqual(staged, source, `staged bytes drifted for ${relative}`);
   }
 
+  for (const relative of ['runtime.mjs', 'runtime-session.mjs']) {
+    const source = await fsp.readFile(path.join(root, 'greenfield', relative));
+    const staged = await fsp.readFile(path.join(shellRoot, 'www', 'greenfield', relative));
+    assert.deepEqual(staged, source, `staged Greenfield bytes drifted for ${relative}`);
+  }
+
+  assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'app.mjs')), false, 'legacy flat app must not ship');
   assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'preview.html')), false, 'preview must not ship in the APK runtime');
-  assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'greenfield')), false, 'legacy greenfield must not ship in the APK runtime');
   assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'lighthouse')), false, 'legacy lighthouse donor runtime must not ship in the APK runtime');
 });
