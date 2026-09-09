@@ -5,6 +5,8 @@ const fs = require('node:fs');
 
 const root = process.cwd();
 const gatePath = path.join(root, 'lighthouse-next/runtime-gate.mjs');
+const htmlPath = path.join(root, 'lighthouse-next/index.html');
+const appPath = path.join(root, 'lighthouse-next/app.mjs');
 
 async function loadGate() {
   assert.equal(fs.existsSync(gatePath), true, 'missing lighthouse-next/runtime-gate.mjs');
@@ -108,4 +110,45 @@ test('runtime gate never persists passwords, recovery codes, or vault secrets in
   const source = fs.readFileSync(gatePath, 'utf8');
   assert.doesNotMatch(source, /localStorage|sessionStorage|\.setItem\s*\(/);
   assert.doesNotMatch(source, /vaultPassphrase\s*=|recoveryCode\s*=\s*deps\.|password\s*=\s*deps\./);
+});
+
+test('LIGHTHOUSE gate exposes real password login and removes the four-digit demo keypad', () => {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  assert.match(html, /id="auth-screen"/);
+  assert.match(html, /id="login-form"/);
+  assert.match(html, /id="device-password"/);
+  assert.match(html, /autocomplete="current-password"/);
+  assert.match(html, /id="show-recovery"/);
+  assert.doesNotMatch(html, /PIN 4 หลัก|data-pin=|pin-dots|pin-pad/);
+});
+
+test('LIGHTHOUSE recovery surface has Recovery Code, new password confirmation, and a route back to login', () => {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  assert.match(html, /id="recovery-form"/);
+  assert.match(html, /id="recovery-code"/);
+  assert.match(html, /id="new-password"/);
+  assert.match(html, /id="confirm-password"/);
+  assert.match(html, /id="cancel-recovery"/);
+  assert.match(html, /id="lock-app"/);
+});
+
+test('LIGHTHOUSE app delegates auth to runtime gate instead of persisting an unlocked demo session', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /from ['"]\.\/runtime-gate\.mjs['"]/);
+  assert.match(app, /createLighthouseRuntimeGate/);
+  assert.match(app, /authMessage/);
+  assert.match(app, /runtimeGate\.inspect\(\)/);
+  assert.match(app, /await runtimeGate\.login\(/);
+  assert.match(app, /await runtimeGate\.resetPassword\(/);
+  assert.match(app, /runtimeGate\.lock\(\)/);
+  assert.doesNotMatch(app, /state\.sessionUnlocked|sessionUnlocked\s*:/);
+  assert.doesNotMatch(app, /pinBuffer|pushPinDigit|popPinDigit|renderPinDots|unlockDemo/);
+});
+
+test('sensitive auth fields are cleared after login, recovery, and cancellation handling', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /devicePassword\.value\s*=\s*['"]["']/);
+  assert.match(app, /recoveryCodeInput\.value\s*=\s*['"]["']/);
+  assert.match(app, /newPasswordInput\.value\s*=\s*['"]["']/);
+  assert.match(app, /confirmPasswordInput\.value\s*=\s*['"]["']/);
 });
