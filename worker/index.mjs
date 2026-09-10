@@ -6,8 +6,68 @@ import { InterpreterProviderError, interpretTextWithOpenAI } from '../master-inp
 import { gateGoClientProposal, interpretGoClientTextWithOpenAI } from '../master-input/go-client-interpreter-provider.mjs';
 import { gateGoClientManagerDecision, interpretGoClientManagerWithOpenAI } from '../master-input/go-client-manager-provider.mjs';
 
+const PUBLIC_CLIENT_ASSETS = Object.freeze(new Map([
+  ['/client/assets/styles.css', '/styles.css'],
+  ['/client/assets/go-client.css', '/go-client.css'],
+  ['/client/assets/ui/go-client-entry.mjs', '/ui/go-client-entry.mjs'],
+  ['/client/assets/ui/go-client.mjs', '/ui/go-client.mjs'],
+  ['/client/assets/ui/go-client-flow.mjs', '/ui/go-client-flow.mjs'],
+]));
+
 function surfaceOf(input) {
   return String(input?.context?.surface || '').trim().toUpperCase();
+}
+
+function publicClientInput(input) {
+  const requestedSurface = surfaceOf(input);
+  return {
+    ...input,
+    context:{
+      ...(input?.context || {}),
+      surface:requestedSurface === 'GO_CLIENT_MANAGER' ? 'GO_CLIENT_MANAGER' : 'GO_CLIENT',
+    },
+  };
+}
+
+function assetRequest(request, pathname) {
+  const url = new URL(request.url);
+  url.pathname = pathname;
+  url.search = '';
+  return new Request(url.toString(), { method:'GET', headers:request.headers });
+}
+
+async function fetchPublicClientAsset(request, env, pathname) {
+  const sourcePath = PUBLIC_CLIENT_ASSETS.get(pathname);
+  if (!sourcePath || typeof env?.ASSETS?.fetch !== 'function') return null;
+  return env.ASSETS.fetch(assetRequest(request, sourcePath));
+}
+
+function transformClientHtml(html) {
+  return String(html || '')
+    .replace(/\s*<link\s+rel=["']manifest["'][^>]*>\s*/i, '\n')
+    .replace(
+      /<link\s+rel=["']stylesheet["']\s+href=["']styles\.css["']\s*>/i,
+      '<link rel="stylesheet" href="/client/assets/styles.css">\n  <link rel="stylesheet" href="/client/assets/go-client.css" data-go-client-style>'
+    )
+    .replace(/<body(?:\s[^>]*)?>/i, '<body class="go-client-mode">')
+    .replace(/\s*<script\s+type=["']module["']\s+src=["']ui\/master-input\.mjs["']><\/script>\s*/i, '\n')
+    .replace(
+      /<script\s+type=["']module["']\s+src=["']app\.mjs["']><\/script>/i,
+      '<script type="module" src="/client/assets/ui/go-client-entry.mjs"></script>'
+    );
+}
+
+async function publicClientDocument(request, env, requestId) {
+  if (request.method !== 'GET') return errorResponse({ requestId, code:'METHOD_NOT_ALLOWED', status:405 });
+  if (typeof env?.ASSETS?.fetch !== 'function') return errorResponse({ requestId, code:'NOT_FOUND', status:404 });
+  const response = await env.ASSETS.fetch(assetRequest(request, '/index.html'));
+  if (!response?.ok) return errorResponse({ requestId, code:'NOT_FOUND', status:404 });
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  headers.delete('etag');
+  headers.set('cache-control', 'no-store');
+  headers.set('content-type', 'text/html; charset=utf-8');
+  return new Response(transformClientHtml(await response.text()), { status:200, headers });
 }
 
 async function interpretRequest(input, env, deps) {
@@ -76,6 +136,16 @@ export async function handleApiRequest(request, env = {}, deps = {}) {
   const url = new URL(request.url);
 
   try {
+    if (url.pathname === '/client' || url.pathname === '/client/') {
+      return publicClientDocument(request, env, requestId);
+    }
+
+    if (url.pathname.startsWith('/client/assets/')) {
+      if (request.method !== 'GET') return errorResponse({ requestId, code:'METHOD_NOT_ALLOWED', status:405 });
+      const response = await fetchPublicClientAsset(request, env, url.pathname);
+      return response || errorResponse({ requestId, code:'NOT_FOUND', status:404 });
+    }
+
     if (url.pathname === '/api/v1/health') {
       if (request.method !== 'GET') {
         return errorResponse({ requestId, code: 'METHOD_NOT_ALLOWED', status: 405 });
@@ -87,8 +157,9 @@ export async function handleApiRequest(request, env = {}, deps = {}) {
       });
     }
 
-    if (url.pathname === '/api/v1/interpret') {
-      const input = await readInterpretRequest(request);
+    if (url.pathname === '/api/v1/interpret' || url.pathname === '/client/api/v1/interpret') {
+      let input = await readInterpretRequest(request);
+      if (url.pathname === '/client/api/v1/interpret') input = publicClientInput(input);
       await enforceInterpretRateLimit(env);
       const intent = await interpretRequest(input, env, deps);
       return jsonResponse({ ...intent, requestId });
