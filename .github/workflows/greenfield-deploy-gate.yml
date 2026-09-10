@@ -139,6 +139,116 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.126.0"
           command: deploy --env=""
+      - name: Ensure GO Client public Access path
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # Requires Access: Apps and Policies Write. This step is create-only and fails closed on drift.
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/access/apps"
+          name="GO Client Public Path"
+          exact="ygph-metropolis.pureekangraw.workers.dev/client"
+          wildcard="ygph-metropolis.pureekangraw.workers.dev/client/*"
+          auth_header="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+
+          # GET existing Access applications
+          list_code="$(curl --silent --show-error --output "$RUNNER_TEMP/access-apps.json" --write-out '%{http_code}' \
+            -H "$auth_header" -H 'content-type: application/json' "$api?per_page=100" || true)"
+          if [ "$list_code" != "200" ] || ! node -e 'const x=require(process.argv[1]); if(x.success!==true||!Array.isArray(x.result)) process.exit(1)' "$RUNNER_TEMP/access-apps.json"; then
+            echo "::error::Cloudflare token cannot read Access applications; Access: Apps and Policies Write is required"
+            exit 1
+          fi
+
+          node - "$RUNNER_TEMP/access-apps.json" "$RUNNER_TEMP/access-state.txt" "$name" "$exact" "$wildcard" <<'NODE'
+          const fs = require('node:fs');
+          const [file, out, name, exact, wildcard] = process.argv.slice(2);
+          const x = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (Number(x.result_info?.total_pages || 1) > 1) {
+            fs.writeFileSync(out, 'CONFLICT:pagination');
+            process.exit(0);
+          }
+          const apps = x.result || [];
+          const desired = [exact, wildcard].sort();
+          const destinations = (app) => (app.destinations || [])
+            .filter((d) => d && d.type === 'public' && typeof d.uri === 'string')
+            .map((d) => d.uri).sort();
+          const named = apps.filter((app) => app?.name === name);
+          const overlapping = apps.filter((app) => app?.name !== name && destinations(app).some((uri) => desired.includes(uri)));
+          if (named.length > 1 || overlapping.length > 0) {
+            fs.writeFileSync(out, 'CONFLICT:duplicate-or-overlap');
+          } else if (named.length === 0) {
+            fs.writeFileSync(out, 'CREATE');
+          } else {
+            const app = named[0];
+            const got = destinations(app);
+            const matches = app.type === 'self_hosted' && got.length === desired.length && got.every((v, i) => v === desired[i]);
+            fs.writeFileSync(out, matches && app.id ? `EXISTING:${app.id}` : 'CONFLICT:shape');
+          }
+          NODE
+
+          access_state="$(cat "$RUNNER_TEMP/access-state.txt")"
+          case "$access_state" in
+            CONFLICT:*)
+              echo "::error::conflicting existing GO Client Access application"
+              exit 1
+              ;;
+            CREATE)
+              # POST create scoped Access application. No update/delete fallback is permitted.
+              node - "$RUNNER_TEMP/access-create.json" "$name" "$exact" "$wildcard" <<'NODE'
+              const fs = require('node:fs');
+              const [out, name, exact, wildcard] = process.argv.slice(2);
+              fs.writeFileSync(out, JSON.stringify({
+                name,
+                type:'self_hosted',
+                domain:exact,
+                destinations:[
+                  {type:'public', uri:exact},
+                  {type:'public', uri:wildcard},
+                ],
+                app_launcher_visible:false,
+                policies:[{
+                  name:'Bypass GO Client public path',
+                  decision:'bypass',
+                  precedence:1,
+                  include:[{everyone:{}}],
+                }],
+              }));
+              NODE
+              create_code="$(curl --silent --show-error --output "$RUNNER_TEMP/access-created.json" --write-out '%{http_code}' \
+                -X POST -H "$auth_header" -H 'content-type: application/json' --data-binary "@$RUNNER_TEMP/access-create.json" "$api" || true)"
+              if { [ "$create_code" != "200" ] && [ "$create_code" != "201" ]; } \
+                || ! node -e 'const x=require(process.argv[1]); if(x.success!==true||!x.result?.id) process.exit(1)' "$RUNNER_TEMP/access-created.json"; then
+                echo "::error::Cloudflare could not create the scoped GO Client Access application; Access: Apps and Policies Write is required"
+                exit 1
+              fi
+              app_id="$(node -p 'require(process.argv[1]).result.id' "$RUNNER_TEMP/access-created.json")"
+              ;;
+            EXISTING:*)
+              app_id="${access_state#EXISTING:}"
+              ;;
+            *)
+              echo "::error::invalid GO Client Access application state"
+              exit 1
+              ;;
+          esac
+
+          policy_code="$(curl --silent --show-error --output "$RUNNER_TEMP/access-policies.json" --write-out '%{http_code}' \
+            -H "$auth_header" -H 'content-type: application/json' "$api/$app_id/policies?per_page=100" || true)"
+          if [ "$policy_code" != "200" ] || ! node - "$RUNNER_TEMP/access-policies.json" <<'NODE'
+          const fs = require('node:fs');
+          const x = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const policies = Array.isArray(x.result) ? x.result : [];
+          const isEveryone = (rule) => rule && typeof rule.everyone === 'object' && Object.keys(rule.everyone).length === 0;
+          const valid = x.success === true && policies.length === 1 && policies[0]?.decision === 'bypass'
+            && Array.isArray(policies[0]?.include) && policies[0].include.length === 1 && isEveryone(policies[0].include[0]);
+          if (!valid) process.exit(1);
+          NODE
+          then
+            echo "::error::conflicting existing GO Client Access application policy"
+            exit 1
+          fi
+          echo "GO Client Access split is configured"
       - name: Verify production smoke
         run: |
           base="https://ygph-metropolis.pureekangraw.workers.dev"
@@ -150,18 +260,25 @@ jobs:
 
           ready=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            health_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-health.headers" --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
-            client_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-client.headers" --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/?surface=client" || true)"
-            client_js_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-go-client.headers" --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
-            client_css_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-go-client-css.headers" --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
+            client_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/client" || true)"
+            client_js_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/client/assets/ui/go-client.mjs" || true)"
+            client_css_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/client/assets/go-client.css" || true)"
+            client_api_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-client-api.json" --write-out '%{http_code}' \
+              -X POST "$base/client/api/v1/interpret" -H 'content-type: application/json' --data '{' || true)"
 
-            health_valid=0
+            owner_root_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-root.headers" --output /dev/null --write-out '%{http_code}' "$base/" || true)"
+            owner_health_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-health.headers" --output /dev/null --write-out '%{http_code}' "$base/api/v1/health" || true)"
+            owner_legacy_client_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-legacy-client.headers" --output /dev/null --write-out '%{http_code}' "$base/?surface=client" || true)"
+            owner_direct_asset_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-owner-asset.headers" --output /dev/null --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
+            owner_direct_css_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-owner-css.headers" --output /dev/null --write-out '%{http_code}' "$base/go-client.css" || true)"
+
+            client_document_valid=0
             js_marker=0
             css_marker=0
-            content_valid=0
-            access_valid=0
-            if [ "$health_code" = "200" ] && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/production-health.json"; then
-              health_valid=1
+            api_valid=0
+            owner_access_valid=0
+            if [ "$client_code" = "200" ] && grep -q '/client/assets/ui/go-client-entry.mjs' "$RUNNER_TEMP/production-client.html"; then
+              client_document_valid=1
             fi
             if [ "$client_js_code" = "200" ] && grep -q 'GO CLIENT' "$RUNNER_TEMP/production-go-client.mjs"; then
               js_marker=1
@@ -169,30 +286,34 @@ jobs:
             if [ "$client_css_code" = "200" ] && grep -q 'go-client-shell' "$RUNNER_TEMP/production-go-client.css"; then
               css_marker=1
             fi
-            if [ "$health_valid" = "1" ] \
-              && [ "$client_code" = "200" ] \
-              && [ "$js_marker" = "1" ] \
-              && [ "$css_marker" = "1" ]; then
-              content_valid=1
+            if [ "$client_api_code" = "400" ] && grep -q 'INVALID_JSON' "$RUNNER_TEMP/production-client-api.json"; then
+              api_valid=1
             fi
 
+            root_redirect="$(sanitize_location "$RUNNER_TEMP/production-root.headers" || true)"
             redirect_target="$(sanitize_location "$RUNNER_TEMP/production-health.headers" || true)"
-            client_redirect="$(sanitize_location "$RUNNER_TEMP/production-client.headers" || true)"
-            js_redirect="$(sanitize_location "$RUNNER_TEMP/production-go-client.headers" || true)"
-            css_redirect="$(sanitize_location "$RUNNER_TEMP/production-go-client-css.headers" || true)"
-            if [ "$health_code" = "302" ] \
-              && [ "$client_code" = "302" ] \
-              && [ "$client_js_code" = "302" ] \
-              && [ "$client_css_code" = "302" ] \
+            legacy_redirect="$(sanitize_location "$RUNNER_TEMP/production-legacy-client.headers" || true)"
+            asset_redirect="$(sanitize_location "$RUNNER_TEMP/production-owner-asset.headers" || true)"
+            css_redirect="$(sanitize_location "$RUNNER_TEMP/production-owner-css.headers" || true)"
+            if [ "$owner_root_code" = "302" ] \
+              && [ "$owner_health_code" = "302" ] \
+              && [ "$owner_legacy_client_code" = "302" ] \
+              && [ "$owner_direct_asset_code" = "302" ] \
+              && [ "$owner_direct_css_code" = "302" ] \
+              && [ "$root_redirect" = "$expected_access" ] \
               && [ "$redirect_target" = "$expected_access" ] \
-              && [ "$client_redirect" = "$expected_access" ] \
-              && [ "$js_redirect" = "$expected_access" ] \
+              && [ "$legacy_redirect" = "$expected_access" ] \
+              && [ "$asset_redirect" = "$expected_access" ] \
               && [ "$css_redirect" = "$expected_access" ]; then
-              access_valid=1
+              owner_access_valid=1
             fi
 
-            echo "production smoke attempt=$attempt content=$content_valid access=$access_valid health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker redirect=${redirect_target:-none}"
-            if [ "$content_valid" = "1" ] || [ "$access_valid" = "1" ]; then
+            echo "production smoke attempt=$attempt public=$client_document_valid/$js_marker/$css_marker/$api_valid owner_access=$owner_access_valid owner=$owner_root_code/$owner_health_code/$owner_legacy_client_code/$owner_direct_asset_code/$owner_direct_css_code redirect=${redirect_target:-none}"
+            if [ "$client_document_valid" = "1" ] \
+              && [ "$js_marker" = "1" ] \
+              && [ "$css_marker" = "1" ] \
+              && [ "$api_valid" = "1" ] \
+              && [ "$owner_access_valid" = "1" ]; then
               ready=1
               break
             fi
@@ -200,15 +321,6 @@ jobs:
           done
 
           if [ "$ready" != "1" ]; then
-            echo "::error::Production smoke failed after bounded retries"
-            for file in production-health.json production-client.html production-go-client.mjs production-go-client.css; do
-              echo "--- $file ---"
-              if [ -f "$RUNNER_TEMP/$file" ]; then
-                head -c 240 "$RUNNER_TEMP/$file" || true
-                echo
-              else
-                echo "missing response body"
-              fi
-            done
+            echo "::error::Production Access split smoke failed after bounded retries"
             exit 1
           fi
