@@ -49,6 +49,16 @@ function actionable(status) {
   return status === 'OPEN' || status === 'PARTIAL';
 }
 
+function stockDelta(record) {
+  if (!record || typeof record !== 'object' || record.status === 'CANCELLED') return 0;
+  const quantity = Number(record.quantity || 0);
+  if (!Number.isSafeInteger(quantity)) return 0;
+  if (record.type === 'PURCHASE') return quantity;
+  if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') return -quantity;
+  if (record.type === 'STOCK_ADJUSTMENT') return quantity;
+  return 0;
+}
+
 export function projectGeneratedIncome(state, today) {
   const day = dateKey(today);
   let storeSatang = 0;
@@ -124,15 +134,20 @@ export function projectReceivableTruth(state) {
 
 export function projectStockTruth(state) {
   let stockQuantity = 0;
+  let legacyUnassignedQuantity = 0;
+  const byProductId = {};
   for (const record of recordsFor(state, 'STORE')) {
-    if (record.status === 'CANCELLED') continue;
-    const quantity = Number(record.quantity || 0);
-    if (!Number.isSafeInteger(quantity)) continue;
-    if (record.type === 'PURCHASE') stockQuantity += quantity;
-    if (record.type === 'SALE' || record.type === 'STOCK_WITHDRAWAL') stockQuantity -= quantity;
-    if (record.type === 'STOCK_ADJUSTMENT') stockQuantity += quantity;
+    const delta = stockDelta(record);
+    if (delta === 0) continue;
+    stockQuantity += delta;
+    const productId = String(record.productId || '').trim();
+    if (!productId) {
+      legacyUnassignedQuantity += delta;
+      continue;
+    }
+    byProductId[productId] = (byProductId[productId] || 0) + delta;
   }
-  return { stockQuantity };
+  return { stockQuantity, legacyUnassignedQuantity, byProductId };
 }
 
 export function projectFinancialTruth(state, ledgerBalanceSatang, today, nearDays = 7) {
