@@ -47,3 +47,18 @@ test('production smoke diagnostics expose only a sanitized redirect target', () 
   assert.doesNotMatch(deployJob, /u\.search/);
   assert.doesNotMatch(deployJob, /u\.hash/);
 });
+
+test('production smoke treats the exact Cloudflare Access login boundary as protected-and-live', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  assert.match(deployJob, /production-client\.headers/);
+  assert.match(deployJob, /production-go-client\.headers/);
+  assert.match(deployJob, /production-go-client-css\.headers/);
+  assert.match(deployJob, /access_valid=0/);
+  assert.match(deployJob, /https:\/\/pureekangraw\.cloudflareaccess\.com/);
+  assert.match(deployJob, /\/cdn-cgi\/access\/login\/ygph-metropolis\.pureekangraw\.workers\.dev/);
+  assert.match(deployJob, /\[ \"\$health_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$client_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$client_js_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$client_css_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$content_valid\" = \"1\" \] \|\| \[ \"\$access_valid\" = \"1\" \]/);
+});
