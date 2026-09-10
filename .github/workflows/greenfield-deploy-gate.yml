@@ -141,7 +141,7 @@ jobs:
           command: deploy --env=""
       - name: Ensure GO Client public Access path
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_ACCESS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/configure-go-client-access.mjs
       - name: Verify production smoke
