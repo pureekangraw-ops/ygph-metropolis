@@ -62,3 +62,44 @@ test('production smoke treats the exact Cloudflare Access login boundary as prot
   assert.match(deployJob, /\[ \"\$client_css_code\" = \"302\" \]/);
   assert.match(deployJob, /\[ \"\$content_valid\" = \"1\" \] \|\| \[ \"\$access_valid\" = \"1\" \]/);
 });
+
+test('production deploy installs a narrowly scoped GO Client Access bypass before smoke verification', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  const deployStep = deployJob.indexOf('- name: Deploy Worker');
+  const accessStep = deployJob.indexOf('- name: Ensure GO Client public Access path');
+  const smokeStep = deployJob.indexOf('- name: Verify production smoke');
+  assert.ok(accessStep > deployStep, 'Access path configuration must happen after the Worker deploy');
+  assert.ok(smokeStep > accessStep, 'production smoke must verify the configured Access split');
+  assert.match(deployJob, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
+  assert.match(deployJob, /CLOUDFLARE_ACCOUNT_ID:\s*\$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
+  assert.match(deployJob, /Access: Apps and Policies Write/);
+  assert.match(deployJob, /GO Client Public Path/);
+  assert.match(deployJob, /ygph-metropolis\.pureekangraw\.workers\.dev\/client/);
+  assert.match(deployJob, /ygph-metropolis\.pureekangraw\.workers\.dev\/client\/\*/);
+  assert.match(deployJob, /"decision":"bypass"/);
+  assert.match(deployJob, /"everyone":\{\}/);
+});
+
+test('Access bypass provisioning is create-only and fails closed on a conflicting existing app', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  assert.match(deployJob, /GET existing Access applications/i);
+  assert.match(deployJob, /conflicting existing GO Client Access application/i);
+  assert.match(deployJob, /POST create scoped Access application/i);
+  assert.doesNotMatch(deployJob, /PUT update GO Client Access application/i);
+  assert.doesNotMatch(deployJob, /DELETE .*Access application/i);
+});
+
+test('production smoke requires the public client path while owner surfaces remain Access-protected', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  assert.match(deployJob, /\$base\/client/);
+  assert.match(deployJob, /\$base\/client\/assets\/ui\/go-client\.mjs/);
+  assert.match(deployJob, /\$base\/client\/assets\/go-client\.css/);
+  assert.match(deployJob, /\$base\/client\/api\/v1\/interpret/);
+  assert.match(deployJob, /INVALID_JSON/);
+  assert.match(deployJob, /owner_root_code/);
+  assert.match(deployJob, /owner_health_code/);
+  assert.match(deployJob, /owner_direct_asset_code/);
+  assert.match(deployJob, /\[ \"\$owner_root_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$owner_health_code\" = \"302\" \]/);
+  assert.match(deployJob, /\[ \"\$owner_direct_asset_code\" = \"302\" \]/);
+});
