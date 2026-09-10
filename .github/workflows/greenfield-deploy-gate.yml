@@ -149,16 +149,40 @@ jobs:
             client_js_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
             client_css_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
 
-            if [ "$health_code" = "200" ] \
-              && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/production-health.json" \
+            health_valid=0
+            js_marker=0
+            css_marker=0
+            if [ "$health_code" = "200" ] && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/production-health.json"; then
+              health_valid=1
+            fi
+            if [ "$client_js_code" = "200" ] && grep -q 'GO CLIENT' "$RUNNER_TEMP/production-go-client.mjs"; then
+              js_marker=1
+            fi
+            if [ "$client_css_code" = "200" ] && grep -q 'go-client-shell' "$RUNNER_TEMP/production-go-client.css"; then
+              css_marker=1
+            fi
+
+            echo "production smoke attempt=$attempt health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker"
+            if [ "$health_valid" = "1" ] \
               && [ "$client_code" = "200" ] \
-              && [ "$client_js_code" = "200" ] \
-              && grep -q 'GO CLIENT' "$RUNNER_TEMP/production-go-client.mjs" \
-              && [ "$client_css_code" = "200" ] \
-              && grep -q 'go-client-shell' "$RUNNER_TEMP/production-go-client.css"; then
+              && [ "$js_marker" = "1" ] \
+              && [ "$css_marker" = "1" ]; then
               ready=1
               break
             fi
             sleep 2
           done
-          test "$ready" = "1"
+
+          if [ "$ready" != "1" ]; then
+            echo "::error::Production smoke failed after bounded retries"
+            for file in production-health.json production-client.html production-go-client.mjs production-go-client.css; do
+              echo "--- $file ---"
+              if [ -f "$RUNNER_TEMP/$file" ]; then
+                head -c 240 "$RUNNER_TEMP/$file" || true
+                echo
+              else
+                echo "missing response body"
+              fi
+            done
+            exit 1
+          fi
