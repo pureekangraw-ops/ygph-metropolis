@@ -73,21 +73,27 @@ test('production deploy installs a narrowly scoped GO Client Access bypass befor
   assert.ok(smokeStep > accessStep, 'production smoke must verify the configured Access split');
   assert.match(deployJob, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
   assert.match(deployJob, /CLOUDFLARE_ACCOUNT_ID:\s*\$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
-  assert.match(deployJob, /Access: Apps and Policies Write/);
-  assert.match(deployJob, /GO Client Public Path/);
-  assert.match(deployJob, /ygph-metropolis\.pureekangraw\.workers\.dev\/client/);
-  assert.match(deployJob, /ygph-metropolis\.pureekangraw\.workers\.dev\/client\/\*/);
-  assert.match(deployJob, /decision:'bypass'/);
-  assert.match(deployJob, /everyone:\{\}/);
+  assert.match(deployJob, /node scripts\/configure-go-client-access\.mjs/);
 });
 
-test('Access bypass provisioning is create-only and fails closed on a conflicting existing app', () => {
-  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
-  assert.match(deployJob, /GET existing Access applications/i);
-  assert.match(deployJob, /conflicting existing GO Client Access application/i);
-  assert.match(deployJob, /POST create scoped Access application/i);
-  assert.doesNotMatch(deployJob, /PUT update GO Client Access application/i);
-  assert.doesNotMatch(deployJob, /DELETE .*Access application/i);
+test('Access bypass provisioning is implemented in a syntax-checked create-only script', () => {
+  const packageJson = fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8');
+  assert.match(packageJson, /node --check scripts\/configure-go-client-access\.mjs/);
+  assert.ok(fs.existsSync(path.join(process.cwd(), 'scripts/configure-go-client-access.mjs')));
+  const script = fs.existsSync(path.join(process.cwd(), 'scripts/configure-go-client-access.mjs'))
+    ? fs.readFileSync(path.join(process.cwd(), 'scripts/configure-go-client-access.mjs'), 'utf8')
+    : '';
+  assert.match(script, /Access: Apps and Policies Write/);
+  assert.match(script, /GO Client Public Path/);
+  assert.match(script, /ygph-metropolis\.pureekangraw\.workers\.dev\/client/);
+  assert.match(script, /ygph-metropolis\.pureekangraw\.workers\.dev\/client\/\*/);
+  assert.match(script, /decision:\s*['"]bypass['"]/);
+  assert.match(script, /everyone:\s*\{\}/);
+  assert.match(script, /GET existing Access applications/i);
+  assert.match(script, /conflicting existing GO Client Access application/i);
+  assert.match(script, /POST create scoped Access application/i);
+  assert.doesNotMatch(script, /method:\s*['"]PUT['"]/i);
+  assert.doesNotMatch(script, /method:\s*['"]DELETE['"]/i);
 });
 
 test('production smoke requires the public client path while owner surfaces remain Access-protected', () => {
