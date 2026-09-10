@@ -12,6 +12,7 @@ import {
 } from './go-client-flow.mjs';
 
 const CLIENT_SURFACE = 'client';
+const PUBLIC_CLIENT_PATH = '/client';
 const JOB_LABELS = Object.freeze({
   PROPOSAL:'Proposal',
   COMPANY_PROFILE:'Company Profile',
@@ -40,16 +41,31 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
+function urlOf(href) {
+  try { return new URL(String(href || ''), 'https://go-client.invalid'); }
+  catch { return new URL('https://go-client.invalid/'); }
+}
+
+function isPublicClientPath(href) {
+  const pathname = urlOf(href).pathname;
+  return pathname === PUBLIC_CLIENT_PATH || pathname === `${PUBLIC_CLIENT_PATH}/`;
+}
+
+export function resolveGoClientInterpretEndpoint(href = globalThis.location?.href) {
+  return isPublicClientPath(href) ? '/client/api/v1/interpret' : '/api/v1/interpret';
+}
+
 export function isGoClientMode() {
   if (!globalThis.location?.href) return false;
-  return new URL(globalThis.location.href).searchParams.get('surface') === CLIENT_SURFACE;
+  const url = urlOf(globalThis.location.href);
+  return isPublicClientPath(url.href) || url.searchParams.get('surface') === CLIENT_SURFACE;
 }
 
 function ensureStylesheet() {
   if (document.querySelector('link[data-go-client-style]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = 'go-client.css';
+  link.href = isPublicClientPath(globalThis.location?.href) ? '/client/assets/go-client.css' : 'go-client.css';
   link.dataset.goClientStyle = 'true';
   document.head.append(link);
 }
@@ -382,7 +398,7 @@ function updateDesiredDate() {
 }
 
 async function requestManagerDecision(packet) {
-  const response = await fetch('/api/v1/interpret', {
+  const response = await fetch(resolveGoClientInterpretEndpoint(), {
     method:'POST',
     headers:{ 'content-type':'application/json' },
     body:JSON.stringify({
@@ -433,7 +449,7 @@ async function callManager(reason = 'OTHER', source = 'CLIENT') {
 }
 
 async function classifyWithApi(text) {
-  const response = await fetch('/api/v1/interpret', {
+  const response = await fetch(resolveGoClientInterpretEndpoint(), {
     method:'POST',
     headers:{ 'content-type':'application/json' },
     body:JSON.stringify({

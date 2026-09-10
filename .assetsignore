@@ -28,6 +28,7 @@
 !/ui/icons.mjs
 !/ui/master-input.mjs
 !/ui/master-input.css
+!/ui/go-client-entry.mjs
 !/ui/go-client.mjs
 !/ui/go-client-flow.mjs
 !/greenfield/
