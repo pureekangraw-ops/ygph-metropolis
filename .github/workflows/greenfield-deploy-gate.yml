@@ -144,7 +144,7 @@ jobs:
           base="https://ygph-metropolis.pureekangraw.workers.dev"
           ready=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            health_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
+            health_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-health.headers" --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
             client_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/?surface=client" || true)"
             client_js_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
             client_css_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
@@ -162,7 +162,8 @@ jobs:
               css_marker=1
             fi
 
-            echo "production smoke attempt=$attempt health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker"
+            redirect_target="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$RUNNER_TEMP/production-health.headers" | node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{s=s.trim(); if(!s) return; try{const u=new URL(s); console.log(u.origin+u.pathname)}catch{console.log("invalid-location")}})' || true)"
+            echo "production smoke attempt=$attempt health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker redirect=${redirect_target:-none}"
             if [ "$health_valid" = "1" ] \
               && [ "$client_code" = "200" ] \
               && [ "$js_marker" = "1" ] \
