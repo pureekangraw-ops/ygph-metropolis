@@ -1,3 +1,5 @@
+import { normalizeProductIdentity } from './store-products.mjs';
+
 const STORE_TYPES = new Set(['SALE', 'PURCHASE', 'STOCK_WITHDRAWAL', 'STOCK_ADJUSTMENT']);
 const CALENDAR_STATUSES = new Set(['OPEN', 'PARTIAL', 'COMPLETED', 'CANCELLED']);
 
@@ -61,6 +63,24 @@ function transactionDirection(record) {
 export function registerGreenfieldDomainCommands(runtime, { now = () => new Date().toISOString() } = {}) {
   if (!runtime || typeof runtime.register !== 'function') throw new TypeError('INVALID_COMMAND_RUNTIME');
 
+  runtime.register('STORE', 'STORE_CREATE_PRODUCT', ({ domainState, payload, command }) => {
+    const input = payload?.record;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('INVALID_PRODUCT_RECORD');
+    const at = now();
+    const identity = normalizeProductIdentity(input);
+    const productId = requiredText(input.productId ?? input.recordId, 'INVALID_PRODUCT_ID');
+    createEntry(domainState, {
+      ...identity,
+      recordId: productId,
+      productId,
+      source: 'STORE',
+      type: 'PRODUCT',
+      status: 'ACTIVE',
+      createdAt: input.createdAt || at,
+      updatedAt: at,
+    }, command, at);
+  });
+
   runtime.register('STORE', 'STORE_CREATE_RECORD', ({ domainState, payload, command }) => {
     const input = payload?.record;
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('INVALID_STORE_RECORD');
@@ -71,6 +91,12 @@ export function registerGreenfieldDomainCommands(runtime, { now = () => new Date
     record.recordId = requiredText(input.recordId ?? input.id, 'INVALID_RECORD_ID');
     record.source = 'STORE';
     record.type = type;
+    if (input.productId != null) {
+      const productId = requiredText(input.productId, 'INVALID_PRODUCT_ID');
+      const product = domainState.records[productId]?.record;
+      if (!product || product.type !== 'PRODUCT' || product.status !== 'ACTIVE') throw new Error(`STORE_PRODUCT_NOT_FOUND:${productId}`);
+      record.productId = productId;
+    }
     record.title = requiredText(input.title, 'INVALID_STORE_TITLE');
     record.status = requiredText(input.status ?? (type === 'PURCHASE' ? 'ACTIVE' : 'COMPLETED'), 'INVALID_STORE_STATUS');
     record.amountSatang = safeSatang(input.amountSatang, { allowNull: type === 'STOCK_ADJUSTMENT', code: 'INVALID_STORE_AMOUNT' });
