@@ -37,3 +37,13 @@ test('production smoke checks health and the GO Client public surface assets', (
   assert.match(deployJob, /GO CLIENT/);
   assert.match(deployJob, /go-client-shell/);
 });
+
+test('production smoke diagnostics expose only a sanitized redirect target', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  assert.match(deployJob, /--dump-header \"\$RUNNER_TEMP\/production-health\.headers\"/);
+  assert.match(deployJob, /\^location:/i);
+  assert.match(deployJob, /console\.log\(u\.origin\+u\.pathname\)/);
+  assert.match(deployJob, /redirect=\$\{redirect_target:-none\}/);
+  assert.doesNotMatch(deployJob, /u\.search/);
+  assert.doesNotMatch(deployJob, /u\.hash/);
+});
