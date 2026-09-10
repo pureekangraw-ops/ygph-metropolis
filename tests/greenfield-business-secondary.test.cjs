@@ -62,3 +62,62 @@ test('calendar close/cancel workflows never create Ledger transactions', async (
   assert.equal(next.domains.CALENDAR.records.Q1.record.status, 'COMPLETED');
   assert.equal(Object.keys(next.domains.LEDGER.records).length, 0);
 });
+
+test('create Product stock workflow creates one Product then linked opening stock atomically', async () => {
+  const { buildCreateProductStockWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const plan = buildCreateProductStockWorkflow({
+    workflowId:'WF-P1',
+    productId:'P1',
+    stockRecordId:'STOCK-P1-OPEN',
+    name:'Samsung A55',
+    model:'128GB',
+    color:'ดำ',
+    quantity:3,
+  });
+
+  assert.equal(plan.commands.length, 2);
+  assert.equal(plan.commands[0].domain, 'STORE');
+  assert.equal(plan.commands[0].type, 'STORE_CREATE_PRODUCT');
+  assert.equal(plan.commands[0].payload.record.productId, 'P1');
+  assert.equal(plan.commands[1].domain, 'STORE');
+  assert.equal(plan.commands[1].type, 'STORE_CREATE_RECORD');
+  assert.equal(plan.commands[1].payload.record.type, 'STOCK_ADJUSTMENT');
+  assert.equal(plan.commands[1].payload.record.productId, 'P1');
+  assert.equal(plan.commands[1].payload.record.quantity, 3);
+
+  const state = await apply(plan.commands);
+  assert.equal(state.domains.STORE.records.P1.record.type, 'PRODUCT');
+  assert.equal(state.domains.STORE.records.P1.record.name, 'Samsung A55');
+  assert.equal(state.domains.STORE.records['STOCK-P1-OPEN'].record.productId, 'P1');
+});
+
+test('restock workflow adds only a linked stock movement and does not create another Product', async () => {
+  const { buildAddProductStockWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const plan = buildAddProductStockWorkflow({
+    workflowId:'WF-P1-RESTOCK',
+    productId:'P1',
+    stockRecordId:'STOCK-P1-RESTOCK',
+    title:'เติม Samsung A55',
+    quantity:2,
+  });
+
+  assert.equal(plan.commands.length, 1);
+  assert.equal(plan.commands[0].type, 'STORE_CREATE_RECORD');
+  assert.equal(plan.commands[0].payload.record.type, 'STOCK_ADJUSTMENT');
+  assert.equal(plan.commands[0].payload.record.productId, 'P1');
+  assert.equal(plan.commands[0].payload.record.quantity, 2);
+});
+
+test('legacy Store workflow builders remain valid without productId', async () => {
+  const { buildPurchaseWorkflow, buildStockWithdrawalWorkflow } = await import('../greenfield/business-workflows.mjs');
+  const purchase = buildPurchaseWorkflow({
+    workflowId:'WF-LEGACY-BUY', purchaseId:'BUY-LEGACY', ledgerTransactionId:'TX-LEGACY-BUY',
+    title:'รับของเดิม', amountSatang:10000, quantity:2,
+  });
+  const withdrawal = buildStockWithdrawalWorkflow({
+    workflowId:'WF-LEGACY-WD', recordId:'WD-LEGACY', title:'เบิกของเดิม', quantity:1,
+  });
+
+  assert.equal('productId' in purchase.commands[0].payload.record, false);
+  assert.equal('productId' in withdrawal.commands[0].payload.record, false);
+});
