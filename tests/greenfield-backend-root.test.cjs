@@ -25,11 +25,11 @@ async function expectJsonError(request, expectedStatus, expectedCode) {
   return body;
 }
 
-test('backend root config declares a selective Worker spine for API routes', () => {
+test('backend root config declares a selective Worker spine for API and GO Client public routes', () => {
   const config = JSON.parse(read('wrangler.jsonc'));
   assert.equal(config.main, 'worker/index.mjs');
   assert.equal(config.assets.binding, 'ASSETS');
-  assert.deepEqual(config.assets.run_worker_first, ['/api/*']);
+  assert.deepEqual(config.assets.run_worker_first, ['/api/*', '/client', '/client/*']);
   assert.ok(fs.existsSync('worker/index.mjs'));
 });
 
