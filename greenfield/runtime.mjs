@@ -14,6 +14,8 @@ import { buildCalendarActionIntent } from './action-contract.mjs';
 import { parseFinanceSeedFile, assertFinanceSeedCanApply, verifyFinanceSeedReadback } from './finance-seed-import.mjs';
 import { applyDailyLifecycle, millisecondsUntilNextBangkokMidnight } from './daily-lifecycle.mjs';
 import {
+  buildCreateProductStockWorkflow,
+  buildAddProductStockWorkflow,
   buildSaleWorkflow,
   buildReceiveCustomerPaymentWorkflow,
   buildObligationWorkflow,
@@ -346,6 +348,8 @@ export function createGreenfieldRuntime({ store, passphrase, lockManager = globa
 
   return Object.freeze({
     diagnostics, readState, syncDailyLifecycle, initializeFromEvidence, project, exportBackup, restoreBackup, ensureDailyGoal, overrideDailyGoal, adjustBalance, changeDevicePassword, importFinanceSeed, repairStoreSaleCost,
+    createProductStock: input => executePlan(buildCreateProductStockWorkflow(input)),
+    addProductStock: input => executePlan(buildAddProductStockWorkflow(input)),
     sale: input => executePlan(buildSaleWorkflow(input)),
     receiveCustomerPayment: input => executeResolvedCalendarPayment(input, 'receiveCustomerPayment'),
     obligation: input => executePlan(buildObligationWorkflow(input)),
