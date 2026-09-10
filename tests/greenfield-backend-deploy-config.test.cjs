@@ -71,9 +71,22 @@ test('production deploy installs a narrowly scoped GO Client Access bypass befor
   const smokeStep = deployJob.indexOf('- name: Verify production smoke');
   assert.ok(accessStep > deployStep, 'Access path configuration must happen after the Worker deploy');
   assert.ok(smokeStep > accessStep, 'production smoke must verify the configured Access split');
-  assert.match(deployJob, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
+  assert.match(deployJob, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_ACCESS_API_TOKEN \}\}/);
   assert.match(deployJob, /CLOUDFLARE_ACCOUNT_ID:\s*\$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
   assert.match(deployJob, /node scripts\/configure-go-client-access\.mjs/);
+});
+
+test('production keeps Worker deploy credentials separate from Access provisioning credentials', () => {
+  const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
+  const deployStepStart = deployJob.indexOf('- name: Deploy Worker');
+  const accessStepStart = deployJob.indexOf('- name: Ensure GO Client public Access path');
+  const smokeStepStart = deployJob.indexOf('- name: Verify production smoke');
+  const workerStep = deployJob.slice(deployStepStart, accessStepStart);
+  const accessStep = deployJob.slice(accessStepStart, smokeStepStart);
+  assert.match(workerStep, /apiToken:\s*\$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
+  assert.doesNotMatch(workerStep, /CLOUDFLARE_ACCESS_API_TOKEN/);
+  assert.match(accessStep, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_ACCESS_API_TOKEN \}\}/);
+  assert.doesNotMatch(accessStep, /CLOUDFLARE_API_TOKEN:\s*\$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}/);
 });
 
 test('Access bypass provisioning is implemented in a syntax-checked create-only script', () => {
