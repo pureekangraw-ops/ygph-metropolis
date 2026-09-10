@@ -139,3 +139,26 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.126.0"
           command: deploy --env=""
+      - name: Verify production smoke
+        run: |
+          base="https://ygph-metropolis.pureekangraw.workers.dev"
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            health_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
+            client_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/?surface=client" || true)"
+            client_js_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
+            client_css_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
+
+            if [ "$health_code" = "200" ] \
+              && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/production-health.json" \
+              && [ "$client_code" = "200" ] \
+              && [ "$client_js_code" = "200" ] \
+              && grep -q 'GO CLIENT' "$RUNNER_TEMP/production-go-client.mjs" \
+              && [ "$client_css_code" = "200" ] \
+              && grep -q 'go-client-shell' "$RUNNER_TEMP/production-go-client.css"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = "1"
