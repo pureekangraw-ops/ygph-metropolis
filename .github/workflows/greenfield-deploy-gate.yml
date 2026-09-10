@@ -142,16 +142,24 @@ jobs:
       - name: Verify production smoke
         run: |
           base="https://ygph-metropolis.pureekangraw.workers.dev"
+          expected_access="https://pureekangraw.cloudflareaccess.com/cdn-cgi/access/login/ygph-metropolis.pureekangraw.workers.dev"
+          sanitize_location() {
+            awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$1" \
+              | node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{s=s.trim(); if(!s) return; try{const u=new URL(s); console.log(u.origin+u.pathname)}catch{console.log("invalid-location")}})'
+          }
+
           ready=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             health_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-health.headers" --output "$RUNNER_TEMP/production-health.json" --write-out '%{http_code}' "$base/api/v1/health" || true)"
-            client_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/?surface=client" || true)"
-            client_js_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
-            client_css_code="$(curl --silent --show-error --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
+            client_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-client.headers" --output "$RUNNER_TEMP/production-client.html" --write-out '%{http_code}' "$base/?surface=client" || true)"
+            client_js_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-go-client.headers" --output "$RUNNER_TEMP/production-go-client.mjs" --write-out '%{http_code}' "$base/ui/go-client.mjs" || true)"
+            client_css_code="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-go-client-css.headers" --output "$RUNNER_TEMP/production-go-client.css" --write-out '%{http_code}' "$base/go-client.css" || true)"
 
             health_valid=0
             js_marker=0
             css_marker=0
+            content_valid=0
+            access_valid=0
             if [ "$health_code" = "200" ] && node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.version!=="1"||x.status!=="ok"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/production-health.json"; then
               health_valid=1
             fi
@@ -161,13 +169,30 @@ jobs:
             if [ "$client_css_code" = "200" ] && grep -q 'go-client-shell' "$RUNNER_TEMP/production-go-client.css"; then
               css_marker=1
             fi
-
-            redirect_target="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "$RUNNER_TEMP/production-health.headers" | node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{s=s.trim(); if(!s) return; try{const u=new URL(s); console.log(u.origin+u.pathname)}catch{console.log("invalid-location")}})' || true)"
-            echo "production smoke attempt=$attempt health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker redirect=${redirect_target:-none}"
             if [ "$health_valid" = "1" ] \
               && [ "$client_code" = "200" ] \
               && [ "$js_marker" = "1" ] \
               && [ "$css_marker" = "1" ]; then
+              content_valid=1
+            fi
+
+            redirect_target="$(sanitize_location "$RUNNER_TEMP/production-health.headers" || true)"
+            client_redirect="$(sanitize_location "$RUNNER_TEMP/production-client.headers" || true)"
+            js_redirect="$(sanitize_location "$RUNNER_TEMP/production-go-client.headers" || true)"
+            css_redirect="$(sanitize_location "$RUNNER_TEMP/production-go-client-css.headers" || true)"
+            if [ "$health_code" = "302" ] \
+              && [ "$client_code" = "302" ] \
+              && [ "$client_js_code" = "302" ] \
+              && [ "$client_css_code" = "302" ] \
+              && [ "$redirect_target" = "$expected_access" ] \
+              && [ "$client_redirect" = "$expected_access" ] \
+              && [ "$js_redirect" = "$expected_access" ] \
+              && [ "$css_redirect" = "$expected_access" ]; then
+              access_valid=1
+            fi
+
+            echo "production smoke attempt=$attempt content=$content_valid access=$access_valid health=$health_code/$health_valid client=$client_code js=$client_js_code/$js_marker css=$client_css_code/$css_marker redirect=${redirect_target:-none}"
+            if [ "$content_valid" = "1" ] || [ "$access_valid" = "1" ]; then
               ready=1
               break
             fi
