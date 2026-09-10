@@ -28,6 +28,25 @@ function includesEveryoneOnly(policy) {
   return everyone && typeof everyone === 'object' && Object.keys(everyone).length === 0;
 }
 
+function sanitizeCloudflareField(value) {
+  return String(value ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+}
+
+function cloudflareErrorSummary(result) {
+  const status = Number(result?.response?.status || 0);
+  const errors = Array.isArray(result?.body?.errors) ? result.body.errors.slice(0, 3) : [];
+  const details = errors.map((error) => {
+    const code = sanitizeCloudflareField(error?.code ?? 'unknown');
+    const message = sanitizeCloudflareField(error?.message ?? 'unspecified');
+    return `${code}:${message}`;
+  });
+  return `Cloudflare response status=${status}${details.length ? `; errors=${details.join(' | ')}` : ''}`;
+}
+
 async function readJson(response) {
   try {
     return await response.json();
@@ -50,7 +69,7 @@ async function cloudflareRequest(url, token, options = {}) {
 
 function requireSuccess(result, operation) {
   if (!result.response.ok || result.body?.success !== true) {
-    throw new Error(`${operation} failed; ${REQUIRED_PERMISSION} is required`);
+    throw new Error(`${operation} failed; ${cloudflareErrorSummary(result)}; ${REQUIRED_PERMISSION} is required`);
   }
   return result.body;
 }

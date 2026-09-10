@@ -96,6 +96,17 @@ test('Access bypass provisioning is implemented in a syntax-checked create-only 
   assert.doesNotMatch(script, /method:\s*['"]DELETE['"]/i);
 });
 
+test('Access API failures expose only bounded status, error codes, and messages for diagnosis', () => {
+  const script = fs.readFileSync(path.join(process.cwd(), 'scripts/configure-go-client-access.mjs'), 'utf8');
+  assert.match(script, /function cloudflareErrorSummary/);
+  assert.match(script, /result\?\.response\?\.status/);
+  assert.match(script, /result\?\.body\?\.errors/);
+  assert.match(script, /error\?\.code/);
+  assert.match(script, /error\?\.message/);
+  assert.match(script, /slice\(0,\s*3\)/);
+  assert.doesNotMatch(script, /JSON\.stringify\(result\.body\)/);
+});
+
 test('production smoke requires the public client path while owner surfaces remain Access-protected', () => {
   const deployJob = workflow.slice(workflow.indexOf('\n  deploy:'));
   assert.match(deployJob, /client_document_valid/);
