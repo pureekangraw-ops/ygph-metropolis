@@ -62,6 +62,24 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   );
 });
 
+test('every staged LIGHTHOUSE relative ES-module dependency is present in the staged bundle', async () => {
+  await stageLighthouseNext({ repoRoot, shellRoot });
+  const stagedLighthouse = join(shellRoot, 'www', 'lighthouse-next');
+  assert.equal(await exists(stagedLighthouse), true, 'shared bundle must contain lighthouse-next');
+
+  for (const relativeFile of await collectMjsFiles(stagedLighthouse)) {
+    const source = await readFile(join(stagedLighthouse, relativeFile), 'utf8');
+    for (const match of source.matchAll(IMPORT_RE)) {
+      const dependency = normalize(join(dirname(relativeFile), match[1])).replaceAll('\\', '/');
+      assert.equal(
+        await exists(join(stagedLighthouse, dependency)),
+        true,
+        `${relativeFile} is missing staged dependency ${match[1]}`,
+      );
+    }
+  }
+});
+
 test('every staged Greenfield relative ES-module dependency is present in the staged closure', async () => {
   await stageLighthouseNext({ repoRoot, shellRoot });
   const stagedGreenfield = join(shellRoot, 'www', 'greenfield');
