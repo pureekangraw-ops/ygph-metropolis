@@ -132,3 +132,20 @@ test('real paid sale path never mutates demo cash, stock, or transaction authori
   assert.doesNotMatch(body, /state\.todayIncome\s*[+\-]=/);
   assert.doesNotMatch(body, /state\.transactions\.push/);
 });
+
+test('Manual Store renders durable Product attributes and quantity instead of demo inventory', () => {
+  const app = readApp();
+  const body = functionBody(app, 'renderStoreDetail', 'renderCalendarDetail');
+  assert.match(body, /storeTruth\?\.products\s*\|\|\s*\[\]/);
+  assert.doesNotMatch(body, /state\.products/);
+  for (const field of ['name', 'model', 'color', 'descriptors', 'quantity']) {
+    assert.match(body, new RegExp(`product\\.${field}\\b`), `Manual Store must render Product ${field}`);
+  }
+});
+
+test('Manual Store keeps legacy unassigned stock separate from named Product inventory', () => {
+  const app = readApp();
+  const body = functionBody(app, 'renderStoreDetail', 'renderCalendarDetail');
+  assert.match(body, /storeTruth\?\.legacyUnassignedQuantity/);
+  assert.match(body, /สต็อกเดิมที่ยังไม่ผูกสินค้า/);
+});
