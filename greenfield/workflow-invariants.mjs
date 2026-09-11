@@ -25,6 +25,55 @@ function plannedStoreDelta(commands) {
   return delta;
 }
 
+function activeProductIds(state) {
+  return new Set(recordsFor(state, 'STORE')
+    .filter(record => record?.type === 'PRODUCT' && record?.status === 'ACTIVE' && record?.productId)
+    .map(record => String(record.productId)));
+}
+
+function plannedProductIds(commands) {
+  const ids = new Set();
+  for (const command of commands) {
+    if (command?.domain !== 'STORE' || command?.type !== 'STORE_CREATE_PRODUCT') continue;
+    const record = command?.payload?.record;
+    const productId = String(record?.productId ?? record?.recordId ?? '').trim();
+    if (productId) ids.add(productId);
+  }
+  return ids;
+}
+
+function productStockBefore(state) {
+  const byProductId = new Map();
+  for (const record of recordsFor(state, 'STORE')) {
+    const productId = String(record?.productId || '').trim();
+    if (!productId) continue;
+    const delta = stockDelta(record);
+    if (delta === 0) continue;
+    byProductId.set(productId, (byProductId.get(productId) || 0) + delta);
+  }
+  return byProductId;
+}
+
+function validateProductStockInvariant(state, commands) {
+  const known = activeProductIds(state);
+  for (const productId of plannedProductIds(commands)) known.add(productId);
+  const projected = productStockBefore(state);
+
+  for (const command of commands) {
+    if (command?.domain !== 'STORE' || command?.type !== 'STORE_CREATE_RECORD') continue;
+    const record = command?.payload?.record;
+    const productId = String(record?.productId || '').trim();
+    if (!productId) continue;
+    if (!known.has(productId)) throw new Error(`STORE_PRODUCT_NOT_FOUND:${productId}`);
+    const delta = stockDelta(record);
+    if (delta !== 0) projected.set(productId, (projected.get(productId) || 0) + delta);
+  }
+
+  for (const [productId, quantity] of projected) {
+    if (quantity < 0) throw new Error(`STORE_PRODUCT_STOCK_UNDERFLOW:${productId}/${quantity}`);
+  }
+}
+
 function plannedCalendarQueues(commands) {
   const queues = new Map();
   for (const command of commands) {
@@ -140,6 +189,7 @@ function validateVerifiedExpenseRelation(state, commands) {
 function validateStockInvariant(state, commands) {
   const finalStock = projectedStockBefore(state) + plannedStoreDelta(commands);
   if (finalStock < 0) throw new Error(`STORE_STOCK_UNDERFLOW:${finalStock}`);
+  validateProductStockInvariant(state, commands);
 }
 
 export function validateWorkflowInvariants(state, commands) {

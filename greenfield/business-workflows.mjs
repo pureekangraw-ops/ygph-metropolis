@@ -22,6 +22,11 @@ function quantity(value) {
   return output;
 }
 
+function optionalProductId(value) {
+  if (value == null || String(value).trim() === '') return {};
+  return { productId:text(value, 'INVALID_PRODUCT_ID') };
+}
+
 function isoDate(value) {
   const input = text(value, 'INVALID_DUE_DATE');
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
@@ -35,7 +40,36 @@ function command(workflowId, index, domain, type, payload, suffix = type) {
   return { commandId: `${workflowId}:${index}`, idempotencyKey: `${workflowId}:${suffix}`, domain, type, payload };
 }
 
-export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, calendarQueueId, title, amountSatang, quantity: qty, receivedSatang = 0, storeCostSatang = 0, dueDate }) {
+export function buildCreateProductStockWorkflow({ workflowId, productId, stockRecordId, name, model, color, descriptors, quantity: qty }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  productId = text(productId, 'INVALID_PRODUCT_ID');
+  stockRecordId = text(stockRecordId, 'INVALID_RECORD_ID');
+  const productName = text(name, 'INVALID_PRODUCT_NAME');
+  const product = { recordId:productId, productId, name:productName };
+  if (model != null) product.model = model;
+  if (color != null) product.color = color;
+  if (descriptors != null) product.descriptors = descriptors;
+  const stockQuantity = quantity(qty);
+  return { workflowId, commands:[
+    command(workflowId, 1, 'STORE', 'STORE_CREATE_PRODUCT', { record:product }, `STORE:PRODUCT:${productId}`),
+    command(workflowId, 2, 'STORE', 'STORE_CREATE_RECORD', { record:{
+      recordId:stockRecordId, type:'STOCK_ADJUSTMENT', title:`เพิ่ม ${productName}`, detail:'OPENING_STOCK', reason:'OPENING_STOCK',
+      amountSatang:null, quantity:stockQuantity, productId, status:'COMPLETED',
+    } }, `STORE:${stockRecordId}`),
+  ] };
+}
+
+export function buildAddProductStockWorkflow({ workflowId, productId, stockRecordId, title, quantity: qty }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  productId = text(productId, 'INVALID_PRODUCT_ID');
+  stockRecordId = text(stockRecordId, 'INVALID_RECORD_ID');
+  return { workflowId, commands:[command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record:{
+    recordId:stockRecordId, type:'STOCK_ADJUSTMENT', title:text(title, 'INVALID_ADJUSTMENT_TITLE'), detail:'RESTOCK', reason:'RESTOCK',
+    amountSatang:null, quantity:quantity(qty), productId, status:'COMPLETED',
+  } }, `STORE:${stockRecordId}`)] };
+}
+
+export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, calendarQueueId, productId, title, amountSatang, quantity: qty, receivedSatang = 0, storeCostSatang = 0, dueDate }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   saleId = text(saleId, 'INVALID_SALE_ID');
   const total = satang(amountSatang, { code: 'INVALID_SALE_AMOUNT' });
@@ -46,7 +80,7 @@ export function buildSaleWorkflow({ workflowId, saleId, ledgerTransactionId, cal
   const commands = [command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
     recordId: saleId, type: 'SALE', title: text(title, 'INVALID_SALE_TITLE'), amountSatang: total, totalSatang: total,
     receivedSatang: received, outstandingSatang: outstanding, storeCostSatang: storeCost, netIncomeSatang: received - storeCost,
-    quantity: quantity(qty),
+    quantity: quantity(qty), ...optionalProductId(productId),
     status: outstanding === 0 ? 'COMPLETED' : received > 0 ? 'PARTIAL' : 'OPEN',
   } }, `STORE:${saleId}`)];
   if (received > 0) {
@@ -127,7 +161,7 @@ export function buildPayObligationWorkflow({ workflowId, obligationId, queueId, 
   ] };
 }
 
-export function buildPurchaseWorkflow({ workflowId, purchaseId, ledgerTransactionId, returnQueueId = null, title, amountSatang, quantity: qty, returnDueDate = null }) {
+export function buildPurchaseWorkflow({ workflowId, purchaseId, ledgerTransactionId, returnQueueId = null, productId, title, amountSatang, quantity: qty, returnDueDate = null }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   purchaseId = text(purchaseId, 'INVALID_PURCHASE_ID');
   ledgerTransactionId = text(ledgerTransactionId, 'INVALID_LEDGER_TRANSACTION_ID');
@@ -135,7 +169,7 @@ export function buildPurchaseWorkflow({ workflowId, purchaseId, ledgerTransactio
   const commands = [
     command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
       recordId: purchaseId, type: 'PURCHASE', title: text(title, 'INVALID_PURCHASE_TITLE'), amountSatang: amount,
-      quantity: quantity(qty), status: 'ACTIVE',
+      quantity: quantity(qty), status: 'ACTIVE', ...optionalProductId(productId),
     } }, `STORE:${purchaseId}`),
     command(workflowId, 2, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
       recordId: ledgerTransactionId, direction: 'OUT', amountSatang: amount, title: `ซื้อ ${title}`, subtype: 'PURCHASE', sourceRef: `STORE/${purchaseId}`,
@@ -152,23 +186,23 @@ export function buildPurchaseWorkflow({ workflowId, purchaseId, ledgerTransactio
   return { workflowId, commands };
 }
 
-export function buildStockWithdrawalWorkflow({ workflowId, recordId, title, quantity: qty }) {
+export function buildStockWithdrawalWorkflow({ workflowId, recordId, productId, title, quantity: qty }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   recordId = text(recordId, 'INVALID_RECORD_ID');
   return { workflowId, commands: [command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
     recordId, type: 'STOCK_WITHDRAWAL', title: text(title, 'INVALID_WITHDRAWAL_TITLE'), amountSatang: 0,
-    quantity: quantity(qty), status: 'COMPLETED',
+    quantity: quantity(qty), status: 'COMPLETED', ...optionalProductId(productId),
   } }, `STORE:${recordId}`)] };
 }
 
-export function buildStockAdjustmentWorkflow({ workflowId, recordId, title, deltaQuantity, reason }) {
+export function buildStockAdjustmentWorkflow({ workflowId, recordId, productId, title, deltaQuantity, reason }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   recordId = text(recordId, 'INVALID_RECORD_ID');
   const delta = Number(deltaQuantity);
   if (!Number.isSafeInteger(delta) || delta === 0) throw new Error('INVALID_STOCK_ADJUSTMENT_DELTA');
   return { workflowId, commands: [command(workflowId, 1, 'STORE', 'STORE_CREATE_RECORD', { record: {
     recordId, type: 'STOCK_ADJUSTMENT', title: text(title, 'INVALID_ADJUSTMENT_TITLE'), detail: text(reason, 'INVALID_ADJUSTMENT_REASON'),
-    reason: text(reason, 'INVALID_ADJUSTMENT_REASON'), amountSatang: null, quantity: delta, status: 'COMPLETED',
+    reason: text(reason, 'INVALID_ADJUSTMENT_REASON'), amountSatang: null, quantity: delta, status: 'COMPLETED', ...optionalProductId(productId),
   } }, `STORE:${recordId}`)] };
 }
 

@@ -91,8 +91,8 @@
       <div id="page-settings" class="app-page" data-root="settings" hidden>
         <div class="page-title-block"><p class="eyebrow">ดูแล LIGHTHOUSE</p><h1>ตั้งค่า</h1></div>
         <section class="settings-panel">
-          <div class="settings-row"><span><strong>ข้อมูลจำลอง</strong><small>ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น</small></span><span class="status-pill">ทดสอบ</span></div>
-          <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>รีเซ็ตเดโม</strong><small>ล้างบทสนทนาและสถานะทดลอง</small></span><b>›</b></button>
+          <div class="settings-row"><span><strong>ข้อมูลจริง</strong><small>การเงินและร้านค้ามาจาก Runtime ที่ปลอดภัย · บทสนทนาและรายการค้างอยู่บนเครื่องนี้</small></span><span class="status-pill">Runtime</span></div>
+          <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>ล้างสถานะบนเครื่อง</strong><small>ล้างบทสนทนาและรายการค้างเท่านั้น ไม่ลบเงินจริงหรือสต็อกจริง</small></span><b>›</b></button>
           <button type="button" id="lock-app" class="settings-button"><span><strong>ล็อก LIGHTHOUSE</strong><small>ปิด Runtime Session แล้วกลับหน้ารหัส</small></span><b>›</b></button>
         </section>
         <section class="about-card"><div class="about-beacon" aria-hidden="true">✦</div><div><p class="eyebrow">LIGHTHOUSE</p><h2>Your next step.</h2><p>ช่วยให้เห็นสถานการณ์ แล้วพาไปยังสิ่งที่ควรทำต่อโดยไม่เพิ่มภาระให้คนใช้</p></div></section>
@@ -106,7 +106,7 @@
       </nav>
     </section>
 
-    <dialog id="reset-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-beacon" aria-hidden="true">✦</div><h2>เริ่มสนามใหม่?</h2><p>ล้างบทสนทนาและข้อมูลทดลองบนเครื่องนี้</p><div class="dialog-actions"><button value="cancel" class="secondary-button">ยังไม่ล้าง</button><button value="confirm" id="confirm-reset" class="danger-button">ล้างข้อมูลทดลอง</button></div></form></dialog>
+    <dialog id="reset-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-beacon" aria-hidden="true">✦</div><h2>ล้างสถานะบนเครื่อง?</h2><p>ล้างบทสนทนาและรายการค้างบนเครื่องนี้ โดยไม่ลบเงินจริงหรือสต็อกจริง</p><div class="dialog-actions"><button value="cancel" class="secondary-button">ยังไม่ล้าง</button><button value="confirm" id="confirm-reset" class="danger-button">ล้างสถานะ</button></div></form></dialog>
   </main>
   <script type="module" src="./app.mjs"></script>
   <script type="module" src="./send-control.mjs"></script>
