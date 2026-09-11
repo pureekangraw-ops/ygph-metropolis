@@ -43,6 +43,7 @@
 !/greenfield/cutover.mjs
 !/greenfield/device-unlock.mjs
 !/greenfield/domain-operations.mjs
+!/greenfield/store-products.mjs
 !/greenfield/evidence-integrity.mjs
 !/greenfield/finance-seed-import.mjs
 !/greenfield/first-run.mjs
