@@ -162,28 +162,27 @@ test('real general-income confirmation does not mutate demo finance authority', 
   assert.doesNotMatch(body, /state\.transactions\.push/);
 });
 
-test('Home finance renders from ledgerTruth instead of demo cash defaults', () => {
+test('Home finance renders through the Ledger truth view-model instead of demo cash defaults', () => {
   const app = fs.readFileSync(appPath, 'utf8');
-  assert.match(app, /ledgerTruth\.balanceSatang/);
-  assert.match(app, /ledgerTruth\.todayInSatang/);
-  assert.match(app, /ledgerTruth\.todayOutSatang/);
-  assert.match(app, /ledgerTruth\.netSatang/);
-  const start = app.indexOf('function renderHomeTruth()');
+  const start = app.indexOf('function financeSnapshot()');
   const end = app.indexOf('function resetDemoState', start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const body = app.slice(start, end);
+  assert.match(body, /projectFinanceView\(ledgerTruth\)/);
+  assert.match(body, /READ_STATE\.READY/);
   assert.doesNotMatch(body, /state\.cash|state\.todayIncome|state\.todayExpense/);
 });
 
-test('Manual Ledger history renders real Ledger transactions only', () => {
+test('Manual Ledger history renders through the durable Ledger truth view-model only', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   const start = app.indexOf('function renderHistoryDetail()');
   const end = app.indexOf('function openManualTask', start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const body = app.slice(start, end);
-  assert.match(body, /ledgerTruth\?\.transactions/);
+  assert.match(body, /projectLedgerHistoryView\(ledgerTruth\)/);
+  assert.match(body, /view\.transactions/);
   assert.doesNotMatch(body, /state\.transactions/);
 });
 
