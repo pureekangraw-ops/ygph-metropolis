@@ -21,13 +21,14 @@ test('finance and obligations are one MANUAL user surface, not a patched second 
   assert.doesNotMatch(app, /\bobligations:\s*\{\s*title:\s*['"]ภาระ['"]/u);
 });
 
-test('Dashboard Finance and Calendar derive obligation pressure from the same demo state', () => {
+test('Dashboard and Finance use Ledger view-model truth while Calendar fails closed without a real bridge', () => {
   const app = read(appPath);
 
-  assert.match(app, /const DEFAULT_OBLIGATIONS\s*=\s*Object\.freeze\(\[/);
-  assert.match(app, /obligations:\s*DEFAULT_OBLIGATIONS/);
-  assert.match(app, /function financeSnapshot\(/);
-  assert.match(app, /function renderHomeTruth\([\s\S]*financeSnapshot\(/);
-  assert.match(app, /function renderFinanceDetail\([\s\S]*financeSnapshot\(/);
-  assert.match(app, /function renderCalendarDetail\([\s\S]*state\.obligations/);
+  assert.match(app, /projectFinanceView/);
+  assert.match(app, /function financeSnapshot\(\)[\s\S]*?projectFinanceView\(ledgerTruth\)/);
+  assert.match(app, /function renderHomeTruth\(\)[\s\S]*?financeSnapshot\(\)/);
+  assert.match(app, /function renderFinanceDetail\(\)[\s\S]*?projectFinanceView\(ledgerTruth\)/);
+  assert.match(app, /function renderCalendarDetail\(\)\s*\{\s*renderStaticDetail\(manualContent\.calendar,\s*unavailableManualRows\(\)\);\s*\}/);
+  assert.doesNotMatch(app, /function renderCalendarDetail\(\)\s*\{[^}]*state\.obligations/);
+  assert.match(app, /projectUnavailableView\(['"]ยังไม่เชื่อมข้อมูลจริง['"]\)/u);
 });

@@ -165,13 +165,18 @@ test('Dashboard renders real cash truth from ledgerTruth', () => {
   assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
 });
 
-test('MANUAL Store keeps demo products while History uses real Ledger transactions', () => {
+test('MANUAL Store and History render durable truth through view-model projections', () => {
   const app = read(appPath);
-  assert.match(app, /function renderStoreDetail\(/);
-  assert.match(app, /state\.products/);
-  assert.match(app, /function renderHistoryDetail\(/);
-  assert.match(app, /ledgerTruth\?\.transactions/);
-  assert.match(app, /เหลือ.*ชิ้น/);
+  const storeDetail = app.match(/function renderStoreDetail\(\)[\s\S]*?function renderRideDetail\(\)/)?.[0];
+  const historyDetail = app.match(/function renderHistoryDetail\(\)[\s\S]*?function openManualTask\(/)?.[0];
+
+  assert.ok(storeDetail, 'renderStoreDetail block must exist');
+  assert.ok(historyDetail, 'renderHistoryDetail block must exist');
+  assert.match(storeDetail, /projectStoreView\(storeTruth\)/);
+  assert.doesNotMatch(storeDetail, /state\.products/);
+  assert.match(storeDetail, /เหลือ.*ชิ้น/u);
+  assert.match(historyDetail, /projectLedgerHistoryView\(ledgerTruth\)/);
+  assert.doesNotMatch(historyDetail, /ledgerTruth\?\.transactions|state\.transactions/);
 });
 
 test('sale cancellation is confirmed, append-only, and protected from double reversal', () => {
