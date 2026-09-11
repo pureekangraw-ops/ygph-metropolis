@@ -83,13 +83,16 @@ test('CHAT confirmation and success copy read like conversation, not system outp
   assert.doesNotMatch(app, /เป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน/);
 });
 
-test('MANUAL exposes user jobs and Settings labels the environment as fake/local demo data', () => {
+test('MANUAL exposes user jobs and Settings distinguishes durable truth from device-local UI state', () => {
   const html = read(htmlPath);
   for (const label of ['การเงิน', 'ภาระ', 'ร้านค้า', 'งานวิ่ง', 'ปฏิทิน', 'รายการทั้งหมด']) {
     assert.match(html, new RegExp(label));
   }
-  assert.match(html, /ข้อมูลจำลอง/);
-  assert.match(html, /รีเซ็ตเดโม/);
+  assert.match(html, /ข้อมูลจริง/);
+  assert.match(html, /การเงินและร้านค้ามาจาก Runtime ที่ปลอดภัย/);
+  assert.match(html, /บทสนทนาและรายการค้างอยู่บนเครื่องนี้/);
+  assert.match(html, /ไม่ลบเงินจริงหรือสต็อกจริง/);
+  assert.doesNotMatch(html, /ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น/);
 });
 
 test('demo staging is isolated from the production asset allowlist and verifies its own public URL', () => {
