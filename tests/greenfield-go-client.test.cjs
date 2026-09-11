@@ -191,7 +191,7 @@ test('client browser module creates the public shell in the same document and us
   assert.match(source, /\.\/go-client-flow\.mjs/);
   assert.match(source, /go-client\.css/);
   assert.match(source, /goClientShell/);
-  assert.match(source, /ระบบกึ่ง AI/);
+  assert.doesNotMatch(source, /ระบบกึ่ง AI/);
   assert.match(source, /id="goClientForm"/);
   assert.match(source, /id="goClientInput"/);
   assert.match(source, /id="goClientFiles"[^>]*multiple/);
@@ -208,4 +208,26 @@ test('client browser module creates the public shell in the same document and us
   assert.doesNotMatch(source, /openGreenfieldRuntime/);
   assert.doesNotMatch(source, /\.arrayBuffer\(/);
   assert.doesNotMatch(source, /file\.text\(/);
+});
+
+test('customer-first shell puts the start route before pricing and keeps manager help secondary', () => {
+  const source = fs.readFileSync(appPath, 'utf8');
+  const chatIndex = source.indexOf('id="goClientChatCard"');
+  const pricingIndex = source.indexOf('id="goClientPricing"');
+  const helpIndex = source.indexOf('id="goClientHelpLane"');
+  assert.ok(chatIndex >= 0, 'customer start route must exist');
+  assert.ok(pricingIndex > chatIndex, 'pricing must come after the customer start route');
+  assert.ok(helpIndex > pricingIndex, 'GO Manager help must be a secondary lane after core customer flow');
+  assert.match(source, /id="goClientPrimaryStart"/);
+  assert.equal((source.match(/go-client-primary-route/g) || []).length, 1, 'there must be one visually primary start route');
+  assert.match(source, /data-go-client-quick=/);
+});
+
+test('customer-first skin exposes dedicated professional navy and teal design tokens', () => {
+  const css = fs.readFileSync(stylePath, 'utf8');
+  assert.match(css, /--go-client-bg:\s*#0b1220/i);
+  assert.match(css, /--go-client-panel:\s*#121a2a/i);
+  assert.match(css, /--go-client-accent:\s*#1f8a70/i);
+  assert.match(css, /\.go-client-primary-route/);
+  assert.match(css, /\.go-client-trust-strip/);
 });

@@ -77,44 +77,58 @@ function ensureShell() {
   wrapper.className = 'go-client-shell';
   wrapper.innerHTML = `
     <header class="go-client-header">
-      <div>
+      <div class="go-client-hero-copy">
         <p class="go-client-eyebrow">GO CLIENT · PRESENTATION</p>
-        <h1>ออกแบบ Presentation จากข้อมูลที่คุณมี</h1>
-        <p class="go-client-muted">แชทนี้เป็นระบบกึ่ง AI สำหรับแนะนำบริการ รับรายละเอียด และเตรียมงานก่อนส่งต่อให้ทีมวางแผนครับ</p>
+        <h1>ออกแบบ Presentation จากข้อมูลที่คุณมีอยู่แล้ว</h1>
+        <p class="go-client-lead">มีข้อมูลเป็นข้อความ เอกสาร ไฟล์เดิม หรือยังจัดไม่เป็นระเบียบก็เริ่มได้ครับ เราช่วยจัดลำดับเนื้อหาและออกแบบให้นำเสนอได้ชัดเจน โดยยึดข้อมูลต้นฉบับของคุณเป็นหลัก</p>
+        <div class="go-client-hero-actions">
+          <button id="goClientPrimaryStart" class="go-client-primary-route" type="button">เริ่มคุย / ส่งงานมาให้ดู</button>
+          <button id="goClientViewPricing" class="go-client-secondary-route" type="button">ดูราคา</button>
+        </div>
+        <p class="go-client-hero-note">มี AI ช่วยรับรายละเอียดเบื้องต้น และหากมีเรื่องที่ต้องพิจารณาเป็นพิเศษ สามารถเรียก GO มาช่วยดูได้ครับ</p>
       </div>
-      <button id="goClientHelp" class="go-client-help" type="button">ขอให้ GO ช่วยดู</button>
     </header>
 
-    <main class="go-client-main">
-      <section class="go-client-card go-client-offer" aria-labelledby="goClientOfferTitle">
-        <div class="go-client-section-head">
-          <div><p class="go-client-eyebrow">บริการ</p><h2 id="goClientOfferTitle">เริ่มถามได้ตามปกติ</h2></div>
-          <span class="go-client-chip">Feedback 2 รอบ</span>
-        </div>
-        <p>รับออกแบบ Proposal, Company Profile, Portfolio / Case Study และ Report / Summary จากข้อมูลที่ลูกค้ามีอยู่แล้ว</p>
-        <div class="go-client-package-grid" aria-label="แพ็กเกจ">
-          <button type="button" data-go-client-package="STARTER"><small>Starter</small><strong>490 บาท</strong><span>ไม่เกิน 5 หน้า</span></button>
-          <button type="button" data-go-client-package="STANDARD"><small>Standard</small><strong>790 บาท</strong><span>ไม่เกิน 10 หน้า</span></button>
-          <button type="button" data-go-client-package="BUSINESS"><small>Business</small><strong>1,390 บาท</strong><span>ไม่เกิน 20 หน้า</span></button>
-        </div>
-        <p class="go-client-muted">เกินแพ็กเกจเพิ่ม 70 บาท/หน้า · ถ้ายังไม่รู้จำนวนหน้า ส่งข้อมูลมาให้ประเมินก่อนได้ครับ</p>
-      </section>
+    <section class="go-client-trust-strip" aria-label="มาตรฐานการทำงาน">
+      <div><strong>ยึดข้อมูลของคุณ</strong><span>ไม่แต่งข้อเท็จจริงหรือตัวเลขเพิ่มเอง</span></div>
+      <div><strong>Feedback 2 รอบ</strong><span>รวบรวมแก้ไขเป็นรอบให้คุยกันง่าย</span></div>
+      <div><strong>ยังไม่รู้จำนวนหน้าก็เริ่มได้</strong><span>ส่งข้อมูลมาให้ดูก่อนแล้วค่อยประเมิน</span></div>
+      <div><strong>ข้อมูลยังไม่เรียบร้อยก็ส่งได้</strong><span>เริ่มจากสิ่งที่มี ไม่ต้องจัดไฟล์ให้สวยก่อน</span></div>
+    </section>
 
-      <section class="go-client-card" aria-labelledby="goClientChatTitle">
-        <div class="go-client-section-head"><div><p class="go-client-eyebrow">คุยกับ GO Client</p><h2 id="goClientChatTitle">สอบถามหรือเริ่มงาน</h2></div></div>
+    <main class="go-client-main">
+      <section id="goClientChatCard" class="go-client-card go-client-chat-card" aria-labelledby="goClientChatTitle">
+        <div class="go-client-section-head">
+          <div><p class="go-client-eyebrow">เริ่มตรงนี้</p><h2 id="goClientChatTitle">เล่างานแบบที่คุณสะดวกได้เลย</h2></div>
+          <span class="go-client-chip">ไม่ต้องเตรียมบรีฟให้ครบ</span>
+        </div>
+        <p class="go-client-card-intro">พิมพ์ตามปกติ หรือเลือกทางลัดด้านล่าง เราจะพาไปเฉพาะขั้นตอนที่เกี่ยวกับงานของคุณครับ</p>
+
+        <div class="go-client-quick-row" aria-label="ทางลัดเริ่มคุย">
+          <button type="button" data-go-client-quick="อยากทราบราคา">อยากทราบราคา</button>
+          <button type="button" data-go-client-quick="มีไฟล์แล้ว อยากเริ่มงาน">มีไฟล์แล้ว</button>
+          <button type="button" data-go-client-quick="อยากทำ Company Profile">อยากทำ Company Profile</button>
+          <button type="button" data-go-client-quick="อยากจัดสไลด์เดิมใหม่">อยากจัดสไลด์เดิมใหม่</button>
+          <button type="button" data-go-client-quick="ยังไม่แน่ใจว่าเป็นงานประเภทไหน">ยังไม่แน่ใจประเภทงาน</button>
+          <button type="button" data-go-client-quick="อยากเริ่มงาน">อยากเริ่มงาน</button>
+        </div>
+
         <div id="goClientThread" class="go-client-thread" aria-live="polite"></div>
 
-        <div id="goClientJobChoices" class="go-client-choice-row" aria-label="ประเภทงาน">
-          <button type="button" data-go-client-job="PROPOSAL">Proposal</button>
-          <button type="button" data-go-client-job="COMPANY_PROFILE">Company Profile</button>
-          <button type="button" data-go-client-job="PORTFOLIO_CASE_STUDY">Portfolio / Case Study</button>
-          <button type="button" data-go-client-job="REPORT_SUMMARY">Report / Summary</button>
-          <button type="button" data-go-client-job="OTHER">งาน Presentation อื่น</button>
-        </div>
+        <details class="go-client-job-types">
+          <summary>รู้ประเภทงานแล้ว? เลือกได้เลย</summary>
+          <div id="goClientJobChoices" class="go-client-choice-row" aria-label="ประเภทงาน">
+            <button type="button" data-go-client-job="PROPOSAL">Proposal</button>
+            <button type="button" data-go-client-job="COMPANY_PROFILE">Company Profile</button>
+            <button type="button" data-go-client-job="PORTFOLIO_CASE_STUDY">Portfolio / Case Study</button>
+            <button type="button" data-go-client-job="REPORT_SUMMARY">Report / Summary</button>
+            <button type="button" data-go-client-job="OTHER">งาน Presentation อื่น</button>
+          </div>
+        </details>
 
         <form id="goClientForm" class="go-client-composer">
           <label class="go-client-sr-only" for="goClientInput">พิมพ์ข้อความ</label>
-          <textarea id="goClientInput" rows="2" maxlength="1200" placeholder="ถามราคา ส่งรายละเอียด หรือบอกงานที่สนใจได้เลยครับ"></textarea>
+          <textarea id="goClientInput" rows="2" maxlength="1200" placeholder="เช่น มีไฟล์ Word อยู่แล้ว อยากทำเป็นสไลด์ / อยากทราบราคา Company Profile"></textarea>
           <button class="go-client-send" type="submit">ส่ง</button>
         </form>
       </section>
@@ -152,6 +166,29 @@ function ensureShell() {
         <div id="goClientSummary" class="go-client-summary"></div>
         <button id="goClientConfirm" type="button" class="go-client-primary">ยืนยันรายละเอียดนี้</button>
         <p id="goClientContact" class="go-client-muted"></p>
+      </section>
+
+      <section id="goClientPricing" class="go-client-card go-client-pricing" aria-labelledby="goClientOfferTitle">
+        <div class="go-client-section-head">
+          <div><p class="go-client-eyebrow">ราคา</p><h2 id="goClientOfferTitle">แพ็กเกจตามขนาดงาน</h2></div>
+          <span class="go-client-chip">Feedback 2 รอบ</span>
+        </div>
+        <p class="go-client-card-intro">ยังไม่แน่ใจว่าเหมาะกับแพ็กเกจไหนไม่เป็นไรครับ ส่งข้อมูลมาให้ดูก่อนได้</p>
+        <div class="go-client-package-grid" aria-label="แพ็กเกจ">
+          <button type="button" data-go-client-package="STARTER"><small>Starter</small><strong>490 บาท</strong><span>ไม่เกิน 5 หน้า</span></button>
+          <button type="button" data-go-client-package="STANDARD"><small>Standard</small><strong>790 บาท</strong><span>ไม่เกิน 10 หน้า</span></button>
+          <button type="button" data-go-client-package="BUSINESS"><small>Business</small><strong>1,390 บาท</strong><span>ไม่เกิน 20 หน้า</span></button>
+        </div>
+        <p class="go-client-muted">เกินแพ็กเกจเพิ่ม 70 บาท/หน้า · ถ้ายังไม่รู้จำนวนหน้า ส่งข้อมูลมาให้ประเมินก่อนได้ครับ</p>
+      </section>
+
+      <section id="goClientHelpLane" class="go-client-help-lane" aria-labelledby="goClientHelpTitle">
+        <div>
+          <p class="go-client-eyebrow">ต้องการคนช่วยดูเพิ่ม?</p>
+          <h2 id="goClientHelpTitle">ติดตรงไหน ให้ GO ช่วยดู</h2>
+          <p>หากไม่แน่ใจเรื่องราคา ขอบเขตงาน ระยะเวลาส่ง หรือรู้สึกว่าคุยกันยังไม่ตรง สามารถเรียกให้ GO ช่วยดูเคสนี้ได้ครับ</p>
+        </div>
+        <button id="goClientHelp" class="go-client-help" type="button">ขอให้ GO ช่วยดู</button>
       </section>
     </main>`;
   document.body.append(wrapper);
@@ -231,7 +268,7 @@ function updateReadinessMessage() {
   }
   const missingLabels = state.checklist.items.filter((item) => result.blockingMissing.includes(item.id)).map((item) => item.label);
   if (result.completeAsProvided) {
-    $('goClientChecklistIntro').textContent = `รับทราบว่ามีข้อมูลเท่านี้ครับ ระบบจะไม่ถามวน แต่ยังขาดข้อมูลสำคัญ: ${missingLabels.join(', ')}`;
+    $('goClientChecklistIntro').textContent = `รับทราบว่ามีข้อมูลเท่านี้ครับ จะไม่ถามรายการเดิมวนซ้ำ แต่ยังขาดข้อมูลสำคัญ: ${missingLabels.join(', ')}`;
     return;
   }
   $('goClientChecklistIntro').textContent = `ตอนนี้ยังขาดข้อมูลที่มีผลต่อการเริ่มงาน: ${missingLabels.join(', ')}`;
@@ -260,7 +297,7 @@ function showIntake() {
   section.hidden = false;
   $('goClientIntakeStage').textContent = state.stage;
   if (!state.jobType) {
-    $('goClientChecklistIntro').textContent = 'เลือกประเภทงานก่อน แล้วระบบจะขอเฉพาะข้อมูลที่เกี่ยวกับงานนั้นครับ';
+    $('goClientChecklistIntro').textContent = 'ถ้ารู้ประเภทงานแล้วเลือกด้านบนได้เลยครับ ถ้ายังไม่แน่ใจ พิมพ์เล่างานต่อได้ตามปกติ';
     return;
   }
   if (!state.checklist) state.checklist = getChecklist(state.jobType);
@@ -274,7 +311,7 @@ function setJobType(jobType) {
   state.receivedItemIds = new Set();
   state.clientConfirmedComplete = false;
   showIntake();
-  addMessage('assistant', `รับเป็นงาน ${JOB_LABELS[state.jobType]} ครับ รบกวนส่งข้อมูลและไฟล์ที่มีอยู่ตามรายการด้านล่างได้เลย`);
+  addMessage('assistant', `รับเป็นงาน ${JOB_LABELS[state.jobType]} ครับ ส่งข้อมูลและไฟล์ที่มีอยู่ตามรายการด้านล่างได้เลย`);
 }
 
 function setPackage(packageId) {
@@ -297,7 +334,7 @@ function renderEstimate() {
   if (!region) return;
   region.replaceChildren();
   if (!state.estimate) {
-    region.textContent = 'หากทราบจำนวนหน้าคร่าว ๆ ระบุด้านบนได้เลยครับ ถ้ายังไม่ทราบ ระบบจะไม่เดาจำนวนหน้าให้เอง';
+    region.textContent = 'หากทราบจำนวนหน้าคร่าว ๆ ระบุด้านบนได้เลยครับ ถ้ายังไม่ทราบ เราจะไม่เดาจำนวนหน้าให้เอง';
     renderSummary();
     return;
   }
@@ -310,7 +347,7 @@ function renderEstimate() {
   if (state.estimate.packageMismatch) {
     const warning = document.createElement('p');
     warning.className = 'go-client-warning';
-    warning.textContent = `จำนวนหน้าที่ระบุเกินแพ็กเกจที่เลือกไว้ ระบบจึงประเมินเป็น ${pkg?.label || packageId} ก่อนครับ`;
+    warning.textContent = `จำนวนหน้าที่ระบุเกินแพ็กเกจที่เลือกไว้ จึงประเมินเป็น ${pkg?.label || packageId} ก่อนครับ`;
     region.append(box, warning);
   } else {
     region.append(box);
@@ -440,7 +477,7 @@ async function callManager(reason = 'OTHER', source = 'CLIENT') {
     return resolved;
   } catch {
     state.managerMode = 'AUTO';
-    addMessage('assistant', 'ตอนนี้เรียก GO มาดูเคสไม่ได้ครับ คุณยังพิมพ์รายละเอียดต่อได้ตามปกติ แล้วระบบจะช่วยพา Flow ต่อจากข้อมูลที่มี');
+    addMessage('assistant', 'ตอนนี้เรียก GO มาดูเคสไม่ได้ครับ คุณยังพิมพ์รายละเอียดต่อได้ตามปกติ แล้วเราจะพา Flow ต่อจากข้อมูลที่มี');
     return null;
   } finally {
     state.managerBusy = false;
@@ -553,6 +590,11 @@ function confirmJob() {
   addMessage('assistant', 'รับการยืนยันแล้วครับ รายละเอียดชุดนี้จะใช้เป็นฐานสำหรับขั้นตอนถัดไป โดยจะไม่เติมข้อมูลที่ลูกค้าไม่ได้ให้มาเอง');
 }
 
+function focusStartRoute() {
+  $('goClientChatCard')?.scrollIntoView({ behavior:'smooth', block:'start' });
+  $('goClientInput')?.focus({ preventScroll:true });
+}
+
 function bindControls() {
   $('goClientForm').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -562,6 +604,13 @@ function bindControls() {
     await handleClientText(value);
   });
 
+  $('goClientPrimaryStart').addEventListener('click', focusStartRoute);
+  $('goClientViewPricing').addEventListener('click', () => {
+    $('goClientPricing')?.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+  document.querySelectorAll('[data-go-client-quick]').forEach((button) => {
+    button.addEventListener('click', () => { void handleClientText(button.dataset.goClientQuick); });
+  });
   document.querySelectorAll('[data-go-client-package]').forEach((button) => {
     button.addEventListener('click', () => setPackage(button.dataset.goClientPackage));
   });
@@ -589,8 +638,7 @@ export function activateGoClientMode() {
   document.querySelector('.layout')?.setAttribute('aria-hidden', 'true');
   bindControls();
   if (!state.messages.length) {
-    addMessage('assistant', 'สวัสดีครับ สามารถพิมพ์ถามได้ตามปกติเลย เช่น ราคา ประเภทงานที่รับ การแก้ไข ระยะเวลา หรือถ้าสนใจเริ่มงานก็แจ้งได้ทันทีครับ');
+    addMessage('assistant', 'สวัสดีครับ ส่งรายละเอียดที่มีมาได้เลย จะเป็นข้อความ ไฟล์เดิม หรือแค่บอกว่าอยากทำงานแบบไหนก็ได้ครับ ถ้ายังไม่แน่ใจ เริ่มจากปุ่มลัดด้านบนได้เลย');
   }
-  $('goClientInput')?.focus();
   return true;
 }
