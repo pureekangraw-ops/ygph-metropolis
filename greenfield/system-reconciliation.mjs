@@ -10,8 +10,11 @@ export function reconcileSystemState(state,{ledgerBalanceSatang=0,today,nearDays
   const errors=[];const warnings=[];
   const truth=projectCalculationAuthority(state,{ledgerBalanceSatang,today,nearDays});
 
-  const stock=projectStockTruth(state).stockQuantity;
-  if(stock<0)errors.push({code:'STORE_STOCK_UNDERFLOW',value:stock});
+  const stockTruth=projectStockTruth(state);
+  if(stockTruth.stockQuantity<0)errors.push({code:'STORE_STOCK_UNDERFLOW',value:stockTruth.stockQuantity});
+  for(const [productId,value] of Object.entries(stockTruth.byProductId||{})){
+    if(value<0)errors.push({code:'STORE_PRODUCT_STOCK_UNDERFLOW',productId,value});
+  }
 
   const calendar=recordsFor(state,'CALENDAR');
   for(const queue of calendar){
