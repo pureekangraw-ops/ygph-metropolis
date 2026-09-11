@@ -14,6 +14,7 @@ const runtimeFiles = [
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'view-model.mjs',
   'runtime-gate.mjs',
   'runtime-ledger.mjs',
   'runtime-store.mjs',
