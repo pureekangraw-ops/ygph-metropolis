@@ -80,3 +80,55 @@ test('real add/restock path never mutates demo Product stock authority', () => {
   assert.doesNotMatch(body, /\.stock\s*[+\-]=/);
   assert.doesNotMatch(body, /\.stock\s*=/);
 });
+
+test('paid sale parsing resolves only against durable Store truth', () => {
+  const app = readApp();
+  const handle = functionBody(app, 'handleChatInput', 'submitChatText');
+  assert.match(handle, /parseStoreSale\(clean,\s*storeTruth\?\.products\s*\|\|\s*\[\]\)/);
+  assert.doesNotMatch(handle, /parseStoreSale\(clean,\s*state\.products\)/);
+});
+
+test('paid sale pending owns stable Store and Ledger retry identities plus deterministic total', () => {
+  const app = readApp();
+  for (const field of ['workflowId', 'saleId', 'ledgerTransactionId']) {
+    assert.match(app, new RegExp(`if \\(!pending\\.${field}\\)`), `${field} must be allocated only when absent`);
+  }
+  for (const field of ['priceBaht', 'priceBasis', 'totalBaht']) {
+    assert.match(app, new RegExp(`\\b${field}\\b`));
+  }
+  const total = functionBody(app, 'totalSaleBaht', 'confirmStoreSale');
+  assert.match(total, /priceBasis\s*===\s*['"]TOTAL['"]/);
+  assert.match(total, /priceBasis\s*===\s*['"]UNIT['"]/);
+  assert.match(total, /priceBaht\s*\*\s*pending\.quantity/);
+  assert.match(total, /quantity\s*===\s*1/);
+  assert.match(total, /LIGHTHOUSE_STORE_PRICE_BASIS_REQUIRED/);
+});
+
+test('paid sale asks only for missing quantity, price, or unit-vs-total basis before confirmation', () => {
+  const app = readApp();
+  assert.match(app, /ขายเท่าไหร่ครับ\?/);
+  assert.match(app, /จำนวนสินค้า/);
+  assert.match(app, /ราคานี้เป็นราคาต่อชิ้นหรือยอดรวมครับ\?/);
+  assert.match(app, /STORE_SALE_PRICE_BASIS/);
+});
+
+test('paid sale confirmation delegates to one atomic Store mutation and refreshes both truths', () => {
+  const app = readApp();
+  const body = functionBody(app, 'confirmStoreSale', 'confirmPending');
+  assert.match(body, /await storeBridge\.sellProduct\(/);
+  assert.equal((body.match(/await storeBridge\.sellProduct\(/g) || []).length, 1, 'sale must delegate exactly once');
+  assert.match(body, /await storeBridge\.readStoreTruth\(\)/);
+  assert.match(body, /await ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(body, /สินค้าไม่พอ/);
+  assert.match(body, /ยังบันทึกไม่สำเร็จ รายการยังค้างอยู่ ลองอีกครั้งได้/);
+});
+
+test('real paid sale path never mutates demo cash, stock, or transaction authority', () => {
+  const app = readApp();
+  const body = functionBody(app, 'confirmStoreSale', 'confirmPending');
+  assert.doesNotMatch(body, /state\.products/);
+  assert.doesNotMatch(body, /product\.stock\s*[+\-]=/);
+  assert.doesNotMatch(body, /state\.cash\s*[+\-]=/);
+  assert.doesNotMatch(body, /state\.todayIncome\s*[+\-]=/);
+  assert.doesNotMatch(body, /state\.transactions\.push/);
+});
