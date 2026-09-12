@@ -11,6 +11,33 @@
   <link rel="stylesheet" href="./owner-polish.css">
   <style>
     .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(520px,100%);display:grid;gap:18px}.auth-form{display:grid;gap:10px}.auth-form label{font-size:13px;color:var(--muted,#9da7b8)}.auth-form input{width:100%;box-sizing:border-box;border:1px solid var(--line,#30394a);border-radius:14px;padding:13px 14px;background:rgba(255,255,255,.04);color:#f5f7fb;font:inherit}.auth-form[hidden],.auth-warning[hidden],.auth-screen[hidden]{display:none}.auth-warning{border:1px solid rgba(255,190,80,.35);border-radius:16px;padding:14px}.text-button{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;padding:10px;cursor:pointer}.auth-actions{display:flex;gap:10px;flex-wrap:wrap}.settings-button span{display:grid;text-align:left}.settings-button small{font-weight:400}
+
+    #manual-hub{padding-bottom:calc(var(--nav-height) + 28px)}
+    #manual-hub .manual-heading{position:relative;display:grid;gap:5px;margin-bottom:12px;padding:14px 16px;border:1px solid rgba(34,216,255,.55);border-radius:16px;background:linear-gradient(134deg,rgba(34,216,255,.12),rgba(255,211,106,.066) 50%,rgba(8,17,29,.96));box-shadow:inset 0 0 12px rgba(255,211,106,.08),0 5px 16px rgba(34,216,255,.08)}
+    #manual-hub .manual-heading::after{display:none}
+    #manual-hub .manual-heading h1{margin:0;font-size:24px;letter-spacing:.03em}
+    #manual-hub .manual-heading p{margin:0;color:#b9cbde;font-size:12.5px}
+    #manual-hub .task-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-bottom:0}
+    #manual-hub .task-card{min-width:0;min-height:78px;display:grid;grid-template-columns:minmax(0,1fr) 38px;align-items:start;gap:8px;padding:14px;border-radius:17px;text-align:left;border:1px solid rgba(34,216,255,.55);background:linear-gradient(116deg,rgba(34,216,255,.12),rgba(255,211,106,.06) 53%,rgba(8,30,40,.98));box-shadow:inset 0 0 10px rgba(255,211,106,.05),0 5px 16px rgba(34,216,255,.08)}
+    #manual-hub .task-card .task-copy{min-width:0;display:grid;gap:5px}
+    #manual-hub .task-card strong{font-size:16px;color:#c5d5e6;line-height:1.2}
+    #manual-hub .task-card small{font-size:11px;color:#c5d5e6;line-height:1.35;white-space:normal}
+    #manual-hub .task-card .task-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(34,216,255,.3);background:rgba(34,216,255,.1)}
+    #manual-hub .task-card .task-icon .ui-icon{width:20px;height:20px;filter:drop-shadow(0 0 5px rgba(84,230,255,.25))}
+    .task-card[data-task="finance"],.task-card[data-task="store"]{border-color:rgba(34,216,255,.95)}
+    .task-card[data-task="ride"]{border-color:rgba(255,100,200,.95);background:linear-gradient(116deg,rgba(255,100,200,.14),rgba(180,92,255,.1) 53%,rgba(37,17,40,.98))}
+    .task-card[data-task="ride"] .task-icon{border-color:rgba(255,100,200,.35);background:rgba(255,100,200,.11);color:#ff79c9}
+    .task-card[data-task="calendar"]{border-color:rgba(108,140,255,.95);background:linear-gradient(116deg,rgba(108,140,255,.14),rgba(180,92,255,.1) 53%,rgba(17,27,53,.98))}
+    .task-card[data-task="calendar"] .task-icon{border-color:rgba(108,140,255,.35);background:rgba(108,140,255,.11);color:#79a7ff}
+    .task-card[data-task="ledger"]{grid-column:1/-1;border-color:rgba(255,211,106,.95);background:linear-gradient(116deg,rgba(255,211,106,.14),rgba(255,158,92,.1) 53%,rgba(42,33,14,.98))}
+    .task-card[data-task="ledger"] .task-icon{border-color:rgba(255,211,106,.35);background:rgba(255,211,106,.1);color:#ffd36a}
+    .manual-summary-stack{display:grid;gap:12px;margin-top:12px}
+    .manual-summary-card{display:grid;gap:3px;min-height:82px;padding:14px 16px;border:1px solid rgba(34,216,255,.55);border-radius:16px;background:linear-gradient(126deg,rgba(34,216,255,.15),rgba(255,211,106,.083) 50%,rgba(11,25,40,.98));box-shadow:inset 0 0 12px rgba(255,211,106,.08),0 5px 16px rgba(34,216,255,.08)}
+    .manual-summary-card:first-child{min-height:112px}
+    .manual-summary-card .summary-label{color:#b9cbde;font-size:12px;font-weight:650}
+    .manual-summary-card strong{color:#f8fbff;font-size:20px;line-height:1.25}
+    .manual-summary-card small{color:#a8bed6;font-size:10.5px;line-height:1.4}
+    @media (max-width:360px){#manual-hub .task-grid{gap:9px}#manual-hub .task-card{padding:12px 11px;grid-template-columns:minmax(0,1fr) 32px}#manual-hub .task-card .task-icon{width:30px;height:30px}#manual-hub .task-card strong{font-size:15px}}
   </style>
 </head>
 <body>
@@ -76,13 +103,18 @@
       </div>
 
       <div id="page-manual" class="app-page" data-root="manual" hidden>
-        <div id="manual-hub"><div class="page-title-block"><p class="eyebrow">เลือกงานแล้วทำได้เลย</p><h1>MANUAL</h1></div>
+        <div id="manual-hub">
+          <div class="page-title-block manual-heading"><h1>MANUAL</h1><p>เลือกสิ่งที่ต้องการจัดการ</p></div>
           <div class="task-grid">
-            <button type="button" class="task-card" data-task="finance"><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="finance" viewBox="0 0 24 24"><path d="M5 7.5h14v10H5z"></path><path d="M8 7.5V6h8v1.5M8.5 12h7M12 9.5v5"></path></svg></span><span><strong>การเงิน</strong><small>เงินจริง เงินเข้าออก ภาระ และเป้าหมาย</small></span><b>›</b></button>
-            <button type="button" class="task-card" data-task="store"><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="store" viewBox="0 0 24 24"><path d="M4 9h16l-1.5-4h-13z"></path><path d="M5.5 9v10h13V9M9 19v-5h6v5M4 9c0 1.4 1.1 2.5 2.5 2.5S9 10.4 9 9c0 1.4 1.1 2.5 2.5 2.5S14 10.4 14 9c0 1.4 1.1 2.5 2.5 2.5S19 10.4 19 9"></path></svg></span><span><strong>ร้านค้า</strong><small>ยอดขาย สต็อก และเงินค้างรับ</small></span><b>›</b></button>
-            <button type="button" class="task-card" data-task="ride"><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ride" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18c3.5 0 2-6 5.5-6S14.5 6 16 6"></path></svg></span><span><strong>งานวิ่ง</strong><small>รอบงาน รายได้ และค่าใช้จ่าย</small></span><b>›</b></button>
-            <button type="button" class="task-card" data-task="calendar"><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 9.5h16M8 13h3M13 13h3M8 16h3"></path></svg></span><span><strong>ปฏิทิน</strong><small>ดูสิ่งที่ต้องทำตามวัน</small></span><b>›</b></button>
-            <button type="button" class="task-card" data-task="ledger"><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ledger" viewBox="0 0 24 24"><path d="M6 4.5h12v15H6z"></path><path d="M9 8h6M9 12h6M9 16h4"></path></svg></span><span><strong>รายการทั้งหมด</strong><small>ย้อนดูเงินเข้าและเงินออก</small></span><b>›</b></button>
+            <button type="button" class="task-card" data-task="finance"><span class="task-copy"><strong>Finance</strong><small>Income · Outcome</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="finance" viewBox="0 0 24 24"><path d="M5 7.5h14v10H5z"></path><path d="M8 7.5V6h8v1.5M8.5 12h7M12 9.5v5"></path></svg></span></button>
+            <button type="button" class="task-card" data-task="store"><span class="task-copy"><strong>Store</strong><small>จาก Store</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="store" viewBox="0 0 24 24"><path d="M4 9h16l-1.5-4h-13z"></path><path d="M5.5 9v10h13V9M9 19v-5h6v5M4 9c0 1.4 1.1 2.5 2.5 2.5S9 10.4 9 9c0 1.4 1.1 2.5 2.5 2.5S14 10.4 14 9c0 1.4 1.1 2.5 2.5 2.5S19 10.4 19 9"></path></svg></span></button>
+            <button type="button" class="task-card" data-task="ride"><span class="task-copy"><strong>Ride</strong><small>ยังไม่เชื่อม</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ride" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18c3.5 0 2-6 5.5-6S14.5 6 16 6"></path></svg></span></button>
+            <button type="button" class="task-card" data-task="calendar"><span class="task-copy"><strong>Calendar</strong><small>ยังไม่เชื่อม</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 9.5h16M8 13h3M13 13h3M8 16h3"></path></svg></span></button>
+            <button type="button" class="task-card" data-task="ledger"><span class="task-copy"><strong>Ledger</strong><small>จาก Ledger</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ledger" viewBox="0 0 24 24"><path d="M6 4.5h12v15H6z"></path><path d="M9 8h6M9 12h6M9 16h4"></path></svg></span></button>
+          </div>
+          <div class="manual-summary-stack">
+            <article class="manual-summary-card" data-manual-summary="truth"><span class="summary-label">ภาพรวมข้อมูลจริง</span><strong>Ledger + Store</strong><small>แสดงค่าจริงเมื่อ Runtime อ่านสำเร็จ</small></article>
+            <article class="manual-summary-card manual-connection-card" data-manual-summary="connection"><span class="summary-label">สถานะการเชื่อมต่อ</span><strong>ไม่ใช้ข้อมูลตัวอย่างแทนของจริง</strong><small>Calendar / Ride แสดง “ยังไม่เชื่อม” จนมี source จริง</small></article>
           </div>
         </div>
         <section id="manual-detail" class="manual-detail" hidden><button type="button" id="manual-back" class="back-button">‹ กลับ</button><div id="manual-detail-content"></div></section>
