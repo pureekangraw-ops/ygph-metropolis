@@ -83,11 +83,17 @@ test('CHAT confirmation and success copy read like conversation, not system outp
   assert.doesNotMatch(app, /เป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน/);
 });
 
-test('MANUAL exposes user jobs and Settings distinguishes durable truth from device-local UI state', () => {
+test('MANUAL exposes current Figma capability jobs and Settings distinguishes durable truth from device-local UI state', () => {
   const html = read(htmlPath);
-  for (const label of ['การเงิน', 'ภาระ', 'ร้านค้า', 'งานวิ่ง', 'ปฏิทิน', 'รายการทั้งหมด']) {
-    assert.match(html, new RegExp(label));
+  for (const label of ['Finance', 'Store', 'Ride', 'Calendar', 'Ledger']) {
+    assert.match(html, new RegExp(`>${label}<`));
   }
+  assert.match(html, /data-task=["']finance["']/);
+  assert.match(html, /data-task=["']store["']/);
+  assert.match(html, /data-task=["']ride["']/);
+  assert.match(html, /data-task=["']calendar["']/);
+  assert.match(html, /data-task=["']ledger["']/);
+  assert.doesNotMatch(html, /data-task=["']client["']/);
   assert.match(html, /ข้อมูลจริง/);
   assert.match(html, /การเงินและร้านค้ามาจาก Runtime ที่ปลอดภัย/);
   assert.match(html, /บทสนทนาและรายการค้างอยู่บนเครื่องนี้/);
