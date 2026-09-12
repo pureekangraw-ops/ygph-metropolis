@@ -478,8 +478,13 @@ function runEstimate() {
   if (Number.isInteger(raw) && raw > 0) {
     const result = estimatePackage({ pageCount:raw, selectedPackage:state.package });
     if (result) {
-      state.estimate = { ...result, turnaroundDays:null };
-      state.package = result.package;
+      if (result.packageMismatch) {
+        state.estimate = result;
+        state.package = result.package;
+      } else {
+        state.estimate = { ...result, turnaroundDays:null };
+        state.package = result.package;
+      }
     }
   } else if (state.package) {
     const pkg = GO_CLIENT_PACKAGES[state.package];
