@@ -306,5 +306,15 @@ export function buildManagerPacket(state = {}, reason = 'OTHER', source = 'SYSTE
   };
 }
 
+export function resolveCustomerDeskView(state = {}) {
+  const managerMode = String(state.managerMode || '').toUpperCase();
+  if (state.managerBusy === true || managerMode === 'TAKEOVER') return 'GO_ASSISTING';
+  if (state.estimate) return 'ESTIMATE_SUMMARY';
+  if (state.stage === 'INTAKE' || state.stage === 'PRE_ESTIMATE') return 'INTAKE_FILES';
+  const messages = Array.isArray(state.messages) ? state.messages : [];
+  if (messages.some((message) => message?.role === 'user')) return 'ACTIVE_CHAT';
+  return 'LANDING';
+}
+
 export const GO_CLIENT_PACKAGES = PACKAGES;
 export const GO_CLIENT_ADDITIONAL_PAGE_BAHT = ADDITIONAL_PAGE_BAHT;
