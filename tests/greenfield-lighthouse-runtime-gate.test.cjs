@@ -24,6 +24,7 @@ test('login reads durable state before activating the shared Runtime Session', a
   const gate = createLighthouseRuntimeGate({
     inspectDeviceUnlock: async () => ({ status: 'ENROLLED' }),
     openRuntimeWithPassword: async ({ pin }) => { calls.push(`open:${pin}`); return runtime; },
+    initializeFirstRun: async () => ({ status: 'CREATED_VERIFIED' }),
     resetDevicePassword: async () => ({ status: 'RESET' }),
     activateSession: value => { assert.equal(value, runtime); calls.push('activate'); },
     deactivateSession: value => { assert.equal(value, runtime); calls.push('deactivate'); return true; },
@@ -47,6 +48,7 @@ test('null durable state fails closed and closes the opened runtime without sess
   const gate = createLighthouseRuntimeGate({
     inspectDeviceUnlock: async () => ({ status: 'ENROLLED' }),
     openRuntimeWithPassword: async () => runtime,
+    initializeFirstRun: async () => ({ status: 'CREATED_VERIFIED' }),
     resetDevicePassword: async () => ({ status: 'RESET' }),
     activateSession: () => calls.push('activate'),
     deactivateSession: () => true,
@@ -57,16 +59,17 @@ test('null durable state fails closed and closes the opened runtime without sess
   assert.deepEqual(calls, ['read', 'close']);
 });
 
-test('inspect maps only ENROLLED to LOGIN and fails closed for UNENROLLED or INCOMPLETE', async () => {
+test('inspect routes UNENROLLED to first-run setup while keeping INCOMPLETE fail-closed', async () => {
   const { createLighthouseRuntimeGate } = await loadGate();
   for (const [raw, expected] of [
     ['ENROLLED', { status: 'LOGIN' }],
-    ['UNENROLLED', { status: 'LOCKED_SETUP_REQUIRED', reason: 'UNENROLLED' }],
+    ['UNENROLLED', { status: 'SETUP' }],
     ['INCOMPLETE', { status: 'LOCKED_SETUP_REQUIRED', reason: 'INCOMPLETE' }],
   ]) {
     const gate = createLighthouseRuntimeGate({
       inspectDeviceUnlock: async () => ({ status: raw }),
       openRuntimeWithPassword: async () => { throw new Error('not used'); },
+      initializeFirstRun: async () => ({ status: 'CREATED_VERIFIED' }),
       resetDevicePassword: async () => ({ status: 'RESET' }),
       activateSession: () => {},
       deactivateSession: () => true,
@@ -76,12 +79,44 @@ test('inspect maps only ENROLLED to LOGIN and fails closed for UNENROLLED or INC
   }
 });
 
+test('first-run setup validates confirmation, initializes durable credentials, then opens the real runtime session', async () => {
+  const { createLighthouseRuntimeGate } = await loadGate();
+  const calls = [];
+  const runtime = {
+    async readState() { calls.push('read'); return { revision: 1 }; },
+    project() { return {}; },
+    close() { calls.push('close'); },
+  };
+  const gate = createLighthouseRuntimeGate({
+    inspectDeviceUnlock: async () => ({ status: 'UNENROLLED' }),
+    openRuntimeWithPassword: async ({ pin }) => { calls.push(`open:${pin}`); return runtime; },
+    initializeFirstRun: async input => { calls.push(`setup:${input.recoveryCode}:${input.password}`); return { status: 'CREATED_VERIFIED' }; },
+    resetDevicePassword: async () => ({ status: 'RESET' }),
+    activateSession: value => { assert.equal(value, runtime); calls.push('activate'); },
+    deactivateSession: () => true,
+    minPasswordLength: 6,
+  });
+
+  await assert.rejects(
+    () => gate.setupFirstRun({ recoveryCode: 'recovery-code-123', password: '123456', confirmPassword: '654321' }),
+    /DEVICE_PIN_CONFIRM_MISMATCH/,
+  );
+  assert.deepEqual(calls, []);
+
+  assert.deepEqual(
+    await gate.setupFirstRun({ recoveryCode: 'recovery-code-123', password: '123456', confirmPassword: '123456' }),
+    { status: 'UNLOCKED', state: { revision: 1 } },
+  );
+  assert.deepEqual(calls, ['setup:recovery-code-123:123456', 'open:123456', 'read', 'activate']);
+});
+
 test('recovery validates password contract before calling the durable reset API', async () => {
   const { createLighthouseRuntimeGate } = await loadGate();
   const writes = [];
   const gate = createLighthouseRuntimeGate({
     inspectDeviceUnlock: async () => ({ status: 'ENROLLED' }),
     openRuntimeWithPassword: async () => { throw new Error('not used'); },
+    initializeFirstRun: async () => ({ status: 'CREATED_VERIFIED' }),
     resetDevicePassword: async input => { writes.push(input); return { status: 'RESET' }; },
     activateSession: () => {},
     deactivateSession: () => true,
@@ -122,6 +157,16 @@ test('LIGHTHOUSE gate exposes real password login and removes the four-digit dem
   assert.doesNotMatch(html, /PIN 4 หลัก|data-pin=|pin-dots|pin-pad/);
 });
 
+test('LIGHTHOUSE first-run surface collects password confirmation and Recovery Code without file restore UI', () => {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  assert.match(html, /id="setup-form"/);
+  assert.match(html, /id="setup-password"/);
+  assert.match(html, /id="setup-confirm-password"/);
+  assert.match(html, /id="setup-recovery-code"/);
+  const setup = /id="setup-form"[\s\S]*?<\/form>/.exec(html)?.[0] || '';
+  assert.doesNotMatch(setup, /type="file"|ไฟล์สำรอง/);
+});
+
 test('LIGHTHOUSE recovery surface has Recovery Code, new password confirmation, and a route back to login', () => {
   const html = fs.readFileSync(htmlPath, 'utf8');
   assert.match(html, /id="recovery-form"/);
@@ -132,22 +177,26 @@ test('LIGHTHOUSE recovery surface has Recovery Code, new password confirmation, 
   assert.match(html, /id="lock-app"/);
 });
 
-test('LIGHTHOUSE app delegates auth to runtime gate instead of persisting an unlocked demo session', () => {
+test('LIGHTHOUSE app delegates auth and first-run setup to runtime gate without persisting an unlocked demo session', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   assert.match(app, /from ['"]\.\/runtime-gate\.mjs['"]/);
   assert.match(app, /createLighthouseRuntimeGate/);
   assert.match(app, /authMessage/);
   assert.match(app, /runtimeGate\.inspect\(\)/);
   assert.match(app, /await runtimeGate\.login\(/);
+  assert.match(app, /await runtimeGate\.setupFirstRun\(/);
   assert.match(app, /await runtimeGate\.resetPassword\(/);
   assert.match(app, /runtimeGate\.lock\(\)/);
   assert.doesNotMatch(app, /state\.sessionUnlocked|sessionUnlocked\s*:/);
   assert.doesNotMatch(app, /pinBuffer|pushPinDigit|popPinDigit|renderPinDots|unlockDemo/);
 });
 
-test('sensitive auth fields are cleared after login, recovery, and cancellation handling', () => {
+test('sensitive auth fields are cleared after login, setup, recovery, and cancellation handling', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   assert.match(app, /devicePassword\.value\s*=\s*['"]["']/);
+  assert.match(app, /setupPasswordInput\.value\s*=\s*['"]["']/);
+  assert.match(app, /setupConfirmPasswordInput\.value\s*=\s*['"]["']/);
+  assert.match(app, /setupRecoveryCodeInput\.value\s*=\s*['"]["']/);
   assert.match(app, /recoveryCodeInput\.value\s*=\s*['"]["']/);
   assert.match(app, /newPasswordInput\.value\s*=\s*['"]["']/);
   assert.match(app, /confirmPasswordInput\.value\s*=\s*['"]["']/);
