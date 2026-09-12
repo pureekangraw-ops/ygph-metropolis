@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0B0E14">
+  <title>ตั้งค่า LIGHTHOUSE</title>
+  <link rel="icon" href="./assets/lighthouse-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./owner-polish.css">
+  <style>
+    body{margin:0;background:#05070c;color:#f5f7fb;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .setup-screen{min-height:100vh;display:grid;place-items:center;padding:28px 22px calc(36px + env(safe-area-inset-bottom));box-sizing:border-box;background:radial-gradient(circle at 50% 14%,rgba(38,73,122,.26),transparent 38%),linear-gradient(180deg,#09111d 0%,#05070c 46%,#030509 100%)}
+    .setup-card{width:min(520px,100%);display:grid;gap:18px}
+    .brand{display:grid;place-items:center;gap:12px;text-align:center}
+    .brand img{width:min(220px,56vw);aspect-ratio:1;border-radius:26%;filter:drop-shadow(0 18px 35px rgba(0,0,0,.45))}
+    .eyebrow{margin:0;color:#f2a646;letter-spacing:.22em;font-weight:750;font-size:13px}
+    h1{margin:0;font-size:clamp(30px,8vw,42px);line-height:1.1;text-align:center}
+    .lead{margin:0;text-align:center;color:#aab4c8;font-size:15px;line-height:1.55}
+    .setup-form{display:grid;gap:11px;margin-top:4px}
+    label{font-size:13px;color:#aab4c8;font-weight:650}
+    input{width:100%;box-sizing:border-box;border:1px solid #30394a;border-radius:15px;padding:14px 15px;background:rgba(255,255,255,.035);color:#f5f7fb;font:inherit;outline:none}
+    input:focus{border-color:#f2a646;box-shadow:0 0 0 3px rgba(242,166,70,.12)}
+    .hint{margin:-3px 0 2px;color:#7f8aa0;font-size:12px;line-height:1.45}
+    .recovery-note{padding:13px 14px;border:1px solid rgba(242,166,70,.28);border-radius:14px;background:rgba(242,166,70,.06);color:#cbd2df;font-size:12px;line-height:1.55}
+    .primary-button{margin-top:4px;width:100%;min-height:56px;border:0;border-radius:10px;background:#f3f3f3;color:#17191e;font:inherit;font-size:17px;font-weight:800;cursor:pointer}
+    .primary-button:disabled{opacity:.45;cursor:wait}
+    .status{min-height:22px;margin:0;text-align:center;color:#aab4c8;font-size:13px;line-height:1.5}
+    .status[data-error="true"]{color:#ff9a9a}
+  </style>
+</head>
+<body>
+  <main class="setup-screen">
+    <section class="setup-card" aria-labelledby="setup-title">
+      <div class="brand">
+        <img src="./assets/lighthouse-icon.svg" alt="LIGHTHOUSE">
+        <p class="eyebrow">LIGHTHOUSE</p>
+        <h1 id="setup-title">ตั้งค่าอุปกรณ์นี้</h1>
+        <p class="lead">สร้างรหัสเข้าแอปครั้งแรก แล้วเก็บ Recovery Code ไว้สำหรับกู้คืนรหัสในอนาคต</p>
+      </div>
+
+      <form id="setup-form" class="setup-form">
+        <label for="setup-password">รหัสเข้าแอป</label>
+        <input id="setup-password" type="password" minlength="6" autocomplete="new-password" required>
+        <p class="hint">อย่างน้อย 6 ตัวอักษร</p>
+
+        <label for="setup-confirm-password">ยืนยันรหัสเข้าแอป</label>
+        <input id="setup-confirm-password" type="password" minlength="6" autocomplete="new-password" required>
+
+        <label for="setup-recovery-code">Recovery Code</label>
+        <input id="setup-recovery-code" type="password" minlength="12" autocomplete="off" required>
+        <p class="hint">อย่างน้อย 12 ตัวอักษร และควรต่างจากรหัสเข้าแอป</p>
+
+        <div class="recovery-note"><strong>เก็บ Recovery Code ไว้นอกเครื่องนี้</strong><br>LIGHTHOUSE จะไม่บันทึก Recovery Code แบบอ่านข้อความได้ และหากลืมทั้งรหัสเข้าแอปกับ Recovery Code จะไม่สามารถกู้ข้อมูลที่เข้ารหัสได้</div>
+
+        <button id="setup-submit" class="primary-button" type="submit">ตั้งค่า LIGHTHOUSE</button>
+      </form>
+      <p id="setup-status" class="status" aria-live="polite">พร้อมตั้งค่าครั้งแรก</p>
+    </section>
+  </main>
+  <script type="module" src="./setup.mjs"></script>
+</body>
+</html>
