@@ -21,14 +21,14 @@ test('finance and obligations are one MANUAL user surface, not a patched second 
   assert.doesNotMatch(app, /\bobligations:\s*\{\s*title:\s*['"]ภาระ['"]/u);
 });
 
-test('Dashboard and Finance use Ledger view-model truth while Calendar fails closed without a real bridge', () => {
+test('Dashboard and Finance use Ledger truth while Calendar uses its own real bridge', () => {
   const app = read(appPath);
 
   assert.match(app, /projectFinanceView/);
   assert.match(app, /function financeSnapshot\(\)[\s\S]*?projectFinanceView\(ledgerTruth\)/);
   assert.match(app, /function renderHomeTruth\(\)[\s\S]*?financeSnapshot\(\)/);
   assert.match(app, /function renderFinanceDetail\(\)[\s\S]*?projectFinanceView\(ledgerTruth\)/);
-  assert.match(app, /function renderCalendarDetail\(\)\s*\{\s*renderStaticDetail\(manualContent\.calendar,\s*unavailableManualRows\(\)\);\s*\}/);
+  assert.match(app, /function renderCalendarDetail\(\)[\s\S]*?projectCalendarView\(calendarTruth\)/);
+  assert.match(app, /ledgerBridge\.readCalendarTruth\(\)/);
   assert.doesNotMatch(app, /function renderCalendarDetail\(\)\s*\{[^}]*state\.obligations/);
-  assert.match(app, /projectUnavailableView\(['"]ยังไม่เชื่อมข้อมูลจริง['"]\)/u);
 });
