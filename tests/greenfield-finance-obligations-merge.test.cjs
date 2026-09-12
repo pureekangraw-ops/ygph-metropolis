@@ -12,11 +12,11 @@ function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
 
-test('MANUAL combines finance and obligations into one user task', () => {
+test('MANUAL keeps obligations inside the single Finance route under the approved Figma card language', () => {
   const html = read(htmlPath);
   const app = read(appPath);
   assert.doesNotMatch(html, /data-task=["']obligations["']/);
-  assert.match(html, /data-task=["']finance["'][\s\S]*?<strong>การเงิน<\/strong>[\s\S]*?ภาระ/);
+  assert.match(html, /data-task=["']finance["'][\s\S]*?<strong>Finance<\/strong><small>Income · Outcome<\/small>/);
   assert.doesNotMatch(html, /manual-finance-merge\.mjs/);
   assert.doesNotMatch(app, /\bobligations:\s*\{\s*title:\s*['"]ภาระ['"]/u);
 });
