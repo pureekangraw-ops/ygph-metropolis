@@ -39,6 +39,7 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   assert.equal(await exists(join(stagedGreenfield, 'runtime.mjs')), true, 'greenfield/runtime.mjs must be staged');
   assert.equal(await exists(join(stagedGreenfield, 'runtime-session.mjs')), true, 'greenfield/runtime-session.mjs must be staged');
   assert.equal(await exists(join(stagedGreenfield, 'calculation-authority.mjs')), true, 'calculation-authority.mjs must be staged');
+  assert.equal(await exists(join(stagedGreenfield, 'first-run.mjs')), true, 'greenfield/first-run.mjs must be staged for standalone setup');
 
   assert.deepEqual(
     await readFile(join(stagedLighthouse, 'runtime-gate.mjs')),
@@ -59,6 +60,10 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   assert.deepEqual(
     await readFile(join(stagedGreenfield, 'calculation-authority.mjs')),
     await readFile(join(repoRoot, 'greenfield', 'calculation-authority.mjs')),
+  );
+  assert.deepEqual(
+    await readFile(join(stagedGreenfield, 'first-run.mjs')),
+    await readFile(join(repoRoot, 'greenfield', 'first-run.mjs')),
   );
 });
 
@@ -105,7 +110,6 @@ test('shared bundle excludes forbidden trees and legacy root app assets', async 
     'ui',
     'release',
     'worker',
-    'greenfield/first-run.mjs',
     'greenfield/import-router.mjs',
     'greenfield/master-input-router.mjs',
     'greenfield/obligation-import.mjs',

@@ -11,9 +11,11 @@ const stageTool = path.join(shellRoot, 'tools', 'stage-lighthouse-next.mjs');
 
 const runtimeFiles = [
   'index.html',
+  'setup.html',
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'setup.mjs',
   'view-model.mjs',
   'runtime-gate.mjs',
   'runtime-ledger.mjs',
@@ -48,7 +50,7 @@ test('Android stage is owned by the shared LIGHTHOUSE bundle and preserves runti
     assert.deepEqual(staged, source, `staged bytes drifted for ${relative}`);
   }
 
-  for (const relative of ['runtime.mjs', 'runtime-session.mjs', 'calculation-authority.mjs']) {
+  for (const relative of ['runtime.mjs', 'runtime-session.mjs', 'calculation-authority.mjs', 'first-run.mjs']) {
     const source = await fsp.readFile(path.join(root, 'greenfield', relative));
     const staged = await fsp.readFile(path.join(shellRoot, 'www', 'greenfield', relative));
     assert.deepEqual(staged, source, `staged Greenfield bytes drifted for ${relative}`);

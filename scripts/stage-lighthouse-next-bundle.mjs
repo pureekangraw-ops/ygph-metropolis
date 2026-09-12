@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'index.html',
+  'setup.html',
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'setup.mjs',
   'view-model.mjs',
   'runtime-gate.mjs',
   'runtime-ledger.mjs',
@@ -23,6 +25,7 @@ export const GREENFIELD_ENTRYPOINTS = Object.freeze([
   'runtime.mjs',
   'runtime-session.mjs',
   'calculation-authority.mjs',
+  'first-run.mjs',
 ]);
 
 const REQUIRED_ASSETS = Object.freeze([
