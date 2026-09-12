@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 
 const workflow = fs.readFileSync('.github/workflows/lighthouse-owner-build.yml', 'utf8');
 
-test('Owner Build packages lighthouse-next and cannot publish production', () => {
-  assert.match(workflow, /ref:\s*work\/metro-new-20260906/);
+test('Owner Build packages current main LIGHTHOUSE and cannot publish production', () => {
+  assert.match(workflow, /ref:\s*main/);
+  assert.doesNotMatch(workflow, /ref:\s*work\/metro-new-20260906/);
   assert.doesNotMatch(workflow, /\binputs:\s*\n|inputs\.target_ref/);
   assert.match(workflow, /node --test test\/\*\.test\.mjs/);
   assert.match(workflow, /npm run app:stage-next/);
@@ -48,5 +49,6 @@ test('Owner Build signs only after security verification and uploads only after 
   assert.ok(stage < addAndroid && addAndroid < syncAndroid && syncAndroid < version && version < icons);
   assert.ok(icons < securityApply && securityApply < securityVerify && securityVerify < build);
   assert.ok(build < sign && sign < identity && identity < upload);
+  assert.match(workflow, /APK_SOURCE_REF:\s*main/);
   assert.match(workflow, /APK_SOURCE_COMMIT="\$\(git rev-parse HEAD\)"/);
 });
