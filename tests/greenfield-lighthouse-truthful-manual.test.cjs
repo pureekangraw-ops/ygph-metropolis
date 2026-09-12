@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const appPath = path.join(process.cwd(), 'lighthouse-next', 'app.mjs');
+const bridgePath = path.join(process.cwd(), 'lighthouse-next', 'runtime-ledger.mjs');
 
 function readApp() {
   assert.equal(fs.existsSync(appPath), true, 'missing lighthouse-next/app.mjs');
@@ -23,19 +24,26 @@ test('live LIGHTHOUSE reads Home and MANUAL truth through the pure view-model bo
   assert.match(app, /from ['"]\.\/view-model\.mjs['"]/);
   assert.match(app, /projectFinanceView\(ledgerTruth\)/);
   assert.match(app, /projectStoreView\(storeTruth\)/);
+  assert.match(app, /projectRideView\(rideTruth\)/);
+  assert.match(app, /projectCalendarView\(calendarTruth\)/);
   assert.match(app, /projectLedgerHistoryView\(ledgerTruth\)/);
 });
 
-test('MANUAL Ride and Calendar show explicit unavailable truth instead of demo values', () => {
+test('MANUAL Ride and Calendar read durable runtime truth instead of demo values', () => {
   const app = readApp();
+  const bridge = fs.readFileSync(bridgePath, 'utf8');
   const manualContent = between(app, 'const manualContent =', 'function showManualHub');
   const calendar = between(app, 'function renderCalendarDetail()', 'function transactionLabel');
   const routing = between(app, 'function openManualTask(taskId)', 'function restoreManualView');
 
-  assert.doesNotMatch(manualContent, /ยังไม่เริ่มรอบ|\['รายได้วันนี้','฿0'\]|\['ค่าใช้จ่ายวันนี้','฿0'\]/u);
+  assert.doesNotMatch(manualContent, /\['รายได้วันนี้','฿0'\]|\['ค่าใช้จ่ายวันนี้','฿0'\]/u);
   assert.doesNotMatch(calendar, /state\.obligations/);
-  assert.match(app, /projectUnavailableView\(['"]ยังไม่เชื่อมข้อมูลจริง['"]\)/u);
-  assert.match(app, /function renderRideDetail\(/);
+  assert.match(bridge, /async function readRideTruth\(/);
+  assert.match(bridge, /async function readCalendarTruth\(/);
+  assert.match(app, /ledgerBridge\.readRideTruth\(\)/);
+  assert.match(app, /ledgerBridge\.readCalendarTruth\(\)/);
+  assert.match(app, /function renderRideDetail\(\).*projectRideView\(rideTruth\)/s);
+  assert.match(calendar, /projectCalendarView\(calendarTruth\)/);
   assert.match(routing, /taskId===['"]ride['"].*renderRideDetail\(/);
   assert.match(routing, /taskId===['"]calendar['"].*renderCalendarDetail\(/);
 });

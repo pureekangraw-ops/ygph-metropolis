@@ -68,6 +68,66 @@ export function projectStoreView(storeTruth) {
   });
 }
 
+export function projectRideView(rideTruth) {
+  const unavailable = () => Object.freeze({
+    status:READ_STATE.UNAVAILABLE,
+    recordCount:null,
+    todayRoundState:null,
+    generatedSatang:null,
+    cashJobSatang:null,
+    creditJobSatang:null,
+    expenseSatang:null,
+    pendingCreditSatang:null,
+  });
+  if (!rideTruth || typeof rideTruth !== 'object') return unavailable();
+  const recordCount = safeInteger(rideTruth.recordCount);
+  const generatedSatang = safeInteger(rideTruth.generatedSatang);
+  const cashJobSatang = safeInteger(rideTruth.cashJobSatang);
+  const creditJobSatang = safeInteger(rideTruth.creditJobSatang);
+  const expenseSatang = safeInteger(rideTruth.expenseSatang);
+  const pendingCreditSatang = safeInteger(rideTruth.pendingCreditSatang);
+  const todayRoundState = String(rideTruth.todayRoundState || '');
+  if (recordCount === null || recordCount < 0 || !['NOT_STARTED','ACTIVE','COMPLETED'].includes(todayRoundState)) return unavailable();
+  if ([generatedSatang,cashJobSatang,creditJobSatang,expenseSatang,pendingCreditSatang].some(value => value === null || value < 0)) return unavailable();
+  return Object.freeze({
+    status:recordCount === 0 ? READ_STATE.EMPTY : READ_STATE.READY,
+    recordCount,
+    todayRoundState,
+    generatedSatang,
+    cashJobSatang,
+    creditJobSatang,
+    expenseSatang,
+    pendingCreditSatang,
+  });
+}
+
+export function projectCalendarView(calendarTruth) {
+  const unavailable = () => Object.freeze({
+    status:READ_STATE.UNAVAILABLE,
+    total:null,
+    byStatus:Object.freeze({}),
+    records:Object.freeze([]),
+  });
+  if (!calendarTruth || typeof calendarTruth !== 'object' || !Array.isArray(calendarTruth.records)) return unavailable();
+  const total = safeInteger(calendarTruth.total);
+  if (total === null || total < 0 || total !== calendarTruth.records.length) return unavailable();
+  const byStatus = clone(calendarTruth.byStatus);
+  const records = clone(calendarTruth.records);
+  if (!byStatus || typeof byStatus !== 'object' || Array.isArray(byStatus) || !records) return unavailable();
+  for (const [status, count] of Object.entries(byStatus)) {
+    if (!status || !Number.isSafeInteger(count) || count < 0) return unavailable();
+  }
+  for (const record of records) {
+    if (!record || typeof record !== 'object' || !String(record.recordId || '').trim()) return unavailable();
+  }
+  return Object.freeze({
+    status:total === 0 ? READ_STATE.EMPTY : READ_STATE.READY,
+    total,
+    byStatus:Object.freeze(byStatus),
+    records:Object.freeze(records.map(record => Object.freeze(record))),
+  });
+}
+
 export function projectLedgerHistoryView(ledgerTruth) {
   const unavailable = () => Object.freeze({
     status:READ_STATE.UNAVAILABLE,
