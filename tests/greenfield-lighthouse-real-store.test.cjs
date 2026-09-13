@@ -81,11 +81,11 @@ test('real add/restock path never mutates demo Product stock authority', () => {
   assert.doesNotMatch(body, /\.stock\s*=/);
 });
 
-test('paid sale parsing resolves only against durable Store truth', () => {
+test('paid sale intent resolves only against durable Store truth', () => {
   const app = readApp();
   const handle = functionBody(app, 'handleChatInput', 'submitChatText');
-  assert.match(handle, /parseStoreSale\(clean,\s*storeTruth\?\.products\s*\|\|\s*\[\]\)/);
-  assert.doesNotMatch(handle, /parseStoreSale\(clean,\s*state\.products\)/);
+  assert.match(handle, /interpretChatIntent\(clean,\s*\{\s*storeProducts:\s*storeTruth\?\.products\s*\|\|\s*\[\]\s*\}\)/);
+  assert.doesNotMatch(handle, /storeProducts:\s*state\.products/);
 });
 
 test('paid sale pending owns stable Store and Ledger retry identities plus deterministic total', () => {
