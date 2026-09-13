@@ -107,6 +107,7 @@ jobs:
           APK_SOURCE_REPOSITORY: ${{ github.repository }}
           APK_SOURCE_REF: main
           APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          APK_RELEASE_CHANNEL: owner-test
         run: |
           set -euo pipefail
           export APK_SOURCE_COMMIT="$(git rev-parse HEAD)"
