@@ -31,12 +31,16 @@ test('live LIGHTHOUSE navigation and MANUAL use one coherent outline icon gramma
   const html = read('lighthouse-next/index.html');
   const polish = read('lighthouse-next/owner-polish.css');
 
-  for (const name of ['home', 'chat', 'manual', 'settings', 'finance', 'store', 'ride', 'calendar', 'ledger']) {
+  for (const name of ['chat', 'manual', 'settings', 'income', 'outcome', 'calendar', 'ledger']) {
     assert.match(html, new RegExp(`data-icon="${name}"`), `missing ${name} icon`);
   }
 
-  assert.doesNotMatch(html, /<span class="task-icon">[฿◇↗□≡]<\/span>/, 'MANUAL should not mix text glyphs as icons');
-  assert.doesNotMatch(html, /data-root-target="(?:home|chat|manual|settings)"[^>]*><span[^>]*>[⌂◌✦⚙]<\/span>/, 'root navigation should not mix platform glyphs');
+  for (const stale of ['home', 'finance', 'store', 'ride']) {
+    assert.doesNotMatch(html, new RegExp(`data-icon="${stale}"`), `${stale} must not remain as a live surface icon`);
+  }
+
+  assert.doesNotMatch(html, /<span class="task-icon"[^>]*>[＋−◷≡]<\/span>/, 'MANUAL should not mix text glyphs as icons');
+  assert.doesNotMatch(html, /data-root-target="(?:chat|manual|settings)"[^>]*><span[^>]*>[◌▦≡]<\/span>/, 'root navigation should not mix platform glyphs');
   assert.match(polish, /\.ui-icon\s*\{[^}]*width\s*:\s*22px[^}]*height\s*:\s*22px/is);
   assert.match(polish, /\.ui-icon[^}]*fill\s*:\s*none[^}]*stroke\s*:\s*currentColor/is);
 });
