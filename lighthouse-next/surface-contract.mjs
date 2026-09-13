@@ -45,6 +45,25 @@ function formatSatang(value) {
   return `฿${(Number(value || 0) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
+function syncDashboardFromTruth(truth) {
+  const cash = root.querySelector('#home-cash-value');
+  const income = root.querySelector('#home-income-value');
+  const expense = root.querySelector('#home-expense-value');
+  const net = root.querySelector('#home-net-value');
+  if (cash) cash.textContent = formatSatang(truth.balanceSatang);
+  if (income) income.textContent = formatSatang(truth.todayInSatang);
+  if (expense) expense.textContent = formatSatang(truth.todayOutSatang);
+  if (net) net.textContent = `${truth.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(truth.netSatang))}`;
+}
+
+async function refreshDashboard() {
+  if (!appShell || appShell.hidden) return;
+  try {
+    const truth = await ledgerBridge.readLedgerTruth();
+    syncDashboardFromTruth(truth);
+  } catch {}
+}
+
 function openSurfaceDetail() {
   manualHub.hidden = true;
   manualDetail.hidden = false;
@@ -76,6 +95,7 @@ async function renderIncome() {
     list.replaceChildren();
     try {
       const truth = await ledgerBridge.readLedgerTruth();
+      syncDashboardFromTruth(truth);
       list.append(
         makeRow('เงินจริง', formatSatang(truth.balanceSatang)),
         makeRow('เงินเข้าวันนี้', formatSatang(truth.todayInSatang)),
@@ -100,16 +120,16 @@ async function renderIncome() {
     }
     status.textContent = 'กำลังบันทึก…';
     try {
-      await ledgerBridge.recordOtherIncome({
+      const result = await ledgerBridge.recordOtherIncome({
         workflowId: operationId('WF-LH-MANUAL-INCOME'),
         ledgerTransactionId: operationId('TX-LH-MANUAL-INCOME'),
         source,
         amountBaht,
       });
+      syncDashboardFromTruth(result.truth);
       form.reset();
       status.textContent = 'บันทึกแล้ว · อ่านกลับจาก Ledger สำเร็จ';
       await refresh();
-      root.querySelector('[data-root-target="manual"]')?.click();
     } catch (error) {
       status.textContent = String(error?.message || '').includes('RUNTIME_SESSION_LOCKED')
         ? 'แอปถูกล็อก กรุณาเข้าใหม่'
@@ -128,6 +148,7 @@ async function renderOutcome() {
   manualDetailContent.append(list);
   try {
     const truth = await ledgerBridge.readLedgerTruth();
+    syncDashboardFromTruth(truth);
     list.append(makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)));
     const outcomes = truth.transactions.filter((item) => item.direction === 'OUT').slice(0, 20);
     if (!outcomes.length) list.append(makeRow('รายการล่าสุด', 'ยังไม่มีรายจ่าย'));
@@ -147,6 +168,14 @@ root?.addEventListener('click', (event) => {
   else void renderOutcome();
 }, true);
 
-const observer = new MutationObserver(() => queueMicrotask(ensureVisibleRoot));
+let shellWasVisible = false;
+const observer = new MutationObserver(() => {
+  queueMicrotask(() => {
+    ensureVisibleRoot();
+    const visible = Boolean(appShell && !appShell.hidden);
+    if (visible && !shellWasVisible) void refreshDashboard();
+    shellWasVisible = visible;
+  });
+});
 if (appShell) observer.observe(appShell, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
 ensureVisibleRoot();
