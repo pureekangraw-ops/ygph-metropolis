@@ -1,1 +1,0 @@
-Scope boundary: CHAT intent understanding only. Preserve known slots, mark missing or ambiguous slots, recover locally, and leave confirmation, mutation owners, durable readback, MANUAL behavior, and PR 138 scope unchanged.
