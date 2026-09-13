@@ -68,11 +68,12 @@ test('Calendar surface routes reschedule/status through runtime bridge and does 
   assert.match(surface, /จัดการที่ Owner ของรายการ/);
 });
 
-test('unlock surface is presented as a PIN gate', () => {
+test('unlock surface is presented as a PIN gate without narrowing the existing credential format', () => {
   const html = read('lighthouse-next/index.html');
 
-  assert.match(html, />PIN<\/label>/);
-  assert.match(html, /inputmode="numeric"/);
+  assert.match(html, /<label for="device-password">PIN<\/label>/);
+  assert.match(html, /id="device-password"[^>]*minlength="6"/);
   assert.match(html, />ลืม PIN<\/button>/);
+  assert.doesNotMatch(html, /inputmode="numeric"/);
   assert.doesNotMatch(html, /<label for="device-password">รหัสเข้าแอป<\/label>/);
 });
