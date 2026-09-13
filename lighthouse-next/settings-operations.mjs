@@ -1,4 +1,5 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
+import { DEVICE_PIN_MIN_LENGTH } from '../greenfield/device-unlock.mjs';
 
 function backupFilename(now = new Date()) {
   const stamp = now.toISOString().replaceAll(':', '-').replaceAll('.', '-');
@@ -29,6 +30,24 @@ export function downloadSettingsBackup(backup, { documentRef = globalThis.docume
   }
 }
 
+export async function changeSettingsPin({ nextPin, confirmPin, withSession = withRuntimeSession } = {}) {
+  const next = String(nextPin ?? '');
+  if (next.length < DEVICE_PIN_MIN_LENGTH) throw new Error('DEVICE_PIN_TOO_SHORT');
+  if (next !== String(confirmPin ?? '')) throw new Error('DEVICE_PIN_CONFIRM_MISMATCH');
+  return withSession(async runtime => {
+    if (!runtime || typeof runtime.changeDevicePassword !== 'function') throw new Error('LIGHTHOUSE_PIN_CHANGE_UNAVAILABLE');
+    return runtime.changeDevicePassword({ nextPassword:next });
+  });
+}
+
+function settingsError(error) {
+  const code = String(error?.message || error || '');
+  if (code === 'RUNTIME_SESSION_LOCKED') return 'แอปถูกล็อก กรุณาเข้าใหม่';
+  if (code === 'DEVICE_PIN_TOO_SHORT') return `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} ตัวอักษร`;
+  if (code === 'DEVICE_PIN_CONFIRM_MISMATCH') return 'PIN ใหม่ทั้งสองช่องไม่ตรงกัน';
+  return 'ยังดำเนินการไม่ได้';
+}
+
 function installSettingsBackup(root = globalThis.document) {
   const button = root?.querySelector?.('#backup-data');
   if (!button || button.dataset.bound === 'true') return false;
@@ -42,8 +61,7 @@ function installSettingsBackup(root = globalThis.document) {
       const filename = downloadSettingsBackup(backup);
       if (status) status.textContent = `สำรองข้อมูลแล้ว · ${filename}`;
     } catch (error) {
-      const code = String(error?.message || error || '');
-      if (status) status.textContent = code === 'RUNTIME_SESSION_LOCKED' ? 'แอปถูกล็อก กรุณาเข้าใหม่' : 'ยังสำรองข้อมูลไม่ได้';
+      if (status) status.textContent = settingsError(error) === 'ยังดำเนินการไม่ได้' ? 'ยังสำรองข้อมูลไม่ได้' : settingsError(error);
     } finally {
       button.disabled = false;
     }
@@ -51,6 +69,54 @@ function installSettingsBackup(root = globalThis.document) {
   return true;
 }
 
-if (typeof document !== 'undefined') installSettingsBackup(document);
+function installSettingsPinChange(root = globalThis.document) {
+  const panel = root?.querySelector?.('#page-settings .settings-panel');
+  if (!panel || panel.querySelector('[data-settings-pin-change]')) return false;
+  const anchor = root.querySelector?.('#lock-app');
+  const form = root.createElement('form');
+  form.className = 'auth-form manual-direct-form';
+  form.dataset.settingsPinChange = '';
+  form.hidden = true;
+  form.innerHTML = `<label>PIN ใหม่</label><input name="nextPin" type="password" minlength="${DEVICE_PIN_MIN_LENGTH}" autocomplete="new-password" required><label>ยืนยัน PIN ใหม่</label><input name="confirmPin" type="password" minlength="${DEVICE_PIN_MIN_LENGTH}" autocomplete="new-password" required><button class="primary-button" type="submit">บันทึก PIN ใหม่</button>`;
 
-export { backupFilename, installSettingsBackup };
+  const toggle = root.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'settings-button';
+  toggle.dataset.settingsPinToggle = '';
+  toggle.innerHTML = '<span><strong>เปลี่ยน PIN</strong><small>เปลี่ยนจาก session ที่เปิดอยู่ · ไม่ต้องใช้ Recovery Code</small></span><b>›</b>';
+  const status = root.querySelector?.('#settings-operations-status');
+
+  toggle.addEventListener('click', () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) form.querySelector('input')?.focus();
+  });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    if (status) status.textContent = 'กำลังเปลี่ยน PIN…';
+    try {
+      await changeSettingsPin({ nextPin:data.get('nextPin'), confirmPin:data.get('confirmPin') });
+      form.reset();
+      form.hidden = true;
+      if (status) status.textContent = 'เปลี่ยน PIN แล้ว';
+    } catch (error) {
+      if (status) status.textContent = settingsError(error);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  if (anchor) panel.insertBefore(toggle, anchor);
+  else panel.append(toggle);
+  panel.append(form);
+  return true;
+}
+
+if (typeof document !== 'undefined') {
+  installSettingsBackup(document);
+  installSettingsPinChange(document);
+}
+
+export { backupFilename, installSettingsBackup, installSettingsPinChange, settingsError };
