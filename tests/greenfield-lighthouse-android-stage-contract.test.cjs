@@ -24,6 +24,8 @@ const runtimeFiles = [
   'general-income.mjs',
   'store-product.mjs',
   'store-sale.mjs',
+  'chat-intent.mjs',
+  'chat-intent-recovery.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ];
