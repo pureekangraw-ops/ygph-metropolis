@@ -9,11 +9,11 @@
   "apkSha256": "81b7ad2cb18daf0a2862402f99cf127bdf4b98fbcfba4e4289da0fb5ff6cd925",
   "status": "VERIFY",
   "checks": {
-    "androidAcceptedInstallOver": "VERIFY",
+    "androidAcceptedInstallOver": "PASS",
     "appLaunches": "PASS",
     "chatManualSettingsSurface": "PASS",
-    "pinWorks": "VERIFY",
+    "pinWorks": "PASS",
     "localStateSurvives": "VERIFY",
-    "launcherIdentity": "VERIFY"
+    "launcherIdentity": "PASS"
   }
 }
