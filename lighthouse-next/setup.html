@@ -36,22 +36,22 @@
         <img src="./assets/lighthouse-icon.svg" alt="LIGHTHOUSE">
         <p class="eyebrow">LIGHTHOUSE</p>
         <h1 id="setup-title">ตั้งค่าอุปกรณ์นี้</h1>
-        <p class="lead">สร้างรหัสเข้าแอปครั้งแรก แล้วเก็บ Recovery Code ไว้สำหรับกู้คืนรหัสในอนาคต</p>
+        <p class="lead">สร้าง PIN ครั้งแรก แล้วเก็บ Recovery Code ไว้สำหรับกู้คืน PIN ในอนาคต</p>
       </div>
 
       <form id="setup-form" class="setup-form">
-        <label for="setup-password">รหัสเข้าแอป</label>
-        <input id="setup-password" type="password" minlength="6" autocomplete="new-password" required>
-        <p class="hint">อย่างน้อย 6 ตัวอักษร</p>
+        <label for="setup-password">PIN</label>
+        <input id="setup-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
+        <p class="hint">อย่างน้อย 6 หลัก</p>
 
-        <label for="setup-confirm-password">ยืนยันรหัสเข้าแอป</label>
-        <input id="setup-confirm-password" type="password" minlength="6" autocomplete="new-password" required>
+        <label for="setup-confirm-password">ยืนยัน PIN</label>
+        <input id="setup-confirm-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
 
         <label for="setup-recovery-code">Recovery Code</label>
         <input id="setup-recovery-code" type="password" minlength="12" autocomplete="off" required>
-        <p class="hint">อย่างน้อย 12 ตัวอักษร และควรต่างจากรหัสเข้าแอป</p>
+        <p class="hint">อย่างน้อย 12 ตัวอักษร และควรต่างจาก PIN</p>
 
-        <div class="recovery-note"><strong>เก็บ Recovery Code ไว้นอกเครื่องนี้</strong><br>LIGHTHOUSE จะไม่บันทึก Recovery Code แบบอ่านข้อความได้ และหากลืมทั้งรหัสเข้าแอปกับ Recovery Code จะไม่สามารถกู้ข้อมูลที่เข้ารหัสได้</div>
+        <div class="recovery-note"><strong>เก็บ Recovery Code ไว้นอกเครื่องนี้</strong><br>LIGHTHOUSE จะไม่บันทึก Recovery Code แบบอ่านข้อความได้ และหากลืมทั้ง PIN กับ Recovery Code จะไม่สามารถกู้ข้อมูลที่เข้ารหัสได้</div>
 
         <button id="setup-submit" class="primary-button" type="submit">ตั้งค่า LIGHTHOUSE</button>
       </form>
