@@ -11,7 +11,7 @@ export function authMessage(error) {
   const code = String(error?.message || error || '');
   const copy = {
     DEVICE_PIN_INVALID: 'PIN ไม่ถูกต้อง',
-    DEVICE_PIN_TOO_SHORT: `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} หลัก`,
+    DEVICE_PIN_TOO_SHORT: `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} ตัวอักษร`,
     DEVICE_PIN_CONFIRM_MISMATCH: 'PIN ใหม่ทั้งสองช่องไม่ตรงกัน',
     DEVICE_UNLOCK_NOT_ENROLLED: 'อุปกรณ์นี้ยังไม่ได้ตั้งค่า PIN',
     DEVICE_UNLOCK_INCOMPLETE: 'ข้อมูล PIN บนอุปกรณ์ยังไม่สมบูรณ์ ต้องซ่อมการตั้งค่าก่อน',
