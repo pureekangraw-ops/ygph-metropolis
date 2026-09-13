@@ -56,3 +56,17 @@ test('MANUAL Figma slice uses a two-column compact grid and per-capability accen
   assert.match(html, /\.manual-summary-card\s*\{[^}]*border-radius\s*:\s*16px/is);
   assert.match(html, /#manual-hub\s*\{[^}]*padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*28px\)/is);
 });
+
+test('MANUAL detail is a direct control surface, not only a read-only list', () => {
+  const app = read('lighthouse-next/app.mjs');
+
+  assert.match(app, /function makeManualActionForm\(/);
+  assert.match(app, /data-manual-action/);
+  assert.match(app, /manual-income-form/);
+  assert.match(app, /manual-product-form/);
+  assert.match(app, /manual-sale-form/);
+  assert.match(app, /ledgerBridge\.recordOtherIncome\(/);
+  assert.match(app, /storeBridge\.createProductWithStock\(/);
+  assert.match(app, /storeBridge\.sellProduct\(/);
+  assert.doesNotMatch(app, /submitChatText\([^)]*manual/i, 'MANUAL must not route direct controls through chat parsing');
+});
