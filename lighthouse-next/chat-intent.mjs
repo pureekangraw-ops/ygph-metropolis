@@ -1,6 +1,10 @@
 import { parseGeneralIncome } from './general-income.mjs';
 import { parseStoreSale } from './store-sale.mjs';
 
+function normalizeText(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function incomplete(kind, slots, missing = [], ambiguous = []) {
   return {
     kind,
@@ -54,10 +58,15 @@ function generalIncomeIntent(parsed) {
 }
 
 export function interpretChatIntent(text, { storeProducts = [] } = {}) {
-  const store = storeSaleIntent(parseStoreSale(text, storeProducts));
+  const clean = normalizeText(text);
+  if (!clean) return null;
+
+  const store = storeSaleIntent(parseStoreSale(clean, storeProducts));
   if (store) return store;
 
-  const income = generalIncomeIntent(parseGeneralIncome(text));
+  if (clean.startsWith('ขาย')) return null;
+
+  const income = generalIncomeIntent(parseGeneralIncome(clean));
   if (income) return income;
 
   return null;
