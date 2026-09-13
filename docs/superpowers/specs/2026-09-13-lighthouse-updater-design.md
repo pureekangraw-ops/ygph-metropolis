@@ -1,6 +1,6 @@
 # LIGHTHOUSE Updater Design
 
-**Status:** Proposed for Owner review
+**Status:** OWNER-APPROVED — Path B
 **Date:** 2026-09-13
 
 ## Decision
