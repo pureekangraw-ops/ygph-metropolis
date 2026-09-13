@@ -71,7 +71,7 @@ test('CHAT encodes Ambiguity Lock B-A-B-A and a supported local side-query remin
 
 test('CHAT general income asks only for amount plus source and never forces a store-or-ride selector', () => {
   const app = read(appPath);
-  assert.match(app, /parseGeneralIncome/);
+  assert.match(app, /interpretChatIntent/);
   assert.match(app, /รบกวนบอกเพิ่ม: ที่มาของรายรับ/);
   assert.match(app, /บันทึกไหม/);
   assert.match(app, /ทิป 59/);
@@ -143,7 +143,7 @@ test('registered product sale parser locks product then value then quantity', as
 
 test('Store sale flow is persisted, confirms before mutation, and protects stock truth', () => {
   const app = read(appPath);
-  assert.match(app, /parseStoreSale/);
+  assert.match(app, /interpretChatIntent/);
   assert.match(app, /kind:\s*['"]STORE_SALE['"]/);
   assert.match(app, /STORE_SALE_VALUE/);
   assert.match(app, /STORE_SALE_QUANTITY/);
