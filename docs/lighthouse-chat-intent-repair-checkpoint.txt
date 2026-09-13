@@ -1,0 +1,5 @@
+LIGHTHOUSE CHAT Intent Repair
+Branch feat/lighthouse-chat-intent-repair-20260913
+Base main d99d3a8a258b8c4ef77fd9691f81660d62ba3f8b
+Status implementation in progress, not merged.
+New intent modules preserve known slots and track missing or ambiguous slots. Recovery repairs only the missing supported slot. app.mjs is not wired yet. No CI verification observed yet. MANUAL authority and execution owners remain unchanged.
