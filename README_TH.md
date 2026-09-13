@@ -41,6 +41,10 @@ Evidence ตั้งต้นยังคงล็อกที่ `FLOW-1786527
 
 `RELEASE_MANIFEST.json` เป็นรายการ production files แบบ exact. `.assetsignore` ต้องตรงกับ manifest โดยไม่มี directory-wide wildcard bypass. Service Worker cache identity ใช้ release + asset revision ที่ถูกตรวจจาก SHA-256 ของ production assets ใน deploy gate ดังนั้นการเปลี่ยน shell asset โดยไม่เปลี่ยน asset revision จะทำให้ CI ล้ม
 
+## GO PATCHMASTER — START HERE
+
+งานระบบอัปเดตแบบ trusted release แยกจาก production business truth. ผู้พัฒนาหรือ GO ห้องใหม่ให้เริ่มจาก `docs/patchmaster/development-evidence.md` แล้วตาม route ไป Design Spec → Implementation Plan → Release Manifest contract → `lighthouse-next/update/` → tests → Android release evidence. อย่าอนุมานว่า Native Android Installer Bridge มีแล้ว; ขอบเขตนั้นแยกจาก Trust Kernel และต้องพิสูจน์ด้วย installed-state readback จริงก่อนอ้างว่าสำเร็จ
+
 ## Verification
 
 `npm run deploy:gate` รัน Greenfield tests, production syntax และ UTF-8 gate. Pull request ไม่ deploy Production. เมื่อ merge เข้า `main` แล้ว workflow จะรัน safety gate ก่อน deploy Cloudflare Production; client-visible/cache changes ยังต้องตรวจ real-device readbackก่อนปิด defect ที่เกี่ยวข้อง

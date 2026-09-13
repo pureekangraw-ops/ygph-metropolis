@@ -51,9 +51,9 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function assertProvenanceMetadata(metadata) {
+export function assertProvenanceMetadata(metadata) {
   const missing = [];
-  for (const name of ['sourceRepository', 'sourceRef', 'sourceCommit', 'workflowRunId', 'builtAt']) {
+  for (const name of ['sourceRepository', 'sourceRef', 'sourceCommit', 'workflowRunId', 'builtAt', 'releaseChannel']) {
     if (!String(metadata?.[name] ?? '').trim()) missing.push(name);
   }
   if (missing.length > 0) {
@@ -76,10 +76,11 @@ export async function verifyApkIdentity({
   sourceRef = process.env.APK_SOURCE_REF || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF || null,
   workflowRunId = process.env.APK_WORKFLOW_RUN_ID || process.env.GITHUB_RUN_ID || null,
   builtAt = process.env.APK_BUILD_TIME || new Date().toISOString(),
+  releaseChannel = process.env.APK_RELEASE_CHANNEL || null,
   evidencePath = null,
 } = {}) {
   if (!apkPath) throw new Error('APK_PATH_REQUIRED');
-  assertProvenanceMetadata({ sourceRepository, sourceRef, sourceCommit, workflowRunId, builtAt });
+  assertProvenanceMetadata({ sourceRepository, sourceRef, sourceCommit, workflowRunId, builtAt, releaseChannel });
 
   const [identity, version, apkBytes, noticeBytes] = await Promise.all([
     readFile(identityPath, 'utf8').then(JSON.parse),
@@ -111,6 +112,7 @@ export async function verifyApkIdentity({
     sourceCommit,
     workflowRunId: String(workflowRunId),
     builtAt,
+    channel: releaseChannel,
     apkSha256: sha256(apkBytes),
     ...actual,
     keyAliasLabel: identity.keyAliasLabel ?? null,
