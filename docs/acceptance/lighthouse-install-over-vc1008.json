@@ -4,9 +4,9 @@
   "baselineVersionCode": 1007,
   "candidateVersionCode": 1008,
   "candidateVersionName": "1.0.0-owner.3",
-  "workflowRunId": null,
-  "sourceCommit": null,
-  "apkSha256": null,
+  "workflowRunId": "34763014824",
+  "sourceCommit": "d59718bf1fffbf59ae492c6954b545d7358d0ee0",
+  "apkSha256": "81b7ad2cb18daf0a2862402f99cf127bdf4b98fbcfba4e4289da0fb5ff6cd925",
   "status": "VERIFY",
   "checks": {
     "androidAcceptedInstallOver": "VERIFY",
