@@ -27,6 +27,42 @@ test('recovery fills only the missing general-income source and preserves amount
   });
 });
 
+test('recovery fills only store sale quantity and preserves product and price', async () => {
+  const { recoverIntentSlot } = await loadRecovery();
+  const pending = {
+    kind:'STORE_SALE',
+    status:'INCOMPLETE',
+    slots:{ productId:'p1', productName:'มือถือ', quantity:null, priceBaht:566, priceBasis:null },
+    missing:['quantity'],
+    ambiguous:[],
+  };
+  assert.deepEqual(recoverIntentSlot(pending, '2 ชิ้น'), {
+    kind:'STORE_SALE',
+    status:'INCOMPLETE',
+    slots:{ productId:'p1', productName:'มือถือ', quantity:2, priceBaht:566, priceBasis:null },
+    missing:['priceBasis'],
+    ambiguous:[],
+  });
+});
+
+test('recovery fills only store sale price and preserves product and quantity', async () => {
+  const { recoverIntentSlot } = await loadRecovery();
+  const pending = {
+    kind:'STORE_SALE',
+    status:'INCOMPLETE',
+    slots:{ productId:'p1', productName:'มือถือ', quantity:1, priceBaht:null, priceBasis:null },
+    missing:['priceBaht'],
+    ambiguous:[],
+  };
+  assert.deepEqual(recoverIntentSlot(pending, '566 บาท'), {
+    kind:'STORE_SALE',
+    status:'READY',
+    slots:{ productId:'p1', productName:'มือถือ', quantity:1, priceBaht:566, priceBasis:'UNIT' },
+    missing:[],
+    ambiguous:[],
+  });
+});
+
 test('recovery fills only store sale price basis and preserves resolved product quantity and price', async () => {
   const { recoverIntentSlot } = await loadRecovery();
   const pending = {
@@ -41,6 +77,27 @@ test('recovery fills only store sale price basis and preserves resolved product 
     status:'READY',
     slots:{ productId:'p1', productName:'มือถือ', quantity:2, priceBaht:566, priceBasis:'UNIT' },
     missing:[],
+    ambiguous:[],
+  });
+});
+
+test('recovery resolves only an ambiguous product candidate and keeps other slots untouched', async () => {
+  const { recoverIntentSlot } = await loadRecovery();
+  const pending = {
+    kind:'STORE_SALE',
+    status:'INCOMPLETE',
+    slots:{ productId:null, productName:null, quantity:2, priceBaht:566, priceBasis:null },
+    missing:[],
+    ambiguous:[{ slot:'product', candidates:[
+      { productId:'p1', productName:'มือถือ A' },
+      { productId:'p2', productName:'มือถือ B' },
+    ] }],
+  };
+  assert.deepEqual(recoverIntentSlot(pending, 'มือถือ B'), {
+    kind:'STORE_SALE',
+    status:'INCOMPLETE',
+    slots:{ productId:'p2', productName:'มือถือ B', quantity:2, priceBaht:566, priceBasis:null },
+    missing:['priceBasis'],
     ambiguous:[],
   });
 });
