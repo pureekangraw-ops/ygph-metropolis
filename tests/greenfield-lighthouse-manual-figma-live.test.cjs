@@ -14,15 +14,15 @@ function manualMarkup(html) {
 
 test('LIGHTHOUSE root navigation is CHAT / MANUAL / SETTINGS only', () => {
   const html = read('lighthouse-next/index.html');
-  const app = read('lighthouse-next/app.mjs');
+  const surface = read('lighthouse-next/surface-contract.mjs');
 
   assert.doesNotMatch(html, /data-root="home"/);
   assert.doesNotMatch(html, /data-root-target="home"/);
   assert.match(html, /data-root-target="chat"/);
   assert.match(html, /data-root-target="manual"/);
   assert.match(html, /data-root-target="settings"/);
-  assert.match(app, /const allowed = \['chat','manual','settings'\]/);
-  assert.doesNotMatch(app, /\['home','chat','manual','settings'\]/);
+  assert.match(surface, /ensureVisibleRoot/);
+  assert.match(surface, /manualNav\?\.click\(\)/);
 });
 
 test('MANUAL owns the Today dashboard and exposes only the four owner houses', () => {
@@ -44,16 +44,14 @@ test('MANUAL owns the Today dashboard and exposes only the four owner houses', (
   assert.doesNotMatch(manual, /data-task="ride"/);
 });
 
-test('MANUAL copy describes direct work instead of a read-only capability menu', () => {
-  const html = read('lighthouse-next/index.html');
-  const manual = manualMarkup(html);
+test('MANUAL direct Income writes to Ledger and Outcome does not fake unsupported mutation', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
 
-  assert.match(manual, /จัดการด้วยมือ/);
-  assert.doesNotMatch(manual, /เลือกสิ่งที่ต้องการจัดการ/);
-  assert.match(manual, /<strong>Income<\/strong>/);
-  assert.match(manual, /<strong>Outcome<\/strong>/);
-  assert.match(manual, /<strong>Calendar<\/strong>/);
-  assert.match(manual, /<strong>Ledger<\/strong>/);
+  assert.match(surface, /id = 'manual-income-form'/);
+  assert.match(surface, /ledgerBridge\.recordOtherIncome\(/);
+  assert.match(surface, /ledgerBridge\.readLedgerTruth\(/);
+  assert.match(surface, /รอ Outcome write contract/);
+  assert.doesNotMatch(surface, /submitChatText/);
 });
 
 test('unlock surface is presented as a PIN gate', () => {
