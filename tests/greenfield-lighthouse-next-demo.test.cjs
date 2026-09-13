@@ -23,19 +23,24 @@ test('LIGHTHOUSE next demo ships its isolated static source files', () => {
   assert.equal(fs.existsSync(incomeParserPath), true, 'missing lighthouse-next/general-income.mjs');
 });
 
-test('user surface is LIGHTHOUSE, Dashboard-first, with exactly four root nav labels', () => {
+test('user surface is LIGHTHOUSE with Today dashboard inside MANUAL and exactly three root nav labels', () => {
   const html = read(htmlPath);
   assert.match(html, /LIGHTHOUSE/);
   for (const label of ['เงินจริง', 'เงินเข้า', 'เงินออก', 'สุทธิ', 'ภาระใกล้ที่สุด', 'ยังขาด', 'เป้าวันนี้']) {
     assert.match(html, new RegExp(label));
   }
+  assert.match(html, /data-manual-dashboard="today"/);
+  assert.doesNotMatch(html, /data-root="home"/);
+  assert.doesNotMatch(html, /data-root-target="home"/);
+
   const nav = html.match(/<nav id="bottom-nav"[\s\S]*?<\/nav>/)?.[0];
   assert.ok(nav, 'bottom root navigation must exist');
-  for (const label of ['หน้าหลัก', 'แชต', 'MANUAL', 'ตั้งค่า']) {
+  for (const label of ['แชต', 'MANUAL', 'ตั้งค่า']) {
     const matches = nav.match(new RegExp(`>${label}<`, 'g')) || [];
     assert.equal(matches.length, 1, `${label} must appear exactly once in bottom root navigation`);
   }
-  assert.equal((nav.match(/data-root-target=/g) || []).length, 4, 'bottom root navigation must contain exactly four root controls');
+  assert.equal((nav.match(/data-root-target=/g) || []).length, 3, 'bottom root navigation must contain exactly three root controls');
+  assert.doesNotMatch(nav, />หน้าหลัก</);
   assert.doesNotMatch(html, /เปิดแชต|เปิด MANUAL/);
 });
 
@@ -83,19 +88,19 @@ test('CHAT confirmation and success copy read like conversation, not system outp
   assert.doesNotMatch(app, /เป็นข้อมูลจำลองเท่านั้น ไม่มีข้อมูลจริงถูกเปลี่ยน/);
 });
 
-test('MANUAL exposes current Figma capability jobs and Settings distinguishes durable truth from device-local UI state', () => {
+test('MANUAL exposes the four owner houses while Settings distinguishes durable truth from device-local UI state', () => {
   const html = read(htmlPath);
-  for (const label of ['Finance', 'Store', 'Ride', 'Calendar', 'Ledger']) {
+  for (const label of ['Income', 'Outcome', 'Calendar', 'Ledger']) {
     assert.match(html, new RegExp(`>${label}<`));
   }
-  assert.match(html, /data-task=["']finance["']/);
-  assert.match(html, /data-task=["']store["']/);
-  assert.match(html, /data-task=["']ride["']/);
-  assert.match(html, /data-task=["']calendar["']/);
-  assert.match(html, /data-task=["']ledger["']/);
-  assert.doesNotMatch(html, /data-task=["']client["']/);
+  for (const task of ['income', 'outcome', 'calendar', 'ledger']) {
+    assert.match(html, new RegExp(`data-task=["']${task}["']`));
+  }
+  for (const stale of ['finance', 'store', 'ride', 'client']) {
+    assert.doesNotMatch(html, new RegExp(`data-task=["']${stale}["']`));
+  }
   assert.match(html, /ข้อมูลจริง/);
-  assert.match(html, /การเงินและร้านค้ามาจาก Runtime ที่ปลอดภัย/);
+  assert.match(html, /การเงินและร้านค้ามาจาก Runtime/);
   assert.match(html, /บทสนทนาและรายการค้างอยู่บนเครื่องนี้/);
   assert.match(html, /ไม่ลบเงินจริงหรือสต็อกจริง/);
   assert.doesNotMatch(html, /ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น/);
@@ -171,7 +176,7 @@ test('Dashboard renders real cash truth from ledgerTruth', () => {
   assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
 });
 
-test('MANUAL Store and History render durable truth through view-model projections', () => {
+test('legacy Store projection and Ledger history still render durable truth through view-model projections', () => {
   const app = read(appPath);
   const storeDetail = app.match(/function renderStoreDetail\(\)[\s\S]*?function renderRideDetail\(\)/)?.[0];
   const historyDetail = app.match(/function renderHistoryDetail\(\)[\s\S]*?function openManualTask\(/)?.[0];
