@@ -71,8 +71,10 @@
         <div class="page-title-block"><p class="eyebrow">ดูแล LIGHTHOUSE</p><h1>ตั้งค่า</h1></div>
         <section class="settings-panel">
           <div class="settings-row"><span><strong>ข้อมูลจริง</strong><small>การเงินและร้านค้ามาจาก Runtime · บทสนทนาและรายการค้างอยู่บนเครื่องนี้</small></span><span class="status-pill">Runtime</span></div>
+          <button type="button" id="backup-data" class="settings-button"><span><strong>สำรองข้อมูล</strong><small>สร้างไฟล์สำรองจากข้อมูลจริงที่เปิดอยู่ตอนนี้</small></span><b>›</b></button>
           <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>ล้างสถานะบนเครื่อง</strong><small>ไม่ลบเงินจริงหรือสต็อกจริง</small></span><b>›</b></button>
           <button type="button" id="lock-app" class="settings-button"><span><strong>ล็อก LIGHTHOUSE</strong><small>ปิด Runtime Session แล้วกลับหน้า PIN</small></span><b>›</b></button>
+          <p id="settings-operations-status" class="pin-status" aria-live="polite"></p>
         </section>
         <section class="about-card"><div class="about-beacon" aria-hidden="true">✦</div><div><p class="eyebrow">LIGHTHOUSE</p><h2>Your next step.</h2><p>ช่วยให้เห็นสถานการณ์ แล้วพาไปยังสิ่งที่ควรทำต่อโดยไม่เพิ่มภาระให้คนใช้</p></div></section>
       </div>
@@ -88,6 +90,7 @@
   </main>
   <script type="module" src="./app.mjs"></script>
   <script type="module" src="./surface-contract.mjs"></script>
+  <script type="module" src="./settings-operations.mjs"></script>
   <script type="module" src="./send-control.mjs"></script>
 </body>
 </html>
