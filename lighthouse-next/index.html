@@ -10,34 +10,11 @@
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./owner-polish.css">
   <style>
-    .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(520px,100%);display:grid;gap:18px}.auth-form{display:grid;gap:10px}.auth-form label{font-size:13px;color:var(--muted,#9da7b8)}.auth-form input{width:100%;box-sizing:border-box;border:1px solid var(--line,#30394a);border-radius:14px;padding:13px 14px;background:rgba(255,255,255,.04);color:#f5f7fb;font:inherit}.auth-form[hidden],.auth-warning[hidden],.auth-screen[hidden]{display:none}.auth-warning{border:1px solid rgba(255,190,80,.35);border-radius:16px;padding:14px}.text-button{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;padding:10px;cursor:pointer}.auth-actions{display:flex;gap:10px;flex-wrap:wrap}.settings-button span{display:grid;text-align:left}.settings-button small{font-weight:400}
-
+    .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(520px,100%);display:grid;gap:18px}.auth-form{display:grid;gap:10px}.auth-form label{font-size:13px;color:var(--muted,#9da7b8)}.auth-form input{width:100%;box-sizing:border-box;border:1px solid var(--line,#30394a);border-radius:14px;padding:13px 14px;background:rgba(255,255,255,.04);color:#f5f7fb;font:inherit}.auth-form[hidden],.auth-warning[hidden],.auth-screen[hidden]{display:none}.auth-warning{border:1px solid rgba(255,190,80,.35);border-radius:16px;padding:14px}.text-button{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;padding:10px;cursor:pointer}.settings-button span{display:grid;text-align:left}.settings-button small{font-weight:400}
     #manual-hub{padding-bottom:calc(var(--nav-height) + 28px)}
-    #manual-hub .manual-heading{position:relative;display:grid;gap:5px;margin-bottom:12px;padding:14px 16px;border:1px solid rgba(34,216,255,.55);border-radius:16px;background:linear-gradient(134deg,rgba(34,216,255,.12),rgba(255,211,106,.066) 50%,rgba(8,17,29,.96));box-shadow:inset 0 0 12px rgba(255,211,106,.08),0 5px 16px rgba(34,216,255,.08)}
-    #manual-hub .manual-heading::after{display:none}
-    #manual-hub .manual-heading h1{margin:0;font-size:24px;letter-spacing:.03em}
-    #manual-hub .manual-heading p{margin:0;color:#b9cbde;font-size:12.5px}
-    #manual-hub .task-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding-bottom:0}
-    #manual-hub .task-card{min-width:0;min-height:78px;display:grid;grid-template-columns:minmax(0,1fr) 38px;align-items:start;gap:8px;padding:14px;border-radius:17px;text-align:left;border:1px solid rgba(34,216,255,.55);background:linear-gradient(116deg,rgba(34,216,255,.12),rgba(255,211,106,.06) 53%,rgba(8,30,40,.98));box-shadow:inset 0 0 10px rgba(255,211,106,.05),0 5px 16px rgba(34,216,255,.08)}
-    #manual-hub .task-card .task-copy{min-width:0;display:grid;gap:5px}
-    #manual-hub .task-card strong{font-size:16px;color:#c5d5e6;line-height:1.2}
-    #manual-hub .task-card small{font-size:11px;color:#c5d5e6;line-height:1.35;white-space:normal}
-    #manual-hub .task-card .task-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(34,216,255,.3);background:rgba(34,216,255,.1)}
-    #manual-hub .task-card .task-icon .ui-icon{width:20px;height:20px;filter:drop-shadow(0 0 5px rgba(84,230,255,.25))}
-    .task-card[data-task="finance"],.task-card[data-task="store"]{border-color:rgba(34,216,255,.95)}
-    .task-card[data-task="ride"]{border-color:rgba(255,100,200,.95);background:linear-gradient(116deg,rgba(255,100,200,.14),rgba(180,92,255,.1) 53%,rgba(37,17,40,.98))}
-    .task-card[data-task="ride"] .task-icon{border-color:rgba(255,100,200,.35);background:rgba(255,100,200,.11);color:#ff79c9}
-    .task-card[data-task="calendar"]{border-color:rgba(108,140,255,.95);background:linear-gradient(116deg,rgba(108,140,255,.14),rgba(180,92,255,.1) 53%,rgba(17,27,53,.98))}
-    .task-card[data-task="calendar"] .task-icon{border-color:rgba(108,140,255,.35);background:rgba(108,140,255,.11);color:#79a7ff}
-    .task-card[data-task="ledger"]{grid-column:1/-1;border-color:rgba(255,211,106,.95);background:linear-gradient(116deg,rgba(255,211,106,.14),rgba(255,158,92,.1) 53%,rgba(42,33,14,.98))}
-    .task-card[data-task="ledger"] .task-icon{border-color:rgba(255,211,106,.35);background:rgba(255,211,106,.1);color:#ffd36a}
-    .manual-summary-stack{display:grid;gap:12px;margin-top:12px}
-    .manual-summary-card{display:grid;gap:3px;min-height:82px;padding:14px 16px;border:1px solid rgba(34,216,255,.55);border-radius:16px;background:linear-gradient(126deg,rgba(34,216,255,.15),rgba(255,211,106,.083) 50%,rgba(11,25,40,.98));box-shadow:inset 0 0 12px rgba(255,211,106,.08),0 5px 16px rgba(34,216,255,.08)}
-    .manual-summary-card:first-child{min-height:112px}
-    .manual-summary-card .summary-label{color:#b9cbde;font-size:12px;font-weight:650}
-    .manual-summary-card strong{color:#f8fbff;font-size:20px;line-height:1.25}
-    .manual-summary-card small{color:#a8bed6;font-size:10.5px;line-height:1.4}
-    @media (max-width:360px){#manual-hub .task-grid{gap:9px}#manual-hub .task-card{padding:12px 11px;grid-template-columns:minmax(0,1fr) 32px}#manual-hub .task-card .task-icon{width:30px;height:30px}#manual-hub .task-card strong{font-size:15px}}
+    #manual-hub .manual-heading{display:grid;gap:5px;margin-bottom:12px;padding:14px 16px;border:1px solid rgba(34,216,255,.55);border-radius:16px;background:linear-gradient(134deg,rgba(34,216,255,.12),rgba(255,211,106,.066) 50%,rgba(8,17,29,.96))}
+    #manual-hub .manual-heading h1{margin:0;font-size:24px}.manual-dashboard{display:grid;gap:12px;margin-bottom:14px}.manual-dashboard .home-hero,.manual-dashboard .today-section,.manual-dashboard .next-step-card{margin:0}
+    #manual-hub .task-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.task-card{min-width:0;min-height:78px;display:grid;grid-template-columns:minmax(0,1fr) 38px;align-items:start;gap:8px;padding:14px;border-radius:17px;text-align:left;border:1px solid rgba(34,216,255,.55);background:linear-gradient(116deg,rgba(34,216,255,.12),rgba(255,211,106,.06) 53%,rgba(8,30,40,.98))}.task-card .task-copy{display:grid;gap:5px}.task-card strong{font-size:16px}.task-card small{font-size:11px}.task-card .task-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(34,216,255,.3);background:rgba(34,216,255,.1)}.task-card[data-task="calendar"]{border-color:rgba(108,140,255,.95)}.task-card[data-task="ledger"]{border-color:rgba(255,211,106,.95)}.manual-direct-form{margin:12px 0 18px}
   </style>
 </head>
 <body>
@@ -45,56 +22,26 @@
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-card">
         <div class="pin-brand" aria-hidden="true"><img class="pin-app-icon" src="./assets/lighthouse-icon.svg" alt=""></div>
-        <div class="pin-copy">
-          <p class="eyebrow">LIGHTHOUSE</p>
-          <h1 id="auth-title">ก้าวต่อไปของคุณ</h1>
-          <p class="muted">ใส่รหัสเข้าแอป</p>
-        </div>
+        <div class="pin-copy"><p class="eyebrow">LIGHTHOUSE</p><h1 id="auth-title">ก้าวต่อไปของคุณ</h1><p class="muted">ใส่ PIN เพื่อเข้าแอป</p></div>
         <form id="login-form" class="auth-form">
-          <label for="device-password">รหัสเข้าแอป</label>
-          <input id="device-password" type="password" minlength="6" autocomplete="current-password" required>
+          <label for="device-password">PIN</label>
+          <input id="device-password" type="password" inputmode="numeric" minlength="6" autocomplete="current-password" required>
           <button id="login-submit" class="primary-button" type="submit">เข้า LIGHTHOUSE</button>
-          <button id="show-recovery" class="text-button" type="button">ลืมรหัส</button>
+          <button id="show-recovery" class="text-button" type="button">ลืม PIN</button>
         </form>
         <form id="recovery-form" class="auth-form" hidden>
-          <label for="recovery-code">Recovery Code</label>
-          <input id="recovery-code" type="password" autocomplete="off" required>
-          <label for="new-password">รหัสใหม่</label>
-          <input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
-          <label for="confirm-password">ยืนยันรหัสใหม่</label>
-          <input id="confirm-password" type="password" minlength="6" autocomplete="new-password" required>
-          <button class="primary-button" type="submit">ตั้งรหัสใหม่</button>
-          <button id="cancel-recovery" class="text-button" type="button">กลับไปเข้าสู่ระบบ</button>
+          <label for="recovery-code">Recovery Code</label><input id="recovery-code" type="password" autocomplete="off" required>
+          <label for="new-password">PIN ใหม่</label><input id="new-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
+          <label for="confirm-password">ยืนยัน PIN ใหม่</label><input id="confirm-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
+          <button class="primary-button" type="submit">ตั้ง PIN ใหม่</button><button id="cancel-recovery" class="text-button" type="button">กลับไปใส่ PIN</button>
         </form>
         <p id="auth-status" class="pin-status" aria-live="polite">กำลังตรวจสถานะอุปกรณ์…</p>
-        <div id="setup-required" class="auth-warning" hidden>
-          <strong>อุปกรณ์นี้ยังไม่พร้อมเข้า LIGHTHOUSE</strong>
-          <p>ต้องตั้งค่าหรือซ่อมรหัสอุปกรณ์จากระบบหลักก่อน</p>
-        </div>
+        <div id="setup-required" class="auth-warning" hidden><strong>อุปกรณ์นี้ยังไม่พร้อมเข้า LIGHTHOUSE</strong><p>ต้องตั้งค่าหรือซ่อม PIN อุปกรณ์จากระบบหลักก่อน</p></div>
       </div>
     </section>
 
     <section id="app-shell" class="app-shell" hidden>
-      <header class="app-header">
-        <div class="compact-brand" aria-label="LIGHTHOUSE"><img class="header-app-icon" src="./assets/lighthouse-icon.svg" alt=""><span>LIGHTHOUSE</span></div>
-        <p id="page-kicker" class="page-kicker">วันนี้</p>
-      </header>
-
-      <div id="page-home" class="app-page active" data-root="home">
-        <section class="home-hero" aria-labelledby="cash-title">
-          <p id="cash-title" class="section-label">เงินจริง</p><p class="cash-value" id="home-cash-value">—</p><p class="cash-note">ใช้ได้จริงตอนนี้</p>
-          <div class="expected-row"><span>คาดว่าจะเข้า</span><strong id="home-expected-value">—</strong></div>
-        </section>
-        <section class="today-section" aria-labelledby="today-title">
-          <div class="section-head"><div><p class="eyebrow">ภาพวันนี้</p><h2 id="today-title">วันนี้</h2></div><span class="date-chip" id="home-date">—</span></div>
-          <div class="metric-grid"><article class="metric-card"><span>เงินเข้า</span><strong id="home-income-value">—</strong></article><article class="metric-card"><span>เงินออก</span><strong id="home-expense-value">—</strong></article><article class="metric-card metric-wide"><span>สุทธิ</span><strong id="home-net-value">—</strong></article></div>
-        </section>
-        <section class="next-step-card" aria-labelledby="next-step-title">
-          <div class="next-step-light" aria-hidden="true"></div><p class="eyebrow">ก้าวถัดไป</p><h2 id="next-step-title">ภาระใกล้ที่สุด</h2>
-          <div class="obligation-main"><div><strong id="home-obligation-title">ค่าใช้จ่ายก้อนถัดไป</strong><span id="home-obligation-due">ครบกำหนดในอีก 3 วัน</span></div><strong class="obligation-amount" id="home-obligation-value">—</strong></div>
-          <div class="gap-row"><span>ยังขาด</span><strong id="home-gap-value">—</strong></div><div class="target-row"><span>เป้าวันนี้</span><strong id="home-target-value">—</strong></div>
-        </section>
-      </div>
+      <header class="app-header"><div class="compact-brand" aria-label="LIGHTHOUSE"><img class="header-app-icon" src="./assets/lighthouse-icon.svg" alt=""><span>LIGHTHOUSE</span></div><p id="page-kicker" class="page-kicker">ทำงานตรง</p></header>
 
       <div id="page-chat" class="app-page chat-page" data-root="chat" hidden>
         <div class="page-title-block"><p class="eyebrow">คุยแบบที่คุณพูด</p><h1>แชต</h1></div>
@@ -104,17 +51,17 @@
 
       <div id="page-manual" class="app-page" data-root="manual" hidden>
         <div id="manual-hub">
-          <div class="page-title-block manual-heading"><h1>MANUAL</h1><p>เลือกสิ่งที่ต้องการจัดการ</p></div>
-          <div class="task-grid">
-            <button type="button" class="task-card" data-task="finance"><span class="task-copy"><strong>Finance</strong><small>Income · Outcome</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="finance" viewBox="0 0 24 24"><path d="M5 7.5h14v10H5z"></path><path d="M8 7.5V6h8v1.5M8.5 12h7M12 9.5v5"></path></svg></span></button>
-            <button type="button" class="task-card" data-task="store"><span class="task-copy"><strong>Store</strong><small>จาก Store</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="store" viewBox="0 0 24 24"><path d="M4 9h16l-1.5-4h-13z"></path><path d="M5.5 9v10h13V9M9 19v-5h6v5M4 9c0 1.4 1.1 2.5 2.5 2.5S9 10.4 9 9c0 1.4 1.1 2.5 2.5 2.5S14 10.4 14 9c0 1.4 1.1 2.5 2.5 2.5S19 10.4 19 9"></path></svg></span></button>
-            <button type="button" class="task-card" data-task="ride"><span class="task-copy"><strong>Ride</strong><small>ยังไม่เชื่อม</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ride" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18c3.5 0 2-6 5.5-6S14.5 6 16 6"></path></svg></span></button>
-            <button type="button" class="task-card" data-task="calendar"><span class="task-copy"><strong>Calendar</strong><small>ยังไม่เชื่อม</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 9.5h16M8 13h3M13 13h3M8 16h3"></path></svg></span></button>
-            <button type="button" class="task-card" data-task="ledger"><span class="task-copy"><strong>Ledger</strong><small>จาก Ledger</small></span><span class="task-icon" aria-hidden="true"><svg class="ui-icon" data-icon="ledger" viewBox="0 0 24 24"><path d="M6 4.5h12v15H6z"></path><path d="M9 8h6M9 12h6M9 16h4"></path></svg></span></button>
+          <div class="page-title-block manual-heading"><h1>MANUAL</h1><p>ดูสถานการณ์วันนี้และจัดการด้วยมือ</p></div>
+          <div class="manual-dashboard" data-manual-dashboard="today">
+            <section class="home-hero" aria-labelledby="cash-title"><p id="cash-title" class="section-label">เงินจริง</p><p class="cash-value" id="home-cash-value">—</p><p class="cash-note">ใช้ได้จริงตอนนี้</p><div class="expected-row"><span>คาดว่าจะเข้า</span><strong id="home-expected-value">—</strong></div></section>
+            <section class="today-section" aria-labelledby="today-title"><div class="section-head"><div><p class="eyebrow">ภาพวันนี้</p><h2 id="today-title">วันนี้</h2></div><span class="date-chip" id="home-date">—</span></div><div class="metric-grid"><article class="metric-card"><span>เงินเข้า</span><strong id="home-income-value">—</strong></article><article class="metric-card"><span>เงินออก</span><strong id="home-expense-value">—</strong></article><article class="metric-card metric-wide"><span>สุทธิ</span><strong id="home-net-value">—</strong></article></div></section>
+            <section class="next-step-card" aria-labelledby="next-step-title"><div class="next-step-light" aria-hidden="true"></div><p class="eyebrow">ก้าวถัดไป</p><h2 id="next-step-title">ภาระใกล้ที่สุด</h2><div class="obligation-main"><div><strong id="home-obligation-title">—</strong><span id="home-obligation-due">—</span></div><strong class="obligation-amount" id="home-obligation-value">—</strong></div><div class="gap-row"><span>ยังขาด</span><strong id="home-gap-value">—</strong></div><div class="target-row"><span>เป้าวันนี้</span><strong id="home-target-value">—</strong></div></section>
           </div>
-          <div class="manual-summary-stack">
-            <article class="manual-summary-card" data-manual-summary="truth"><span class="summary-label">ภาพรวมข้อมูลจริง</span><strong>Ledger + Store</strong><small>แสดงค่าจริงเมื่อ Runtime อ่านสำเร็จ</small></article>
-            <article class="manual-summary-card manual-connection-card" data-manual-summary="connection"><span class="summary-label">สถานะการเชื่อมต่อ</span><strong>ไม่ใช้ข้อมูลตัวอย่างแทนของจริง</strong><small>Calendar / Ride แสดง “ยังไม่เชื่อม” จนมี source จริง</small></article>
+          <div class="task-grid">
+            <button type="button" class="task-card" data-task="income"><span class="task-copy"><strong>Income</strong><small>รายรับ · รับชำระ · รายได้งาน</small></span><span class="task-icon" aria-hidden="true">＋</span></button>
+            <button type="button" class="task-card" data-task="outcome"><span class="task-copy"><strong>Outcome</strong><small>รายจ่าย · ภาระ · ค่าใช้จ่ายงาน</small></span><span class="task-icon" aria-hidden="true">−</span></button>
+            <button type="button" class="task-card" data-task="calendar"><span class="task-copy"><strong>Calendar</strong><small>เวลา · กำหนด · สถานะ</small></span><span class="task-icon" aria-hidden="true">◷</span></button>
+            <button type="button" class="task-card" data-task="ledger"><span class="task-copy"><strong>Ledger</strong><small>ประวัติ · Readback · Control</small></span><span class="task-icon" aria-hidden="true">≡</span></button>
           </div>
         </div>
         <section id="manual-detail" class="manual-detail" hidden><button type="button" id="manual-back" class="back-button">‹ กลับ</button><div id="manual-detail-content"></div></section>
@@ -123,24 +70,24 @@
       <div id="page-settings" class="app-page" data-root="settings" hidden>
         <div class="page-title-block"><p class="eyebrow">ดูแล LIGHTHOUSE</p><h1>ตั้งค่า</h1></div>
         <section class="settings-panel">
-          <div class="settings-row"><span><strong>ข้อมูลจริง</strong><small>การเงินและร้านค้ามาจาก Runtime ที่ปลอดภัย · บทสนทนาและรายการค้างอยู่บนเครื่องนี้</small></span><span class="status-pill">Runtime</span></div>
-          <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>ล้างสถานะบนเครื่อง</strong><small>ล้างบทสนทนาและรายการค้างเท่านั้น ไม่ลบเงินจริงหรือสต็อกจริง</small></span><b>›</b></button>
-          <button type="button" id="lock-app" class="settings-button"><span><strong>ล็อก LIGHTHOUSE</strong><small>ปิด Runtime Session แล้วกลับหน้ารหัส</small></span><b>›</b></button>
+          <div class="settings-row"><span><strong>ข้อมูลจริง</strong><small>การเงินและร้านค้ามาจาก Runtime · บทสนทนาและรายการค้างอยู่บนเครื่องนี้</small></span><span class="status-pill">Runtime</span></div>
+          <button type="button" id="reset-demo" class="settings-button danger-soft"><span><strong>ล้างสถานะบนเครื่อง</strong><small>ไม่ลบเงินจริงหรือสต็อกจริง</small></span><b>›</b></button>
+          <button type="button" id="lock-app" class="settings-button"><span><strong>ล็อก LIGHTHOUSE</strong><small>ปิด Runtime Session แล้วกลับหน้า PIN</small></span><b>›</b></button>
         </section>
         <section class="about-card"><div class="about-beacon" aria-hidden="true">✦</div><div><p class="eyebrow">LIGHTHOUSE</p><h2>Your next step.</h2><p>ช่วยให้เห็นสถานการณ์ แล้วพาไปยังสิ่งที่ควรทำต่อโดยไม่เพิ่มภาระให้คนใช้</p></div></section>
       </div>
 
       <nav id="bottom-nav" class="bottom-nav" aria-label="เมนูหลัก">
-        <button type="button" class="nav-item active" data-root-target="home"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="home" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5"></path><path d="M6.5 10.5V19h11v-8.5M9.5 19v-5h5v5"></path></svg></span><small>หน้าหลัก</small></button>
-        <button type="button" class="nav-item" data-root-target="chat"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="chat" viewBox="0 0 24 24"><path d="M5 5.5h14v10H10l-5 4z"></path><path d="M8 9.5h8M8 12.5h5"></path></svg></span><small>แชต</small></button>
-        <button type="button" class="nav-item" data-root-target="manual"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="manual" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1"></rect><rect x="13.5" y="5" width="5.5" height="5.5" rx="1"></rect><rect x="5" y="13.5" width="5.5" height="5.5" rx="1"></rect><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1"></rect></svg></span><small>MANUAL</small></button>
-        <button type="button" class="nav-item" data-root-target="settings"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="settings" viewBox="0 0 24 24"><path d="M5 7h6M15 7h4M5 12h2M11 12h8M5 17h9M18 17h1"></path><circle cx="13" cy="7" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="16" cy="17" r="2"></circle></svg></span><small>ตั้งค่า</small></button>
+        <button type="button" class="nav-item" data-root-target="chat"><span class="nav-icon" aria-hidden="true">◌</span><small>แชต</small></button>
+        <button type="button" class="nav-item active" data-root-target="manual"><span class="nav-icon" aria-hidden="true">▦</span><small>MANUAL</small></button>
+        <button type="button" class="nav-item" data-root-target="settings"><span class="nav-icon" aria-hidden="true">≡</span><small>ตั้งค่า</small></button>
       </nav>
     </section>
 
     <dialog id="reset-dialog" class="confirm-dialog"><form method="dialog"><div class="dialog-beacon" aria-hidden="true">✦</div><h2>ล้างสถานะบนเครื่อง?</h2><p>ล้างบทสนทนาและรายการค้างบนเครื่องนี้ โดยไม่ลบเงินจริงหรือสต็อกจริง</p><div class="dialog-actions"><button value="cancel" class="secondary-button">ยังไม่ล้าง</button><button value="confirm" id="confirm-reset" class="danger-button">ล้างสถานะ</button></div></form></dialog>
   </main>
   <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./surface-contract.mjs"></script>
   <script type="module" src="./send-control.mjs"></script>
 </body>
 </html>
