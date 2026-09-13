@@ -1,0 +1,1 @@
+Branch feat/lighthouse-chat-intent-repair-20260913 now contains central intent interpretation, local slot recovery, unit contracts, and integration RED contracts that require app.mjs wiring. Production app.mjs has not been modified yet. No merge or completion claim is implied.
