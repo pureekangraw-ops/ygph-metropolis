@@ -54,3 +54,11 @@ test('CHAT intent never invents a domain for ambiguous income language', async (
   assert.equal('route' in result, false);
   assert.equal('owner' in result, false);
 });
+
+test('unknown sale stays unknown instead of being reclassified as general income', async () => {
+  const { interpretChatIntent } = await loadIntent();
+  assert.equal(
+    interpretChatIntent('ขายของที่ไม่มีในร้าน 566', { storeProducts: [] }),
+    null,
+  );
+});
