@@ -20,6 +20,7 @@ const runtimeFiles = [
   'runtime-gate.mjs',
   'runtime-ledger.mjs',
   'runtime-store.mjs',
+  'surface-contract.mjs',
   'send-control.mjs',
   'general-income.mjs',
   'store-product.mjs',
