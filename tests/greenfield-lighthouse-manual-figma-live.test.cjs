@@ -12,47 +12,68 @@ function manualMarkup(html) {
   return match[0];
 }
 
-test('MANUAL live hub adopts the approved compact capability grid without inventing Client as a live capability', () => {
+test('LIGHTHOUSE root navigation is CHAT / MANUAL / SETTINGS only', () => {
+  const html = read('lighthouse-next/index.html');
+  const surface = read('lighthouse-next/surface-contract.mjs');
+
+  assert.doesNotMatch(html, /data-root="home"/);
+  assert.doesNotMatch(html, /data-root-target="home"/);
+  assert.match(html, /data-root-target="chat"/);
+  assert.match(html, /data-root-target="manual"/);
+  assert.match(html, /data-root-target="settings"/);
+  assert.match(surface, /ensureVisibleRoot/);
+  assert.match(surface, /manualNav\?\.click\(\)/);
+});
+
+test('MANUAL owns the Today dashboard and exposes only the four owner houses', () => {
   const html = read('lighthouse-next/index.html');
   const manual = manualMarkup(html);
 
-  assert.match(manual, /class="page-title-block manual-heading"/);
-  for (const task of ['finance', 'store', 'ride', 'calendar', 'ledger']) {
-    assert.match(manual, new RegExp(`data-task="${task}"`), `${task} must remain reachable from MANUAL`);
+  assert.match(manual, /data-manual-dashboard="today"/);
+  assert.match(manual, /เงินจริง/);
+  assert.match(manual, /เงินเข้า/);
+  assert.match(manual, /เงินออก/);
+  assert.match(manual, /สุทธิ/);
+
+  for (const task of ['income', 'outcome', 'calendar', 'ledger']) {
+    assert.match(manual, new RegExp(`data-task="${task}"`), `${task} must be a MANUAL owner house`);
   }
-  assert.doesNotMatch(manual, /data-task="client"/);
 
-  assert.match(manual, /<strong>Finance<\/strong><small>Income · Outcome<\/small>/);
-  assert.match(manual, /<strong>Store<\/strong><small>จาก Store<\/small>/);
-  assert.match(manual, /<strong>Ride<\/strong><small>ยังไม่เชื่อม<\/small>/);
-  assert.match(manual, /<strong>Calendar<\/strong><small>ยังไม่เชื่อม<\/small>/);
-  assert.match(manual, /<strong>Ledger<\/strong><small>จาก Ledger<\/small>/);
+  assert.doesNotMatch(manual, /data-task="finance"/);
+  assert.doesNotMatch(manual, /data-task="store"/);
+  assert.doesNotMatch(manual, /data-task="ride"/);
 });
 
-test('MANUAL live hub carries truth-source and connection-state summaries from the approved Figma blueprint', () => {
-  const html = read('lighthouse-next/index.html');
-  const manual = manualMarkup(html);
+test('MANUAL direct Income and Outcome mutate through owner bridges, never Chat parsing', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
 
-  assert.match(manual, /class="manual-summary-card"[^>]*data-manual-summary="truth"/);
-  assert.match(manual, /ภาพรวมข้อมูลจริง/);
-  assert.match(manual, /Ledger \+ Store/);
-  assert.match(manual, /แสดงค่าจริงเมื่อ Runtime อ่านสำเร็จ/);
-
-  assert.match(manual, /class="manual-summary-card manual-connection-card"[^>]*data-manual-summary="connection"/);
-  assert.match(manual, /สถานะการเชื่อมต่อ/);
-  assert.match(manual, /ไม่ใช้ข้อมูลตัวอย่างแทนของจริง/);
-  assert.match(manual, /Calendar \/ Ride แสดง “ยังไม่เชื่อม” จนมี source จริง/);
+  assert.match(surface, /id = 'manual-income-form'/);
+  assert.match(surface, /id = 'manual-expense-form'/);
+  assert.match(surface, /id = 'manual-obligation-form'/);
+  assert.match(surface, /ledgerBridge\.recordOtherIncome\(/);
+  assert.match(surface, /ledgerBridge\.recordExpense\(/);
+  assert.match(surface, /ledgerBridge\.createObligation\(/);
+  assert.match(surface, /ledgerBridge\.payObligation\(/);
+  assert.match(surface, /ledgerBridge\.readLedgerTruth\(/);
+  assert.doesNotMatch(surface, /submitChatText/);
 });
 
-test('MANUAL Figma slice uses a two-column compact grid and per-capability accents while preserving nav clearance', () => {
+test('Calendar surface routes reschedule/status through runtime bridge and does not close owner-controlled payments', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
+  assert.match(surface, /ledgerBridge\.rescheduleCalendar\(/);
+  assert.match(surface, /ledgerBridge\.setCalendarStatus\(/);
+  assert.match(surface, /PAY_OBLIGATION/);
+  assert.match(surface, /PAY_OBLIGATION_INSTALLMENT/);
+  assert.match(surface, /RECEIVE_CUSTOMER_PAYMENT/);
+  assert.match(surface, /จัดการที่ Owner ของรายการ/);
+});
+
+test('unlock surface is presented as a PIN gate without narrowing the existing credential format', () => {
   const html = read('lighthouse-next/index.html');
 
-  assert.match(html, /#manual-hub \.task-grid\s*\{[^}]*grid-template-columns\s*:\s*repeat\(2,minmax\(0,1fr\)\)[^}]*gap\s*:\s*12px/is);
-  assert.match(html, /#manual-hub \.task-card\s*\{[^}]*min-height\s*:\s*78px[^}]*border-radius\s*:\s*17px/is);
-  assert.match(html, /\.task-card\[data-task="finance"\][^{]*\{[^}]*rgba\(34,216,255,/is);
-  assert.match(html, /\.task-card\[data-task="ride"\][^{]*\{[^}]*rgba\(255,100,200,/is);
-  assert.match(html, /\.task-card\[data-task="calendar"\][^{]*\{[^}]*rgba\(108,140,255,/is);
-  assert.match(html, /\.task-card\[data-task="ledger"\][^{]*\{[^}]*rgba\(255,211,106,/is);
-  assert.match(html, /\.manual-summary-card\s*\{[^}]*border-radius\s*:\s*16px/is);
-  assert.match(html, /#manual-hub\s*\{[^}]*padding-bottom\s*:\s*calc\(var\(--nav-height\)\s*\+\s*28px\)/is);
+  assert.match(html, /<label for="device-password">PIN<\/label>/);
+  assert.match(html, /id="device-password"[^>]*minlength="6"/);
+  assert.match(html, />ลืม PIN<\/button>/);
+  assert.doesNotMatch(html, /inputmode="numeric"/);
+  assert.doesNotMatch(html, /<label for="device-password">รหัสเข้าแอป<\/label>/);
 });
