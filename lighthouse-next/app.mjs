@@ -166,6 +166,7 @@ showRecoveryButton.addEventListener('click', () => { devicePassword.value = ''; 
 cancelRecoveryButton.addEventListener('click', () => { clearRecoveryFields(); showLoginGate(); });
 lockAppButton.addEventListener('click', lockApp);
 window.addEventListener('pagehide', () => { runtimeGate.lock(); });
+void bootRuntimeGate();
 root.querySelectorAll('[data-root-target]').forEach((button)=>button.addEventListener('click',()=>selectRoot(button.dataset.rootTarget)));
 root.querySelectorAll('[data-task]').forEach((button)=>button.addEventListener('click',()=>openManualTask(button.dataset.task)));
 root.querySelector('#manual-back').addEventListener('click',showManualHub);
