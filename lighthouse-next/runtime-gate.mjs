@@ -10,14 +10,14 @@ import { activateRuntimeSession, deactivateRuntimeSession } from '../greenfield/
 export function authMessage(error) {
   const code = String(error?.message || error || '');
   const copy = {
-    DEVICE_PIN_INVALID: 'รหัสไม่ถูกต้อง',
-    DEVICE_PIN_TOO_SHORT: `รหัสต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} ตัวอักษร`,
-    DEVICE_PIN_CONFIRM_MISMATCH: 'รหัสใหม่ทั้งสองช่องไม่ตรงกัน',
-    DEVICE_UNLOCK_NOT_ENROLLED: 'อุปกรณ์นี้ยังไม่ได้ตั้งค่ารหัสเข้าใช้งาน',
-    DEVICE_UNLOCK_INCOMPLETE: 'ข้อมูลรหัสบนอุปกรณ์ยังไม่สมบูรณ์ ต้องซ่อมการตั้งค่าก่อน',
+    DEVICE_PIN_INVALID: 'PIN ไม่ถูกต้อง',
+    DEVICE_PIN_TOO_SHORT: `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} หลัก`,
+    DEVICE_PIN_CONFIRM_MISMATCH: 'PIN ใหม่ทั้งสองช่องไม่ตรงกัน',
+    DEVICE_UNLOCK_NOT_ENROLLED: 'อุปกรณ์นี้ยังไม่ได้ตั้งค่า PIN',
+    DEVICE_UNLOCK_INCOMPLETE: 'ข้อมูล PIN บนอุปกรณ์ยังไม่สมบูรณ์ ต้องซ่อมการตั้งค่าก่อน',
     PASSPHRASE_TOO_SHORT: 'Recovery Code ต้องมีอย่างน้อย 12 ตัวอักษร',
     GREENFIELD_VAULT_DECRYPT_FAILED: 'Recovery Code ไม่ถูกต้อง',
-    FIRST_RUN_ALREADY_ENROLLED: 'อุปกรณ์นี้ตั้งค่ารหัสแล้ว กรุณาเข้าสู่ระบบ',
+    FIRST_RUN_ALREADY_ENROLLED: 'อุปกรณ์นี้ตั้งค่า PIN แล้ว กรุณาเข้าสู่ระบบ',
     LIGHTHOUSE_RUNTIME_STATE_REQUIRED: 'ยังอ่านข้อมูลจริงไม่ได้ จึงยังเข้าแอปไม่ได้',
   };
   return copy[code] || 'ดำเนินการไม่ได้ กรุณาลองใหม่';
