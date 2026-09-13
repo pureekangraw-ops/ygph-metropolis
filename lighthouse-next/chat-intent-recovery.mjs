@@ -6,6 +6,11 @@ function normalizeText(value) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
+function normalizeIncomeSource(value) {
+  const source = normalizeText(value).replace(/^จาก\s*/u, '').trim();
+  return source && source.length <= 80 ? source : null;
+}
+
 function parsePositiveNumber(value) {
   const match = normalizeText(value).match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)/u);
   if (!match) return null;
@@ -32,7 +37,7 @@ function recomputeStoreMissing(intent) {
 
 function recoverGeneralIncome(intent, answer) {
   if (intent.missing[0] !== 'source') return intent;
-  const source = normalizeText(answer);
+  const source = normalizeIncomeSource(answer);
   if (!source) return intent;
   const next = clone(intent);
   next.slots.source = source;
