@@ -10,134 +10,265 @@ body.go-client-mode{
   --go-client-faint:#7f8aa0;
   --go-client-accent:#1f8a70;
   --go-client-accent-hover:#176c58;
-  --go-client-accent-soft:rgba(31,138,112,.14);
+  --go-client-accent-bright:#2cc7aa;
+  --go-client-accent-soft:rgba(31,138,112,.16);
   --go-client-success:#22c55e;
   --go-client-warn:#f59e0b;
-  --go-client-radius:18px;
+  --go-client-danger:#ef4444;
+  --go-client-radius:16px;
   min-height:100dvh;
-  background:
-    radial-gradient(circle at 82% -8%,rgba(31,138,112,.16),transparent 30rem),
-    linear-gradient(180deg,#0b1220 0%,#0b1220 62%,#0a101c 100%);
+  margin:0;
+  background:#0b1220;
   color:var(--go-client-text);
+  font-family:"Noto Sans Thai","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;
 }
 body.go-client-mode>.appbar,body.go-client-mode>.layout{display:none!important}
+body.go-client-mode *{box-sizing:border-box}
+body.go-client-mode [hidden]{display:none!important}
 body.go-client-mode button,body.go-client-mode textarea,body.go-client-mode input{font:inherit}
-body.go-client-mode button{transition:border-color .16s ease,background .16s ease,transform .16s ease,box-shadow .16s ease}
-body.go-client-mode button:focus-visible,body.go-client-mode textarea:focus-visible,body.go-client-mode input:focus-visible,body.go-client-mode summary:focus-visible{outline:2px solid var(--go-client-accent);outline-offset:3px}
-.go-client-shell{width:min(960px,100%);margin:0 auto;padding:clamp(16px,4vw,38px);min-height:100dvh}
-.go-client-header{padding:clamp(18px,4vw,42px) 0 24px}
-.go-client-hero-copy{max-width:760px}
-.go-client-header h1{margin:7px 0 14px;max-width:760px;font-size:clamp(2rem,7vw,3.55rem);line-height:1.04;letter-spacing:-.045em;color:var(--go-client-text)}
-.go-client-eyebrow{margin:0;color:#58bca3;font-size:.72rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
-.go-client-lead{max-width:720px;margin:0;color:var(--go-client-muted);font-size:clamp(.98rem,2.5vw,1.12rem);line-height:1.72}
-.go-client-hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
-.go-client-primary-route{min-height:48px;padding:11px 18px;border:1px solid var(--go-client-accent);border-radius:12px;background:var(--go-client-accent);color:#fff;font-weight:850;box-shadow:0 10px 28px rgba(31,138,112,.2)}
-.go-client-primary-route:hover{background:var(--go-client-accent-hover);border-color:var(--go-client-accent-hover);transform:translateY(-1px)}
-.go-client-secondary-route{min-height:48px;padding:11px 17px;border:1px solid var(--go-client-line-strong);border-radius:12px;background:rgba(18,26,42,.72);color:var(--go-client-text);font-weight:750}
-.go-client-secondary-route:hover{border-color:#50637f;background:var(--go-client-panel-soft)}
-.go-client-hero-note{margin:13px 0 0;color:var(--go-client-faint);font-size:.84rem;line-height:1.55}
-.go-client-trust-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;overflow:hidden;border:1px solid var(--go-client-line);border-radius:16px;background:var(--go-client-line);box-shadow:0 16px 44px rgba(0,0,0,.12)}
-.go-client-trust-strip>div{min-width:0;padding:14px 15px;background:rgba(18,26,42,.94)}
-.go-client-trust-strip strong{display:block;margin-bottom:4px;color:var(--go-client-text);font-size:.88rem;line-height:1.35}
-.go-client-trust-strip span{display:block;color:var(--go-client-faint);font-size:.75rem;line-height:1.45}
-.go-client-main{display:grid;gap:16px;padding:20px 0 42px}
-.go-client-card{background:rgba(18,26,42,.94);border:1px solid var(--go-client-line);border-radius:var(--go-client-radius);padding:clamp(17px,3vw,24px);box-shadow:0 16px 44px rgba(0,0,0,.13)}
-.go-client-chat-card{border-color:#31435c;box-shadow:0 22px 54px rgba(0,0,0,.19)}
-.go-client-card h2,.go-client-help-lane h2{margin:.16rem 0;font-size:clamp(1.16rem,3vw,1.38rem);line-height:1.28;letter-spacing:-.015em;color:var(--go-client-text)}
-.go-client-card p,.go-client-help-lane p{line-height:1.62}
-.go-client-card-intro{margin:5px 0 14px;color:var(--go-client-muted)}
-.go-client-muted{color:var(--go-client-muted);margin:.45rem 0 0}
-.go-client-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
-.go-client-chip{display:inline-flex;align-items:center;min-height:28px;padding:3px 9px;border:1px solid var(--go-client-line);border-radius:999px;background:rgba(11,18,32,.45);color:var(--go-client-faint);font-size:.74rem;white-space:nowrap}
-.go-client-quick-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:15px 0 10px}
-.go-client-quick-row button{min-height:44px;padding:8px 10px;border:1px solid var(--go-client-line-strong);border-radius:11px;background:var(--go-client-panel-soft);color:var(--go-client-text);font-size:.83rem;font-weight:700;text-align:left}
-.go-client-quick-row button:hover{border-color:#54706d;background:var(--go-client-accent-soft)}
-.go-client-thread{min-height:190px;max-height:44vh;overflow:auto;display:flex;flex-direction:column;gap:9px;margin-top:4px;padding:10px 2px 13px;scrollbar-width:thin;scrollbar-color:var(--go-client-line-strong) transparent}
-.go-client-message{max-width:min(78%,620px);padding:10px 12px;border:1px solid var(--go-client-line);border-radius:14px;white-space:pre-wrap;line-height:1.56;color:var(--go-client-text)}
-.go-client-message.is-assistant{align-self:flex-start;background:var(--go-client-panel-deep);border-bottom-left-radius:4px}
-.go-client-message.is-user{align-self:flex-end;background:var(--go-client-accent-soft);border-color:#315b53;border-bottom-right-radius:4px}
-.go-client-job-types{margin:4px 0 12px;border-top:1px solid var(--go-client-line);padding-top:11px}
-.go-client-job-types summary{width:max-content;max-width:100%;cursor:pointer;color:var(--go-client-muted);font-size:.82rem;font-weight:700}
-.go-client-choice-row{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 2px}
-.go-client-choice-row button{min-height:40px;padding:7px 10px;border:1px solid var(--go-client-line);border-radius:10px;background:transparent;color:var(--go-client-muted);font-size:.8rem}
-.go-client-choice-row button:hover{border-color:#4d617e;color:var(--go-client-text)}
-.go-client-composer{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:end;padding-top:12px;border-top:1px solid var(--go-client-line)}
-.go-client-composer textarea{min-height:58px;max-height:160px;resize:vertical;margin:0;padding:12px 13px;border:1px solid var(--go-client-line-strong);border-radius:12px;background:#0e1727;color:var(--go-client-text);line-height:1.5}
-.go-client-composer textarea::placeholder{color:#69778e}
-.go-client-send,.go-client-primary{min-height:46px;border:1px solid var(--go-client-accent);border-radius:11px;background:var(--go-client-accent);color:#fff;font-weight:850}
-.go-client-send{min-width:74px;min-height:58px}
-.go-client-send:hover,.go-client-primary:hover{background:var(--go-client-accent-hover);border-color:var(--go-client-accent-hover)}
+body.go-client-mode button,body.go-client-mode summary,body.go-client-mode label[for]{-webkit-tap-highlight-color:transparent}
+body.go-client-mode button{cursor:pointer;transition:background .16s ease,border-color .16s ease,transform .16s ease,box-shadow .16s ease}
+body.go-client-mode button:focus-visible,body.go-client-mode textarea:focus-visible,body.go-client-mode input:focus-visible,body.go-client-mode summary:focus-visible,body.go-client-mode label[for]:focus-within{outline:2px solid var(--go-client-accent-bright);outline-offset:2px}
+
+.go-client-shell{
+  width:100%;
+  max-width:430px;
+  min-height:100dvh;
+  margin:0 auto;
+  padding:12px 16px 28px;
+  background:linear-gradient(180deg,#0b1220 0%,#0b1220 72%,#09101c 100%);
+}
+
+.go-customer-topbar{
+  min-height:52px;
+  display:grid;
+  grid-template-columns:40px minmax(0,1fr) 12px;
+  align-items:center;
+  gap:12px;
+  border-bottom:2px solid rgba(44,199,170,.68);
+  padding-bottom:12px;
+}
+.go-customer-brand-mark{
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--go-client-accent-bright);
+  border-radius:12px;
+  background:linear-gradient(145deg,#172337,#0f1726);
+  box-shadow:0 0 18px rgba(44,199,170,.10);
+  color:var(--go-client-text);
+  font-weight:900;
+  font-size:.72rem;
+  letter-spacing:-.04em;
+}
+.go-customer-brand-mark span{position:relative}
+.go-customer-brand-mark span::before,.go-customer-brand-mark span::after{content:"";position:absolute;top:-7px;width:3px;height:3px;border-radius:50%;background:var(--go-client-accent-bright)}
+.go-customer-brand-mark span::before{left:3px}.go-customer-brand-mark span::after{right:3px}
+.go-customer-brand-copy{min-width:0;display:grid;gap:1px}
+.go-customer-brand-copy strong{font-size:16px;line-height:22px;letter-spacing:.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.go-customer-brand-copy strong span{color:var(--go-client-accent-bright)}
+.go-customer-brand-copy small{font-size:12px;line-height:18px;color:var(--go-client-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.go-customer-live-dot{width:8px;height:8px;border-radius:50%;background:#56ded0;box-shadow:0 0 11px rgba(86,222,208,.65);justify-self:end}
+
+.go-customer-state-intro{padding:14px 0 2px}
+.go-customer-state-intro h1{margin:0;font-size:22px;line-height:30px;letter-spacing:-.02em;color:var(--go-client-text)}
+.go-customer-state-intro p{margin:0;color:var(--go-client-muted);font-size:14px;line-height:22px}
+
+.go-customer-assist-banner{
+  min-height:72px;
+  display:grid;
+  grid-template-columns:40px 1fr;
+  gap:12px;
+  align-items:center;
+  margin-top:12px;
+  padding:12px;
+  border:1px solid var(--go-client-accent);
+  border-radius:14px;
+  background:var(--go-client-panel);
+}
+.go-customer-assist-avatar{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--go-client-accent-bright);border-radius:11px;background:#0d1c26;color:var(--go-client-text);font-size:.7rem;font-weight:900}
+.go-customer-assist-banner strong,.go-customer-assist-banner span{display:block}
+.go-customer-assist-banner strong{font-size:16px;line-height:24px}
+.go-customer-assist-banner span{color:var(--go-client-muted);font-size:13px;line-height:20px}
+
+.go-client-header{padding:14px 0 8px}
+.go-client-header h1{margin:0 0 4px;font-size:30px;line-height:38px;letter-spacing:-.035em;color:var(--go-client-text)}
+.go-client-lead{margin:0;color:var(--go-client-muted);font-size:14px;line-height:22px}
+.go-client-hero-actions{display:grid;gap:4px;margin-top:16px}
+.go-client-primary-route{min-height:48px;width:100%;padding:10px 16px;border:1px solid #2cbda2;border-radius:12px;background:linear-gradient(100deg,#2ec4ae,#208f78);color:#fff;font-size:16px;font-weight:800;box-shadow:0 10px 24px rgba(31,138,112,.18)}
+.go-client-primary-route:hover{background:linear-gradient(100deg,#27ad99,#18765f);transform:translateY(-1px)}
+.go-client-secondary-route{min-height:44px;width:100%;border:0;background:transparent;color:var(--go-client-muted);font-size:14px;font-weight:700}
+.go-client-secondary-route:hover{color:var(--go-client-text)}
+
+.go-client-trust-strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:8px 0 20px}
+.go-client-trust-strip>div{min-height:76px;display:grid;grid-template-columns:22px 1fr;grid-template-rows:auto auto;column-gap:8px;align-content:start;padding:10px 12px;border:1px solid var(--go-client-line);border-radius:14px;background:var(--go-client-panel)}
+.go-customer-trust-icon{width:22px;height:22px;display:grid!important;place-items:center;grid-row:1;border:2px solid #00dc83;border-radius:50%;color:#00dc83!important;font-size:13px!important;line-height:1!important;font-weight:900}
+.go-client-trust-strip strong{grid-column:2;display:block;color:var(--go-client-text);font-size:13px;line-height:20px}
+.go-client-trust-strip>div>span:last-child{grid-column:1/-1;display:block;margin-top:2px;color:var(--go-client-faint);font-size:11px;line-height:17px}
+
+.go-client-main{display:grid;gap:16px;padding-bottom:12px}
+.go-client-card{padding:14px;border:1px solid var(--go-client-line);border-radius:var(--go-client-radius);background:var(--go-client-panel);box-shadow:none}
+.go-client-card h2,.go-client-help-lane h2{margin:0;color:var(--go-client-text);font-size:20px;line-height:28px;letter-spacing:-.015em}
+.go-client-card h3{margin:0 0 10px;font-size:16px;line-height:24px}
+.go-client-card-intro{margin:0;color:var(--go-client-muted);font-size:13px;line-height:20px}
+.go-client-muted{margin:6px 0 0;color:var(--go-client-muted);font-size:13px;line-height:20px}
+.go-client-section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.go-client-section-head>div{min-width:0}
+.go-client-section-head>div:has(.go-customer-section-icon){display:flex;align-items:center;gap:10px}
+.go-customer-section-icon{font-size:24px;color:var(--go-client-muted)}
+.go-client-chip{min-height:28px;display:inline-flex;align-items:center;padding:3px 9px;border:1px solid var(--go-client-line);border-radius:999px;background:#0d1626;color:var(--go-client-faint);font-size:11px;line-height:18px;white-space:nowrap}
+
+.go-client-chat-card{border-color:var(--go-client-accent);padding:14px;background:#111a2b}
+.go-client-quick-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.go-client-quick-row button{min-height:44px;padding:8px 16px;border:1px solid #235b56;border-radius:999px;background:#0d1828;color:var(--go-client-muted);font-size:13px;line-height:20px;font-weight:500}
+.go-client-quick-row button:hover{border-color:var(--go-client-accent);background:var(--go-client-accent-soft);color:var(--go-client-text)}
+.go-client-thread{min-height:132px;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:16px;padding:2px 0 14px;scrollbar-width:thin;scrollbar-color:var(--go-client-line-strong) transparent}
+.go-client-message{max-width:78%;padding:10px 12px;border:1px solid #245763;border-radius:14px;white-space:pre-wrap;color:var(--go-client-text);font-size:14px;line-height:22px}
+.go-client-message.is-assistant{align-self:flex-start;background:#142033}
+.go-client-message.is-user{align-self:flex-end;background:#22977e;border-color:#22977e;color:#fff}
+.go-client-job-types{margin:0 0 12px;border-top:1px solid var(--go-client-line);padding-top:10px}
+.go-client-job-types summary{min-height:44px;display:flex;align-items:center;width:max-content;max-width:100%;cursor:pointer;color:var(--go-client-muted);font-size:13px;line-height:20px;font-weight:700}
+.go-client-choice-row{display:flex;gap:7px;flex-wrap:wrap;margin:6px 0 0}
+.go-client-choice-row button{min-height:44px;padding:8px 11px;border:1px solid var(--go-client-line);border-radius:10px;background:#0d1727;color:var(--go-client-muted);font-size:12px}
+.go-client-choice-row button:hover{border-color:var(--go-client-accent);color:var(--go-client-text)}
+.go-customer-file-truth{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center;margin:0 0 12px;padding:10px 12px;border:1px solid var(--go-client-warn);border-radius:12px;color:var(--go-client-warn)}
+.go-customer-file-truth>span{font-weight:900;font-size:18px;text-align:center}
+.go-customer-file-truth p{margin:0;font-size:12px;line-height:18px;font-weight:700}
+.go-client-composer{min-height:64px;display:grid;grid-template-columns:44px minmax(0,1fr) 48px;gap:8px;align-items:center;padding:8px;border:1px solid var(--go-client-line);border-radius:13px;background:#0c1626}
+.go-customer-attach{width:44px;height:44px;display:grid;place-items:center;border-radius:10px;background:#162238;color:var(--go-client-muted);font-size:24px;cursor:pointer}
+.go-client-composer textarea{width:100%;min-height:44px;max-height:112px;resize:none;margin:0;padding:10px 2px;border:0;background:transparent;color:var(--go-client-text);font-size:16px;line-height:24px;outline:0}
+.go-client-composer textarea::placeholder{color:#78849a}
+.go-client-send{width:48px;height:48px;min-height:48px;border:1px solid #2ec4ae;border-radius:12px;background:linear-gradient(145deg,#2cc4ac,#1e937b);color:#fff;font-size:21px;font-weight:800}
+.go-client-send:hover{background:var(--go-client-accent-hover)}
 .go-client-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.go-client-intake[hidden],#goClientEstimate[hidden],#goClientSummaryCard[hidden]{display:none!important}
-.go-client-checklist{display:grid;gap:7px;margin:13px 0}
-.go-client-check-row{display:grid;grid-template-columns:32px 1fr;gap:9px;align-items:center;padding:10px;border:1px solid var(--go-client-line);border-radius:12px;background:var(--go-client-panel-deep)}
-.go-client-check-row.is-received{border-color:#315b53;background:#10211f}
-.go-client-check-status{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--go-client-line);border-radius:999px;color:var(--go-client-faint);font-weight:900}
-.go-client-check-row.is-received .go-client-check-status{color:#58bca3;border-color:#47786c}
-.go-client-check-row>span:last-child{display:grid;gap:2px}
-.go-client-check-row small{color:var(--go-client-faint)}
-.go-client-file-drop{display:grid;gap:5px;padding:15px;border:1px dashed #496078;border-radius:13px;background:#0e1727;cursor:pointer}
-.go-client-file-drop:hover{border-color:#54897d;background:#10201f}
-.go-client-file-drop span{font-size:.82rem;color:var(--go-client-muted)}
-.go-client-file-drop input{margin-top:7px;color:var(--go-client-muted)}
-.go-client-material-list{display:grid;gap:7px;margin-top:10px}
-.go-client-material{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;background:var(--go-client-panel-deep);border:1px solid var(--go-client-line);border-radius:10px}
-.go-client-material small{color:var(--go-client-faint);text-align:right}
+
+.go-client-checklist{display:grid;gap:8px;margin:12px 0}
+.go-client-check-row{min-height:42px;display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;border:1px solid var(--go-client-line);border-radius:10px;background:#172237}
+.go-client-check-row.is-received{border-color:#284f4b}
+.go-client-check-status{width:22px;height:22px;display:grid;place-items:center;border:2px solid var(--go-client-warn);border-radius:50%;color:var(--go-client-warn);font-size:12px;font-weight:900}
+.go-client-check-row.is-received .go-client-check-status{border-color:#00dc83;color:#00dc83}
+.go-client-check-row>span:last-child{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.go-client-check-row strong{font-size:13px;line-height:20px}
+.go-client-check-row small{color:var(--go-client-faint);font-size:11px;line-height:17px;text-align:right}
+.go-customer-files-panel{margin-top:16px;padding-top:14px;border-top:1px solid var(--go-client-line)}
+.go-client-file-drop{min-height:48px;display:grid;gap:2px;align-content:center;padding:8px 14px;border:1px solid var(--go-client-accent);border-radius:12px;background:#0d1727;cursor:pointer}
+.go-client-file-drop strong{font-size:15px;line-height:22px}
+.go-client-file-drop span{color:var(--go-client-muted);font-size:11px;line-height:17px}
+.go-client-file-drop input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none}
+.go-client-material-list{display:grid;gap:8px;margin-top:10px}
+.go-client-material{min-height:58px;display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--go-client-line);border-radius:10px;background:#172237}
+.go-customer-file-icon{color:var(--go-client-muted);font-size:22px}
+.go-client-material>span:last-child{min-width:0;display:grid;gap:1px}
+.go-client-material strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px}
+.go-client-material small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--go-client-muted);font-size:10px;line-height:16px}
+.go-customer-file-note{margin:8px 0 0;padding:4px 8px;border:1px solid var(--go-client-warn);border-radius:8px;color:var(--go-client-warn);font-size:11px;line-height:18px;text-align:center}
 .go-client-inline-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.go-client-inline-actions button{min-height:42px;border:1px solid var(--go-client-line-strong);border-radius:10px;background:transparent;color:var(--go-client-muted)}
-.go-client-card label{color:var(--go-client-muted)}
-.go-client-card input[type="number"],.go-client-card input[type="date"]{display:block;width:100%;margin:7px 0 12px;padding:10px 11px;border:1px solid var(--go-client-line-strong);border-radius:10px;background:#0e1727;color:var(--go-client-text)}
+.go-client-inline-actions button{min-height:44px;padding:8px 12px;border:1px solid var(--go-client-line-strong);border-radius:10px;background:transparent;color:var(--go-client-muted)}
+
+.go-client-card label{color:var(--go-client-muted);font-size:13px;line-height:20px}
+.go-client-card input[type="number"],.go-client-card input[type="date"]{display:block;width:100%;min-height:44px;margin:6px 0 12px;padding:9px 11px;border:1px solid var(--go-client-line);border-radius:10px;background:#172237;color:var(--go-client-text);font-size:16px}
+.go-client-primary{min-height:48px;width:100%;padding:9px 14px;border:1px solid #2abda5;border-radius:12px;background:linear-gradient(100deg,#2ec4ae,#208f78);color:#fff;font-weight:800}
+.go-client-primary:hover{background:linear-gradient(100deg,#27ad99,#18765f)}
 .go-client-estimate-result{margin:12px 0}
-.go-client-result-box{display:grid;gap:4px;padding:13px;border:1px solid #315b53;border-radius:12px;background:#10211f}
-.go-client-result-box span{color:var(--go-client-muted);font-size:.88rem}
-.go-client-warning{color:var(--go-client-warn);padding:10px 0 0;margin:0}
-.go-client-summary{display:grid;gap:0;border:1px solid var(--go-client-line);border-radius:12px;overflow:hidden;margin:10px 0 14px}
-.go-client-summary>div{display:grid;grid-template-columns:minmax(110px,.8fr) 1.4fr;gap:12px;padding:10px 12px;background:var(--go-client-panel-deep);border-bottom:1px solid var(--go-client-line)}
-.go-client-summary>div:last-child{border-bottom:0}
-.go-client-summary span{color:var(--go-client-muted)}
-.go-client-summary strong{text-align:right}
-#goClientContact:not(:empty){margin-top:12px;padding:10px;border:1px solid #315b53;border-radius:10px;background:#10211f;color:var(--go-client-text)}
-.go-client-pricing{background:rgba(15,23,38,.82);box-shadow:none}
-.go-client-package-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0 7px}
-.go-client-package-grid button{min-height:104px;display:grid;gap:3px;text-align:left;align-content:center;padding:12px;border:1px solid var(--go-client-line);border-radius:12px;background:var(--go-client-panel-soft);color:var(--go-client-text)}
-.go-client-package-grid button:hover,.go-client-package-grid button:focus-visible{border-color:#4f7d73;background:var(--go-client-accent-soft)}
-.go-client-package-grid small{color:var(--go-client-faint)}
-.go-client-package-grid strong{font-size:1.08rem}
-.go-client-package-grid span{font-size:.78rem;color:var(--go-client-muted)}
-.go-client-help-lane{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:18px 20px;border:1px solid var(--go-client-line);border-radius:16px;background:rgba(11,18,32,.52);color:var(--go-client-muted)}
-.go-client-help-lane p{max-width:650px;margin:.4rem 0 0;color:var(--go-client-faint);font-size:.88rem}
-.go-client-help{flex:0 0 auto;min-height:44px;padding:9px 13px;border:1px solid var(--go-client-line-strong);border-radius:10px;background:transparent;color:var(--go-client-text);font-weight:750}
-.go-client-help:hover{border-color:#54706d;background:var(--go-client-accent-soft)}
-@media(max-width:820px){
-  .go-client-trust-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .go-client-quick-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+.go-client-result-box{display:grid;gap:6px;padding:12px;border:1px solid var(--go-client-line);border-radius:11px;background:#172237}
+.go-client-result-box strong{font-size:15px;line-height:22px}
+.go-client-result-box span{color:var(--go-client-muted);font-size:13px;line-height:20px}
+.go-client-warning{margin:12px 0 0;padding:10px 12px;border:1px solid var(--go-client-line);border-radius:11px;color:var(--go-client-warn);font-size:12px;line-height:18px;font-weight:700}
+.go-client-summary{display:grid;gap:0;margin:6px 0 14px}
+.go-client-summary>div{display:grid;grid-template-columns:108px minmax(0,1fr);gap:12px;padding:4px 0}
+.go-client-summary span{color:var(--go-client-muted);font-size:13px;line-height:20px}
+.go-client-summary strong{text-align:right;font-size:14px;line-height:20px}
+#goClientContact:not(:empty){margin-top:12px;padding:10px;border:1px solid var(--go-client-accent);border-radius:10px;background:#10211f;color:var(--go-client-text)}
+
+.go-client-pricing{background:#101827}
+.go-client-package-grid{display:grid;gap:10px;margin:12px 0 8px}
+.go-client-package-grid button{min-height:64px;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;gap:0 12px;align-items:center;padding:10px 14px;border:1px solid var(--go-client-line);border-radius:12px;background:#172237;color:var(--go-client-text);text-align:left}
+.go-client-package-grid button:hover{border-color:var(--go-client-accent);background:var(--go-client-accent-soft)}
+.go-client-package-grid small{grid-column:1;color:var(--go-client-muted);font-size:11px}
+.go-client-package-grid strong{grid-column:2;grid-row:1/3;font-size:18px;line-height:26px}
+.go-client-package-grid span{grid-column:1;color:var(--go-client-muted);font-size:12px;line-height:18px}
+
+.go-client-help-lane{min-height:72px;display:grid;grid-template-columns:28px minmax(0,1fr) 88px;gap:10px;align-items:center;padding:10px 14px;border:1px solid var(--go-client-line);border-radius:14px;background:var(--go-client-panel)}
+.go-customer-help-icon{font-size:24px;color:var(--go-client-muted)}
+.go-client-help-lane h2{font-size:14px;line-height:21px}
+.go-client-help-lane p{margin:0;color:var(--go-client-muted);font-size:11px;line-height:17px}
+.go-client-help{min-height:44px;padding:6px 8px;border:1px solid var(--go-client-accent);border-radius:10px;background:transparent;color:var(--go-client-text);font-size:12px;line-height:17px;font-weight:700}
+.go-client-help:hover{background:var(--go-client-accent-soft)}
+
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-header,
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-trust-strip,
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-pricing,
+[data-go-customer-view="INTAKE_FILES"] .go-client-header,
+[data-go-customer-view="INTAKE_FILES"] .go-client-trust-strip,
+[data-go-customer-view="INTAKE_FILES"] .go-client-pricing,
+[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-header,
+[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-trust-strip,
+[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-pricing,
+[data-go-customer-view="GO_ASSISTING"] .go-client-header,
+[data-go-customer-view="GO_ASSISTING"] .go-client-trust-strip,
+[data-go-customer-view="GO_ASSISTING"] .go-client-pricing{display:none}
+
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-main{padding-top:8px}
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-chat-card{min-height:574px;display:flex;flex-direction:column}
+[data-go-customer-view="ACTIVE_CHAT"] .go-client-thread{flex:1;max-height:360px}
+[data-go-customer-view="INTAKE_FILES"] #goClientIntake{order:1}
+[data-go-customer-view="INTAKE_FILES"] #goClientChatCard{order:2}
+[data-go-customer-view="INTAKE_FILES"] #goClientEstimate{order:3}
+[data-go-customer-view="INTAKE_FILES"] #goClientSummaryCard{order:4}
+[data-go-customer-view="INTAKE_FILES"] #goClientHelpLane{order:5}
+[data-go-customer-view="ESTIMATE_SUMMARY"] #goClientEstimate{order:1}
+[data-go-customer-view="ESTIMATE_SUMMARY"] #goClientSummaryCard{order:2}
+[data-go-customer-view="ESTIMATE_SUMMARY"] #goClientIntake{order:3}
+[data-go-customer-view="ESTIMATE_SUMMARY"] #goClientChatCard{order:4}
+[data-go-customer-view="ESTIMATE_SUMMARY"] #goClientHelpLane{order:5}
+[data-go-customer-view="GO_ASSISTING"] .go-client-main{padding-top:0}
+[data-go-customer-view="GO_ASSISTING"] #goClientChatCard{order:1;min-height:518px;display:flex;flex-direction:column}
+[data-go-customer-view="GO_ASSISTING"] #goClientIntake,[data-go-customer-view="GO_ASSISTING"] #goClientEstimate,[data-go-customer-view="GO_ASSISTING"] #goClientSummaryCard{order:2}
+[data-go-customer-view="GO_ASSISTING"] .go-client-thread{flex:1;max-height:330px}
+
+@media(min-width:700px){
+  .go-client-shell{max-width:768px;padding:12px 32px 36px}
+  .go-client-header{padding-top:22px}
+  .go-client-header h1{font-size:34px;line-height:44px}
+  .go-client-trust-strip{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .go-client-trust-strip>div{min-height:96px}
+  .go-client-package-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .go-client-package-grid button{min-height:104px;grid-template-columns:1fr;grid-template-rows:auto auto auto;align-content:center}
+  .go-client-package-grid strong{grid-column:1;grid-row:auto;font-size:18px}
 }
-@media(max-width:700px){
-  .go-client-shell{padding:14px 12px 28px}
-  .go-client-header{padding:16px 2px 18px}
-  .go-client-header h1{font-size:clamp(2rem,10vw,2.8rem)}
-  .go-client-hero-actions{display:grid;grid-template-columns:1fr}
-  .go-client-primary-route,.go-client-secondary-route{width:100%}
-  .go-client-main{padding-top:14px}
-  .go-client-section-head{display:grid;gap:8px}
-  .go-client-chip{width:max-content;max-width:100%;white-space:normal}
-  .go-client-message{max-width:90%}
-  .go-client-choice-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-  .go-client-choice-row button:last-child:nth-child(odd){grid-column:1/-1}
-  .go-client-composer{grid-template-columns:1fr}
-  .go-client-send{width:100%;min-height:48px}
-  .go-client-package-grid{grid-template-columns:1fr}
-  .go-client-package-grid button{min-height:76px}
-  .go-client-material{display:grid}
-  .go-client-material small{text-align:left}
-  .go-client-summary>div{grid-template-columns:1fr;gap:2px}
-  .go-client-summary strong{text-align:left}
-  .go-client-help-lane{display:grid;gap:14px;padding:16px}
-  .go-client-help{width:100%}
+
+@media(min-width:900px){
+  .go-client-shell{max-width:1440px;padding:12px 72px 40px}
+  .go-customer-topbar{grid-template-columns:40px minmax(0,1fr) 12px}
+  .go-client-header{grid-area:hero;padding-top:40px}
+  .go-client-header h1{max-width:430px;font-size:42px;line-height:50px}
+  .go-client-lead{max-width:430px;font-size:15px;line-height:24px}
+  .go-client-hero-actions{max-width:430px;margin-top:20px}
+  .go-client-trust-strip{grid-area:trust;max-width:430px;grid-template-columns:repeat(2,minmax(0,1fr));margin:0}
+  .go-client-main{display:grid;grid-template-columns:430px minmax(0,1fr);grid-template-areas:"help chat" "pricing pricing";column-gap:48px;row-gap:20px;padding-top:30px}
+  .go-client-chat-card{grid-area:chat;min-height:520px}
+  .go-client-pricing{grid-area:pricing;margin-left:478px}
+  .go-client-help-lane{grid-area:help;align-self:start;margin-top:394px}
+  [data-go-customer-view="LANDING"]{display:grid;grid-template-columns:430px minmax(0,1fr);grid-template-rows:auto auto auto;column-gap:48px}
+  [data-go-customer-view="LANDING"] .go-customer-topbar{grid-column:1/-1}
+  [data-go-customer-view="LANDING"] .go-client-header{grid-column:1;grid-row:2}
+  [data-go-customer-view="LANDING"] .go-client-trust-strip{grid-column:1;grid-row:3}
+  [data-go-customer-view="LANDING"] .go-client-main{grid-column:2;grid-row:2/4;display:grid;grid-template-columns:1fr;grid-template-areas:"chat" "pricing" "help";padding-top:30px}
+  [data-go-customer-view="LANDING"] .go-client-pricing{margin-left:0}
+  [data-go-customer-view="LANDING"] .go-client-help-lane{margin-top:0}
+  [data-go-customer-view="ACTIVE_CHAT"],[data-go-customer-view="INTAKE_FILES"],[data-go-customer-view="ESTIMATE_SUMMARY"],[data-go-customer-view="GO_ASSISTING"]{max-width:900px}
+  [data-go-customer-view="ACTIVE_CHAT"] .go-client-main,[data-go-customer-view="INTAKE_FILES"] .go-client-main,[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-main,[data-go-customer-view="GO_ASSISTING"] .go-client-main{display:grid;grid-template-columns:1fr;grid-template-areas:none;padding-top:10px}
+  [data-go-customer-view="ACTIVE_CHAT"] .go-client-help-lane,[data-go-customer-view="INTAKE_FILES"] .go-client-help-lane,[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-help-lane{margin-top:0}
+  [data-go-customer-view="ACTIVE_CHAT"] .go-client-chat-card,[data-go-customer-view="INTAKE_FILES"] .go-client-chat-card,[data-go-customer-view="ESTIMATE_SUMMARY"] .go-client-chat-card,[data-go-customer-view="GO_ASSISTING"] .go-client-chat-card{grid-area:auto}
 }
-@media(max-width:430px){
-  .go-client-trust-strip{grid-template-columns:1fr}
-  .go-client-quick-row{grid-template-columns:1fr}
-  .go-client-choice-row{grid-template-columns:1fr}
-  .go-client-choice-row button:last-child:nth-child(odd){grid-column:auto}
+
+@media(max-width:370px){
+  .go-client-shell{padding-left:12px;padding-right:12px}
+  .go-client-header h1{font-size:28px;line-height:36px}
+  .go-client-trust-strip{gap:10px}
+  .go-client-trust-strip>div{padding:9px 10px}
+  .go-client-quick-row button{padding-left:12px;padding-right:12px}
+  .go-client-help-lane{grid-template-columns:24px minmax(0,1fr) 84px;padding-left:10px;padding-right:10px}
 }
