@@ -6,7 +6,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const acceptancePath = path.join(ROOT, 'docs/acceptance/lighthouse-install-over-vc1008.json');
 
-test('vc1008 physical install-over evidence is bound to the verified owner-test artifact and leaves device gates VERIFY', () => {
+test('vc1008 physical install-over evidence is bound to the verified owner-test artifact and preserves truthful device-gate state', () => {
   const record = JSON.parse(fs.readFileSync(acceptancePath, 'utf8'));
   assert.equal(record.schemaVersion, 1);
   assert.equal(record.applicationId, 'com.yggdrasil.lighthouse');
@@ -25,5 +25,10 @@ test('vc1008 physical install-over evidence is bound to the verified owner-test 
     'localStateSurvives',
     'pinWorks',
   ].sort());
-  for (const value of Object.values(record.checks)) assert.equal(value, 'VERIFY');
+  assert.equal(record.checks.androidAcceptedInstallOver, 'PASS');
+  assert.equal(record.checks.appLaunches, 'PASS');
+  assert.equal(record.checks.chatManualSettingsSurface, 'PASS');
+  assert.equal(record.checks.pinWorks, 'PASS');
+  assert.equal(record.checks.launcherIdentity, 'PASS');
+  assert.equal(record.checks.localStateSurvives, 'VERIFY');
 });
