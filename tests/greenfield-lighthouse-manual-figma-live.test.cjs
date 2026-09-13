@@ -44,14 +44,28 @@ test('MANUAL owns the Today dashboard and exposes only the four owner houses', (
   assert.doesNotMatch(manual, /data-task="ride"/);
 });
 
-test('MANUAL direct Income writes to Ledger and Outcome does not fake unsupported mutation', () => {
+test('MANUAL direct Income and Outcome mutate through owner bridges, never Chat parsing', () => {
   const surface = read('lighthouse-next/surface-contract.mjs');
 
   assert.match(surface, /id = 'manual-income-form'/);
+  assert.match(surface, /id = 'manual-expense-form'/);
+  assert.match(surface, /id = 'manual-obligation-form'/);
   assert.match(surface, /ledgerBridge\.recordOtherIncome\(/);
+  assert.match(surface, /ledgerBridge\.recordExpense\(/);
+  assert.match(surface, /ledgerBridge\.createObligation\(/);
+  assert.match(surface, /ledgerBridge\.payObligation\(/);
   assert.match(surface, /ledgerBridge\.readLedgerTruth\(/);
-  assert.match(surface, /รอ Outcome write contract/);
   assert.doesNotMatch(surface, /submitChatText/);
+});
+
+test('Calendar surface routes reschedule/status through runtime bridge and does not close owner-controlled payments', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
+  assert.match(surface, /ledgerBridge\.rescheduleCalendar\(/);
+  assert.match(surface, /ledgerBridge\.setCalendarStatus\(/);
+  assert.match(surface, /PAY_OBLIGATION/);
+  assert.match(surface, /PAY_OBLIGATION_INSTALLMENT/);
+  assert.match(surface, /RECEIVE_CUSTOMER_PAYMENT/);
+  assert.match(surface, /จัดการที่ Owner ของรายการ/);
 });
 
 test('unlock surface is presented as a PIN gate', () => {
