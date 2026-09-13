@@ -25,14 +25,14 @@
         <div class="pin-copy"><p class="eyebrow">LIGHTHOUSE</p><h1 id="auth-title">ก้าวต่อไปของคุณ</h1><p class="muted">ใส่ PIN เพื่อเข้าแอป</p></div>
         <form id="login-form" class="auth-form">
           <label for="device-password">PIN</label>
-          <input id="device-password" type="password" inputmode="numeric" minlength="6" autocomplete="current-password" required>
+          <input id="device-password" type="password" minlength="6" autocomplete="current-password" required>
           <button id="login-submit" class="primary-button" type="submit">เข้า LIGHTHOUSE</button>
           <button id="show-recovery" class="text-button" type="button">ลืม PIN</button>
         </form>
         <form id="recovery-form" class="auth-form" hidden>
           <label for="recovery-code">Recovery Code</label><input id="recovery-code" type="password" autocomplete="off" required>
-          <label for="new-password">PIN ใหม่</label><input id="new-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
-          <label for="confirm-password">ยืนยัน PIN ใหม่</label><input id="confirm-password" type="password" inputmode="numeric" minlength="6" autocomplete="new-password" required>
+          <label for="new-password">PIN ใหม่</label><input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
+          <label for="confirm-password">ยืนยัน PIN ใหม่</label><input id="confirm-password" type="password" minlength="6" autocomplete="new-password" required>
           <button class="primary-button" type="submit">ตั้ง PIN ใหม่</button><button id="cancel-recovery" class="text-button" type="button">กลับไปใส่ PIN</button>
         </form>
         <p id="auth-status" class="pin-status" aria-live="polite">กำลังตรวจสถานะอุปกรณ์…</p>
