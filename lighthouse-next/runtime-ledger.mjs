@@ -1,5 +1,5 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
-import { projectFinancialTruth } from '../greenfield/calculation-authority.mjs';
+import { projectFinancialTruth, projectReceivableTruth } from '../greenfield/calculation-authority.mjs';
 
 function requiredText(value, code) {
   const output = String(value ?? '').trim();
@@ -27,6 +27,10 @@ function ledgerRecord(state, recordId) {
   return state?.domains?.LEDGER?.records?.[recordId]?.record || null;
 }
 
+function storeRecord(state, recordId) {
+  return state?.domains?.STORE?.records?.[recordId]?.record || null;
+}
+
 function calendarRecord(state, recordId) {
   return state?.domains?.CALENDAR?.records?.[recordId]?.record || null;
 }
@@ -52,6 +56,93 @@ function buildTruth(runtime, state, projectFinancial, now) {
   const transactions = all.filter(record => record?.type === 'TRANSACTION').map(record => structuredClone(record)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const obligations = all.filter(record => record?.type === 'OBLIGATION').map(record => structuredClone(record)).sort((a, b) => String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
   return Object.freeze({ revision:state.revision ?? null, balanceSatang, todayInSatang, todayOutSatang, netSatang:todayInSatang - todayOutSatang, transactions:Object.freeze(transactions), obligations:Object.freeze(obligations) });
+}
+
+function buildIncomeTruth(runtime, state, projectFinancial, now) {
+  const cash = buildTruth(runtime, state, projectFinancial, now);
+  const projection = projectReceivableTruth(state);
+  const receivables = projection.items.map(item => {
+    const sale = storeRecord(state, item.saleId);
+    return Object.freeze({
+      ...structuredClone(item),
+      receivedSatang:Number.isSafeInteger(Number(sale?.receivedSatang)) ? Number(sale.receivedSatang) : 0,
+      totalSatang:Number.isSafeInteger(Number(sale?.totalSatang ?? sale?.amountSatang)) ? Number(sale.totalSatang ?? sale.amountSatang) : null,
+      status:sale?.status ?? null,
+    });
+  });
+  return Object.freeze({ ...cash, outstandingReceivableSatang:Number(projection.totalOutstandingSatang || 0), receivables:Object.freeze(receivables) });
+}
+
+function verifyReceivablePayment(state, before, { saleId, queueId, ledgerTransactionId, amountSatang, recovered }) {
+  const sale = storeRecord(state, saleId);
+  if (!sale || sale.type !== 'SALE') throw new Error('LIGHTHOUSE_RECEIVABLE_READBACK_MISMATCH');
+  const record = ledgerRecord(state, ledgerTransactionId);
+  if (!record || record.type !== 'TRANSACTION' || record.direction !== 'IN' || record.detail !== 'IN:SALE_RECEIPT' ||
+      Number(record.amountSatang) !== amountSatang || String(record.sourceRef || '') !== `STORE/${saleId}`) {
+    throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  }
+  const queue = calendarRecord(state, queueId);
+  if (!queue || queue.type !== 'RECEIVE_CUSTOMER_PAYMENT' || String(queue.detail || '') !== `STORE/${saleId}` ||
+      !['PARTIAL','COMPLETED'].includes(String(queue.status || ''))) {
+    throw new Error('LIGHTHOUSE_CALENDAR_READBACK_MISMATCH');
+  }
+
+  if (!recovered) {
+    const beforeSale = storeRecord(before, saleId);
+    const beforeQueue = calendarRecord(before, queueId);
+    const beforeReceived = Number(beforeSale?.receivedSatang ?? 0);
+    const beforeOutstanding = Number(beforeSale?.outstandingSatang ?? ((beforeSale?.totalSatang ?? beforeSale?.amountSatang ?? 0) - beforeReceived));
+    const beforeQueueAmount = Number(beforeQueue?.amountSatang ?? 0);
+    const beforeQueuePaid = Number(beforeQueue?.paidSatang ?? 0);
+    if (!beforeSale || beforeSale.type !== 'SALE' || !beforeQueue || beforeQueue.type !== 'RECEIVE_CUSTOMER_PAYMENT' ||
+        ![beforeReceived,beforeOutstanding,beforeQueueAmount,beforeQueuePaid].every(Number.isSafeInteger) ||
+        Number(sale.receivedSatang) !== beforeReceived + amountSatang ||
+        Number(sale.outstandingSatang) !== beforeOutstanding - amountSatang ||
+        Number(queue.amountSatang) !== beforeQueueAmount - amountSatang ||
+        Number(queue.paidSatang) !== beforeQueuePaid + amountSatang) {
+      throw new Error('LIGHTHOUSE_RECEIVABLE_READBACK_MISMATCH');
+    }
+  } else {
+    const received = Number(sale.receivedSatang);
+    const outstanding = Number(sale.outstandingSatang);
+    const paid = Number(queue.paidSatang ?? 0);
+    const remaining = Number(queue.amountSatang ?? 0);
+    if (![received,outstanding,paid,remaining].every(Number.isSafeInteger) || received < amountSatang || paid < amountSatang || outstanding < 0 || remaining < 0) {
+      throw new Error('LIGHTHOUSE_RECEIVABLE_READBACK_MISMATCH');
+    }
+  }
+  return { sale, record, queue };
+}
+
+function assertLedgerReversalAllowed(state, originalRecordId, reversalRecordId) {
+  const original = ledgerRecord(state, originalRecordId);
+  if (!original || original.type !== 'TRANSACTION' || original.reversalOf || String(original.sourceRef || '') !== 'LEDGER/MANUAL') {
+    throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  }
+  const reversals = ledgerRecords(state).filter(record => record?.reversalOf === originalRecordId);
+  const conflicting = reversals.find(record => record.recordId !== reversalRecordId);
+  if (conflicting) throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  const existing = ledgerRecord(state, reversalRecordId);
+  if (existing && (existing.type !== 'TRANSACTION' || existing.reversalOf !== originalRecordId)) {
+    throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  }
+  return { original, existing };
+}
+
+function verifyLedgerReversal(state, beforeOriginal, { originalRecordId, reversalRecordId, reason }) {
+  const original = ledgerRecord(state, originalRecordId);
+  const reversal = ledgerRecord(state, reversalRecordId);
+  const expectedDirection = beforeOriginal.direction === 'IN' ? 'OUT' : 'IN';
+  if (!original || JSON.stringify(original) !== JSON.stringify(beforeOriginal)) throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  if (!reversal || reversal.type !== 'TRANSACTION' || reversal.reversalOf !== originalRecordId ||
+      reversal.direction !== expectedDirection || reversal.detail !== `${expectedDirection}:REVERSAL` ||
+      Number(reversal.amountSatang) !== Number(beforeOriginal.amountSatang) || reversal.status !== 'COMPLETED' ||
+      String(reversal.sourceRef || '') !== String(beforeOriginal.sourceRef || '') || String(reversal.reversalReason || '') !== reason) {
+    throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  }
+  const reversals = ledgerRecords(state).filter(record => record?.reversalOf === originalRecordId);
+  if (reversals.length !== 1 || reversals[0].recordId !== reversalRecordId) throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  return { original, reversal };
 }
 
 function validNonNegativeSatang(value, code) {
@@ -95,6 +186,7 @@ export function createLighthouseLedgerBridge(deps = {}) {
   const now = deps.now ?? (() => new Date());
 
   async function readLedgerTruth() { return withSession(async runtime => buildTruth(runtime, await runtime.readState(), projectFinancial, now)); }
+  async function readIncomeTruth() { return withSession(async runtime => buildIncomeTruth(runtime, await runtime.readState(), projectFinancial, now)); }
   async function readRideTruth() { return withSession(async runtime => buildRideTruth(runtime, await runtime.readState())); }
   async function readCalendarTruth() { return withSession(async runtime => buildCalendarTruth(runtime, await runtime.readState())); }
 
@@ -112,6 +204,36 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
+  async function receiveReceivablePayment({ workflowId, saleId, queueId, ledgerTransactionId, amountBaht } = {}) {
+    const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
+    const sale = requiredText(saleId, 'LIGHTHOUSE_SALE_ID_REQUIRED');
+    const queue = requiredText(queueId, 'LIGHTHOUSE_QUEUE_ID_REQUIRED');
+    const transaction = requiredText(ledgerTransactionId, 'LIGHTHOUSE_LEDGER_TRANSACTION_ID_REQUIRED');
+    const amountSatang = bahtToSatang(amountBaht);
+    return withSession(async runtime => {
+      const before = await runtime.readState();
+      const existing = ledgerRecord(before, transaction);
+      let recovered = Boolean(existing);
+      if (!existing) {
+        try {
+          await runtime.receiveCustomerPayment({ workflowId:workflow, saleId:sale, queueId:queue, ledgerTransactionId:transaction, amountSatang });
+        } catch (error) {
+          if (!duplicateCommand(error)) throw error;
+          recovered = true;
+        }
+      }
+      const state = await runtime.readState();
+      const verified = verifyReceivablePayment(state, before, { saleId:sale, queueId:queue, ledgerTransactionId:transaction, amountSatang, recovered });
+      return Object.freeze({
+        status:'VERIFIED', recovered,
+        sale:structuredClone(verified.sale),
+        record:structuredClone(verified.record),
+        queue:structuredClone(verified.queue),
+        incomeTruth:buildIncomeTruth(runtime, state, projectFinancial, now),
+      });
+    });
+  }
+
   async function recordExpense({ workflowId, ledgerTransactionId, title, amountBaht } = {}) {
     const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
     const transaction = requiredText(ledgerTransactionId, 'LIGHTHOUSE_LEDGER_TRANSACTION_ID_REQUIRED');
@@ -123,6 +245,34 @@ export function createLighthouseLedgerBridge(deps = {}) {
       const state = await runtime.readState();
       const record = verifyTransaction(state, { ledgerTransactionId:transaction, direction:'OUT', detail:'OUT:EXPENSE', title:expenseTitle, amountSatang, sourceRef:'LEDGER/MANUAL' });
       return Object.freeze({ status:'VERIFIED', recovered, record:structuredClone(record), truth:buildTruth(runtime, state, projectFinancial, now) });
+    });
+  }
+
+  async function reverseLedgerTransaction({ workflowId, originalRecordId, reversalRecordId, reason } = {}) {
+    const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
+    const originalId = requiredText(originalRecordId, 'LIGHTHOUSE_ORIGINAL_RECORD_ID_REQUIRED');
+    const reversalId = requiredText(reversalRecordId, 'LIGHTHOUSE_REVERSAL_RECORD_ID_REQUIRED');
+    const reversalReason = requiredText(reason, 'LIGHTHOUSE_REVERSAL_REASON_REQUIRED');
+    return withSession(async runtime => {
+      const before = await runtime.readState();
+      const allowed = assertLedgerReversalAllowed(before, originalId, reversalId);
+      let recovered = Boolean(allowed.existing);
+      if (!allowed.existing) {
+        try {
+          await runtime.reverseLedgerTransaction({ workflowId:workflow, originalRecordId:originalId, reversalRecordId:reversalId, reason:reversalReason });
+        } catch (error) {
+          if (!duplicateCommand(error)) throw error;
+          recovered = true;
+        }
+      }
+      const state = await runtime.readState();
+      const verified = verifyLedgerReversal(state, allowed.original, { originalRecordId:originalId, reversalRecordId:reversalId, reason:reversalReason });
+      return Object.freeze({
+        status:'VERIFIED', recovered,
+        original:structuredClone(verified.original),
+        reversal:structuredClone(verified.reversal),
+        truth:buildTruth(runtime, state, projectFinancial, now),
+      });
     });
   }
 
@@ -190,5 +340,5 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
-  return Object.freeze({ readLedgerTruth, readRideTruth, readCalendarTruth, recordOtherIncome, recordExpense, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
+  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
 }
