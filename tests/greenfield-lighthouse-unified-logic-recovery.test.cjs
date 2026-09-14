@@ -139,3 +139,78 @@ test('receiveReceivablePayment fails closed when durable owner readback does not
     /LIGHTHOUSE_(RECEIVABLE|LEDGER|CALENDAR)_READBACK_MISMATCH/,
   );
 });
+
+test('Ledger reversal workflow exposes one append-only owner command', async () => {
+  const workflows = await import(`../greenfield/business-workflows.mjs?t=${Date.now()}-${Math.random()}`);
+  assert.equal(typeof workflows.buildLedgerReversalWorkflow, 'function');
+  const plan = workflows.buildLedgerReversalWorkflow({
+    workflowId:'WF-REV-1', originalRecordId:'TX-OUT-1', reversalRecordId:'TX-REV-1', reason:'ลงรายการผิด',
+  });
+  assert.equal(plan.commands.length, 1);
+  assert.deepEqual(plan.commands[0], {
+    commandId:'WF-REV-1:1', idempotencyKey:'WF-REV-1:LEDGER:TX-REV-1', domain:'LEDGER', type:'LEDGER_REVERSE_TRANSACTION',
+    payload:{ originalRecordId:'TX-OUT-1', reversalRecordId:'TX-REV-1', reason:'ลงรายการผิด' },
+  });
+});
+
+test('reverseLedgerTransaction delegates to owner runtime and verifies append-only readback', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  const original = {
+    recordId:'TX-OUT-1', source:'LEDGER', type:'TRANSACTION', title:'ค่าอาหาร', detail:'OUT:EXPENSE',
+    direction:'OUT', amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/MANUAL', createdAt:'2026-09-14T01:00:00.000Z',
+  };
+  let state = stateWith({ ledger:[original] });
+  const calls = [];
+  const runtime = {
+    async reverseLedgerTransaction(input) {
+      calls.push(input);
+      state = stateWith({ revision:13, ledger:[original, {
+        recordId:'TX-REV-1', source:'LEDGER', type:'TRANSACTION', title:'ย้อนรายการ ค่าอาหาร', detail:'IN:REVERSAL',
+        direction:'IN', amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/TX-OUT-1', reversalOf:'TX-OUT-1',
+        reason:'ลงรายการผิด', createdAt:'2026-09-14T02:00:00.000Z',
+      }] });
+      return { status:'COMMITTED' };
+    },
+    async readState() { return state; },
+    project() { return { ledgerBalanceSatang:0 }; },
+  };
+  const bridge = createLighthouseLedgerBridge({
+    withSession: operation => operation(runtime),
+    projectFinancial: () => ({ todayInSatang:6500, todayOutSatang:6500 }),
+  });
+
+  const result = await bridge.reverseLedgerTransaction({
+    workflowId:'WF-REV-1', originalRecordId:'TX-OUT-1', reversalRecordId:'TX-REV-1', reason:'ลงรายการผิด',
+  });
+
+  assert.deepEqual(calls, [{ workflowId:'WF-REV-1', originalRecordId:'TX-OUT-1', reversalRecordId:'TX-REV-1', reason:'ลงรายการผิด' }]);
+  assert.deepEqual(state.domains.LEDGER.records['TX-OUT-1'].record, original, 'original transaction must remain unchanged');
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.original.recordId, 'TX-OUT-1');
+  assert.equal(result.reversal.recordId, 'TX-REV-1');
+  assert.equal(result.reversal.reversalOf, 'TX-OUT-1');
+  assert.equal(result.reversal.direction, 'IN');
+  assert.equal(result.reversal.amountSatang, 6500);
+});
+
+test('reverseLedgerTransaction blocks reversing a reversal before owner mutation', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  const reversal = {
+    recordId:'TX-REV-OLD', source:'LEDGER', type:'TRANSACTION', title:'ย้อนรายการ', detail:'IN:REVERSAL', direction:'IN',
+    amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/TX-OUT-1', reversalOf:'TX-OUT-1', createdAt:'2026-09-14T02:00:00.000Z',
+  };
+  const state = stateWith({ ledger:[reversal] });
+  let called = false;
+  const runtime = {
+    async reverseLedgerTransaction() { called = true; },
+    async readState() { return state; },
+    project() { return { ledgerBalanceSatang:6500 }; },
+  };
+  const bridge = createLighthouseLedgerBridge({ withSession: operation => operation(runtime), projectFinancial: () => ({ todayInSatang:6500, todayOutSatang:0 }) });
+
+  await assert.rejects(
+    bridge.reverseLedgerTransaction({ workflowId:'WF-REV-BAD', originalRecordId:'TX-REV-OLD', reversalRecordId:'TX-REV-NEW', reason:'ห้ามย้อนซ้ำ' }),
+    /LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED/,
+  );
+  assert.equal(called, false);
+});
