@@ -15,6 +15,19 @@ function incomplete(kind, slots, missing = [], ambiguous = []) {
   };
 }
 
+function readQueryIntent(clean) {
+  const queryByText = new Map([
+    ['สรุปร้านวันนี้', 'STORE_SUMMARY'],
+    ['สรุปงานวิ่งวันนี้', 'RIDE_SUMMARY'],
+    ['ดูปฏิทินวันนี้', 'CALENDAR_LIST'],
+    ['ดูรายการเงินวันนี้', 'LEDGER_LIST'],
+    ['สรุปรายรับวันนี้', 'INCOME_SUMMARY'],
+  ]);
+  const query = queryByText.get(clean);
+  if (!query) return null;
+  return { kind:'READ_QUERY', status:'READY', query, slots:{}, missing:[], ambiguous:[] };
+}
+
 function storeSaleIntent(parsed) {
   if (!parsed) return null;
   if (parsed.ambiguous) {
@@ -60,6 +73,9 @@ function generalIncomeIntent(parsed) {
 export function interpretChatIntent(text, { storeProducts = [] } = {}) {
   const clean = normalizeText(text);
   if (!clean) return null;
+
+  const read = readQueryIntent(clean);
+  if (read) return read;
 
   const store = storeSaleIntent(parseStoreSale(clean, storeProducts));
   if (store) return store;
