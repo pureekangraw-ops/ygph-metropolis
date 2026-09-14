@@ -16,6 +16,7 @@ const runtimeFiles = [
   'owner-polish.css',
   'app.mjs',
   'surface-contract.mjs',
+  'calendar-month.mjs',
   'settings-operations.mjs',
   'setup.mjs',
   'view-model.mjs',
