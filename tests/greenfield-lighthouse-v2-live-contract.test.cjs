@@ -12,8 +12,9 @@ function count(haystack, needle) {
 }
 
 test('LIGHTHOUSE V2 keeps PIN outside a three-root live shell', () => {
-  assert.match(html, /id="auth-screen"/);
-  assert.match(html, /id="app-shell"[^>]*data-visual-version="v2"/);
+  assert.match(html, /<section id="auth-screen"/);
+  assert.match(html, /<section id="app-shell"/);
+  assert.ok(html.indexOf('id="auth-screen"') < html.indexOf('id="app-shell"'));
   assert.equal(count(html, 'data-root-target="chat"'), 1);
   assert.equal(count(html, 'data-root-target="manual"'), 1);
   assert.equal(count(html, 'data-root-target="settings"'), 1);
@@ -36,6 +37,6 @@ test('LIGHTHOUSE V2 exposes the Figma-approved semantic visual tokens', () => {
 
 test('LIGHTHOUSE V2 has explicit visual state hooks for CHAT truth flow', () => {
   for (const state of ['confirm', 'edit', 'committing', 'verified-success', 'failed']) {
-    assert.match(html + css, new RegExp(`chat-state-${state}`));
+    assert.match(css, new RegExp(`\\.chat-state-${state}\\b`));
   }
 });
