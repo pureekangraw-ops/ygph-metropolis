@@ -214,3 +214,53 @@ test('reverseLedgerTransaction blocks reversing a reversal before owner mutation
   );
   assert.equal(called, false);
 });
+
+test('reverseLedgerTransaction blocks an already-reversed original before owner mutation', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  const original = {
+    recordId:'TX-OUT-1', source:'LEDGER', type:'TRANSACTION', title:'ค่าอาหาร', detail:'OUT:EXPENSE', direction:'OUT',
+    amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/MANUAL', createdAt:'2026-09-14T01:00:00.000Z',
+  };
+  const existingReversal = {
+    recordId:'TX-REV-OLD', source:'LEDGER', type:'TRANSACTION', title:'ย้อนรายการ ค่าอาหาร', detail:'IN:REVERSAL', direction:'IN',
+    amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/TX-OUT-1', reversalOf:'TX-OUT-1', reason:'แก้ครั้งก่อน', createdAt:'2026-09-14T02:00:00.000Z',
+  };
+  const state = stateWith({ ledger:[original, existingReversal] });
+  let called = false;
+  const runtime = {
+    async reverseLedgerTransaction() { called = true; },
+    async readState() { return state; },
+    project() { return { ledgerBalanceSatang:0 }; },
+  };
+  const bridge = createLighthouseLedgerBridge({ withSession: operation => operation(runtime), projectFinancial: () => ({ todayInSatang:6500, todayOutSatang:6500 }) });
+
+  await assert.rejects(
+    bridge.reverseLedgerTransaction({ workflowId:'WF-REV-TWICE', originalRecordId:'TX-OUT-1', reversalRecordId:'TX-REV-NEW', reason:'ห้ามย้อนสองครั้ง' }),
+    /LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED/,
+  );
+  assert.equal(called, false);
+});
+
+test('reverseLedgerTransaction fails closed for Store and Ride linked Ledger records before mutation', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  for (const [index, sourceRef] of ['STORE/SALE-1','RIDE/JOB-1'].entries()) {
+    const original = {
+      recordId:`TX-LINKED-${index + 1}`, source:'LEDGER', type:'TRANSACTION', title:'owner-linked', detail:'OUT:EXPENSE', direction:'OUT',
+      amountSatang:2500, status:'COMPLETED', sourceRef, createdAt:'2026-09-14T01:00:00.000Z',
+    };
+    const state = stateWith({ ledger:[original] });
+    let called = false;
+    const runtime = {
+      async reverseLedgerTransaction() { called = true; },
+      async readState() { return state; },
+      project() { return { ledgerBalanceSatang:-2500 }; },
+    };
+    const bridge = createLighthouseLedgerBridge({ withSession: operation => operation(runtime), projectFinancial: () => ({ todayInSatang:0, todayOutSatang:2500 }) });
+
+    await assert.rejects(
+      bridge.reverseLedgerTransaction({ workflowId:`WF-LINKED-${index + 1}`, originalRecordId:original.recordId, reversalRecordId:`TX-LINKED-REV-${index + 1}`, reason:'ต้องย้อนผ่าน owner' }),
+      /LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED/,
+    );
+    assert.equal(called, false, `${sourceRef} must not reach generic Ledger reversal`);
+  }
+});
