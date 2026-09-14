@@ -9,6 +9,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'owner-polish.css',
   'app.mjs',
   'surface-contract.mjs',
+  'calendar-month.mjs',
   'settings-operations.mjs',
   'setup.mjs',
   'view-model.mjs',
