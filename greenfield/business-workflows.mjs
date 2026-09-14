@@ -275,3 +275,13 @@ export function buildCalendarStatusWorkflow({ workflowId, queueId, status }) {
   if (status !== 'COMPLETED' && status !== 'CANCELLED') throw new Error(`INVALID_CALENDAR_STATUS:${status}`);
   return { workflowId, commands: [command(workflowId, 1, 'CALENDAR', 'CALENDAR_SET_STATUS', { recordId: queueId, status }, `CALENDAR:${queueId}:${status}`)] };
 }
+
+export function buildLedgerReversalWorkflow({ workflowId, originalRecordId, reversalRecordId, reason }) {
+  workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
+  originalRecordId = text(originalRecordId, 'INVALID_ORIGINAL_RECORD_ID');
+  reversalRecordId = text(reversalRecordId, 'INVALID_REVERSAL_RECORD_ID');
+  const reversalReason = text(reason, 'INVALID_REVERSAL_REASON');
+  return { workflowId, commands: [command(workflowId, 1, 'LEDGER', 'LEDGER_REVERSE_TRANSACTION', {
+    originalRecordId, reversalRecordId, reason:reversalReason,
+  }, `LEDGER:${reversalRecordId}`)] };
+}
