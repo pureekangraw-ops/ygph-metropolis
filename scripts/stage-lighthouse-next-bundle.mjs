@@ -21,6 +21,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'store-product.mjs',
   'store-sale.mjs',
   'chat-intent.mjs',
+  'chat-read.mjs',
   'chat-intent-recovery.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
