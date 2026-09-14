@@ -114,6 +114,37 @@ function verifyReceivablePayment(state, before, { saleId, queueId, ledgerTransac
   return { sale, record, queue };
 }
 
+function assertLedgerReversalAllowed(state, originalRecordId, reversalRecordId) {
+  const original = ledgerRecord(state, originalRecordId);
+  if (!original || original.type !== 'TRANSACTION' || original.reversalOf || String(original.sourceRef || '') !== 'LEDGER/MANUAL') {
+    throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  }
+  const reversals = ledgerRecords(state).filter(record => record?.reversalOf === originalRecordId);
+  const conflicting = reversals.find(record => record.recordId !== reversalRecordId);
+  if (conflicting) throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  const existing = ledgerRecord(state, reversalRecordId);
+  if (existing && (existing.type !== 'TRANSACTION' || existing.reversalOf !== originalRecordId)) {
+    throw new Error('LIGHTHOUSE_LEDGER_REVERSAL_NOT_ALLOWED');
+  }
+  return { original, existing };
+}
+
+function verifyLedgerReversal(state, beforeOriginal, { originalRecordId, reversalRecordId, reason }) {
+  const original = ledgerRecord(state, originalRecordId);
+  const reversal = ledgerRecord(state, reversalRecordId);
+  const expectedDirection = beforeOriginal.direction === 'IN' ? 'OUT' : 'IN';
+  if (!original || JSON.stringify(original) !== JSON.stringify(beforeOriginal)) throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  if (!reversal || reversal.type !== 'TRANSACTION' || reversal.reversalOf !== originalRecordId ||
+      reversal.direction !== expectedDirection || reversal.detail !== `${expectedDirection}:REVERSAL` ||
+      Number(reversal.amountSatang) !== Number(beforeOriginal.amountSatang) || reversal.status !== 'COMPLETED' ||
+      String(reversal.sourceRef || '') !== String(beforeOriginal.sourceRef || '') || String(reversal.reversalReason || '') !== reason) {
+    throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  }
+  const reversals = ledgerRecords(state).filter(record => record?.reversalOf === originalRecordId);
+  if (reversals.length !== 1 || reversals[0].recordId !== reversalRecordId) throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
+  return { original, reversal };
+}
+
 function validNonNegativeSatang(value, code) {
   const amount = Number(value);
   if (!Number.isSafeInteger(amount) || amount < 0) throw new Error(code);
@@ -217,6 +248,34 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
+  async function reverseLedgerTransaction({ workflowId, originalRecordId, reversalRecordId, reason } = {}) {
+    const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
+    const originalId = requiredText(originalRecordId, 'LIGHTHOUSE_ORIGINAL_RECORD_ID_REQUIRED');
+    const reversalId = requiredText(reversalRecordId, 'LIGHTHOUSE_REVERSAL_RECORD_ID_REQUIRED');
+    const reversalReason = requiredText(reason, 'LIGHTHOUSE_REVERSAL_REASON_REQUIRED');
+    return withSession(async runtime => {
+      const before = await runtime.readState();
+      const allowed = assertLedgerReversalAllowed(before, originalId, reversalId);
+      let recovered = Boolean(allowed.existing);
+      if (!allowed.existing) {
+        try {
+          await runtime.reverseLedgerTransaction({ workflowId:workflow, originalRecordId:originalId, reversalRecordId:reversalId, reason:reversalReason });
+        } catch (error) {
+          if (!duplicateCommand(error)) throw error;
+          recovered = true;
+        }
+      }
+      const state = await runtime.readState();
+      const verified = verifyLedgerReversal(state, allowed.original, { originalRecordId:originalId, reversalRecordId:reversalId, reason:reversalReason });
+      return Object.freeze({
+        status:'VERIFIED', recovered,
+        original:structuredClone(verified.original),
+        reversal:structuredClone(verified.reversal),
+        truth:buildTruth(runtime, state, projectFinancial, now),
+      });
+    });
+  }
+
   async function createObligation({ workflowId, obligationId, queueId, title, amountBaht, dueDate, detail = '' } = {}) {
     const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
     const obligation = requiredText(obligationId, 'LIGHTHOUSE_OBLIGATION_ID_REQUIRED');
@@ -281,5 +340,5 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
-  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, recordOtherIncome, receiveReceivablePayment, recordExpense, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
+  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
 }
