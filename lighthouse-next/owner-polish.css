@@ -1,15 +1,16 @@
 :root {
-  --bg: #07111d;
+  /* Compatibility aliases retained for the approved live visual contract. */
+  --bg: #0B0E14;
   --bg-deep: #040a12;
-  --panel: #0d1a2a;
+  --panel: #1E293B;
   --panel-2: #091421;
   --text: #eef6ff;
   --muted: #86a0b8;
   --line: #263c52;
-  --gold: #ffd15c;
+  --gold: #F59E0B;
   --gold-strong: #ffbd38;
-  --cyan: #43d9ff;
-  --violet: #8b7cff;
+  --cyan: #06B6D4;
+  --violet: #8B5CF6;
 
   /* LIGHTHOUSE V2 — Figma-approved semantic roles */
   --lh-v2-bg-deep: #040a12;
@@ -241,9 +242,9 @@ body {
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0,1fr) 48px;
+  grid-template-columns: minmax(0,1fr) 44px;
   gap: 6px;
-  padding: 5px;
+  padding: 4px;
   border-radius: 22px;
   align-items: end;
   border: 1px solid rgba(71, 97, 129, .58);
@@ -254,9 +255,9 @@ body {
 
 .chat-composer textarea {
   width: 100%;
-  min-height: 46px;
+  min-height: 44px;
   max-height: 118px;
-  padding: 12px 13px;
+  padding: 11px 13px;
   border: 0;
   border-radius: 17px;
   background: transparent;
@@ -269,8 +270,8 @@ body {
 }
 
 .send-button {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 16px;
   display: grid;
   place-items: center;
