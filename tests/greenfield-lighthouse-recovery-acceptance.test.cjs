@@ -26,14 +26,12 @@ test('Income is a MANUAL parent that routes to Store, Ride and Other income', ()
   const html = read('lighthouse-next/index.html');
   const manual = manualMarkup(html);
   const surface = read('lighthouse-next/surface-contract.mjs');
-  const app = read('lighthouse-next/app.mjs');
 
   assert.match(manual, /data-task="income"/, 'Income remains a MANUAL owner house');
-  assert.match(surface, /data-income-target="store"/, 'Income must expose Store');
-  assert.match(surface, /data-income-target="ride"/, 'Income must expose Ride');
+  assert.match(surface, /data-income-target="store"[^>]*data-task="store"/, 'Income Store must reuse the existing Store task route');
+  assert.match(surface, /data-income-target="ride"[^>]*data-task="ride"/, 'Income Ride must reuse the existing Ride task route');
   assert.match(surface, /data-income-target="other-general"/, 'Income must expose Other/General income');
-  assert.match(surface, /lighthouse:manual-task/, 'Income descendants must route through the live MANUAL task owner');
-  assert.match(app, /lighthouse:manual-task/, 'App must own descendant routing into existing Store/Ride renderers');
+  assert.match(surface, /incomeTarget === 'other-general'/, 'Other/General must route to the direct durable income form');
 });
 
 test('Store and Ride are descendants, never MANUAL owner houses', () => {
