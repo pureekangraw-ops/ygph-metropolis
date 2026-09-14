@@ -1,60 +1,266 @@
 :root {
-  --bg: #0B0E14;
-  --bg-deep: #06080d;
-  --panel: #1E293B;
-  --panel-2: #111827;
-  --text: #F8FAFC;
-  --muted: #94A3B8;
-  --line: #334155;
-  --gold: #F59E0B;
-  --gold-strong: #F59E0B;
-  --cyan: #06B6D4;
-  --violet: #8B5CF6;
+  --bg: #07111d;
+  --bg-deep: #040a12;
+  --panel: #0d1a2a;
+  --panel-2: #091421;
+  --text: #eef6ff;
+  --muted: #86a0b8;
+  --line: #263c52;
+  --gold: #ffd15c;
+  --gold-strong: #ffbd38;
+  --cyan: #43d9ff;
+  --violet: #8b7cff;
+
+  /* LIGHTHOUSE V2 — Figma-approved semantic roles */
+  --lh-v2-bg-deep: #040a12;
+  --lh-v2-panel: rgba(11, 27, 43, .94);
+  --lh-v2-panel-strong: rgba(9, 22, 36, .985);
+  --lh-v2-gold: #ffd15c;
+  --lh-v2-cyan: #43d9ff;
+  --lh-v2-success: #56e6a5;
+  --lh-v2-danger: #ff7088;
+  --lh-v2-text: #eef6ff;
+  --lh-v2-muted: #86a0b8;
+  --lh-v2-radius-shell: 24px;
+  --lh-v2-radius-card: 20px;
+  --lh-v2-stroke: rgba(92, 127, 160, .38);
+  --lh-v2-shadow: 0 22px 56px rgba(0, 0, 0, .28);
+}
+
+html,
+body {
+  background: var(--lh-v2-bg-deep);
 }
 
 body {
+  color: var(--lh-v2-text);
   background:
-    radial-gradient(circle at 82% 6%, rgba(6, 182, 212, .07), transparent 24%),
-    radial-gradient(circle at 18% 20%, rgba(139, 92, 246, .055), transparent 28%),
-    radial-gradient(circle at 50% -10%, rgba(30, 41, 59, .86), var(--bg) 32%, var(--bg-deep) 82%);
+    radial-gradient(circle at 88% 2%, rgba(67, 217, 255, .105), transparent 25%),
+    radial-gradient(circle at 12% 16%, rgba(139, 124, 255, .075), transparent 29%),
+    radial-gradient(circle at 48% -8%, rgba(25, 52, 76, .72), #07111d 33%, var(--lh-v2-bg-deep) 78%);
+  background-attachment: fixed;
+}
+
+/* ---------- PIN / owner gate ---------- */
+.auth-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.auth-screen::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 209, 92, .72), rgba(67, 217, 255, .66), transparent) top / 100% 3px no-repeat,
+    radial-gradient(circle at 50% 19%, rgba(67, 217, 255, .12), transparent 24%);
+  pointer-events: none;
+}
+
+.auth-card {
+  position: relative;
+  padding: 30px 24px 24px;
+  border: 1px solid rgba(92, 127, 160, .36);
+  border-radius: 30px;
+  background: linear-gradient(155deg, rgba(11, 27, 43, .94), rgba(5, 13, 23, .985));
+  box-shadow: var(--lh-v2-shadow), inset 0 1px 0 rgba(255,255,255,.035);
+  backdrop-filter: blur(18px);
+}
+
+.pin-brand {
+  display: grid;
+  place-items: center;
 }
 
 .pin-app-icon {
-  width: min(220px, 64vw);
+  width: min(196px, 56vw);
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 28px;
+  border-radius: 34px;
   display: block;
   margin: 0 auto;
+  border: 1px solid rgba(255, 209, 92, .26);
+  box-shadow: 0 18px 56px rgba(0,0,0,.32), 0 0 42px rgba(67,217,255,.08);
+}
+
+.pin-copy {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+}
+
+.pin-copy .eyebrow {
+  color: var(--lh-v2-gold);
+  letter-spacing: .14em;
+}
+
+.pin-copy h1 {
+  margin: 0;
+  color: var(--lh-v2-text);
+  font-size: clamp(26px, 7vw, 34px);
+  letter-spacing: -.025em;
+}
+
+.auth-form input {
+  min-height: 56px;
+  border: 1px solid rgba(92, 127, 160, .48) !important;
+  border-radius: 18px !important;
+  background: rgba(4, 13, 23, .74) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: rgba(67, 217, 255, .82) !important;
+  background: rgba(7, 20, 33, .92) !important;
+  box-shadow: 0 0 0 3px rgba(67, 217, 255, .10), 0 0 24px rgba(67, 217, 255, .07);
+}
+
+.primary-button,
+#login-submit {
+  min-height: 54px;
+  border: 0;
+  border-radius: 18px;
+  color: #15100a;
+  background: linear-gradient(135deg, var(--lh-v2-gold), #ffb938);
+  box-shadow: 0 12px 28px rgba(255, 189, 56, .14), inset 0 1px 0 rgba(255,255,255,.36);
+  font-weight: 700;
+}
+
+.pin-status {
+  color: var(--lh-v2-muted);
+}
+
+/* ---------- shared live shell ---------- */
+.app-shell {
+  background:
+    radial-gradient(circle at 90% 2%, rgba(67,217,255,.065), transparent 25%),
+    radial-gradient(circle at 15% 28%, rgba(139,124,255,.045), transparent 28%);
+}
+
+.app-header {
+  border-bottom-color: rgba(92, 127, 160, .24);
+  background: linear-gradient(180deg, rgba(4, 13, 23, .94), rgba(4, 13, 23, .68), transparent);
+  backdrop-filter: blur(16px);
+}
+
+.header-app-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 209, 92, .32);
+  box-shadow: 0 0 18px rgba(255, 209, 92, .11);
+}
+
+.compact-brand {
+  gap: 10px;
+  letter-spacing: .09em;
+  color: var(--lh-v2-gold);
+}
+
+.page-kicker,
+.eyebrow,
+.section-label,
+.muted {
+  color: var(--lh-v2-muted);
 }
 
 .app-page {
   scroll-padding-bottom: calc(var(--nav-height) + 24px);
 }
 
+#page-chat .page-title-block,
+#page-settings .page-title-block,
+#manual-hub .page-title-block {
+  position: relative;
+  padding-bottom: 22px;
+}
+
+#page-chat .page-title-block::after,
+#page-settings .page-title-block::after,
+#manual-hub .page-title-block::after {
+  content: "";
+  display: block;
+  width: 76px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lh-v2-gold), rgba(67, 217, 255, .72), transparent);
+  box-shadow: 0 0 15px rgba(255, 209, 92, .14);
+}
+
+/* ---------- CHAT ---------- */
+.chat-thread {
+  gap: 12px;
+}
+
+.message {
+  border-radius: 20px;
+}
+
+.message.app {
+  border: 1px solid rgba(71, 97, 129, .58);
+  background: linear-gradient(145deg, rgba(13, 31, 49, .98), rgba(7, 18, 31, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 32px rgba(0,0,0,.08);
+}
+
+.message.user {
+  border: 1px solid rgba(245, 158, 11, .34);
+  background: linear-gradient(145deg, rgba(67, 51, 24, .72), rgba(26, 26, 28, .94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.message.note {
+  border-color: rgba(67, 217, 255, .30);
+  background: linear-gradient(145deg, rgba(12, 54, 69, .27), rgba(7, 18, 31, .95));
+}
+
+.chat-actions {
+  gap: 8px;
+}
+
+.chat-chip {
+  min-height: 42px;
+  border: 1px solid rgba(92, 127, 160, .43);
+  border-radius: 15px;
+  color: var(--lh-v2-text);
+  background: linear-gradient(145deg, rgba(13, 31, 49, .94), rgba(7, 18, 31, .94));
+}
+
+.chat-chip:active {
+  border-color: rgba(245, 158, 11, .42);
+  background: rgba(245, 158, 11, .09);
+}
+
 .chat-composer {
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0,1fr) 44px;
+  grid-template-columns: minmax(0,1fr) 48px;
   gap: 6px;
-  padding: 4px;
+  padding: 5px;
   border-radius: 22px;
   align-items: end;
   border: 1px solid rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
+  background: linear-gradient(145deg, rgba(13, 31, 49, .985), rgba(6, 16, 27, .97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 14px 34px rgba(0, 0, 0, .13);
+  backdrop-filter: blur(15px);
 }
 
 .chat-composer textarea {
   width: 100%;
-  min-height: 44px;
+  min-height: 46px;
   max-height: 118px;
-  padding: 11px 12px;
+  padding: 12px 13px;
   border: 0;
   border-radius: 17px;
   background: transparent;
-  color: var(--text);
+  color: var(--lh-v2-text);
   box-shadow: none;
 }
 
@@ -63,29 +269,27 @@ body {
 }
 
 .send-button {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 16px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  background: linear-gradient(135deg, #F59E0B, #f7b62f);
+  background: linear-gradient(135deg, var(--lh-v2-gold), #ffb938);
   color: #17110a;
-  box-shadow: 0 0 15px rgba(245, 158, 11, .12);
+  box-shadow: 0 8px 22px rgba(255, 189, 56, .13);
   transition: opacity .15s ease, transform .12s ease, filter .15s ease;
 }
 
 .send-button:disabled {
-  opacity: .32;
-  filter: saturate(.5);
+  opacity: .30;
+  filter: saturate(.45);
   cursor: default;
   box-shadow: none;
 }
 
-.send-button:not(:disabled):active {
-  transform: scale(.96);
-}
+.send-button:not(:disabled):active { transform: scale(.96); }
 
 .send-icon {
   width: 20px;
@@ -97,66 +301,46 @@ body {
   stroke-linejoin: round;
 }
 
-.ui-icon {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  display: block;
-  vector-effect: non-scaling-stroke;
+/* Truth-flow semantic hooks. These decorate existing runtime states only;
+   they never manufacture a successful write/readback. */
+.chat-state-confirm {
+  border-color: rgba(255, 209, 92, .52) !important;
+  box-shadow: inset 3px 0 0 var(--lh-v2-gold), 0 12px 30px rgba(0,0,0,.10);
 }
 
-.nav-icon {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
+.chat-state-edit {
+  border-color: rgba(67, 217, 255, .54) !important;
+  box-shadow: inset 3px 0 0 var(--lh-v2-cyan), 0 12px 30px rgba(0,0,0,.10);
 }
 
-.nav-item .ui-icon {
-  width: 21px;
-  height: 21px;
+.chat-state-committing {
+  border-color: rgba(67, 217, 255, .42) !important;
+  background: linear-gradient(145deg, rgba(10, 48, 63, .28), rgba(7,18,31,.96)) !important;
 }
 
-.nav-item.active .nav-icon {
-  color: var(--gold);
+.chat-state-verified-success {
+  border-color: rgba(86, 230, 165, .50) !important;
+  background: linear-gradient(145deg, rgba(22, 74, 58, .28), rgba(7,18,31,.96)) !important;
+  box-shadow: inset 3px 0 0 var(--lh-v2-success), 0 12px 30px rgba(0,0,0,.10);
 }
 
-.task-icon .ui-icon {
-  width: 22px;
-  height: 22px;
+.chat-state-failed {
+  border-color: rgba(255, 112, 136, .52) !important;
+  background: linear-gradient(145deg, rgba(78, 29, 43, .24), rgba(7,18,31,.96)) !important;
+  box-shadow: inset 3px 0 0 var(--lh-v2-danger), 0 12px 30px rgba(0,0,0,.10);
 }
 
-.history-cancel {
-  min-height: 44px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  touch-action: manipulation;
-}
-
-/* Owner-approved restrained cosmic direction: app usability stays primary.
-   LIGHTHOUSE identity appears through the approved mark, icon rings, dark navy panels and gold active states. */
-.header-app-icon {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  object-fit: cover;
-  border-radius: 9px;
-  border: 1px solid rgba(245, 158, 11, .32);
-  box-shadow: 0 0 16px rgba(245, 158, 11, .13);
-}
-
-.compact-brand {
-  gap: 10px;
-  letter-spacing: .08em;
+/* ---------- MANUAL ---------- */
+#manual-hub .manual-heading {
+  border-color: rgba(67, 217, 255, .28) !important;
+  background: linear-gradient(145deg, rgba(11, 37, 52, .40), rgba(7, 18, 31, .96)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
 }
 
 .home-hero {
   border: 1px solid rgba(71, 97, 129, .62);
-  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(7, 17, 29, .96));
+  border-radius: var(--lh-v2-radius-card);
+  background: linear-gradient(145deg, rgba(15, 37, 57, .98), rgba(6, 17, 29, .96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03), 0 16px 38px rgba(0, 0, 0, .10);
 }
 
@@ -167,71 +351,24 @@ body {
 
 .metric-card {
   border: 1px solid rgba(71, 97, 129, .54);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .96), rgba(8, 17, 29, .94));
+  border-radius: 17px;
+  background: linear-gradient(145deg, rgba(13, 31, 49, .96), rgba(7, 17, 29, .94));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
 }
 
-.metric-wide {
-  border-color: rgba(6, 182, 212, .26);
-}
+.metric-wide { border-color: rgba(67, 217, 255, .27); }
 
 .next-step-card {
   border: 1px solid rgba(245, 158, 11, .34);
-  background: linear-gradient(145deg, rgba(28, 27, 31, .96), rgba(8, 17, 29, .96));
+  border-radius: var(--lh-v2-radius-card);
+  background: linear-gradient(145deg, rgba(39, 35, 29, .96), rgba(7, 17, 29, .96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 16px 36px rgba(0, 0, 0, .08);
 }
 
 .next-step-light {
   width: 3px;
-  background: linear-gradient(var(--gold), var(--cyan), var(--violet));
-  box-shadow: 0 0 14px rgba(245, 158, 11, .20);
-}
-
-#page-chat .page-title-block,
-#page-settings .page-title-block,
-#manual-hub .page-title-block {
-  position: relative;
-  padding-bottom: 24px;
-}
-
-#page-chat .page-title-block::after,
-#page-settings .page-title-block::after,
-#manual-hub .page-title-block::after {
-  content: "";
-  display: block;
-  width: 72px;
-  height: 3px;
-  margin-top: 12px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--gold), rgba(245, 158, 11, .18));
-  box-shadow: 0 0 12px rgba(245, 158, 11, .2);
-}
-
-.message.app {
-  border: 1px solid rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .98), rgba(8, 17, 29, .95));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
-}
-
-.message.user {
-  border: 1px solid rgba(245, 158, 11, .34);
-  background: linear-gradient(145deg, rgba(55, 38, 19, .74), rgba(28, 24, 24, .90));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
-}
-
-.message.note {
-  border-color: rgba(6, 182, 212, .26);
-  background: linear-gradient(145deg, rgba(6, 182, 212, .08), rgba(8, 17, 29, .94));
-}
-
-.chat-chip {
-  border-color: rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .94));
-}
-
-.chat-chip:active {
-  border-color: rgba(245, 158, 11, .42);
-  background: rgba(245, 158, 11, .09);
+  background: linear-gradient(var(--lh-v2-gold), var(--lh-v2-cyan), var(--violet));
+  box-shadow: 0 0 14px rgba(255, 209, 92, .20);
 }
 
 #manual-hub .task-grid {
@@ -246,13 +383,19 @@ body {
   padding: 14px 16px;
   border: 1px solid rgba(71, 97, 129, .58);
   border-radius: 22px;
-  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 10px 30px rgba(0, 0, 0, .08);
+  background: linear-gradient(145deg, rgba(13, 31, 49, .97), rgba(6, 16, 27, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 32px rgba(0, 0, 0, .09);
 }
 
+.task-card[data-task="income"] { border-color: rgba(86, 230, 165, .34); }
+.task-card[data-task="outcome"] { border-color: rgba(255, 112, 136, .32); }
+.task-card[data-task="calendar"] { border-color: rgba(139, 124, 255, .46); }
+.task-card[data-task="ledger"] { border-color: rgba(255, 209, 92, .44); }
+
 .task-card:active {
-  border-color: rgba(245, 158, 11, .42);
-  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+  transform: translateY(1px);
+  border-color: rgba(255, 209, 92, .46);
+  background: linear-gradient(145deg, rgba(22, 39, 55, .98), rgba(8, 21, 34, .97));
 }
 
 .task-card strong {
@@ -261,6 +404,7 @@ body {
 }
 
 .task-card small {
+  color: var(--lh-v2-muted);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -276,74 +420,120 @@ body {
   height: 60px;
   border-radius: 19px;
   border: 1px solid transparent;
-  background: linear-gradient(#0d1725, #0d1725) padding-box,
-    conic-gradient(from 215deg, rgba(6, 182, 212, .9), rgba(139, 92, 246, .78), rgba(245, 158, 11, .92), rgba(6, 182, 212, .9)) border-box;
-  box-shadow: inset 0 0 20px rgba(245, 158, 11, .05), 0 0 18px rgba(6, 182, 212, .06);
-  color: #ffb02e;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(#0b1b2a, #0b1b2a) padding-box,
+    conic-gradient(from 215deg, rgba(67, 217, 255, .90), rgba(139, 124, 255, .78), rgba(255, 209, 92, .92), rgba(67, 217, 255, .90)) border-box;
+  box-shadow: inset 0 0 20px rgba(255, 209, 92, .04), 0 0 18px rgba(67, 217, 255, .055);
+  color: var(--lh-v2-gold);
+}
+
+/* ---------- icons ---------- */
+.ui-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  vector-effect: non-scaling-stroke;
 }
 
 .task-icon .ui-icon {
   width: 27px;
   height: 27px;
   stroke-width: 1.75;
-  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .32));
+  filter: drop-shadow(0 0 5px rgba(255, 209, 92, .28));
 }
 
+.nav-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+
+.nav-item .ui-icon { width: 21px; height: 21px; }
+.nav-item.active .nav-icon { color: var(--lh-v2-gold); }
+
+/* ---------- detail surfaces ---------- */
 .detail-hero {
   border: 1px solid rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(18, 31, 49, .98), rgba(8, 17, 29, .96));
+  border-radius: var(--lh-v2-radius-card);
+  background: linear-gradient(145deg, rgba(15, 37, 57, .98), rgba(6, 17, 29, .96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 30px rgba(0, 0, 0, .08);
 }
 
 .detail-row {
   border: 1px solid rgba(71, 97, 129, .50);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .94), rgba(8, 17, 29, .93));
+  border-radius: 17px;
+  background: linear-gradient(145deg, rgba(13, 31, 49, .94), rgba(6, 17, 29, .93));
 }
 
-.back-button {
-  color: #f6b43b;
+.back-button { color: var(--lh-v2-gold); }
+
+.history-cancel {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  touch-action: manipulation;
 }
 
-.settings-panel {
-  gap: 12px;
-}
+/* ---------- SETTINGS ---------- */
+.settings-panel { gap: 12px; }
 
 .settings-row {
   border: 1px solid rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(13, 31, 49, .97), rgba(6, 16, 27, .95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
 }
 
 .settings-button {
+  min-height: 70px;
   border: 1px solid rgba(71, 97, 129, .58);
-  background: linear-gradient(145deg, rgba(17, 24, 39, .97), rgba(8, 17, 29, .95));
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(13, 31, 49, .97), rgba(6, 16, 27, .95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
 }
 
 .settings-button:active {
-  border-color: rgba(245, 158, 11, .38);
-  background: linear-gradient(145deg, rgba(29, 30, 37, .98), rgba(11, 21, 33, .97));
+  border-color: rgba(255, 209, 92, .38);
+  background: linear-gradient(145deg, rgba(25, 39, 51, .98), rgba(8, 21, 33, .97));
+}
+
+.settings-button.danger-soft { border-color: rgba(255, 112, 136, .28); }
+
+.status-pill {
+  border-color: rgba(86, 230, 165, .32);
+  color: var(--lh-v2-success);
+  background: rgba(86, 230, 165, .07);
 }
 
 .about-card {
   border: 1px solid rgba(245, 158, 11, .28);
-  background: linear-gradient(145deg, rgba(27, 27, 33, .96), rgba(8, 17, 29, .95));
+  border-radius: var(--lh-v2-radius-card);
+  background: linear-gradient(145deg, rgba(35, 33, 31, .96), rgba(6, 17, 29, .95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 14px 32px rgba(0, 0, 0, .08);
 }
 
 .about-beacon {
-  border-color: rgba(245, 158, 11, .34);
-  background: radial-gradient(circle, rgba(245, 158, 11, .12), rgba(6, 182, 212, .04));
-  box-shadow: inset 0 0 16px rgba(245, 158, 11, .06);
+  border-color: rgba(255, 209, 92, .34);
+  background: radial-gradient(circle, rgba(255, 209, 92, .12), rgba(67, 217, 255, .04));
+  box-shadow: inset 0 0 16px rgba(255, 209, 92, .06);
 }
 
+/* ---------- bottom navigation ---------- */
 .bottom-nav {
   width: min(700px, calc(100% - 20px));
   border: 1px solid rgba(71, 97, 129, .46);
   border-bottom: 0;
   border-radius: 28px 28px 0 0;
-  background: linear-gradient(180deg, rgba(8, 20, 33, .97), rgba(4, 12, 21, .98));
-  box-shadow: 0 -14px 34px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .025);
+  background: linear-gradient(180deg, rgba(8, 24, 39, .975), rgba(3, 12, 21, .99));
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, .21), inset 0 1px 0 rgba(255, 255, 255, .025);
+  backdrop-filter: blur(18px);
 }
 
 .nav-item {
@@ -352,45 +542,31 @@ body {
 }
 
 .nav-item.active {
-  border: 1px solid rgba(245, 158, 11, .46);
-  background: linear-gradient(180deg, rgba(245, 158, 11, .13), rgba(245, 158, 11, .05));
-  box-shadow: inset 0 0 16px rgba(245, 158, 11, .05), 0 0 16px rgba(245, 158, 11, .09);
+  border: 1px solid rgba(255, 209, 92, .46);
+  background: linear-gradient(180deg, rgba(255, 209, 92, .13), rgba(255, 209, 92, .045));
+  box-shadow: inset 0 0 16px rgba(255, 209, 92, .05), 0 0 16px rgba(255, 209, 92, .08);
 }
 
-.nav-item.active small {
-  color: #f6b43b;
-}
+.nav-item.active small { color: var(--lh-v2-gold); }
 
 @media (max-width: 380px) {
+  .auth-card { padding: 24px 18px 20px; border-radius: 24px; }
+  .pin-app-icon { width: min(168px, 52vw); border-radius: 28px; }
   .task-card {
     min-height: 94px;
     grid-template-columns: 56px minmax(0, 1fr) 16px;
     gap: 12px;
     padding: 12px 13px;
   }
+  .task-icon { width: 54px; height: 54px; border-radius: 17px; }
+  .task-card strong { font-size: 18px; }
+  .task-card small { font-size: 12px; }
+}
 
-  .task-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 17px;
-  }
-
-  .task-card strong {
-    font-size: 18px;
-  }
-
-  .task-card small {
-    font-size: 12px;
-  }
-
-  .home-hero,
-  .next-step-card,
-  .detail-hero,
-  .about-card {
-    border-radius: 21px;
-  }
-
-  .message {
-    max-width: 90%;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+    animation-duration: .001ms !important;
   }
 }
