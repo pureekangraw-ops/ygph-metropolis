@@ -77,3 +77,17 @@ test('unlock surface is presented as a PIN gate without narrowing the existing c
   assert.doesNotMatch(html, /inputmode="numeric"/);
   assert.doesNotMatch(html, /<label for="device-password">รหัสเข้าแอป<\/label>/);
 });
+
+test('MANUAL detail is a direct control surface, not only a read-only list', () => {
+  const app = read('lighthouse-next/app.mjs');
+
+  assert.match(app, /function makeManualActionForm\(/);
+  assert.match(app, /data-manual-action/);
+  assert.match(app, /manual-income-form/);
+  assert.match(app, /manual-product-form/);
+  assert.match(app, /manual-sale-form/);
+  assert.match(app, /ledgerBridge\.recordOtherIncome\(/);
+  assert.match(app, /storeBridge\.createProductWithStock\(/);
+  assert.match(app, /storeBridge\.sellProduct\(/);
+  assert.doesNotMatch(app, /submitChatText\([^)]*manual/i, 'MANUAL must not route direct controls through chat parsing');
+});
