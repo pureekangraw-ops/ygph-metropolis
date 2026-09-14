@@ -1,4 +1,5 @@
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
+import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
@@ -241,51 +242,130 @@ async function renderOutcome() {
   await refresh();
 }
 
+function calendarMonthLabel(year, month) {
+  return new Intl.DateTimeFormat('th-TH', { month:'long', year:'numeric', timeZone:'Asia/Bangkok' }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
 async function renderCalendar() {
   openSurfaceDetail();
-  manualDetailContent.append(makeHero('Calendar', 'มุมมองตามเวลา อ่านรายการจาก Owner จริง และส่งการเปลี่ยนกลับไปที่ Runtime'));
+  manualDetailContent.append(makeHero('Calendar', 'ปฏิทินรายเดือนอ่านจาก Owner จริง การจ่ายเงินยังกลับไปจัดการที่ Owner ของรายการ'));
+
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let cursor = { year:now.getFullYear(), month:now.getMonth() + 1 };
+  let selectedDate = todayIso;
+
+  const controls = document.createElement('div');
+  controls.className = 'calendar-month-controls';
+  controls.innerHTML = '<button type="button" class="secondary-button" data-calendar-prev aria-label="เดือนก่อน">‹</button><strong data-calendar-label></strong><button type="button" class="secondary-button" data-calendar-today>วันนี้</button><button type="button" class="secondary-button" data-calendar-next aria-label="เดือนถัดไป">›</button>';
+  const grid = document.createElement('div');
+  grid.className = 'calendar-month-grid';
+  grid.setAttribute('role', 'grid');
   const list = document.createElement('div');
-  list.className = 'detail-list';
-  manualDetailContent.append(list);
-  try {
-    const calendar = await ledgerBridge.readCalendarTruth();
-    if (!calendar.records.length) return void list.append(makeRow('ปฏิทิน', 'ยังไม่มีรายการ'));
-    for (const record of calendar.records) {
-      const card = document.createElement('form');
-      card.className = 'auth-form manual-direct-form manual-calendar-record';
-      card.append(makeRow(record.title || record.type || 'รายการ', `${record.dueDate || '—'} · ${record.status || '—'}`));
-      const date = document.createElement('input');
-      date.name = 'dueDate';
-      date.type = 'date';
-      date.value = record.dueDate || '';
-      const reschedule = document.createElement('button');
-      reschedule.type = 'submit';
-      reschedule.className = 'secondary-button';
-      reschedule.textContent = 'เลื่อนวัน';
-      const status = makeStatus();
-      card.append(date, reschedule);
-      const ownerControlled = ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT','RECEIVE_CUSTOMER_PAYMENT'].includes(record.type);
-      if (!ownerControlled && ['OPEN','PARTIAL'].includes(record.status)) {
-        const complete = document.createElement('button');
-        complete.type = 'button';
-        complete.className = 'primary-button';
-        complete.textContent = 'เสร็จแล้ว';
-        complete.addEventListener('click', async () => {
-          status.textContent = 'กำลังอัปเดต…';
-          try { await ledgerBridge.setCalendarStatus({ workflowId:operationId('WF-LH-CALENDAR-STATUS'), queueId:record.recordId, status:'COMPLETED' }); status.textContent = 'อัปเดตแล้ว'; await renderCalendar(); } catch (error) { status.textContent = errorText(error); }
-        });
-        card.append(complete);
-      } else if (ownerControlled) card.append(makeRow('การจ่าย/รับเงิน', 'จัดการที่ Owner ของรายการ'));
-      card.append(status);
-      card.addEventListener('submit', async event => {
-        event.preventDefault();
-        const dueDate = String(new FormData(card).get('dueDate') || '');
-        status.textContent = 'กำลังเลื่อนวัน…';
-        try { await ledgerBridge.rescheduleCalendar({ workflowId:operationId('WF-LH-CALENDAR-RESCHEDULE'), queueId:record.recordId, dueDate }); status.textContent = 'เลื่อนวันแล้ว'; await renderCalendar(); } catch (error) { status.textContent = errorText(error); }
+  list.className = 'detail-list calendar-day-detail';
+  manualDetailContent.append(controls, grid, list);
+
+  function renderRecordCard(record) {
+    const card = document.createElement('form');
+    card.className = 'auth-form manual-direct-form manual-calendar-record';
+    card.append(makeRow(record.title || record.type || 'รายการ', `${record.dueDate || '—'} · ${record.status || '—'}`));
+    const date = document.createElement('input');
+    date.name = 'dueDate';
+    date.type = 'date';
+    date.value = record.dueDate || '';
+    const reschedule = document.createElement('button');
+    reschedule.type = 'submit';
+    reschedule.className = 'secondary-button';
+    reschedule.textContent = 'เลื่อนวัน';
+    const status = makeStatus();
+    card.append(date, reschedule);
+    const ownerControlled = ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT','RECEIVE_CUSTOMER_PAYMENT'].includes(record.type);
+    if (!ownerControlled && ['OPEN','PARTIAL'].includes(record.status)) {
+      const complete = document.createElement('button');
+      complete.type = 'button';
+      complete.className = 'primary-button';
+      complete.textContent = 'เสร็จแล้ว';
+      complete.addEventListener('click', async () => {
+        status.textContent = 'กำลังอัปเดต…';
+        try {
+          await ledgerBridge.setCalendarStatus({ workflowId:operationId('WF-LH-CALENDAR-STATUS'), queueId:record.recordId, status:'COMPLETED' });
+          status.textContent = 'อัปเดตแล้ว';
+          await draw();
+        } catch (error) { status.textContent = errorText(error); }
       });
-      list.append(card);
+      card.append(complete);
+    } else if (ownerControlled) {
+      card.append(makeRow('การจ่าย/รับเงิน', 'จัดการที่ Owner ของรายการ'));
     }
-  } catch { list.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้')); }
+    card.append(status);
+    card.addEventListener('submit', async event => {
+      event.preventDefault();
+      const dueDate = String(new FormData(card).get('dueDate') || '');
+      status.textContent = 'กำลังเลื่อนวัน…';
+      try {
+        await ledgerBridge.rescheduleCalendar({ workflowId:operationId('WF-LH-CALENDAR-RESCHEDULE'), queueId:record.recordId, dueDate });
+        selectedDate = dueDate || selectedDate;
+        status.textContent = 'เลื่อนวันแล้ว';
+        await draw();
+      } catch (error) { status.textContent = errorText(error); }
+    });
+    return card;
+  }
+
+  async function draw() {
+    grid.replaceChildren();
+    list.replaceChildren();
+    const label = controls.querySelector('[data-calendar-label]');
+    if (label) label.textContent = calendarMonthLabel(cursor.year, cursor.month);
+    try {
+      const calendar = await ledgerBridge.readCalendarTruth();
+      const month = projectCalendarMonth(calendar.records, cursor);
+      const weekdays = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+      for (const day of weekdays) {
+        const head = document.createElement('span');
+        head.className = 'calendar-weekday';
+        head.textContent = day;
+        grid.append(head);
+      }
+      for (const cell of month.cells) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'calendar-day';
+        if (!cell.inMonth) button.classList.add('is-outside-month');
+        if (cell.date === selectedDate) button.classList.add('is-selected');
+        button.dataset.calendarDate = cell.date;
+        button.setAttribute('role', 'gridcell');
+        button.innerHTML = `<strong>${Number(cell.date.slice(-2))}</strong>${cell.items.length ? `<small>${cell.items.length} รายการ</small>` : '<small>—</small>'}`;
+        button.addEventListener('click', () => { selectedDate = cell.date; void draw(); });
+        grid.append(button);
+      }
+      const selected = month.cells.find(cell => cell.date === selectedDate);
+      const records = selected?.items.map(item => item.sourceRecord) || [];
+      list.append(makeRow(selectedDate, records.length ? `${records.length} รายการ` : 'ไม่มีรายการ'));
+      for (const record of records) list.append(renderRecordCard(record));
+    } catch {
+      list.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้'));
+    }
+  }
+
+  controls.querySelector('[data-calendar-prev]')?.addEventListener('click', () => {
+    cursor = shiftCalendarMonth(cursor, -1);
+    selectedDate = `${cursor.year}-${String(cursor.month).padStart(2, '0')}-01`;
+    void draw();
+  });
+  controls.querySelector('[data-calendar-next]')?.addEventListener('click', () => {
+    cursor = shiftCalendarMonth(cursor, 1);
+    selectedDate = `${cursor.year}-${String(cursor.month).padStart(2, '0')}-01`;
+    void draw();
+  });
+  controls.querySelector('[data-calendar-today]')?.addEventListener('click', () => {
+    const today = new Date();
+    cursor = { year:today.getFullYear(), month:today.getMonth() + 1 };
+    selectedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    void draw();
+  });
+
+  await draw();
 }
 
 root?.addEventListener('click', event => {
