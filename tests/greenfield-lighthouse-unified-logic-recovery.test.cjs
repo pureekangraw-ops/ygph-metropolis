@@ -165,9 +165,9 @@ test('reverseLedgerTransaction delegates to owner runtime and verifies append-on
     async reverseLedgerTransaction(input) {
       calls.push(input);
       state = stateWith({ revision:13, ledger:[original, {
-        recordId:'TX-REV-1', source:'LEDGER', type:'TRANSACTION', title:'ย้อนรายการ ค่าอาหาร', detail:'IN:REVERSAL',
-        direction:'IN', amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/TX-OUT-1', reversalOf:'TX-OUT-1',
-        reason:'ลงรายการผิด', createdAt:'2026-09-14T02:00:00.000Z',
+        recordId:'TX-REV-1', source:'LEDGER', type:'TRANSACTION', title:'ย้อน ค่าอาหาร', detail:'IN:REVERSAL',
+        direction:'IN', amountSatang:6500, status:'COMPLETED', sourceRef:'LEDGER/MANUAL', reversalOf:'TX-OUT-1',
+        reversalReason:'ลงรายการผิด', createdAt:'2026-09-14T02:00:00.000Z',
       }] });
       return { status:'COMMITTED' };
     },
