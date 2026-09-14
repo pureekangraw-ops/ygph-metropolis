@@ -84,7 +84,27 @@ function errorText(error) {
 
 async function renderIncome() {
   openSurfaceDetail();
-  manualDetailContent.append(makeHero('Income', 'รายรับทั้งหมดอยู่บ้านนี้ และเพิ่มรายรับตรงได้โดยไม่ผ่าน Chat'));
+  manualDetailContent.append(makeHero('Income', 'เลือกว่าเงินก้อนนี้มาจากโลกไหน แล้วเข้า workflow ของมันโดยตรง'));
+
+  const routes = document.createElement('div');
+  routes.className = 'task-grid income-route-grid';
+  routes.dataset.incomeRoutes = '';
+  routes.innerHTML = '<button type="button" class="task-card" data-income-target="store" data-task="store"><span class="task-copy"><strong>ร้านค้า</strong><small>ขาย · สต็อก · ค้างรับ · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="ride" data-task="ride"><span class="task-copy"><strong>งานวิ่ง</strong><small>รายได้ · เครดิต · รอบงาน · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="other-general"><span class="task-copy"><strong>รายรับอื่น</strong><small>บันทึกรายรับตรงพร้อมที่มา</small></span><span class="task-icon" aria-hidden="true">›</span></button>';
+  manualDetailContent.append(routes);
+
+  const summary = document.createElement('div');
+  summary.className = 'detail-list';
+  manualDetailContent.append(summary);
+  try {
+    const truth = await ledgerBridge.readLedgerTruth();
+    syncDashboardFromTruth(truth);
+    summary.append(makeRow('เงินจริง', formatSatang(truth.balanceSatang)), makeRow('เงินเข้าวันนี้', formatSatang(truth.todayInSatang)));
+  } catch { summary.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้')); }
+}
+
+async function renderOtherIncome() {
+  openSurfaceDetail();
+  manualDetailContent.append(makeHero('รายรับอื่น', 'เพิ่มรายรับตรงพร้อมที่มา โดยเขียนผ่าน Runtime และอ่านกลับจาก Ledger ก่อนยืนยัน'));
   const form = document.createElement('form');
   form.className = 'auth-form manual-direct-form';
   form.id = 'manual-income-form';
@@ -269,6 +289,14 @@ async function renderCalendar() {
 }
 
 root?.addEventListener('click', event => {
+  const incomeTarget = event.target.closest?.('[data-income-target]')?.dataset.incomeTarget;
+  if (incomeTarget === 'other-general') {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void renderOtherIncome();
+    return;
+  }
+
   const task = event.target.closest?.('[data-task]')?.dataset.task;
   if (!['income','outcome','calendar'].includes(task)) return;
   event.preventDefault();
