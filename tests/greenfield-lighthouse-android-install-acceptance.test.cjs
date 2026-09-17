@@ -28,6 +28,7 @@ function deviceEvidence(overrides = {}) {
     installMode: 'INSTALL_OVER',
     installedApplicationId: expected.applicationId,
     installedSignerCertificateSha256: expected.signerCertificateSha256,
+    installedApkSha256: staticEvidence.apkSha256,
     beforeVersionCode: expected.baselineVersionCode,
     afterVersionCode: expected.targetVersionCode,
     launchedAfterInstall: true,
@@ -57,7 +58,7 @@ test('complete matching device evidence passes install-over acceptance', async (
   assert.doesNotThrow(() => assertAndroidInstallAccepted(result));
 });
 
-test('identity, downgrade, readback and persistence contradictions fail closed', async () => {
+test('identity, installed APK, downgrade, readback and persistence contradictions fail closed', async () => {
   const { evaluateAndroidInstallAcceptance } = await loadModule();
 
   const wrongSigner = evaluateAndroidInstallAcceptance({
@@ -67,6 +68,14 @@ test('identity, downgrade, readback and persistence contradictions fail closed',
   });
   assert.equal(wrongSigner.status, 'FAIL');
   assert.equal(wrongSigner.reasons.includes('DEVICE_SIGNER_MISMATCH'), true);
+
+  const wrongApk = evaluateAndroidInstallAcceptance({
+    expected,
+    staticEvidence,
+    deviceEvidence: deviceEvidence({ installedApkSha256: 'f'.repeat(64) }),
+  });
+  assert.equal(wrongApk.status, 'FAIL');
+  assert.equal(wrongApk.reasons.includes('DEVICE_APK_SHA256_MISMATCH'), true);
 
   const wrongReadback = evaluateAndroidInstallAcceptance({
     expected,
