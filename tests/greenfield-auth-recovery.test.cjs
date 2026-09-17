@@ -171,3 +171,66 @@ test('authenticated runtime changes the everyday password without Recovery Code 
   reopened.close();
   assert.deepEqual(fake.raw('current'), vaultBefore);
 });
+
+test('fresh first-run creates Recovery Code authority and recovery preserves data after a real mutation', async () => {
+  const { initializeFirstRun } = await import('../greenfield/first-run.mjs');
+  const {
+    openGreenfieldRuntimeWithDevicePin,
+    resetGreenfieldDevicePassword,
+  } = await import('../greenfield/runtime.mjs');
+
+  const fake = createFakeIndexedDB();
+  const created = await initializeFirstRun({
+    recoveryCode:RECOVERY_CODE,
+    password:OLD_PASSWORD,
+    indexedDBImpl:fake.indexedDBImpl,
+    now:()=>'2026-09-18T00:00:00.000Z',
+  });
+  assert.equal(created.status, 'CREATED_VERIFIED');
+
+  const runtime = await openGreenfieldRuntimeWithDevicePin({
+    pin:OLD_PASSWORD,
+    indexedDBImpl:fake.indexedDBImpl,
+    lockManager:null,
+    now:()=>'2026-09-18T00:01:00.000Z',
+  });
+  await runtime.readState();
+  const adjusted = await runtime.adjustBalance({
+    workflowId:'WF-RECOVERY-ACCEPTANCE',
+    ledgerTransactionId:'TX-RECOVERY-ACCEPTANCE',
+    targetBalanceSatang:12345,
+    reason:'recovery acceptance probe',
+  });
+  assert.equal(adjusted.status, 'ADJUSTED');
+  const revisionBeforeReset = adjusted.state.revision;
+  runtime.close();
+
+  assert.deepEqual(
+    await resetGreenfieldDevicePassword({
+      recoveryCode:RECOVERY_CODE,
+      nextPassword:NEW_PASSWORD,
+      indexedDBImpl:fake.indexedDBImpl,
+    }),
+    { status:'RESET' },
+  );
+
+  await assert.rejects(
+    () => openGreenfieldRuntimeWithDevicePin({
+      pin:OLD_PASSWORD,
+      indexedDBImpl:fake.indexedDBImpl,
+      lockManager:null,
+    }),
+    /DEVICE_PIN_INVALID/,
+  );
+
+  const reopened = await openGreenfieldRuntimeWithDevicePin({
+    pin:NEW_PASSWORD,
+    indexedDBImpl:fake.indexedDBImpl,
+    lockManager:null,
+    now:()=>'2026-09-18T00:02:00.000Z',
+  });
+  const state = await reopened.readState();
+  assert.equal(state.revision, revisionBeforeReset);
+  assert.equal(reopened.project().ledgerBalanceSatang, 12345);
+  reopened.close();
+});
