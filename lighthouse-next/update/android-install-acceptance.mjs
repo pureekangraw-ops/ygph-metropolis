@@ -10,6 +10,10 @@ function cleanSigner(value) {
   return String(value ?? '').replaceAll(':', '').trim().toLowerCase();
 }
 
+function cleanDigest(value) {
+  return String(value ?? '').trim().toLowerCase().replace(/^sha256:/, '');
+}
+
 function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
@@ -62,18 +66,19 @@ function evaluateStaticEvidence(expected, evidence) {
   if (cleanSigner(evidence.signerCertificateSha256) !== expected.signerCertificateSha256) reasons.push('STATIC_SIGNER_MISMATCH');
   if (evidence.versionCode !== expected.targetVersionCode) reasons.push('STATIC_VERSION_CODE_MISMATCH');
   if (evidence.versionName !== expected.targetVersionName) reasons.push('STATIC_VERSION_NAME_MISMATCH');
-  if (!HEX_64.test(String(evidence.apkSha256))) reasons.push('STATIC_APK_SHA256_INVALID');
+  if (!HEX_64.test(cleanDigest(evidence.apkSha256))) reasons.push('STATIC_APK_SHA256_INVALID');
 
   return reasons.length ? { status: 'FAIL', reasons } : { status: 'PASS', reasons: [] };
 }
 
-function evaluateDeviceEvidence(expected, evidence) {
+function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
   if (!evidence || typeof evidence !== 'object') return { status: 'VERIFY', reasons: ['DEVICE_EVIDENCE_REQUIRED'] };
 
   const required = [
     'installMode',
     'installedApplicationId',
     'installedSignerCertificateSha256',
+    'installedApkSha256',
     'beforeVersionCode',
     'afterVersionCode',
     'launchedAfterInstall',
@@ -96,6 +101,9 @@ function evaluateDeviceEvidence(expected, evidence) {
   if (cleanSigner(evidence.installedSignerCertificateSha256) !== expected.signerCertificateSha256) {
     reasons.push('DEVICE_SIGNER_MISMATCH');
   }
+  if (cleanDigest(evidence.installedApkSha256) !== cleanDigest(staticEvidence.apkSha256)) {
+    reasons.push('DEVICE_APK_SHA256_MISMATCH');
+  }
   if (evidence.beforeVersionCode !== expected.baselineVersionCode) reasons.push('DEVICE_BASELINE_VERSION_MISMATCH');
   if (evidence.afterVersionCode !== expected.targetVersionCode) reasons.push('DEVICE_TARGET_VERSION_MISMATCH');
   if (!isPositiveInteger(evidence.beforeVersionCode) || !isPositiveInteger(evidence.afterVersionCode) ||
@@ -116,7 +124,7 @@ export function evaluateAndroidInstallAcceptance({ expected, staticEvidence, dev
     return freezeResult(staticResult.status, staticResult.reasons, normalizedExpected);
   }
 
-  const deviceResult = evaluateDeviceEvidence(normalizedExpected, deviceEvidence);
+  const deviceResult = evaluateDeviceEvidence(normalizedExpected, staticEvidence, deviceEvidence);
   return freezeResult(deviceResult.status, deviceResult.reasons, normalizedExpected);
 }
 
