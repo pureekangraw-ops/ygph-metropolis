@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 function requireSnapshot(value, label) {
   if (!value || typeof value !== 'object') throw new Error(`INSTALL_OVER_${label}_SNAPSHOT_REQUIRED`);
-  for (const key of ['installedApplicationId', 'installedSignerCertificateSha256', 'versionCode']) {
+  for (const key of ['installedApplicationId', 'installedSignerCertificateSha256', 'versionCode', 'apkSha256']) {
     if (value[key] === undefined || value[key] === null || value[key] === '') {
       throw new Error(`INSTALL_OVER_${label}_SNAPSHOT_INCOMPLETE`);
     }
@@ -32,11 +32,15 @@ export function createInstallOverDeviceEvidence({
   if (before.installedApplicationId !== after.installedApplicationId) {
     throw new Error('INSTALL_OVER_APP_ID_DRIFT');
   }
+  if (String(before.installedSignerCertificateSha256).toLowerCase() !== String(after.installedSignerCertificateSha256).toLowerCase()) {
+    throw new Error('INSTALL_OVER_SIGNER_DRIFT');
+  }
 
   return Object.freeze({
     installMode: 'INSTALL_OVER',
     installedApplicationId: after.installedApplicationId,
     installedSignerCertificateSha256: after.installedSignerCertificateSha256,
+    installedApkSha256: after.apkSha256,
     beforeVersionCode: before.versionCode,
     afterVersionCode: after.versionCode,
     launchedAfterInstall: launchedAfterInstall === true,
