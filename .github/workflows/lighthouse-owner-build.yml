@@ -42,6 +42,13 @@ jobs:
       - name: Stage owner-approved LIGHTHOUSE next
         run: npm run app:stage-next
 
+      - name: Reject legacy shell from APK payload
+        run: |
+          test ! -e www/ui/lighthouse-shell.mjs
+          test ! -e www/ui/home-ui.mjs
+          test ! -e www/ui/store-ui.mjs
+          ! grep -R -n -E 'YGPH METROPOLIS|MASTER INPUT' www/lighthouse-next www/index.html
+
       - name: Generate Android project
         run: npx cap add android
 

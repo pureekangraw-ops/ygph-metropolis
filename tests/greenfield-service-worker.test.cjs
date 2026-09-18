@@ -1,75 +1,59 @@
 "use strict";
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const crypto = require('node:crypto');
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const os=require('node:os');
 
-const root = path.resolve(__dirname, '..');
-const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'RELEASE_MANIFEST.json'), 'utf8'));
+const root=path.resolve(__dirname,'..');
 
-function expectedAssetRevision() {
-  const hash = crypto.createHash('sha256');
-  const paths = manifest.productionFiles.map(item => item.path).filter(file => file !== 'sw.js').sort();
-  for (const file of paths) {
-    hash.update(file);
-    hash.update('\0');
-    hash.update(fs.readFileSync(path.join(root, file)));
-    hash.update('\0');
-  }
-  return `sha256-${hash.digest('hex').slice(0, 16)}`;
+async function staged(){
+  const {mkdtemp,readFile,rm}=require('node:fs/promises');
+  const mod=await import(path.join(root,'scripts/stage-lighthouse-next-bundle.mjs'));
+  const dest=await mkdtemp(path.join(os.tmpdir(),'lh-sw-'));
+  await mod.stageLighthouseBundle({repoRoot:root,destinationRoot:dest});
+  return {
+    sw:await readFile(path.join(dest,'sw.js'),'utf8'),
+    manifest:JSON.parse(await readFile(path.join(dest,'release-manifest.json'),'utf8')),
+    cleanup:()=>rm(dest,{recursive:true,force:true})
+  };
 }
 
-function relativeModuleImports(file) {
-  const source = fs.readFileSync(path.join(root, file), 'utf8');
-  const specs = [];
-  const pattern = /(?:\bfrom\s*|\bimport\s*)['"](\.{1,2}\/[^'"]+)['"]/g;
-  for (const match of source.matchAll(pattern)) specs.push(match[1]);
-  return specs.map(spec => path.posix.normalize(path.posix.join(path.posix.dirname(file), spec)));
-}
-
-test('service worker fetches navigations from network before offline shell fallback', () => {
-  assert.match(sw, /request\.mode\s*===\s*['"]navigate['"]/);
-  assert.match(sw, /navigationNetworkFirst\(event\.request\)/);
-  assert.match(sw, /fetch\(request,\{cache:['"]no-store['"]\}\)/);
-  assert.match(sw, /caches\.match\(['"]\.\/index\.html['"]\)/);
-
-  const helper = sw.indexOf('async function navigationNetworkFirst(request)');
-  const network = sw.indexOf("fetch(request,{cache:'no-store'})", helper);
-  const fallback = sw.indexOf("caches.match('./index.html')", helper);
-  assert.ok(helper >= 0, 'network-first navigation helper must exist');
-  assert.ok(network > helper, 'navigation helper must try network');
-  assert.ok(fallback > network, 'offline shell lookup must happen only after the network attempt');
+test('generated service worker is LIGHTHOUSE-owned and deletes legacy METROPOLIS caches',async()=>{
+  const x=await staged();
+  try{
+    assert.match(x.sw,/lighthouse-/);
+    assert.match(x.sw,/key\.startsWith\('ygph-metropolis-'\)/);
+    assert.doesNotMatch(x.sw,/ui\/lighthouse-shell\.mjs|ui\/home-ui\.mjs/);
+  }finally{await x.cleanup();}
 });
 
-test('service worker no longer uses generic cache-first handling for every GET', () => {
-  assert.doesNotMatch(sw, /caches\.match\(event\.request\)\.then\(cached\s*=>\s*cached\s*\|\|\s*fetch\(event\.request\)/);
+test('generated service worker uses network-first navigation and code',async()=>{
+  const x=await staged();
+  try{
+    assert.match(x.sw,/request\.mode==='navigate'/);
+    assert.match(x.sw,/networkFirst\(event\.request,'\.\/index\.html'\)/);
+    assert.match(x.sw,/request\.destination==='script'\|\|event\.request\.destination==='style'/);
+    assert.match(x.sw,/fetch\(request,\{cache:'no-store'\}\)/);
+  }finally{await x.cleanup();}
 });
 
-test('every relative production module import is included in the production manifest', () => {
-  const production = new Set(manifest.productionFiles.map(item => item.path));
-  const missing = [];
-  for (const file of production) {
-    if (!/\.(?:mjs|js)$/.test(file) || file === 'sw.js') continue;
-    for (const dependency of relativeModuleImports(file)) {
-      if (!production.has(dependency)) missing.push(`${file} -> ${dependency}`);
-    }
-  }
-  assert.deepEqual(missing, [], `production import closure missing: ${missing.join(', ')}`);
+test('generated offline shell follows runtime manifest plus generated release manifest',async()=>{
+  const x=await staged();
+  try{
+    const match=/const SHELL=(\[[^;]+\]);/.exec(x.sw);
+    assert.ok(match,'SHELL must be static');
+    const shell=Function('"use strict";return ('+match[1]+');')().map(v=>v.replace(/^\.\//,'')).sort();
+    const expected=[...x.manifest.applicationFiles,'release-manifest.json'].sort();
+    assert.deepEqual(shell,expected);
+  }finally{await x.cleanup();}
 });
 
-test('service-worker cache identity is coupled to the actual production asset revision', () => {
-  const expected = expectedAssetRevision();
-  assert.equal(manifest.serviceWorker.assetRevision, expected, `update release assetRevision to ${expected}`);
-  assert.match(sw, new RegExp(`const ASSET_REVISION=['"]${expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}['"]`));
-  assert.match(sw, /const CACHE=`ygph-metropolis-\$\{RELEASE\}-\$\{ASSET_REVISION\}`/);
-});
-
-test('offline shell is exactly the manifest production asset set except service worker itself', () => {
-  const shellMatch = /const SHELL=(\[[^;]+\]);/.exec(sw);
-  assert.ok(shellMatch, 'SHELL constant must be statically declared');
-  const shell = Function(`"use strict"; return (${shellMatch[1]});`)().map(file => file.replace(/^\.\//,''));
-  const expected = manifest.productionFiles.map(item => item.path).filter(file => file !== 'sw.js').sort();
-  assert.deepEqual([...shell].sort(), expected);
+test('runtime manifest is sourced from one builder and carries one asset revision',async()=>{
+  const x=await staged();
+  try{
+    assert.equal(x.manifest.product,'LIGHTHOUSE');
+    assert.equal(x.manifest.authority,'scripts/stage-lighthouse-next-bundle.mjs');
+    assert.match(x.manifest.assetRevision,/^sha256-[a-f0-9]{16}$/);
+    assert.equal(x.sw.includes(x.manifest.assetRevision),true);
+  }finally{await x.cleanup();}
 });

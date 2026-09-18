@@ -32,25 +32,16 @@ test('GO Client selects the public alias only when entered through /client', asy
   assert.equal(resolveGoClientInterpretEndpoint('https://metro.example/'), '/api/v1/interpret');
 });
 
-test('GET /client reuses index.html but removes owner boot scripts and points at public client assets', async () => {
+test('GET /client serves its own staged shell instead of transforming the owner root', async () => {
   const { handleApiRequest } = await import('../worker/index.mjs');
   const seen = [];
-  const rootHtml = `<!doctype html><html><head>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'">
-    <link rel="manifest" href="manifest.webmanifest">
-    <link rel="stylesheet" href="styles.css">
-    <title>YGPH METROPOLIS</title>
-  </head><body>
-    <main class="layout"><section id="gate"></section><div id="workspace"></div></main>
-    <script type="module" src="ui/master-input.mjs"></script>
-    <script type="module" src="app.mjs"></script>
-  </body></html>`;
+  const clientHtml = '<!doctype html><html><head><title>GO Client</title><link rel="stylesheet" href="/client/assets/styles.css"><link rel="stylesheet" href="/client/assets/go-client.css" data-go-client-style></head><body class="go-client-mode"><script type="module" src="/client/assets/ui/go-client-entry.mjs"></script></body></html>';
   const env = {
     ASSETS:{
       async fetch(request) {
         const pathname = new URL(request.url).pathname;
         seen.push(pathname);
-        if (pathname === '/index.html') return new Response(rootHtml, { status:200, headers:{'content-type':'text/html; charset=utf-8'} });
+        if (pathname === '/client/index.html') return new Response(clientHtml, { status:200, headers:{'content-type':'text/html; charset=utf-8'} });
         return new Response('missing', { status:404 });
       },
     },
@@ -58,15 +49,13 @@ test('GET /client reuses index.html but removes owner boot scripts and points at
 
   const response = await handleApiRequest(new Request('https://metro.example/client'), env);
   assert.equal(response.status, 200);
-  assert.deepEqual(seen, ['/index.html']);
+  assert.deepEqual(seen, ['/client/index.html']);
   const html = await response.text();
   assert.match(html, /<body class="go-client-mode">/);
   assert.match(html, /href="\/client\/assets\/styles\.css"/);
   assert.match(html, /href="\/client\/assets\/go-client\.css"[^>]*data-go-client-style/);
   assert.match(html, /src="\/client\/assets\/ui\/go-client-entry\.mjs"/);
-  assert.doesNotMatch(html, /src="ui\/master-input\.mjs"/);
-  assert.doesNotMatch(html, /src="app\.mjs"/);
-  assert.doesNotMatch(html, /rel="manifest"/);
+  assert.doesNotMatch(html, /YGPH METROPOLIS|ui\/master-input\.mjs|src="app\.mjs"/);
 });
 
 test('public client asset proxy exposes only the small allowlist, never owner runtime modules', async () => {
@@ -84,12 +73,12 @@ test('public client asset proxy exposes only the small allowlist, never owner ru
 
   const clientModule = await handleApiRequest(new Request('https://metro.example/client/assets/ui/go-client.mjs'), env);
   assert.equal(clientModule.status, 200);
-  assert.equal(await clientModule.text(), 'asset:/ui/go-client.mjs');
-  assert.deepEqual(seen, ['/ui/go-client.mjs']);
+  assert.equal(await clientModule.text(), 'asset:/client/assets/ui/go-client.mjs');
+  assert.deepEqual(seen, ['/client/assets/ui/go-client.mjs']);
 
   const ownerRuntime = await handleApiRequest(new Request('https://metro.example/client/assets/greenfield/runtime.mjs'), env);
   assert.equal(ownerRuntime.status, 404);
-  assert.deepEqual(seen, ['/ui/go-client.mjs']);
+  assert.deepEqual(seen, ['/client/assets/ui/go-client.mjs']);
 });
 
 test('public client interpret alias forces GO_CLIENT and preserves GO_CLIENT_MANAGER without opening legacy METRO', async () => {

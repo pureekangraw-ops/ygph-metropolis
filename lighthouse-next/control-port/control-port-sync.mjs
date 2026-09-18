@@ -1,0 +1,86 @@
+export function createLighthouseControlPortSync({ runtime, now = () => new Date().toISOString() } = {}) {
+  if (!runtime || typeof runtime.receive !== 'function' || typeof runtime.outbox !== 'function') {
+    throw new Error('LIGHTHOUSE_CONTROL_PORT_SYNC_RUNTIME_REQUIRED');
+  }
+
+  async function reconcile({
+    pullInbox,
+    pushOutbox,
+    pushState,
+  } = {}) {
+    const report = {
+      startedAt:now(),
+      transport:'ONLINE',
+      received:0,
+      processed:0,
+      pushedReceipts:0,
+      snapshotFreshness:null,
+      errors:[],
+    };
+
+    if (typeof pullInbox === 'function') {
+      try {
+        const remote = await pullInbox();
+        const commands = Array.isArray(remote) ? remote : [];
+        for (const command of commands) {
+          runtime.receive(command);
+          report.received += 1;
+        }
+      } catch (error) {
+        report.transport = 'OFFLINE';
+        report.errors.push(String(error?.message || error || 'PULL_FAILED'));
+      }
+    }
+
+    try {
+      const processed = await runtime.processPending();
+      report.processed = processed.length;
+    } catch (error) {
+      report.errors.push(String(error?.message || error || 'PROCESS_PENDING_FAILED'));
+    }
+
+    let snapshot = null;
+    try {
+      snapshot = await runtime.refreshSnapshot();
+      report.snapshotFreshness = snapshot.freshness;
+    } catch (error) {
+      report.errors.push(String(error?.message || error || 'SNAPSHOT_REFRESH_FAILED'));
+      try {
+        snapshot = await runtime.snapshotStatus();
+        report.snapshotFreshness = snapshot.freshness;
+      } catch {}
+    }
+
+    const receipts = runtime.outbox();
+    if (typeof pushOutbox === 'function') {
+      try {
+        await pushOutbox(receipts);
+        report.pushedReceipts = receipts.length;
+      } catch (error) {
+        report.transport = 'OFFLINE';
+        report.errors.push(String(error?.message || error || 'PUSH_OUTBOX_FAILED'));
+      }
+    }
+
+    if (typeof pushState === 'function') {
+      try {
+        await pushState({
+          work:runtime.workState(),
+          snapshot,
+          syncedAt:now(),
+        });
+      } catch (error) {
+        report.transport = 'OFFLINE';
+        report.errors.push(String(error?.message || error || 'PUSH_STATE_FAILED'));
+      }
+    }
+
+    return Object.freeze({
+      ...report,
+      finishedAt:now(),
+      errors:Object.freeze([...report.errors]),
+    });
+  }
+
+  return Object.freeze({ reconcile });
+}

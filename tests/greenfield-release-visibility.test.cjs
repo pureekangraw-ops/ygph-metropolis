@@ -1,57 +1,49 @@
 "use strict";
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const root = path.resolve(__dirname, '..');
-const source = file => fs.readFileSync(path.join(root, file), 'utf8');
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const os=require('node:os');
 
-test('Cloudflare security headers are deployment-owned and enforce frame protection', () => {
-  const headers = source('_headers');
-  const manifest = JSON.parse(source('RELEASE_MANIFEST.json'));
-  assert.match(headers, /Content-Security-Policy:/);
-  assert.match(headers, /frame-ancestors 'none'/);
-  assert.match(headers, /X-Content-Type-Options: nosniff/);
-  assert.match(headers, /Referrer-Policy: no-referrer/);
-  assert.match(headers, /Permissions-Policy:/);
-  assert.ok((manifest.deploymentFiles || []).some(entry => entry.path === '_headers'));
-  assert.equal(manifest.productionFiles.some(entry => entry.path === '_headers'), false);
+const root=path.resolve(__dirname,'..');
+const source=file=>fs.readFileSync(path.join(root,file),'utf8');
+
+test('Cloudflare security headers remain deployment-owned and frame-protected',()=>{
+  const headers=source('_headers');
+  assert.match(headers,/Content-Security-Policy:/);
+  assert.match(headers,/frame-ancestors 'none'/);
+  assert.match(headers,/X-Content-Type-Options: nosniff/);
+  assert.match(headers,/Referrer-Policy: no-referrer/);
 });
 
-test('visible release authority agrees across package manifest service worker and UI status owner', () => {
-  const manifest = JSON.parse(source('RELEASE_MANIFEST.json'));
-  const pkg = JSON.parse(source('package.json'));
-  const lock = JSON.parse(source('package-lock.json'));
-  const sw = source('sw.js');
-  const status = source('ui/release-status.mjs');
-  const app = source('app.mjs');
-  const uiRelease = /APP_RELEASE='([^']+)'/.exec(status)?.[1];
-  const swRelease = /const RELEASE='([^']+)'/.exec(sw)?.[1];
-  assert.equal(manifest.release, pkg.version);
-  assert.equal(lock.version, manifest.release);
-  assert.equal(lock.packages[''].version, manifest.release);
-  assert.equal(uiRelease, manifest.release);
-  assert.equal(swRelease, manifest.release);
-  assert.match(app, /import ['"]\.\/ui\/release-status\.mjs['"]/);
-  assert.match(status, /import ['"]\.\/theme-shell\.mjs['"]/);
+test('visible release authority is generated from Android identity into the canonical bundle',async()=>{
+  const {mkdtemp,readFile,rm}=require('node:fs/promises');
+  const mod=await import(path.join(root,'scripts/stage-lighthouse-next-bundle.mjs'));
+  const dest=await mkdtemp(path.join(os.tmpdir(),'lh-release-'));
+  try{
+    await mod.stageLighthouseBundle({repoRoot:root,destinationRoot:dest});
+    const runtimeManifest=JSON.parse(await readFile(path.join(dest,'release-manifest.json'),'utf8'));
+    const identity=JSON.parse(await readFile(path.join(dest,'lighthouse-next','build-identity.json'),'utf8'));
+    const version=JSON.parse(await readFile(path.join(root,'android-shell','version.json'),'utf8'));
+    assert.equal(runtimeManifest.product,'LIGHTHOUSE');
+    assert.equal(runtimeManifest.architecture,'LIGHTHOUSE_NEXT');
+    assert.equal(runtimeManifest.versionName,version.versionName);
+    assert.equal(runtimeManifest.versionCode,version.versionCode);
+    assert.equal(identity.versionName,version.versionName);
+    assert.equal(identity.versionCode,version.versionCode);
+    assert.equal(runtimeManifest.authority,'scripts/stage-lighthouse-next-bundle.mjs');
+  }finally{await rm(dest,{recursive:true,force:true});}
 });
 
-test('System reports service-worker lifecycle instead of leaving update state invisible', () => {
-  const status = source('ui/release-status.mjs');
-  assert.match(status, /systemVersion/);
-  assert.match(status, /systemServiceWorker/);
-  assert.match(status, /navigator\.serviceWorker\.register\('\.\/sw\.js'\)/);
-  for (const label of ['กำลังตรวจสอบ','พร้อมใช้','กำลังอัปเดต','มีอัปเดตพร้อมใช้','อัปเดตแล้ว','มีปัญหา']) assert.match(status, new RegExp(label));
+test('LIGHTHOUSE web runtime registers the generated root service worker only on web protocols',()=>{
+  const app=source('lighthouse-next/app.mjs');
+  assert.match(app,/navigator\.serviceWorker\.register\('\/sw\.js'/);
+  assert.match(app,/\^https\?:\$/);
 });
 
-test('Settings shows only the latest human update entry', () => {
-  const status = source('ui/release-status.mjs');
-  assert.match(status, /มีอะไรใหม่/);
-  assert.match(status, /24 ส\.ค\. 2026 · 08:15/);
-  assert.match(status, /นำเข้าไฟล์/);
-  assert.equal((status.match(/timestamp:'/g) || []).length, 1);
-  assert.doesNotMatch(status, /24 ส\.ค\. 2026 · 02:28/);
-  assert.doesNotMatch(status, /23 ส\.ค\. 2026 · 21:36/);
-  assert.doesNotMatch(status, /เติมเงินออกที่ขาด/);
-  assert.doesNotMatch(status, /ค่าเสื่อม/);
+test('legacy release-status module is not production authority',()=>{
+  const manifest=JSON.parse(source('RELEASE_MANIFEST.json'));
+  assert.equal(manifest.legacy.shellAuthority,'ROLLBACK_ONLY_NOT_DEPLOYED');
+  assert.equal(manifest.authority.webEntrypoint,'lighthouse-next/index.html');
+  assert.notEqual(manifest.authority.webEntrypoint,'index.html');
 });

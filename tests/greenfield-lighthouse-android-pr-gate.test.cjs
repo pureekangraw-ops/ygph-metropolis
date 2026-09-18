@@ -37,15 +37,15 @@ test('PR safety gate verifies nested LIGHTHOUSE bytes including the runtime gate
   assert.match(workflow, /LIGHTHOUSE_STAGE_HASH_MISMATCH/);
 });
 
-test('isolated LIGHTHOUSE staging composes the shared bundle before dry-run and deploy', () => {
-  const command = 'node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-next-staging';
-  const occurrences = workflow.match(new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || [];
-  assert.ok(occurrences.length >= 2, 'shared bundle builder must run before both staging validation and deployment');
+test('canonical LIGHTHOUSE bundle is staged before Wrangler validation and PR staging deploy', () => {
+  const command = 'node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-production';
+  const occurrences = workflow.split(command).length - 1;
+  assert.ok(occurrences >= 2, 'canonical bundle builder must run in safety and staging jobs');
 
-  const validateStage = workflow.indexOf('Stage isolated LIGHTHOUSE bundle for validation');
-  const validate = workflow.indexOf('Validate isolated LIGHTHOUSE demo staging config');
-  const deployStage = workflow.indexOf('Stage isolated LIGHTHOUSE bundle for deploy');
-  const deploy = workflow.indexOf('Deploy isolated LIGHTHOUSE next demo staging');
-  assert.ok(validateStage >= 0 && validate >= 0 && validateStage < validate);
-  assert.ok(deployStage >= 0 && deploy >= 0 && deployStage < deploy);
+  const stage = workflow.indexOf('Stage canonical LIGHTHOUSE production bundle');
+  const reject = workflow.indexOf('Reject legacy production shell');
+  const validate = workflow.indexOf('Validate Wrangler production config');
+  assert.ok(stage >= 0 && reject > stage && validate > reject);
+  assert.match(workflow, /\.lighthouse-production/);
+  assert.doesNotMatch(workflow, /Deploy isolated LIGHTHOUSE next demo staging/);
 });

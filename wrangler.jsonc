@@ -4,7 +4,7 @@
   "compatibility_date": "2026-08-02",
   "main": "worker/index.mjs",
   "assets": {
-    "directory": ".",
+    "directory": "./.lighthouse-production",
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*",

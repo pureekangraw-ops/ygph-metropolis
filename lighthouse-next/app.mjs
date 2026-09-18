@@ -10,10 +10,62 @@ import { formatThaiBangkokDate } from './bangkok-date.mjs';
 import { createLighthouseRuntimeGate, authMessage } from './runtime-gate.mjs';
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from './runtime-store.mjs';
+import { createLighthouseControlPort } from './control-port/control-port.mjs';
+import { createLighthouseControlPortRuntime } from './control-port/control-port-runtime.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
+
+function registerProductionServiceWorker() {
+  if (!globalThis.navigator?.serviceWorker) return;
+  if (!/^https?:$/.test(globalThis.location?.protocol || '')) return;
+  globalThis.navigator.serviceWorker.register('/sw.js', { scope:'/' }).catch(() => {});
+}
+
+registerProductionServiceWorker();
 
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const DEFAULT_STATE = Object.freeze({ activeRoot:'manual', chatHistory:[], pendingFlow:null });
+let controlPortBuildIdentityPromise = null;
+
+async function readControlPortBuildIdentity() {
+  if (!controlPortBuildIdentityPromise) {
+    controlPortBuildIdentityPromise = fetch('./build-identity.json', { cache:'no-store' })
+      .then(async response => response.ok ? response.json() : null)
+      .catch(() => null);
+  }
+  return controlPortBuildIdentityPromise;
+}
+
+async function controlPortSnapshotMetadata() {
+  const identity = await readControlPortBuildIdentity();
+  const versionName = typeof identity?.versionName === 'string' && identity.versionName.trim()
+    ? identity.versionName.trim()
+    : null;
+  const versionCode = Number.isSafeInteger(Number(identity?.versionCode))
+    ? Number(identity.versionCode)
+    : null;
+  return {
+    appVersion:versionName,
+    mainSha:typeof identity?.sourceCommit === 'string' && /^[a-f0-9]{40}$/i.test(identity.sourceCommit) ? identity.sourceCommit : null,
+    buildState:{
+      status:identity ? 'STAGED' : 'UNKNOWN',
+      identity:identity ? {
+        owner:identity.owner || null,
+        applicationId:identity.applicationId || null,
+        versionCode,
+        versionName,
+      } : null,
+    },
+    deployState:{ status:'UNKNOWN' },
+    updaterState:{ status:'UNKNOWN' },
+    source:{
+      repository:typeof identity?.sourceRepository === 'string' && identity.sourceRepository.trim()
+        ? identity.sourceRepository.trim()
+        : 'pureekangraw-ops/ygph-metropolis',
+      branch:typeof identity?.sourceRef === 'string' && identity.sourceRef.trim() ? identity.sourceRef.trim() : null,
+    },
+    owner:{ system:'METROPOLIS', runtime:'LIGHTHOUSE_CONTROL_PORT' },
+  };
+}
 
 const root = document.querySelector('#demo-root');
 const authScreen = root.querySelector('#auth-screen');
@@ -47,6 +99,11 @@ const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
 const storeBridge = createLighthouseStoreBridge();
+const controlPort = createLighthouseControlPort({ ledgerBridge, storeBridge });
+const controlPortRuntime = createLighthouseControlPortRuntime({
+  port:controlPort,
+  snapshotMetadata:controlPortSnapshotMetadata,
+});
 const chatRead = createChatReadCapability({ ledgerBridge, storeBridge });
 const chatLifecycle = createChatLifecycle();
 
@@ -134,7 +191,7 @@ function showSetupRequired(reason) { authScreen.hidden = false; appShell.hidden 
 function showApp() { authScreen.hidden = true; appShell.hidden = false; renderHomeTruth(); selectRoot(state.activeRoot || 'manual'); restorePending(); }
 function clearRecoveryFields() { recoveryCodeInput.value = ''; newPasswordInput.value = ''; confirmPasswordInput.value = ''; }
 async function bootRuntimeGate() { authStatus.textContent = 'กำลังตรวจสถานะอุปกรณ์…'; try { const result = await runtimeGate.inspect(); if (result.status === 'LOGIN') showLoginGate(); else showSetupRequired(result.reason); } catch (error) { showSetupRequired(); authStatus.textContent = authMessage(error); } }
-async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); state.activeRoot = 'manual'; saveState(); showApp(); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
+async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
 function lockApp() { runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 

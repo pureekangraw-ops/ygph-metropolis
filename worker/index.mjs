@@ -7,11 +7,11 @@ import { gateGoClientProposal, interpretGoClientTextWithOpenAI } from '../master
 import { gateGoClientManagerDecision, interpretGoClientManagerWithOpenAI } from '../master-input/go-client-manager-provider.mjs';
 
 const PUBLIC_CLIENT_ASSETS = Object.freeze(new Map([
-  ['/client/assets/styles.css', '/styles.css'],
-  ['/client/assets/go-client.css', '/go-client.css'],
-  ['/client/assets/ui/go-client-entry.mjs', '/ui/go-client-entry.mjs'],
-  ['/client/assets/ui/go-client.mjs', '/ui/go-client.mjs'],
-  ['/client/assets/ui/go-client-flow.mjs', '/ui/go-client-flow.mjs'],
+  ['/client/assets/styles.css', '/client/assets/styles.css'],
+  ['/client/assets/go-client.css', '/client/assets/go-client.css'],
+  ['/client/assets/ui/go-client-entry.mjs', '/client/assets/ui/go-client-entry.mjs'],
+  ['/client/assets/ui/go-client.mjs', '/client/assets/ui/go-client.mjs'],
+  ['/client/assets/ui/go-client-flow.mjs', '/client/assets/ui/go-client-flow.mjs'],
 ]));
 
 function surfaceOf(input) {
@@ -42,32 +42,17 @@ async function fetchPublicClientAsset(request, env, pathname) {
   return env.ASSETS.fetch(assetRequest(request, sourcePath));
 }
 
-function transformClientHtml(html) {
-  return String(html || '')
-    .replace(/\s*<link\s+rel=["']manifest["'][^>]*>\s*/i, '\n')
-    .replace(
-      /<link\s+rel=["']stylesheet["']\s+href=["']styles\.css["']\s*>/i,
-      '<link rel="stylesheet" href="/client/assets/styles.css">\n  <link rel="stylesheet" href="/client/assets/go-client.css" data-go-client-style>'
-    )
-    .replace(/<body(?:\s[^>]*)?>/i, '<body class="go-client-mode">')
-    .replace(/\s*<script\s+type=["']module["']\s+src=["']ui\/master-input\.mjs["']><\/script>\s*/i, '\n')
-    .replace(
-      /<script\s+type=["']module["']\s+src=["']app\.mjs["']><\/script>/i,
-      '<script type="module" src="/client/assets/ui/go-client-entry.mjs"></script>'
-    );
-}
-
 async function publicClientDocument(request, env, requestId) {
   if (request.method !== 'GET') return errorResponse({ requestId, code:'METHOD_NOT_ALLOWED', status:405 });
   if (typeof env?.ASSETS?.fetch !== 'function') return errorResponse({ requestId, code:'NOT_FOUND', status:404 });
-  const response = await env.ASSETS.fetch(assetRequest(request, '/index.html'));
+  const response = await env.ASSETS.fetch(assetRequest(request, '/client/index.html'));
   if (!response?.ok) return errorResponse({ requestId, code:'NOT_FOUND', status:404 });
   const headers = new Headers(response.headers);
   headers.delete('content-length');
   headers.delete('etag');
   headers.set('cache-control', 'no-store');
   headers.set('content-type', 'text/html; charset=utf-8');
-  return new Response(transformClientHtml(await response.text()), { status:200, headers });
+  return new Response(await response.text(), { status:200, headers });
 }
 
 async function interpretRequest(input, env, deps) {
