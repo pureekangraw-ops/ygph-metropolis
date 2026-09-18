@@ -13,8 +13,10 @@ function requireSnapshot(value, label) {
 }
 
 function requireProbe(value) {
-  if (!value || typeof value !== 'object' || !value.key || value.before === undefined || value.after === undefined) {
-    throw new Error('INSTALL_OVER_PERSISTENCE_PROBE_REQUIRED');
+  if (!value || typeof value !== 'object' || value.key !== 'GREENFIELD_DATABASE_VAULT_SHA256' ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(value.before || '')) ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(value.after || ''))) {
+    throw new Error('INSTALL_OVER_PERSISTENCE_PROBE_INVALID');
   }
   return value;
 }
@@ -61,6 +63,7 @@ export function createInstallOverDeviceEvidence({
     installedApkSha256: after.apkSha256,
     beforeVersionCode: before.versionCode,
     afterVersionCode: after.versionCode,
+    afterVersionName: after.versionName,
     launchedAfterInstall: true,
     launchEvidence: Object.freeze({ ...launch }),
     readbackVersionCode: after.versionCode,
