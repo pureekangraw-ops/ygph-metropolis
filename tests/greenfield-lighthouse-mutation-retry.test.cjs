@@ -99,3 +99,76 @@ test('MANUAL mutation surfaces reuse stable attempts instead of minting new ids 
     assert.equal(surface.includes(forbidden), false, `fresh retry identity remains: ${forbidden}`);
   }
 });
+
+
+function localStorageLike() {
+  const data = new Map();
+  return {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(String(key), String(value)); },
+    removeItem(key) { data.delete(String(key)); },
+    key(index) { return [...data.keys()][index] ?? null; },
+    get length() { return data.size; },
+    dump(key) { return data.get(key) ?? null; },
+  };
+}
+
+test('ambiguous retry ids survive reopen without persisting business payload plaintext', async () => {
+  const { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt } = await load();
+  const storage = localStorageLike();
+  let serial = 0;
+  const persistenceKey = `${MANUAL_MUTATION_ATTEMPT_PREFIX}expense`;
+  const first = createStableMutationAttempt({
+    createId:prefix => `${prefix}-${++serial}`,
+    prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
+    storage,
+    persistenceKey,
+  });
+
+  const payload = { title:'secret-lunch-note', amountBaht:987.65 };
+  const ids = first.acquire(payload);
+  first.markVerificationPending();
+
+  const persisted = storage.dump(persistenceKey);
+  assert.ok(persisted);
+  assert.equal(persisted.includes('secret-lunch-note'), false);
+  assert.equal(persisted.includes('987.65'), false);
+  assert.match(persisted, /"verificationPending":true/);
+
+  const reopened = createStableMutationAttempt({
+    createId:() => { throw new Error('restored retry must not mint new ids'); },
+    prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
+    storage,
+    persistenceKey,
+  });
+  assert.equal(reopened.snapshot().restored, true);
+  assert.deepEqual(reopened.acquire(payload), ids);
+  assert.throws(() => reopened.acquire({ ...payload, amountBaht:1000 }), /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/);
+
+  reopened.clear();
+  assert.equal(storage.getItem(persistenceKey), null);
+});
+
+test('local reset cleanup removes only persisted MANUAL retry guards', async () => {
+  const { MANUAL_MUTATION_ATTEMPT_PREFIX, clearStableMutationAttempts } = await load();
+  const storage = localStorageLike();
+  storage.setItem(`${MANUAL_MUTATION_ATTEMPT_PREFIX}expense`, '{}');
+  storage.setItem(`${MANUAL_MUTATION_ATTEMPT_PREFIX}income`, '{}');
+  storage.setItem('unrelated-key', 'keep');
+
+  assert.equal(clearStableMutationAttempts({ storage }), 2);
+  assert.equal(storage.getItem(`${MANUAL_MUTATION_ATTEMPT_PREFIX}expense`), null);
+  assert.equal(storage.getItem(`${MANUAL_MUTATION_ATTEMPT_PREFIX}income`), null);
+  assert.equal(storage.getItem('unrelated-key'), 'keep');
+});
+
+test('MANUAL surfaces assign persistent retry scopes instead of storing payload truth', () => {
+  const fs = require('node:fs');
+  const surface = fs.readFileSync(path.resolve(__dirname, '../lighthouse-next/surface-contract.mjs'), 'utf8');
+  assert.match(surface, /MANUAL_MUTATION_ATTEMPT_PREFIX/);
+  assert.match(surface, /persistenceKey:/);
+  assert.match(surface, /receivable:\$\{item\.saleId\}:\$\{item\.queueId\}/);
+  assert.match(surface, /obligation-pay:\$\{obligation\.recordId\}:\$\{queue\.recordId\}/);
+  assert.match(surface, /calendar-reschedule:\$\{record\.recordId\}/);
+  assert.match(surface, /ledger-reversal:\$\{transaction\.recordId\}/);
+});
