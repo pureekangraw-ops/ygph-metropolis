@@ -151,8 +151,43 @@ async function renderIncome() {
       );
       if (!incomeTruth.receivables.length) summary.append(makeRow('ลูกหนี้', 'ไม่มีรายการค้างรับ'));
       for (const item of incomeTruth.receivables.slice(0, 10)) {
-        const amount = Number.isSafeInteger(Number(item.outstandingSatang)) ? formatSatang(item.outstandingSatang) : 'ต้องตรวจสอบ';
-        summary.append(makeRow(item.title || 'ลูกหนี้จากการขาย', amount));
+        const outstandingSatang = Number(item.outstandingSatang);
+        const amount = Number.isSafeInteger(outstandingSatang) ? formatSatang(outstandingSatang) : 'ต้องตรวจสอบ';
+        const card = document.createElement('form');
+        card.className = 'auth-form manual-direct-form manual-receivable-payment';
+        card.append(makeRow(item.title || 'ลูกหนี้จากการขาย', amount));
+
+        if (item.queueState === 'SCHEDULED' && item.queueId && Number.isSafeInteger(outstandingSatang) && outstandingSatang > 0) {
+          card.innerHTML += `<input name="amount" type="number" min="0.01" max="${outstandingSatang / 100}" step="0.01" value="${outstandingSatang / 100}" inputmode="decimal" required><button class="primary-button" type="submit">รับชำระ</button>`;
+          const payStatus = makeStatus();
+          card.append(payStatus);
+          const workflowId = operationId('WF-LH-MANUAL-RECEIVABLE');
+          const ledgerTransactionId = operationId('TX-LH-MANUAL-RECEIVABLE');
+          card.addEventListener('submit', async event => {
+            event.preventDefault();
+            const amountBaht = Number(new FormData(card).get('amount'));
+            payStatus.textContent = 'กำลังรับชำระ…';
+            try {
+              const result = await ledgerBridge.receiveReceivablePayment({
+                workflowId,
+                saleId:item.saleId,
+                queueId:item.queueId,
+                ledgerTransactionId,
+                amountBaht,
+              });
+              syncDashboardFromTruth(result.incomeTruth);
+              payStatus.textContent = 'รับชำระแล้ว · Store, Ledger และ Calendar อ่านกลับตรงกัน';
+              await refresh();
+            } catch (error) {
+              payStatus.textContent = errorText(error);
+            }
+          });
+        } else if (item.queueState === 'VERIFY_DUPLICATE') {
+          card.append(makeRow('สถานะ', 'พบคิวรับชำระซ้ำ · ต้องตรวจ Calendar ก่อน'));
+        } else {
+          card.append(makeRow('สถานะ', 'ยังไม่มีคิวรับชำระที่ปลอดภัย'));
+        }
+        summary.append(card);
       }
     } catch {
       summary.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้'));
