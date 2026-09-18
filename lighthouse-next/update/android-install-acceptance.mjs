@@ -123,7 +123,7 @@ function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
   if (launch.source !== 'ADB_AM_START_WAIT' || launch.launched !== true ||
       launch.applicationId !== expected.applicationId ||
       !String(launch.component || '').startsWith(`${expected.applicationId}/`) ||
-      !/^d+$/.test(String(launch.processId || '')) ||
+      !/^\d+$/.test(String(launch.processId || '')) ||
       !launch.capturedAt || !Number.isFinite(Date.parse(String(launch.capturedAt)))) {
     reasons.push('DEVICE_LAUNCH_EVIDENCE_INVALID');
   }
