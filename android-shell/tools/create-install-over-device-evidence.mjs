@@ -30,6 +30,9 @@ function requireLaunchEvidence(value, applicationId) {
   if (!String(value.component || '').startsWith(`${applicationId}/`)) {
     throw new Error('INSTALL_OVER_LAUNCH_COMPONENT_MISMATCH');
   }
+  if (!/^\d+$/.test(String(value.processId || ''))) {
+    throw new Error('INSTALL_OVER_LAUNCH_PROCESS_MISSING');
+  }
   return value;
 }
 
