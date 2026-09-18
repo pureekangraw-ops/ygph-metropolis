@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +51,14 @@ export const LIGHTHOUSE_PATH_ENTRYPOINTS = Object.freeze([
   'capabilities/expense.mjs',
 ]);
 
+export const CLIENT_RUNTIME_FILES = Object.freeze([
+  'styles.css',
+  'go-client.css',
+  'ui/go-client-entry.mjs',
+  'ui/go-client.mjs',
+  'ui/go-client-flow.mjs',
+]);
+
 const REQUIRED_ASSETS = Object.freeze([
   'assets/lighthouse-icon.svg',
   'assets/lighthouse-icon-maskable.svg',
@@ -84,20 +93,78 @@ export async function collectGreenfieldModuleClosure(greenfieldRoot, entrypoints
 
 const ROOT_ENTRY = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LIGHTHOUSE</title><meta http-equiv="refresh" content="0;url=./lighthouse-next/index.html"></head><body><p>LIGHTHOUSE</p><script>location.replace(\'./lighthouse-next/index.html\');</script></body></html>';
 
+const CLIENT_ENTRY = `<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0B0E14">
+  <title>GO Client</title>
+  <link rel="stylesheet" href="/client/assets/styles.css">
+  <link rel="stylesheet" href="/client/assets/go-client.css" data-go-client-style>
+</head>
+<body class="go-client-mode">
+  <script type="module" src="/client/assets/ui/go-client-entry.mjs"></script>
+</body>
+</html>`;
+
+function sourceIdentity() {
+  const commit = String(process.env.GITHUB_SHA || '').trim() || null;
+  const ref = String(process.env.GITHUB_REF_NAME || process.env.GITHUB_HEAD_REF || '').trim() || null;
+  const repository = String(process.env.GITHUB_REPOSITORY || 'pureekangraw-ops/ygph-metropolis').trim();
+  return { repository, ref, commit };
+}
+
+async function hashFiles(root, files) {
+  const hash = createHash('sha256');
+  for (const relative of [...files].sort()) {
+    hash.update(relative);
+    hash.update('\0');
+    hash.update(await readFile(join(root, relative)));
+    hash.update('\0');
+  }
+  return `sha256-${hash.digest('hex').slice(0, 16)}`;
+}
+
+function renderServiceWorker({ release, assetRevision, shell }) {
+  return `"use strict";
+const RELEASE=${JSON.stringify(release)};
+const ASSET_REVISION=${JSON.stringify(assetRevision)};
+const CACHE=\`lighthouse-\${RELEASE}-\${ASSET_REVISION}\`;
+const SHELL=${JSON.stringify(shell)};
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
+self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>(key.startsWith('lighthouse-')||key.startsWith('ygph-metropolis-'))&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
+async function networkFirst(request,fallback){try{const response=await fetch(request,{cache:'no-store'});if(response&&response.status===200&&response.type!=='opaque'){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(request,copy));}return response;}catch(error){const cached=await caches.match(request);if(cached)return cached;if(fallback){const shell=await caches.match(fallback);if(shell)return shell;}throw error;}}
+async function cacheFirst(request){const cached=await caches.match(request);if(cached)return cached;const response=await fetch(request);if(response&&response.status===200&&response.type!=='opaque'){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(request,copy));}return response;}
+self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;if(event.request.mode==='navigate'){event.respondWith(networkFirst(event.request,'./index.html'));return;}if(event.request.destination==='script'||event.request.destination==='style'){event.respondWith(networkFirst(event.request));return;}event.respondWith(cacheFirst(event.request));});
+`;
+}
+
 export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   const lighthouseRoot = join(repoRoot, 'lighthouse-next');
   const greenfieldRoot = join(repoRoot, 'greenfield');
   const lighthousePathRoot = join(repoRoot, 'lighthouse');
+
   for (const relative of [...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS]) {
     if (!(await exists(join(lighthouseRoot, relative)))) throw new Error(`LIGHTHOUSE_NEXT_SOURCE_MISSING:${relative}`);
   }
+  for (const relative of CLIENT_RUNTIME_FILES) {
+    if (!(await exists(join(repoRoot, relative)))) throw new Error(`GO_CLIENT_SOURCE_MISSING:${relative}`);
+  }
+
   const greenfieldFiles = await collectGreenfieldModuleClosure(greenfieldRoot);
   const lighthousePathFiles = await collectGreenfieldModuleClosure(lighthousePathRoot, LIGHTHOUSE_PATH_ENTRYPOINTS);
+
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(join(destinationRoot, 'lighthouse-next', 'assets'), { recursive: true });
   await mkdir(join(destinationRoot, 'greenfield'), { recursive: true });
   await mkdir(join(destinationRoot, 'lighthouse', 'capabilities'), { recursive: true });
+  await mkdir(join(destinationRoot, 'client', 'assets', 'ui'), { recursive: true });
+
   await writeFile(join(destinationRoot, 'index.html'), ROOT_ENTRY, 'utf8');
+  await writeFile(join(destinationRoot, 'client', 'index.html'), CLIENT_ENTRY, 'utf8');
+  await cp(join(repoRoot, '_headers'), join(destinationRoot, '_headers'), { force: true });
+
   const [androidVersion, androidIdentity] = await Promise.all([
     readFile(join(repoRoot, 'android-shell', 'version.json'), 'utf8').then(JSON.parse),
     readFile(join(repoRoot, 'android-shell', 'apk-identity.json'), 'utf8').then(JSON.parse),
@@ -106,14 +173,20 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   if (!androidIdentity?.applicationId || !Number.isInteger(Number(androidVersion?.versionCode)) || !String(androidVersion?.versionName || '').trim()) {
     throw new Error('LIGHTHOUSE_ANDROID_BUILD_IDENTITY_INVALID');
   }
+
+  const source = sourceIdentity();
   const buildIdentity = {
     owner:'ANDROID_APK',
     applicationId:androidIdentity.applicationId,
     versionCode:Number(androidVersion.versionCode),
     versionName:String(androidVersion.versionName),
     baselineVersionCode:Number(androidVersion.baselineVersionCode),
+    sourceRepository:source.repository,
+    sourceRef:source.ref,
+    sourceCommit:source.commit,
   };
   await writeFile(join(destinationRoot, 'lighthouse-next', 'build-identity.json'), `${JSON.stringify(buildIdentity, null, 2)}\n`, 'utf8');
+
   for (const relative of LIGHTHOUSE_RUNTIME_FILES) {
     const target = join(destinationRoot, 'lighthouse-next', relative);
     await mkdir(dirname(target), { recursive: true });
@@ -134,7 +207,54 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     await mkdir(dirname(target), { recursive: true });
     await cp(join(lighthousePathRoot, relative), target, { force: true });
   }
-  return { lighthouseFiles:[...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS], greenfieldFiles, lighthousePathFiles };
+  for (const relative of CLIENT_RUNTIME_FILES) {
+    const target = join(destinationRoot, 'client', 'assets', relative);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(join(repoRoot, relative), target, { force: true });
+  }
+
+  const applicationFiles = [
+    'index.html',
+    'client/index.html',
+    'lighthouse-next/build-identity.json',
+    ...LIGHTHOUSE_RUNTIME_FILES.map(file => `lighthouse-next/${file}`),
+    ...REQUIRED_ASSETS.map(file => `lighthouse-next/${file}`),
+    ...greenfieldFiles.map(file => `greenfield/${file}`),
+    ...lighthousePathFiles.map(file => `lighthouse/${file}`),
+    ...CLIENT_RUNTIME_FILES.map(file => `client/assets/${file}`),
+  ];
+  const assetRevision = await hashFiles(destinationRoot, applicationFiles);
+  const releaseManifest = {
+    product:'LIGHTHOUSE',
+    architecture:'LIGHTHOUSE_NEXT',
+    authority:'scripts/stage-lighthouse-next-bundle.mjs',
+    versionName:buildIdentity.versionName,
+    versionCode:buildIdentity.versionCode,
+    applicationId:buildIdentity.applicationId,
+    source,
+    assetRevision,
+    roots:['CHAT','MANUAL','SETTINGS'],
+    legacyShell:'ROLLBACK_ONLY_NOT_DEPLOYED',
+    applicationFiles:[...applicationFiles].sort(),
+  };
+  await writeFile(join(destinationRoot, 'release-manifest.json'), `${JSON.stringify(releaseManifest, null, 2)}\n`, 'utf8');
+
+  const shell = [...applicationFiles, 'release-manifest.json'].sort().map(file => `./${file}`);
+  await writeFile(join(destinationRoot, 'sw.js'), renderServiceWorker({
+    release:buildIdentity.versionName,
+    assetRevision,
+    shell,
+  }), 'utf8');
+
+  return {
+    lighthouseFiles:[...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS],
+    greenfieldFiles,
+    lighthousePathFiles,
+    clientFiles:[...CLIENT_RUNTIME_FILES],
+    applicationFiles:[...applicationFiles, 'release-manifest.json', 'sw.js'],
+    assetRevision,
+    buildIdentity,
+  };
 }
 
 const modulePath = fileURLToPath(import.meta.url);
@@ -145,5 +265,5 @@ if (invokedPath === modulePath) {
   const repoRoot = resolve(dirname(modulePath), '..');
   const destinationRoot = resolve(process.cwd(), destinationArg);
   const result = await stageLighthouseBundle({ repoRoot, destinationRoot });
-  console.log(`Staged LIGHTHOUSE bundle (${result.lighthouseFiles.length} app files, ${result.greenfieldFiles.length} Greenfield modules)`);
+  console.log(`Staged canonical LIGHTHOUSE bundle (${result.applicationFiles.length} deploy files, ${result.greenfieldFiles.length} Greenfield modules)`);
 }
