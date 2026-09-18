@@ -13,14 +13,14 @@ const versionToolPath = path.join(ROOT, 'android-shell', 'tools', 'set-android-v
 
 test('Android candidate records and enforces the canonical upgrade baseline', async () => {
   const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
-  assert.equal(version.baselineVersionCode, 1007);
-  assert.equal(version.versionCode, 1008);
-  assert.equal(version.versionName, '1.0.0-owner.3');
-  assert.ok(version.versionCode > 1007, 'first-run patch must install over owner-test vc1007');
+  assert.equal(version.baselineVersionCode, 1008);
+  assert.equal(version.versionCode, 1009);
+  assert.equal(version.versionName, '1.0.0-owner.4');
+  assert.ok(version.versionCode > version.baselineVersionCode, 'candidate must install over the canonical previous owner build');
 
   const { assertUpgradeVersion, applyAndroidVersion } = await import(pathToFileURL(versionToolPath));
   assert.doesNotThrow(() => assertUpgradeVersion({
-    baselineVersionCode: 1007,
+    baselineVersionCode: version.baselineVersionCode,
     candidateVersionCode: version.versionCode,
   }));
   assert.throws(() => assertUpgradeVersion({
@@ -52,16 +52,17 @@ test('APK identity verifier fails closed on package signer and version drift', a
   assert.equal(identity.signerCertificateSha256, 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce');
 
   const { assertApkIdentity } = await import(pathToFileURL(verifierPath));
+  const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
   const expected = {
     applicationId: identity.applicationId,
     signerCertificateSha256: identity.signerCertificateSha256,
-    versionCode: 1008,
-    versionName: '1.0.0-owner.3',
+    versionCode: version.versionCode,
+    versionName: version.versionName,
   };
   assert.doesNotThrow(() => assertApkIdentity(expected, expected));
   assert.throws(() => assertApkIdentity({ ...expected, applicationId: 'bad.id' }, expected), /APK_APPLICATION_ID_MISMATCH/);
   assert.throws(() => assertApkIdentity({ ...expected, signerCertificateSha256: '0'.repeat(64) }, expected), /APK_SIGNER_MISMATCH/);
-  assert.throws(() => assertApkIdentity({ ...expected, versionCode: 1007 }, expected), /APK_VERSION_CODE_MISMATCH/);
+  assert.throws(() => assertApkIdentity({ ...expected, versionCode: version.baselineVersionCode }, expected), /APK_VERSION_CODE_MISMATCH/);
 });
 
 test('final APK verifier owns hash and provenance evidence after signed-byte verification', () => {
