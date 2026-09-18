@@ -32,12 +32,18 @@ test('captures post-install launch evidence through injected adb commands', asyn
     if (args.includes('resolve-activity')) {
       return { status:0, stdout:'com.yggdrasil.lighthouse/.MainActivity\n', stderr:'' };
     }
+    if (args.includes('force-stop')) {
+      return { status:0, stdout:'', stderr:'' };
+    }
     if (args.includes('start')) {
       return {
         status:0,
         stdout:'Status: ok\nActivity: com.yggdrasil.lighthouse/.MainActivity\nTotalTime: 184\n',
         stderr:'',
       };
+    }
+    if (args.includes('pidof')) {
+      return { status:0, stdout:'4242\n', stderr:'' };
     }
     throw new Error('unexpected adb command');
   };
@@ -54,9 +60,27 @@ test('captures post-install launch evidence through injected adb commands', asyn
     applicationId:'com.yggdrasil.lighthouse',
     component:'com.yggdrasil.lighthouse/.MainActivity',
     launched:true,
+    processId:'4242',
     activity:'com.yggdrasil.lighthouse/.MainActivity',
     totalTimeMs:184,
   });
   assert.equal(calls.some(call => call.includes('resolve-activity')), true);
+  assert.equal(calls.some(call => call.includes('force-stop')), true);
   assert.equal(calls.some(call => call.includes('-W')), true);
+  assert.equal(calls.some(call => call.includes('pidof')), true);
+});
+
+
+test('fails closed when the launched app process is not alive after am start -W', async () => {
+  const runner = async (_command, args) => {
+    if (args.includes('resolve-activity')) return { status:0, stdout:'com.yggdrasil.lighthouse/.MainActivity\n', stderr:'' };
+    if (args.includes('force-stop')) return { status:0, stdout:'', stderr:'' };
+    if (args.includes('start')) return { status:0, stdout:'Status: ok\nTotalTime: 50\n', stderr:'' };
+    if (args.includes('pidof')) return { status:0, stdout:'', stderr:'' };
+    throw new Error('unexpected adb command');
+  };
+  await assert.rejects(
+    captureAppLaunchEvidence({ applicationId:'com.yggdrasil.lighthouse', runner }),
+    /ADB_LAUNCH_PROCESS_MISSING/,
+  );
 });
