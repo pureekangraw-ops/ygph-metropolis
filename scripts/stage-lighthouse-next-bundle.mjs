@@ -79,6 +79,22 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   await mkdir(join(destinationRoot, 'lighthouse-next', 'assets'), { recursive: true });
   await mkdir(join(destinationRoot, 'greenfield'), { recursive: true });
   await writeFile(join(destinationRoot, 'index.html'), ROOT_ENTRY, 'utf8');
+  const [androidVersion, androidIdentity] = await Promise.all([
+    readFile(join(repoRoot, 'android-shell', 'version.json'), 'utf8').then(JSON.parse),
+    readFile(join(repoRoot, 'android-shell', 'apk-identity.json'), 'utf8').then(JSON.parse),
+  ]);
+  if (androidVersion?.owner !== 'ANDROID_APK') throw new Error('LIGHTHOUSE_ANDROID_VERSION_OWNER_INVALID');
+  if (!androidIdentity?.applicationId || !Number.isInteger(Number(androidVersion?.versionCode)) || !String(androidVersion?.versionName || '').trim()) {
+    throw new Error('LIGHTHOUSE_ANDROID_BUILD_IDENTITY_INVALID');
+  }
+  const buildIdentity = {
+    owner:'ANDROID_APK',
+    applicationId:androidIdentity.applicationId,
+    versionCode:Number(androidVersion.versionCode),
+    versionName:String(androidVersion.versionName),
+    baselineVersionCode:Number(androidVersion.baselineVersionCode),
+  };
+  await writeFile(join(destinationRoot, 'lighthouse-next', 'build-identity.json'), `${JSON.stringify(buildIdentity, null, 2)}\n`, 'utf8');
   for (const relative of LIGHTHOUSE_RUNTIME_FILES) {
     const target = join(destinationRoot, 'lighthouse-next', relative);
     await mkdir(dirname(target), { recursive: true });
