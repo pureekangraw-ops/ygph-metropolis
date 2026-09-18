@@ -181,25 +181,28 @@ async function renderIncome() {
           card.innerHTML += `<input name="amount" type="number" min="0.01" max="${outstandingSatang / 100}" step="0.01" value="${outstandingSatang / 100}" inputmode="decimal" required><button class="primary-button" type="submit">รับชำระ</button>`;
           const payStatus = makeStatus();
           card.append(payStatus);
-          const workflowId = operationId('WF-LH-MANUAL-RECEIVABLE');
-          const ledgerTransactionId = operationId('TX-LH-MANUAL-RECEIVABLE');
+          const paymentAttempt = createManualAttempt({
+            workflowId:'WF-LH-MANUAL-RECEIVABLE',
+            ledgerTransactionId:'TX-LH-MANUAL-RECEIVABLE',
+          });
           card.addEventListener('submit', async event => {
             event.preventDefault();
             const amountBaht = Number(new FormData(card).get('amount'));
             payStatus.textContent = 'กำลังรับชำระ…';
             try {
+              const ids = paymentAttempt.acquire({ saleId:item.saleId, queueId:item.queueId, amountBaht });
               const result = await ledgerBridge.receiveReceivablePayment({
-                workflowId,
+                ...ids,
                 saleId:item.saleId,
                 queueId:item.queueId,
-                ledgerTransactionId,
                 amountBaht,
               });
+              paymentAttempt.clear();
               syncDashboardFromTruth(result.incomeTruth);
               payStatus.textContent = 'รับชำระแล้ว · Store, Ledger และ Calendar อ่านกลับตรงกัน';
               await refresh();
             } catch (error) {
-              payStatus.textContent = errorText(error);
+              handleManualMutationFailure(paymentAttempt, error, payStatus);
             }
           });
         } else if (item.queueState === 'VERIFY_DUPLICATE') {
@@ -238,6 +241,10 @@ async function renderOtherIncome() {
   form.id = 'manual-income-form';
   form.innerHTML = '<label>จำนวนเงิน (บาท)</label><input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required><label>ที่มา</label><input name="source" type="text" maxlength="80" required><button class="primary-button" type="submit">บันทึกรายรับ</button>';
   const status = makeStatus();
+  const incomeAttempt = createManualAttempt({
+    workflowId:'WF-LH-MANUAL-INCOME',
+    ledgerTransactionId:'TX-LH-MANUAL-INCOME',
+  });
   form.append(status);
   manualDetailContent.append(form);
   const list = document.createElement('div');
@@ -264,12 +271,14 @@ async function renderOtherIncome() {
     if (!Number.isFinite(amountBaht) || amountBaht <= 0 || !source) return void (status.textContent = 'กรอกจำนวนเงินและที่มาให้ครบ');
     status.textContent = 'กำลังบันทึก…';
     try {
-      const result = await ledgerBridge.recordOtherIncome({ workflowId:operationId('WF-LH-MANUAL-INCOME'), ledgerTransactionId:operationId('TX-LH-MANUAL-INCOME'), source, amountBaht });
+      const ids = incomeAttempt.acquire({ source, amountBaht });
+      const result = await ledgerBridge.recordOtherIncome({ ...ids, source, amountBaht });
+      incomeAttempt.clear();
       syncDashboardFromTruth(result.truth);
       form.reset();
       status.textContent = 'บันทึกแล้ว · อ่านกลับจาก Ledger สำเร็จ';
       await refresh();
-    } catch (error) { status.textContent = errorText(error); }
+    } catch (error) { handleManualMutationFailure(incomeAttempt, error, status); }
   });
   await refresh();
 }
@@ -290,6 +299,15 @@ async function renderOutcome() {
   obligationForm.id = 'manual-obligation-form';
   obligationForm.innerHTML = '<label>ภาระ</label><input name="title" type="text" maxlength="80" placeholder="เช่น ค่าเช่ารถ" required><label>ยอดทั้งหมด (บาท)</label><input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required><label>ครบกำหนด</label><input name="dueDate" type="date" required><button class="primary-button" type="submit">เพิ่มภาระ</button>';
   const obligationStatus = makeStatus();
+  const expenseAttempt = createManualAttempt({
+    workflowId:'WF-LH-MANUAL-EXPENSE',
+    ledgerTransactionId:'TX-LH-MANUAL-EXPENSE',
+  });
+  const obligationAttempt = createManualAttempt({
+    workflowId:'WF-LH-MANUAL-OBLIGATION',
+    obligationId:'OB-LH-MANUAL',
+    queueId:'CAL-LH-MANUAL-OBLIGATION',
+  });
   obligationForm.append(obligationStatus);
   manualDetailContent.append(expenseForm, obligationForm);
 
@@ -326,17 +344,23 @@ async function renderOutcome() {
         if (queue && Number(obligation.remainingSatang) > 0) {
           card.innerHTML += `<input name="amount" type="number" min="0.01" max="${Number(obligation.remainingSatang) / 100}" step="0.01" value="${Number(obligation.remainingSatang) / 100}" inputmode="decimal" required><button class="primary-button" type="submit">จ่ายภาระ</button>`;
           const payStatus = makeStatus();
+          const payAttempt = createManualAttempt({
+            workflowId:'WF-LH-MANUAL-PAY',
+            ledgerTransactionId:'TX-LH-MANUAL-PAY',
+          });
           card.append(payStatus);
           card.addEventListener('submit', async event => {
             event.preventDefault();
             const amountBaht = Number(new FormData(card).get('amount'));
             payStatus.textContent = 'กำลังจ่าย…';
             try {
-              const result = await ledgerBridge.payObligation({ workflowId:operationId('WF-LH-MANUAL-PAY'), obligationId:obligation.recordId, queueId:queue.recordId, ledgerTransactionId:operationId('TX-LH-MANUAL-PAY'), amountBaht });
+              const ids = payAttempt.acquire({ obligationId:obligation.recordId, queueId:queue.recordId, amountBaht });
+              const result = await ledgerBridge.payObligation({ ...ids, obligationId:obligation.recordId, queueId:queue.recordId, amountBaht });
+              payAttempt.clear();
               syncDashboardFromTruth(result.truth);
               payStatus.textContent = 'จ่ายแล้ว · Ledger และ Calendar ตรงกัน';
               await refresh();
-            } catch (error) { payStatus.textContent = errorText(error); }
+            } catch (error) { handleManualMutationFailure(payAttempt, error, payStatus); }
           });
         } else if (obligation.status === 'COMPLETED') card.append(makeRow('สถานะ', 'จ่ายครบแล้ว'));
         list.append(card);
@@ -352,12 +376,14 @@ async function renderOutcome() {
     const amountBaht = Number(data.get('amount'));
     expenseStatus.textContent = 'กำลังบันทึก…';
     try {
-      const result = await ledgerBridge.recordExpense({ workflowId:operationId('WF-LH-MANUAL-EXPENSE'), ledgerTransactionId:operationId('TX-LH-MANUAL-EXPENSE'), title, amountBaht });
+      const ids = expenseAttempt.acquire({ title, amountBaht });
+      const result = await ledgerBridge.recordExpense({ ...ids, title, amountBaht });
+      expenseAttempt.clear();
       syncDashboardFromTruth(result.truth);
       expenseForm.reset();
       expenseStatus.textContent = 'บันทึกแล้ว · อ่านกลับจาก Ledger สำเร็จ';
       await refresh();
-    } catch (error) { expenseStatus.textContent = errorText(error); }
+    } catch (error) { handleManualMutationFailure(expenseAttempt, error, expenseStatus); }
   });
 
   obligationForm.addEventListener('submit', async event => {
@@ -368,13 +394,14 @@ async function renderOutcome() {
     const dueDate = String(data.get('dueDate') || '').trim();
     obligationStatus.textContent = 'กำลังเพิ่มภาระ…';
     try {
-      const id = operationId('OB-LH-MANUAL');
-      const result = await ledgerBridge.createObligation({ workflowId:operationId('WF-LH-MANUAL-OBLIGATION'), obligationId:id, queueId:operationId('CAL-LH-MANUAL-OBLIGATION'), title, amountBaht, dueDate });
+      const ids = obligationAttempt.acquire({ title, amountBaht, dueDate });
+      const result = await ledgerBridge.createObligation({ ...ids, title, amountBaht, dueDate });
+      obligationAttempt.clear();
       syncDashboardFromTruth(result.truth);
       obligationForm.reset();
       obligationStatus.textContent = 'เพิ่มแล้ว · Owner และ Calendar อ่านกลับตรงกัน';
       await refresh();
-    } catch (error) { obligationStatus.textContent = errorText(error); }
+    } catch (error) { handleManualMutationFailure(obligationAttempt, error, obligationStatus); }
   });
 
   await refresh();
@@ -416,6 +443,8 @@ async function renderCalendar() {
     reschedule.className = 'secondary-button';
     reschedule.textContent = 'เลื่อนวัน';
     const status = makeStatus();
+    const rescheduleAttempt = createManualAttempt({ workflowId:'WF-LH-CALENDAR-RESCHEDULE' });
+    const statusAttempt = createManualAttempt({ workflowId:'WF-LH-CALENDAR-STATUS' });
     card.append(date, reschedule);
     const ownerControlled = ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT','RECEIVE_CUSTOMER_PAYMENT'].includes(record.type);
     if (!ownerControlled && ['OPEN','PARTIAL'].includes(record.status)) {
@@ -426,10 +455,12 @@ async function renderCalendar() {
       complete.addEventListener('click', async () => {
         status.textContent = 'กำลังอัปเดต…';
         try {
-          await ledgerBridge.setCalendarStatus({ workflowId:operationId('WF-LH-CALENDAR-STATUS'), queueId:record.recordId, status:'COMPLETED' });
+          const ids = statusAttempt.acquire({ queueId:record.recordId, status:'COMPLETED' });
+          await ledgerBridge.setCalendarStatus({ ...ids, queueId:record.recordId, status:'COMPLETED' });
+          statusAttempt.clear();
           status.textContent = 'อัปเดตแล้ว';
           await draw();
-        } catch (error) { status.textContent = errorText(error); }
+        } catch (error) { handleManualMutationFailure(statusAttempt, error, status); }
       });
       card.append(complete);
     } else if (ownerControlled) {
@@ -451,11 +482,13 @@ async function renderCalendar() {
       const dueDate = String(new FormData(card).get('dueDate') || '');
       status.textContent = 'กำลังเลื่อนวัน…';
       try {
-        await ledgerBridge.rescheduleCalendar({ workflowId:operationId('WF-LH-CALENDAR-RESCHEDULE'), queueId:record.recordId, dueDate });
+        const ids = rescheduleAttempt.acquire({ queueId:record.recordId, dueDate });
+        await ledgerBridge.rescheduleCalendar({ ...ids, queueId:record.recordId, dueDate });
+        rescheduleAttempt.clear();
         selectedDate = dueDate || selectedDate;
         status.textContent = 'เลื่อนวันแล้ว';
         await draw();
-      } catch (error) { status.textContent = errorText(error); }
+      } catch (error) { handleManualMutationFailure(rescheduleAttempt, error, status); }
     });
     return card;
   }
