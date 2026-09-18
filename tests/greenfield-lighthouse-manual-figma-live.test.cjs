@@ -66,6 +66,11 @@ test('Calendar surface routes reschedule/status through runtime bridge and does 
   assert.match(surface, /PAY_OBLIGATION_INSTALLMENT/);
   assert.match(surface, /RECEIVE_CUSTOMER_PAYMENT/);
   assert.match(surface, /จัดการที่ Owner ของรายการ/);
+  assert.match(surface, /data\.calendarOwnerRoute|dataset\.calendarOwnerRoute/);
+  assert.match(surface, /ไป Outcome/);
+  assert.match(surface, /ไป Income/);
+  assert.match(surface, /void renderOutcome\(\)/);
+  assert.match(surface, /void renderIncome\(\)/);
 });
 
 test('unlock surface is presented as a PIN gate without narrowing the existing credential format', () => {
