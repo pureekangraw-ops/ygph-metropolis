@@ -7,6 +7,7 @@ const root = process.cwd();
 const bridgePath = path.join(root, 'lighthouse-next/runtime-ledger.mjs');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
 const htmlPath = path.join(root, 'lighthouse-next/index.html');
+const surfacePath = path.join(root, 'lighthouse-next/surface-contract.mjs');
 
 async function loadBridge() {
   assert.equal(fs.existsSync(bridgePath), true, 'missing lighthouse-next/runtime-ledger.mjs');
@@ -174,16 +175,14 @@ test('Home finance renders through the Ledger truth view-model instead of demo c
   assert.doesNotMatch(body, /state\.cash|state\.todayIncome|state\.todayExpense/);
 });
 
-test('Manual Ledger history renders through the durable Ledger truth view-model only', () => {
+test('Manual Ledger history reads fresh durable Ledger truth from the owner bridge only', () => {
   const app = fs.readFileSync(appPath, 'utf8');
-  const start = app.indexOf('function renderHistoryDetail()');
-  const end = app.indexOf('function openManualTask', start);
-  assert.notEqual(start, -1);
-  assert.notEqual(end, -1);
-  const body = app.slice(start, end);
-  assert.match(body, /projectLedgerHistoryView\(ledgerTruth\)/);
-  assert.match(body, /view\.transactions/);
-  assert.doesNotMatch(body, /state\.transactions/);
+  const surface = fs.readFileSync(surfacePath, 'utf8');
+  assert.doesNotMatch(app, /function renderHistoryDetail\(|function openManualTask\(/);
+  assert.match(surface, /async function renderLedger\(\)/);
+  assert.match(surface, /ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(surface, /truth\.transactions/);
+  assert.doesNotMatch(surface, /state\.transactions/);
 });
 
 test('login loads real Ledger truth before showing the app', () => {
