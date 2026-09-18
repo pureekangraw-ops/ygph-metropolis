@@ -12,7 +12,10 @@ test('dynamic Income descendants route through one delegated MANUAL task owner',
 
   assert.match(surface, /data-income-target="store" data-task="store"/);
   assert.match(surface, /data-income-target="ride" data-task="ride"/);
-  assert.match(surface, /if \(!\['income','outcome','calendar'\]\.includes\(task\)\) return;/);
+  assert.match(surface, /\['income','outcome','calendar','ledger','store','ride'\]\.includes\(task\)/);
+  assert.match(surface, /task === 'store'[\s\S]*renderStore\(\)/);
+  assert.match(surface, /renderRide\(\)/);
+  assert.match(surface, /task === 'ledger'[\s\S]*renderLedger\(\)/);
 
   assert.match(app, /root\.addEventListener\(['"]click['"],\s*event\s*=>[\s\S]*closest\?\.\(['"]\[data-task\]['"]\)[\s\S]*openManualTask\(task\)/);
   assert.doesNotMatch(app, /querySelectorAll\(['"]\[data-task\]['"]\)\.forEach/);
