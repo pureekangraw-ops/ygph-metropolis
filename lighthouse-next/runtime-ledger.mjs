@@ -73,6 +73,90 @@ function buildIncomeTruth(runtime, state, projectFinancial, now) {
   return Object.freeze({ ...cash, outstandingReceivableSatang:Number(projection.totalOutstandingSatang || 0), receivables:Object.freeze(receivables) });
 }
 
+function bangkokDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('LIGHTHOUSE_DATE_INVALID');
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit',
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function goalBahtToSatang(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('LIGHTHOUSE_DAILY_GOAL_INVALID');
+  const satang = Math.round(amount * 100);
+  if (!Number.isSafeInteger(satang) || satang < 0 || Math.abs((satang / 100) - amount) > 1e-9) {
+    throw new Error('LIGHTHOUSE_DAILY_GOAL_INVALID');
+  }
+  return satang;
+}
+
+function buildPlanningTruth(runtime, state, projectFinancial, now) {
+  if (!state) throw new Error('LIGHTHOUSE_PLANNING_STATE_REQUIRED');
+  const at = now();
+  const date = bangkokDateKey(at);
+  const projection = runtime.project();
+  const balanceSatang = Number(projection?.ledgerBalanceSatang);
+  if (!Number.isSafeInteger(balanceSatang)) throw new Error('LIGHTHOUSE_LEDGER_BALANCE_INVALID');
+
+  const finance = projectFinancial(state, balanceSatang, at);
+  const spendableBalanceSatang = Number(finance?.spendableBalanceSatang ?? finance?.cashBalanceSatang);
+  if (!Number.isSafeInteger(spendableBalanceSatang) || spendableBalanceSatang < 0) {
+    throw new Error('LIGHTHOUSE_SPENDABLE_BALANCE_INVALID');
+  }
+
+  const receivables = projectReceivableTruth(state);
+  const outstandingReceivableSatang = Number(receivables.totalOutstandingSatang || 0);
+  if (!Number.isSafeInteger(outstandingReceivableSatang) || outstandingReceivableSatang < 0) {
+    throw new Error('LIGHTHOUSE_RECEIVABLE_PROJECTION_INVALID');
+  }
+
+  const ride = buildRideTruth(runtime, state);
+  const pendingRideCreditSatang = Number(ride.pendingCreditSatang || 0);
+  const expectedIncomingSatang = outstandingReceivableSatang + pendingRideCreditSatang;
+  if (!Number.isSafeInteger(expectedIncomingSatang)) throw new Error('LIGHTHOUSE_EXPECTED_INCOME_INVALID');
+
+  const rawGoal = state?.meta?.dailyGoals?.[date]?.goalSatang;
+  const goalSatang = rawGoal === undefined || rawGoal === null ? null : Number(rawGoal);
+  if (goalSatang !== null && (!Number.isSafeInteger(goalSatang) || goalSatang < 0)) {
+    throw new Error('LIGHTHOUSE_DAILY_GOAL_INVALID');
+  }
+
+  const queues = Object.values(state?.domains?.CALENDAR?.records || {})
+    .map(entry => entry?.record)
+    .filter(record => record && ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT'].includes(record.type) && ['OPEN','PARTIAL'].includes(record.status))
+    .filter(record => /^\d{4}-\d{2}-\d{2}$/.test(String(record.dueDate || '')))
+    .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) || String(a.recordId || '').localeCompare(String(b.recordId || '')));
+  const queue = queues[0] || null;
+  let nextObligation = null;
+  if (queue) {
+    const ownerId = String(queue.detail || '').startsWith('LEDGER/') ? String(queue.detail).slice('LEDGER/'.length) : null;
+    const owner = ownerId ? ledgerRecord(state, ownerId) : null;
+    const amountSatang = Number(queue.amountSatang || owner?.remainingSatang || 0);
+    if (!Number.isSafeInteger(amountSatang) || amountSatang < 0) throw new Error('LIGHTHOUSE_OBLIGATION_PROJECTION_INVALID');
+    nextObligation = Object.freeze({
+      recordId:owner?.recordId ?? ownerId ?? null,
+      queueId:queue.recordId,
+      title:owner?.title || queue.title || 'ภาระ',
+      dueDate:queue.dueDate,
+      amountSatang,
+      canPayNow:spendableBalanceSatang >= amountSatang,
+    });
+  }
+
+  return Object.freeze({
+    date,
+    goalSatang,
+    outstandingReceivableSatang,
+    pendingRideCreditSatang,
+    expectedIncomingSatang,
+    spendableBalanceSatang,
+    nextObligation,
+  });
+}
+
 function verifyReceivablePayment(state, before, { saleId, queueId, ledgerTransactionId, amountSatang, recovered }) {
   const sale = storeRecord(state, saleId);
   if (!sale || sale.type !== 'SALE') throw new Error('LIGHTHOUSE_RECEIVABLE_READBACK_MISMATCH');
@@ -189,6 +273,33 @@ export function createLighthouseLedgerBridge(deps = {}) {
   async function readIncomeTruth() { return withSession(async runtime => buildIncomeTruth(runtime, await runtime.readState(), projectFinancial, now)); }
   async function readRideTruth() { return withSession(async runtime => buildRideTruth(runtime, await runtime.readState())); }
   async function readCalendarTruth() { return withSession(async runtime => buildCalendarTruth(runtime, await runtime.readState())); }
+
+  async function readPlanningTruth() {
+    return withSession(async runtime => buildPlanningTruth(runtime, await runtime.readState(), projectFinancial, now));
+  }
+
+  async function setDailyGoal({ goalBaht } = {}) {
+    const goalSatang = goalBahtToSatang(goalBaht);
+    return withSession(async runtime => {
+      const date = bangkokDateKey(now());
+      const before = await runtime.readState();
+      if (!before) throw new Error('LIGHTHOUSE_PLANNING_STATE_REQUIRED');
+      const existing = before?.meta?.dailyGoals?.[date];
+      if (existing) await runtime.overrideDailyGoal({ date, goalSatang });
+      else await runtime.ensureDailyGoal({ date, suggestedSatang:goalSatang });
+      const state = await runtime.readState();
+      const readback = Number(state?.meta?.dailyGoals?.[date]?.goalSatang);
+      if (!Number.isSafeInteger(readback) || readback !== goalSatang) {
+        throw new Error('LIGHTHOUSE_DAILY_GOAL_READBACK_MISMATCH');
+      }
+      return Object.freeze({
+        status:'VERIFIED',
+        date,
+        goalSatang:readback,
+        source:String(state?.meta?.dailyGoals?.[date]?.source || ''),
+      });
+    });
+  }
 
   async function recordOtherIncome({ workflowId, ledgerTransactionId, source, amountBaht } = {}) {
     const workflow = requiredText(workflowId, 'LIGHTHOUSE_WORKFLOW_ID_REQUIRED');
@@ -340,5 +451,5 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
-  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
+  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, readPlanningTruth, setDailyGoal, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
 }
