@@ -1,7 +1,7 @@
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
-import { createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
+import { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
@@ -109,8 +109,15 @@ function errorText(error) {
   return 'ยังบันทึกไม่สำเร็จ · ไม่มีข้อมูลถูกเปลี่ยน';
 }
 
-function createManualAttempt(prefixes) {
-  return createStableMutationAttempt({ createId:operationId, prefixes });
+function createManualAttempt(scope, prefixes) {
+  const safeScope = String(scope || '').trim().replace(/[^A-Za-z0-9._:-]+/g, '_');
+  if (!safeScope) throw new Error('LIGHTHOUSE_MANUAL_ATTEMPT_SCOPE_REQUIRED');
+  return createStableMutationAttempt({
+    createId:operationId,
+    prefixes,
+    storage:globalThis.localStorage,
+    persistenceKey:`${MANUAL_MUTATION_ATTEMPT_PREFIX}${safeScope}`,
+  });
 }
 
 function handleManualMutationFailure(attempt, error, status) {
@@ -183,7 +190,7 @@ async function renderIncome() {
           card.innerHTML += `<input name="amount" type="number" min="0.01" max="${outstandingSatang / 100}" step="0.01" value="${outstandingSatang / 100}" inputmode="decimal" required><button class="primary-button" type="submit">รับชำระ</button>`;
           const payStatus = makeStatus();
           card.append(payStatus);
-          const paymentAttempt = createManualAttempt({
+          const paymentAttempt = createManualAttempt(`receivable:${item.saleId}:${item.queueId}`, {
             workflowId:'WF-LH-MANUAL-RECEIVABLE',
             ledgerTransactionId:'TX-LH-MANUAL-RECEIVABLE',
           });
@@ -243,7 +250,7 @@ async function renderOtherIncome() {
   form.id = 'manual-income-form';
   form.innerHTML = '<label>จำนวนเงิน (บาท)</label><input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required><label>ที่มา</label><input name="source" type="text" maxlength="80" required><button class="primary-button" type="submit">บันทึกรายรับ</button>';
   const status = makeStatus();
-  const incomeAttempt = createManualAttempt({
+  const incomeAttempt = createManualAttempt('other-income', {
     workflowId:'WF-LH-MANUAL-INCOME',
     ledgerTransactionId:'TX-LH-MANUAL-INCOME',
   });
@@ -301,11 +308,11 @@ async function renderOutcome() {
   obligationForm.id = 'manual-obligation-form';
   obligationForm.innerHTML = '<label>ภาระ</label><input name="title" type="text" maxlength="80" placeholder="เช่น ค่าเช่ารถ" required><label>ยอดทั้งหมด (บาท)</label><input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required><label>ครบกำหนด</label><input name="dueDate" type="date" required><button class="primary-button" type="submit">เพิ่มภาระ</button>';
   const obligationStatus = makeStatus();
-  const expenseAttempt = createManualAttempt({
+  const expenseAttempt = createManualAttempt('expense', {
     workflowId:'WF-LH-MANUAL-EXPENSE',
     ledgerTransactionId:'TX-LH-MANUAL-EXPENSE',
   });
-  const obligationAttempt = createManualAttempt({
+  const obligationAttempt = createManualAttempt('obligation-create', {
     workflowId:'WF-LH-MANUAL-OBLIGATION',
     obligationId:'OB-LH-MANUAL',
     queueId:'CAL-LH-MANUAL-OBLIGATION',
@@ -346,7 +353,7 @@ async function renderOutcome() {
         if (queue && Number(obligation.remainingSatang) > 0) {
           card.innerHTML += `<input name="amount" type="number" min="0.01" max="${Number(obligation.remainingSatang) / 100}" step="0.01" value="${Number(obligation.remainingSatang) / 100}" inputmode="decimal" required><button class="primary-button" type="submit">จ่ายภาระ</button>`;
           const payStatus = makeStatus();
-          const payAttempt = createManualAttempt({
+          const payAttempt = createManualAttempt(`obligation-pay:${obligation.recordId}:${queue.recordId}`, {
             workflowId:'WF-LH-MANUAL-PAY',
             ledgerTransactionId:'TX-LH-MANUAL-PAY',
           });
@@ -494,7 +501,7 @@ async function renderLedger() {
           form.className = 'manual-ledger-reversal';
           form.innerHTML = '<label>เหตุผลการย้อนรายการ</label><input name="reason" type="text" maxlength="120" required><button class="secondary-button" type="submit">ย้อนรายการ</button>';
           const status = makeStatus();
-          const attempt = createManualAttempt({
+          const attempt = createManualAttempt(`ledger-reversal:${transaction.recordId}`, {
             workflowId:'WF-LH-MANUAL-REVERSAL',
             reversalRecordId:'TX-LH-MANUAL-REVERSAL',
           });
@@ -568,8 +575,8 @@ async function renderCalendar() {
     reschedule.className = 'secondary-button';
     reschedule.textContent = 'เลื่อนวัน';
     const status = makeStatus();
-    const rescheduleAttempt = createManualAttempt({ workflowId:'WF-LH-CALENDAR-RESCHEDULE' });
-    const statusAttempt = createManualAttempt({ workflowId:'WF-LH-CALENDAR-STATUS' });
+    const rescheduleAttempt = createManualAttempt(`calendar-reschedule:${record.recordId}`, { workflowId:'WF-LH-CALENDAR-RESCHEDULE' });
+    const statusAttempt = createManualAttempt(`calendar-status:${record.recordId}`, { workflowId:'WF-LH-CALENDAR-STATUS' });
     card.append(date, reschedule);
     const ownerControlled = ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT','RECEIVE_CUSTOMER_PAYMENT'].includes(record.type);
     if (!ownerControlled && ['OPEN','PARTIAL'].includes(record.status)) {
