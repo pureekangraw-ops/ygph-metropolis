@@ -199,7 +199,7 @@ async function renderIncome() {
             const amountBaht = Number(new FormData(card).get('amount'));
             payStatus.textContent = 'กำลังรับชำระ…';
             try {
-              const ids = paymentAttempt.acquire({ saleId:item.saleId, queueId:item.queueId, amountBaht });
+              const ids = await paymentAttempt.acquire({ saleId:item.saleId, queueId:item.queueId, amountBaht });
               const result = await ledgerBridge.receiveReceivablePayment({
                 ...ids,
                 saleId:item.saleId,
@@ -282,7 +282,7 @@ async function renderOtherIncome() {
     if (!Number.isFinite(amountBaht) || amountBaht <= 0 || !source) return void (status.textContent = 'กรอกจำนวนเงินและที่มาให้ครบ');
     status.textContent = 'กำลังบันทึก…';
     try {
-      const ids = incomeAttempt.acquire({ source, amountBaht });
+      const ids = await incomeAttempt.acquire({ source, amountBaht });
       const result = await ledgerBridge.recordOtherIncome({ ...ids, source, amountBaht });
       incomeAttempt.clear();
       syncDashboardFromTruth(result.truth);
@@ -365,7 +365,7 @@ async function renderOutcome() {
             const amountBaht = Number(new FormData(card).get('amount'));
             payStatus.textContent = 'กำลังจ่าย…';
             try {
-              const ids = payAttempt.acquire({ obligationId:obligation.recordId, queueId:queue.recordId, amountBaht });
+              const ids = await payAttempt.acquire({ obligationId:obligation.recordId, queueId:queue.recordId, amountBaht });
               const result = await ledgerBridge.payObligation({ ...ids, obligationId:obligation.recordId, queueId:queue.recordId, amountBaht });
               payAttempt.clear();
               syncDashboardFromTruth(result.truth);
@@ -387,7 +387,7 @@ async function renderOutcome() {
     const amountBaht = Number(data.get('amount'));
     expenseStatus.textContent = 'กำลังบันทึก…';
     try {
-      const ids = expenseAttempt.acquire({ title, amountBaht });
+      const ids = await expenseAttempt.acquire({ title, amountBaht });
       const result = await ledgerBridge.recordExpense({ ...ids, title, amountBaht });
       expenseAttempt.clear();
       syncDashboardFromTruth(result.truth);
@@ -405,7 +405,7 @@ async function renderOutcome() {
     const dueDate = String(data.get('dueDate') || '').trim();
     obligationStatus.textContent = 'กำลังเพิ่มภาระ…';
     try {
-      const ids = obligationAttempt.acquire({ title, amountBaht, dueDate });
+      const ids = await obligationAttempt.acquire({ title, amountBaht, dueDate });
       const result = await ledgerBridge.createObligation({ ...ids, title, amountBaht, dueDate });
       obligationAttempt.clear();
       syncDashboardFromTruth(result.truth);
@@ -513,7 +513,7 @@ async function renderLedger() {
             const reason = String(new FormData(form).get('reason') || '').trim();
             status.textContent = 'กำลังย้อนรายการ…';
             try {
-              const ids = attempt.acquire({ originalRecordId:transaction.recordId, reason });
+              const ids = await attempt.acquire({ originalRecordId:transaction.recordId, reason });
               const result = await ledgerBridge.reverseLedgerTransaction({
                 ...ids,
                 originalRecordId:transaction.recordId,
@@ -589,7 +589,7 @@ async function renderCalendar() {
       complete.addEventListener('click', async () => {
         status.textContent = 'กำลังอัปเดต…';
         try {
-          const ids = statusAttempt.acquire({ queueId:record.recordId, status:'COMPLETED' });
+          const ids = await statusAttempt.acquire({ queueId:record.recordId, status:'COMPLETED' });
           await ledgerBridge.setCalendarStatus({ ...ids, queueId:record.recordId, status:'COMPLETED' });
           statusAttempt.clear();
           status.textContent = 'อัปเดตแล้ว';
@@ -616,7 +616,7 @@ async function renderCalendar() {
       const dueDate = String(new FormData(card).get('dueDate') || '');
       status.textContent = 'กำลังเลื่อนวัน…';
       try {
-        const ids = rescheduleAttempt.acquire({ queueId:record.recordId, dueDate });
+        const ids = await rescheduleAttempt.acquire({ queueId:record.recordId, dueDate });
         await ledgerBridge.rescheduleCalendar({ ...ids, queueId:record.recordId, dueDate });
         rescheduleAttempt.clear();
         selectedDate = dueDate || selectedDate;
