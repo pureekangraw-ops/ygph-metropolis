@@ -46,10 +46,16 @@ test('Income exposes receivables, pending Ride credit, expected incoming and run
   assert.match(surface, /อ่านกลับจาก Runtime สำเร็จ/);
 });
 
-test('Outcome shows spendable balance from calculation authority without inventing a local budget owner', () => {
+test('Outcome separates spendable cash from an undefined owner-controlled spending ceiling', () => {
   const surface = read(surfacePath);
+  const bridge = read(path.join(root, 'lighthouse-next', 'runtime-ledger.mjs'));
   assert.match(surface, /spendableBalanceSatang/);
   assert.match(surface, /ใช้ได้ตอนนี้/);
+  assert.match(surface, /เพดานใช้จ่าย/);
+  assert.match(surface, /ยังไม่ได้กำหนดกติกา/);
+  assert.match(bridge, /spendingCeilingStatus:'OWNER_RULE_REQUIRED'/);
+  assert.match(bridge, /spendingCeilingSatang:null/);
+  assert.doesNotMatch(surface, /spendingCeilingSatang\s*:\s*planning\.spendableBalanceSatang/);
   assert.doesNotMatch(surface, /localStorage.*spending|spending.*localStorage/s);
 });
 
