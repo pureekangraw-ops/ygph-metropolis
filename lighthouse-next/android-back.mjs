@@ -1,3 +1,5 @@
+import { getNativeCapacitorApp } from './capacitor-app.mjs';
+
 export async function handleAndroidBack({ root = globalThis.document?.querySelector?.('#demo-root'), App } = {}) {
   if (!root || !App) return 'UNAVAILABLE';
 
@@ -36,13 +38,8 @@ export async function installAndroidBackHandler({
   root = globalThis.document?.querySelector?.('#demo-root'),
   capacitor = globalThis.Capacitor,
 } = {}) {
-  if (!root || !capacitor || typeof capacitor.isNativePlatform !== 'function' ||
-      capacitor.isNativePlatform() !== true || typeof capacitor.isPluginAvailable !== 'function' ||
-      capacitor.isPluginAvailable('App') !== true || typeof capacitor.registerPlugin !== 'function') {
-    return false;
-  }
-
-  const App = capacitor.registerPlugin('App');
+  if (!root) return false;
+  const App = getNativeCapacitorApp(capacitor);
   if (!App || typeof App.addListener !== 'function') return false;
 
   await App.addListener('backButton', () => {
