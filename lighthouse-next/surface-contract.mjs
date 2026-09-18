@@ -65,9 +65,32 @@ function syncDashboardFromTruth(truth) {
   if (net) net.textContent = `${truth.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(truth.netSatang))}`;
 }
 
+function syncDashboardFromPlanning(truth) {
+  const expected = root.querySelector('#home-expected-value');
+  const obligationTitle = root.querySelector('#home-obligation-title');
+  const obligationDue = root.querySelector('#home-obligation-due');
+  const obligationValue = root.querySelector('#home-obligation-value');
+  const gap = root.querySelector('#home-gap-value');
+  const target = root.querySelector('#home-target-value');
+
+  if (expected) expected.textContent = formatSatang(truth.expectedIncomingSatang);
+  if (truth.nextObligation) {
+    if (obligationTitle) obligationTitle.textContent = truth.nextObligation.title;
+    if (obligationDue) obligationDue.textContent = truth.nextObligation.dueDate;
+    if (obligationValue) obligationValue.textContent = formatSatang(truth.nextObligation.amountSatang);
+  } else {
+    if (obligationTitle) obligationTitle.textContent = 'ยังไม่มีภาระค้าง';
+    if (obligationDue) obligationDue.textContent = '—';
+    if (obligationValue) obligationValue.textContent = '—';
+  }
+  if (target) target.textContent = truth.goalSatang == null ? 'ยังไม่มีเป้า' : formatSatang(truth.goalSatang);
+  if (gap) gap.textContent = truth.goalGapSatang == null ? '—' : formatSatang(truth.goalGapSatang);
+}
+
 async function refreshDashboard() {
   if (!appShell || appShell.hidden) return;
   try { syncDashboardFromTruth(await ledgerBridge.readLedgerTruth()); } catch {}
+  try { syncDashboardFromPlanning(await ledgerBridge.readPlanningTruth()); } catch {}
 }
 
 function openSurfaceDetail() {
@@ -85,7 +108,7 @@ function errorText(error) {
 
 async function renderIncome() {
   openSurfaceDetail();
-  manualDetailContent.append(makeHero('Income', 'เลือกว่าเงินก้อนนี้มาจากโลกไหน แล้วเข้า workflow ของมันโดยตรง'));
+  manualDetailContent.append(makeHero('Income', 'เงินเข้าทุกทางยังอยู่กับ Owner เดิม แต่รวมภาพคาดว่าจะเข้าและเป้าวันนี้ไว้ที่เดียว'));
 
   const routes = document.createElement('div');
   routes.className = 'task-grid income-route-grid';
@@ -93,14 +116,63 @@ async function renderIncome() {
   routes.innerHTML = '<button type="button" class="task-card" data-income-target="store" data-task="store"><span class="task-copy"><strong>ร้านค้า</strong><small>ขาย · สต็อก · ค้างรับ · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="ride" data-task="ride"><span class="task-copy"><strong>งานวิ่ง</strong><small>รายได้ · เครดิต · รอบงาน · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="other-general"><span class="task-copy"><strong>รายรับอื่น</strong><small>บันทึกรายรับตรงพร้อมที่มา</small></span><span class="task-icon" aria-hidden="true">›</span></button>';
   manualDetailContent.append(routes);
 
+  const goalForm = document.createElement('form');
+  goalForm.className = 'auth-form manual-direct-form';
+  goalForm.id = 'manual-daily-goal-form';
+  goalForm.innerHTML = '<label>เป้ารายได้วันนี้ (บาท)</label><input name="goal" type="number" min="0" step="0.01" inputmode="decimal" required><button class="secondary-button" type="submit">บันทึกเป้าวันนี้</button>';
+  const goalStatus = makeStatus();
+  goalForm.append(goalStatus);
+  manualDetailContent.append(goalForm);
+
   const summary = document.createElement('div');
   summary.className = 'detail-list';
   manualDetailContent.append(summary);
-  try {
-    const truth = await ledgerBridge.readLedgerTruth();
-    syncDashboardFromTruth(truth);
-    summary.append(makeRow('เงินจริง', formatSatang(truth.balanceSatang)), makeRow('เงินเข้าวันนี้', formatSatang(truth.todayInSatang)));
-  } catch { summary.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้')); }
+
+  async function refresh() {
+    summary.replaceChildren();
+    try {
+      const [incomeTruth, rideTruth, planning] = await Promise.all([
+        ledgerBridge.readIncomeTruth(),
+        ledgerBridge.readRideTruth(),
+        ledgerBridge.readPlanningTruth(),
+      ]);
+      syncDashboardFromTruth(incomeTruth);
+      syncDashboardFromPlanning(planning);
+      const goalInput = goalForm.elements.namedItem('goal');
+      if (goalInput && document.activeElement !== goalInput) goalInput.value = planning.goalSatang == null ? '' : String(planning.goalSatang / 100);
+
+      summary.append(
+        makeRow('เงินจริง', formatSatang(incomeTruth.balanceSatang)),
+        makeRow('เงินเข้าวันนี้', formatSatang(incomeTruth.todayInSatang)),
+        makeRow('ลูกหนี้ร้าน', formatSatang(incomeTruth.outstandingReceivableSatang)),
+        makeRow('เครดิตงานวิ่งค้าง', formatSatang(rideTruth.pendingCreditSatang)),
+        makeRow('คาดว่าจะเข้า', formatSatang(planning.expectedIncomingSatang)),
+        makeRow('เป้าที่สร้างได้วันนี้', formatSatang(planning.generatedTodaySatang)),
+      );
+      if (!incomeTruth.receivables.length) summary.append(makeRow('ลูกหนี้', 'ไม่มีรายการค้างรับ'));
+      for (const item of incomeTruth.receivables.slice(0, 10)) {
+        const amount = Number.isSafeInteger(Number(item.outstandingSatang)) ? formatSatang(item.outstandingSatang) : 'ต้องตรวจสอบ';
+        summary.append(makeRow(item.title || 'ลูกหนี้จากการขาย', amount));
+      }
+    } catch {
+      summary.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้'));
+    }
+  }
+
+  goalForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const goalBaht = Number(new FormData(goalForm).get('goal'));
+    goalStatus.textContent = 'กำลังบันทึกเป้า…';
+    try {
+      await ledgerBridge.setDailyGoal({ goalBaht });
+      goalStatus.textContent = 'บันทึกแล้ว · อ่านกลับจาก Runtime สำเร็จ';
+      await refresh();
+    } catch (error) {
+      goalStatus.textContent = errorText(error);
+    }
+  });
+
+  await refresh();
 }
 
 async function renderOtherIncome() {
@@ -173,9 +245,19 @@ async function renderOutcome() {
   async function refresh() {
     list.replaceChildren();
     try {
-      const [truth, calendar] = await Promise.all([ledgerBridge.readLedgerTruth(), ledgerBridge.readCalendarTruth()]);
+      const [truth, calendar, planning, ride] = await Promise.all([
+        ledgerBridge.readLedgerTruth(),
+        ledgerBridge.readCalendarTruth(),
+        ledgerBridge.readPlanningTruth(),
+        ledgerBridge.readRideTruth(),
+      ]);
       syncDashboardFromTruth(truth);
-      list.append(makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)));
+      syncDashboardFromPlanning(planning);
+      list.append(
+        makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)),
+        makeRow('ใช้ได้ตอนนี้', formatSatang(planning.spendableBalanceSatang)),
+        makeRow('ค่าใช้จ่ายงานวิ่ง', formatSatang(ride.expenseSatang)),
+      );
       const outcomes = truth.transactions.filter(item => item.direction === 'OUT').slice(0, 10);
       for (const item of outcomes) list.append(makeRow(item.title || 'รายจ่าย', `-${formatSatang(item.amountSatang)}`));
       if (!outcomes.length) list.append(makeRow('รายการรายจ่าย', 'ยังไม่มีรายจ่าย'));
