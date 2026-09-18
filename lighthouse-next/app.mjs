@@ -236,7 +236,6 @@ lockAppButton.addEventListener('click', lockApp);
 window.addEventListener('pagehide', () => { runtimeGate.lock(); });
 void bootRuntimeGate();
 root.querySelectorAll('[data-root-target]').forEach((button)=>button.addEventListener('click',()=>selectRoot(button.dataset.rootTarget)));
-root.addEventListener('click', event => { const taskButton=event.target.closest?.('[data-task]'); if (!taskButton) return; const task=taskButton.dataset.task; if (!task) return; openManualTask(task); });
 root.querySelector('#manual-back').addEventListener('click',showManualHub);
 chatForm.addEventListener('submit', async event => { event.preventDefault(); const value = chatInput.value; chatInput.value = ''; if (chatSend) chatSend.disabled = true; await submitChatText(value); chatInput.focus({ preventScroll:true }); });
 chatInput.addEventListener('input',()=>{ chatInput.style.height='auto'; chatInput.style.height=`${Math.min(chatInput.scrollHeight,118)}px`; if (chatSend) chatSend.disabled=!chatInput.value.trim(); });
