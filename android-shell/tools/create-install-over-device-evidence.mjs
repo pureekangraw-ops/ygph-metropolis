@@ -35,6 +35,9 @@ function requireLaunchEvidence(value, applicationId) {
   if (!/^\d+$/.test(String(value.processId || ''))) {
     throw new Error('INSTALL_OVER_LAUNCH_PROCESS_MISSING');
   }
+  if (!value.capturedAt || !Number.isFinite(Date.parse(String(value.capturedAt)))) {
+    throw new Error('INSTALL_OVER_LAUNCH_CAPTURE_TIME_INVALID');
+  }
   return value;
 }
 
