@@ -25,7 +25,12 @@ test('builds device acceptance evidence from before/after installed snapshots an
       before: 'sha256:' + 'a'.repeat(64),
       after: 'sha256:' + 'a'.repeat(64),
     },
-    launchedAfterInstall: true,
+    launchEvidence: {
+      source:'ADB_AM_START_WAIT',
+      applicationId:'com.yggdrasil.lighthouse',
+      component:'com.yggdrasil.lighthouse/.MainActivity',
+      launched:true,
+    },
   });
 
   assert.equal(result.installMode, 'INSTALL_OVER');
@@ -37,13 +42,24 @@ test('builds device acceptance evidence from before/after installed snapshots an
   assert.equal(result.launchedAfterInstall, true);
 });
 
-test('does not invent post-install launch evidence', () => {
-  const result = createInstallOverDeviceEvidence({
+test('requires a real adb post-install launch receipt instead of a manual boolean', () => {
+  assert.throws(() => createInstallOverDeviceEvidence({
     beforeInstalled: snapshot(1007),
     afterInstalled: snapshot(1008),
     persistenceProbe: { key: 'probe', before: 'same', after: 'same' },
-  });
-  assert.equal(result.launchedAfterInstall, false);
+  }), /INSTALL_OVER_LAUNCH_EVIDENCE_REQUIRED/);
+
+  assert.throws(() => createInstallOverDeviceEvidence({
+    beforeInstalled: snapshot(1007),
+    afterInstalled: snapshot(1008),
+    persistenceProbe: { key: 'probe', before: 'same', after: 'same' },
+    launchEvidence: {
+      source:'ADB_AM_START_WAIT',
+      applicationId:'other.app',
+      component:'other.app/.MainActivity',
+      launched:true,
+    },
+  }), /INSTALL_OVER_LAUNCH_APP_ID_MISMATCH/);
 });
 
 test('rejects snapshots from different app identities or signer lineage before acceptance evaluation', () => {
