@@ -136,5 +136,6 @@ test('Settings reset is explicitly device-local and cannot erase Runtime busines
   const reset = app.slice(start, end);
   assert.match(reset, /localStorage\.removeItem\(STORAGE_KEY\)/);
   assert.match(reset, /chatLifecycle\.clear\(\)/);
+  assert.match(reset, /clearStableMutationAttempts\(\{ storage:localStorage \}\)/);
   assert.doesNotMatch(reset, /ledgerBridge\.|storeBridge\.|runtimeGate\.|restoreBackup|exportBackup|deleteDatabase|clearVault|factoryReset/i);
 });
