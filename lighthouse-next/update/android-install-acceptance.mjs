@@ -93,14 +93,17 @@ function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
 
   const probe = evidence.persistenceProbe;
   const launch = evidence.launchEvidence;
-  if (!probe || typeof probe !== 'object' || probe.key !== 'GREENFIELD_DATABASE_VAULT_SHA256' ||
-      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.before || '')) ||
-      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.after || '')) ||
+  if (!probe || typeof probe !== 'object' || probe.before === undefined || probe.after === undefined ||
       !launch || typeof launch !== 'object') {
     return { status: 'VERIFY', reasons: ['DEVICE_EVIDENCE_INCOMPLETE'] };
   }
 
   const reasons = [];
+  if (probe.key !== 'GREENFIELD_DATABASE_VAULT_SHA256' ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.before || '')) ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.after || ''))) {
+    reasons.push('DEVICE_PERSISTENCE_PROBE_INVALID');
+  }
   if (evidence.installMode !== 'INSTALL_OVER') reasons.push('DEVICE_NOT_INSTALL_OVER');
   if (evidence.installedApplicationId !== expected.applicationId) reasons.push('DEVICE_APP_ID_MISMATCH');
   if (cleanSigner(evidence.installedSignerCertificateSha256) !== expected.signerCertificateSha256) {
