@@ -650,7 +650,7 @@ async function renderCalendar() {
         if (cell.date === selectedDate) button.classList.add('is-selected');
         button.dataset.calendarDate = cell.date;
         button.setAttribute('role', 'gridcell');
-        button.innerHTML = `<strong>${Number(cell.date.slice(-2))}</strong>${cell.items.length ? `<small>${cell.items.length} รายการ</small>` : '<small>—</small>'}`;
+        button.innerHTML = `<strong>${Number(cell.date.slice(-2))}</strong><small aria-label="${cell.items.length} รายการ">${cell.items.length || '—'}</small>`;
         button.addEventListener('click', () => { selectedDate = cell.date; void draw(); });
         grid.append(button);
       }
