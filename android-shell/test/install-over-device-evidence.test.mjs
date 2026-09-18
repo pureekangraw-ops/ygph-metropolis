@@ -7,6 +7,7 @@ const signer = 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce
 function snapshot(versionCode, overrides = {}) {
   return {
     source: 'ADB_INSTALLED_APK',
+    capturedAt: versionCode === 1007 ? '2026-09-18T01:00:00.000Z' : '2026-09-18T01:30:00.000Z',
     installedApplicationId: 'com.yggdrasil.lighthouse',
     installedSignerCertificateSha256: signer,
     versionCode,
@@ -113,4 +114,25 @@ test('rejects non-vault persistence probes and launch receipts without capture t
       processId:'4242',
     },
   }), /INSTALL_OVER_LAUNCH_CAPTURE_TIME_INVALID/);
+});
+
+
+test('rejects installed snapshots without ADB provenance', () => {
+  assert.throws(() => createInstallOverDeviceEvidence({
+    beforeInstalled: snapshot(1007, { source:'MANUAL_JSON' }),
+    afterInstalled: snapshot(1008),
+    persistenceProbe: {
+      key:'GREENFIELD_DATABASE_VAULT_SHA256',
+      before:'sha256:' + 'a'.repeat(64),
+      after:'sha256:' + 'a'.repeat(64),
+    },
+    launchEvidence: {
+      source:'ADB_AM_START_WAIT',
+      applicationId:'com.yggdrasil.lighthouse',
+      component:'com.yggdrasil.lighthouse/.MainActivity',
+      launched:true,
+      processId:'4242',
+      capturedAt:'2026-09-18T01:20:00.000Z',
+    },
+  }), /INSTALL_OVER_BEFORE_SNAPSHOT_INVALID/);
 });
