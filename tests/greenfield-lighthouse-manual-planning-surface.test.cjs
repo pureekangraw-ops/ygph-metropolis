@@ -69,7 +69,7 @@ test('Outcome separates spendable cash from an undefined owner-controlled spendi
 test('legacy app finance refresh cannot overwrite planning fields owned by surface contract', () => {
   const app = read(path.join(root, 'lighthouse-next', 'app.mjs'));
   const start = app.indexOf('function renderHomeTruth()');
-  const end = app.indexOf('function resetDemoState', start);
+  const end = app.indexOf('function resetLocalState', start);
   assert.ok(start >= 0 && end > start, 'renderHomeTruth block must exist');
   const body = app.slice(start, end);
   for (const symbol of [
