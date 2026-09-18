@@ -21,8 +21,11 @@ test('LIGHTHOUSE root navigation is CHAT / MANUAL / SETTINGS only', () => {
   assert.match(html, /data-root-target="chat"/);
   assert.match(html, /data-root-target="manual"/);
   assert.match(html, /data-root-target="settings"/);
+  const styles = read('lighthouse-next/styles.css');
   assert.match(surface, /ensureVisibleRoot/);
   assert.match(surface, /manualNav\?\.click\(\)/);
+  assert.match(styles, /\.bottom-nav\{[\s\S]*grid-template-columns:repeat\(3,1fr\)/);
+  assert.doesNotMatch(styles, /\.bottom-nav\{[\s\S]*grid-template-columns:repeat\(4,1fr\)/);
 });
 
 test('MANUAL owns the Today dashboard and exposes only the four owner houses', () => {
