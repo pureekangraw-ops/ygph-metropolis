@@ -13,6 +13,9 @@ test('LIGHTHOUSE Settings exposes GO Hub pairing without collecting Owner passco
   assert.match(html, /id="go-hub-bootstrap"/);
   assert.match(html, /id="go-hub-sync-now"/);
   assert.match(html, /id="go-hub-disconnect"/);
+  assert.match(html, /id="go-hub-confirmation"/);
+  assert.match(html, /id="go-hub-command-confirm"/);
+  assert.match(html, /id="go-hub-command-reject"/);
   assert.doesNotMatch(html, /go-hub-owner-passcode|x-go-owner-passcode/i);
   assert.match(settings, /createLighthouseHubControlPortTransport/);
   assert.match(settings, /lighthouse:hub-sync-request/);
@@ -22,6 +25,11 @@ test('LIGHTHOUSE Settings exposes GO Hub pairing without collecting Owner passco
 test('LIGHTHOUSE app reconciles GO Hub through existing Control Port sync only after unlock', () => {
   const app = read('lighthouse-next/app.mjs');
   assert.match(app, /createLighthouseControlPortSync\(\{ runtime:controlPortRuntime \}\)/);
+  assert.match(app, /installGoHubCommandConfirmation\(\{ root, runtime:controlPortRuntime \}\)/);
+  const confirmation = read('lighthouse-next/control-port/control-port-confirmation.mjs');
+  assert.match(confirmation, /entry\?\.status === 'CONFIRMATION_REQUIRED'/);
+  assert.match(confirmation, /await runtime\.confirm\(requestId\)/);
+  assert.match(confirmation, /runtime\.cancel\(requestId\)/);
   assert.match(app, /pullInbox:\(\) => hubControlPortTransport\.pullInbox\(\)/);
   assert.match(app, /pushOutbox:receipts => hubControlPortTransport\.pushOutbox\(receipts\)/);
   assert.match(app, /pushState:packet => hubControlPortTransport\.pushState\(packet\)/);
