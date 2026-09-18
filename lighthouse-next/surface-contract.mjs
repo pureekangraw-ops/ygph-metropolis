@@ -235,7 +235,9 @@ async function renderIncome() {
       goalStatus.textContent = 'บันทึกแล้ว · อ่านกลับจาก Runtime สำเร็จ';
       await refresh();
     } catch (error) {
-      goalStatus.textContent = errorText(error);
+      goalStatus.textContent = mutationErrorNeedsVerification(error)
+        ? 'เป้าอาจบันทึกแล้วแต่ยังตรวจกลับไม่ได้ · ลองซ้ำค่าเดิม'
+        : errorText(error);
     }
   });
 
