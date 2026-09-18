@@ -14,13 +14,7 @@ import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const AMBIGUITY_LOCK = 'BABA';
-const DEFAULT_PRODUCTS = Object.freeze([
-  { id: 'phone', name: 'มือถือ', aliases: ['โทรศัพท์', 'โทสับ'], stock: 5 },
-  { id: 'case', name: 'เคสมือถือ', aliases: ['เคส'], stock: 8 },
-  { id: 'film', name: 'ฟิล์ม', aliases: ['ฟิล์มกันรอย'], stock: 12 },
-]);
-const DEFAULT_OBLIGATIONS = Object.freeze([{ id: 'next-expense', title: 'ค่าใช้จ่ายก้อนถัดไป', amount: 3200, dueLabel: 'อีก 3 วัน', dailyTarget: 1100, status: 'OPEN' }]);
-const DEFAULT_STATE = Object.freeze({ activeRoot: 'manual', chatHistory: [], pendingFlow: null, manualView: null, products: DEFAULT_PRODUCTS, obligations: DEFAULT_OBLIGATIONS, transactions: [], cash: 2450, expectedIncome: 700, todayIncome: 1250, todayExpense: 380 });
+const DEFAULT_STATE = Object.freeze({ activeRoot:'manual', chatHistory:[], pendingFlow:null });
 
 const root = document.querySelector('#demo-root');
 const authScreen = root.querySelector('#auth-screen');
@@ -39,15 +33,9 @@ const setupRequired = root.querySelector('#setup-required');
 const lockAppButton = root.querySelector('#lock-app');
 const homeDate = root.querySelector('#home-date');
 const homeCashValue = root.querySelector('#home-cash-value');
-const homeExpectedValue = root.querySelector('#home-expected-value');
 const homeIncomeValue = root.querySelector('#home-income-value');
 const homeExpenseValue = root.querySelector('#home-expense-value');
 const homeNetValue = root.querySelector('#home-net-value');
-const homeObligationTitle = root.querySelector('#home-obligation-title');
-const homeObligationDue = root.querySelector('#home-obligation-due');
-const homeObligationValue = root.querySelector('#home-obligation-value');
-const homeGapValue = root.querySelector('#home-gap-value');
-const homeTargetValue = root.querySelector('#home-target-value');
 const pageKicker = root.querySelector('#page-kicker');
 const chatThread = root.querySelector('#chat-thread');
 const chatActions = root.querySelector('#chat-actions');
@@ -56,7 +44,6 @@ const chatInput = root.querySelector('#chat-input');
 const chatSend = root.querySelector('#chat-send');
 const manualHub = root.querySelector('#manual-hub');
 const manualDetail = root.querySelector('#manual-detail');
-const manualDetailContent = root.querySelector('#manual-detail-content');
 const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
@@ -76,13 +63,9 @@ function newOperationId(prefix) { const suffix = globalThis.crypto?.randomUUID?.
 function ensureGeneralIncomeIdentity(pending) { if (!pending.workflowId) pending.workflowId = newOperationId('WF-LH-INCOME'); if (!pending.ledgerTransactionId) pending.ledgerTransactionId = newOperationId('TX-LH-INCOME'); saveState(); return pending; }
 function ensureStoreProductIdentity(pending) { if (!pending.workflowId) pending.workflowId = newOperationId('WF-LH-PRODUCT'); if (!pending.productId) pending.productId = newOperationId('PRODUCT-LH'); if (!pending.stockRecordId) pending.stockRecordId = newOperationId('STOCK-LH'); saveState(); return pending; }
 function ensureStoreSaleIdentity(pending) { if (!pending.workflowId) pending.workflowId = newOperationId('WF-LH-SALE'); if (!pending.saleId) pending.saleId = newOperationId('SALE-LH'); if (!pending.ledgerTransactionId) pending.ledgerTransactionId = newOperationId('TX-LH-SALE'); pending.totalBaht = totalSaleBaht(pending); saveState(); return pending; }
-function freshProducts() { return DEFAULT_PRODUCTS.map((product) => ({ ...product, aliases: [...product.aliases] })); }
-function freshObligations() { return DEFAULT_OBLIGATIONS.map((obligation) => ({ ...obligation })); }
-function cloneDefaults() { return { activeRoot: DEFAULT_STATE.activeRoot, chatHistory: [], pendingFlow: null, manualView: null, products: freshProducts(), obligations: freshObligations(), transactions: [], cash: DEFAULT_STATE.cash, expectedIncome: DEFAULT_STATE.expectedIncome, todayIncome: DEFAULT_STATE.todayIncome, todayExpense: DEFAULT_STATE.todayExpense }; }
-function numberOr(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
-function normalizeStoredProducts(products) { if (!Array.isArray(products)) return freshProducts(); return freshProducts().map((baseline) => { const stored = products.find((product) => product?.id === baseline.id); const stock = Number(stored?.stock); return { ...baseline, stock: Number.isInteger(stock) && stock >= 0 ? stock : baseline.stock }; }); }
-function normalizeStoredObligations(obligations) { if (!Array.isArray(obligations)) return freshObligations(); return freshObligations().map((baseline) => { const stored = obligations.find((obligation) => obligation?.id === baseline.id); if (!stored) return baseline; const amount = numberOr(stored.amount, baseline.amount); const dailyTarget = numberOr(stored.dailyTarget, baseline.dailyTarget); return { ...baseline, title: typeof stored.title === 'string' && stored.title.trim() ? stored.title.trim() : baseline.title, amount: amount >= 0 ? amount : baseline.amount, dueLabel: typeof stored.dueLabel === 'string' && stored.dueLabel.trim() ? stored.dueLabel.trim() : baseline.dueLabel, dailyTarget: dailyTarget >= 0 ? dailyTarget : baseline.dailyTarget, status: stored.status === 'CLOSED' ? 'CLOSED' : 'OPEN' }; }); }
-function normalizeStoredTransactions(transactions) { if (!Array.isArray(transactions)) return []; return transactions.filter((transaction) => transaction && transaction.id && transaction.type).slice(-100).map((transaction) => ({ ...transaction })); }
+function cloneDefaults() {
+  return { activeRoot:DEFAULT_STATE.activeRoot, chatHistory:[], pendingFlow:null };
+}
 function optionalStoredText(value) { return typeof value === 'string' && value.trim() ? value.trim() : null; }
 function pendingLifecycleMessageId(pending) { return optionalStoredText(pending?.messageId); }
 function lifecycleRequestId(pending) { return optionalStoredText(pending?.requestId) || optionalStoredText(pending?.workflowId) || null; }
@@ -137,8 +120,8 @@ function pendingRequiresReadbackRetry(pending) {
 function markCancelled(pending, eventType='CANCELLED') { transitionPendingLifecycle(pending, { executionState:'CANCELLED', readbackState:'IDLE', requestId:lifecycleRequestId(pending), eventType }); }
 function storeSaleStage(pending) { if (!Number.isInteger(Number(pending.quantity)) || Number(pending.quantity) <= 0) return 'STORE_SALE_QUANTITY'; if (!Number.isFinite(Number(pending.priceBaht)) || Number(pending.priceBaht) <= 0) return 'STORE_SALE_VALUE'; if (Number(pending.quantity) > 1 && pending.priceBasis !== 'UNIT' && pending.priceBasis !== 'TOTAL') return 'STORE_SALE_PRICE_BASIS'; return 'CONFIRM_STORE_SALE'; }
 function normalizeStoredPending(pending) { if (!pending || typeof pending !== 'object') return null; if (pending.kind === 'DIRECT_EXPENSE') { const requestId=optionalStoredText(pending.requestId); const title=optionalStoredText(pending.title); const amountSatang=Number(pending.amountSatang); if (!requestId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/.test(requestId) || !title || !Number.isSafeInteger(amountSatang) || amountSatang <= 0) return null; return { kind:'DIRECT_EXPENSE', stage:'CONFIRM_DIRECT_EXPENSE', requestId, title, amountSatang, messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'GENERAL_INCOME') { if (!Number.isFinite(Number(pending.amount)) || Number(pending.amount) <= 0) return null; const source = typeof pending.source === 'string' && pending.source.trim() ? pending.source.trim() : null; const workflowId = typeof pending.workflowId === 'string' && pending.workflowId.trim() ? pending.workflowId.trim() : null; const ledgerTransactionId = typeof pending.ledgerTransactionId === 'string' && pending.ledgerTransactionId.trim() ? pending.ledgerTransactionId.trim() : null; return { kind:'GENERAL_INCOME', stage:source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE', amount:Number(pending.amount), source, workflowId, ledgerTransactionId, messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'STORE_PRODUCT_ADD' && optionalStoredText(pending.name)) { const quantity = Number.isInteger(Number(pending.quantity)) && Number(pending.quantity) > 0 ? Number(pending.quantity) : null; const descriptors = Array.isArray(pending.descriptors) ? pending.descriptors.map(optionalStoredText).filter(Boolean) : []; const allowedStages = new Set(['STORE_PRODUCT_MODEL','STORE_PRODUCT_COLOR','STORE_PRODUCT_DESCRIPTORS','STORE_PRODUCT_QUANTITY','CONFIRM_STORE_PRODUCT_ADD']); const stage = allowedStages.has(pending.stage) ? pending.stage : quantity ? 'CONFIRM_STORE_PRODUCT_ADD' : 'STORE_PRODUCT_QUANTITY'; return { kind:'STORE_PRODUCT_ADD', stage, name:optionalStoredText(pending.name), model:optionalStoredText(pending.model), color:optionalStoredText(pending.color), descriptors, modelExplicitlyAbsent:Boolean(pending.modelExplicitlyAbsent), colorExplicitlyAbsent:Boolean(pending.colorExplicitlyAbsent), quantity, isExisting:Boolean(pending.isExisting), workflowId:optionalStoredText(pending.workflowId), productId:optionalStoredText(pending.productId), stockRecordId:optionalStoredText(pending.stockRecordId), messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'STORE_SALE' && pending.productId && pending.productName) { const rawPrice = pending.priceBaht ?? pending.value; const normalized = { kind:'STORE_SALE', stage:pending.stage, productId:String(pending.productId), productName:String(pending.productName), quantity:Number.isInteger(Number(pending.quantity)) && Number(pending.quantity) > 0 ? Number(pending.quantity) : null, priceBaht:Number.isFinite(Number(rawPrice)) && Number(rawPrice) > 0 ? Number(rawPrice) : null, priceBasis:pending.priceBasis === 'UNIT' || pending.priceBasis === 'TOTAL' ? pending.priceBasis : null, totalBaht:Number.isFinite(Number(pending.totalBaht)) && Number(pending.totalBaht) > 0 ? Number(pending.totalBaht) : null, workflowId:optionalStoredText(pending.workflowId), saleId:optionalStoredText(pending.saleId), ledgerTransactionId:optionalStoredText(pending.ledgerTransactionId), messageId:pendingLifecycleMessageId(pending) }; normalized.stage = storeSaleStage(normalized); return normalized; } return null; }
-function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return cloneDefaults(); const parsed = JSON.parse(raw); return { ...cloneDefaults(), ...parsed, manualView:null, chatHistory: Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [], pendingFlow: normalizeStoredPending(parsed.pendingFlow), products: freshProducts(), obligations: normalizeStoredObligations(parsed.obligations), transactions: normalizeStoredTransactions(parsed.transactions), cash: numberOr(parsed.cash, DEFAULT_STATE.cash), expectedIncome: numberOr(parsed.expectedIncome, DEFAULT_STATE.expectedIncome), todayIncome: numberOr(parsed.todayIncome, DEFAULT_STATE.todayIncome), todayExpense: numberOr(parsed.todayExpense, DEFAULT_STATE.todayExpense) }; } catch { return cloneDefaults(); } }
-function saveState() { const snapshot = { activeRoot: ['chat','manual','settings'].includes(state.activeRoot) ? state.activeRoot : 'manual', chatHistory: state.chatHistory.slice(-80), pendingFlow: state.pendingFlow, manualView: null, obligations: state.obligations, transactions: state.transactions.slice(-100), cash: state.cash, expectedIncome: state.expectedIncome, todayIncome: state.todayIncome, todayExpense: state.todayExpense }; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch {} }
+function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return cloneDefaults(); const parsed = JSON.parse(raw); return { activeRoot:['chat','manual','settings'].includes(parsed.activeRoot) ? parsed.activeRoot : 'manual', chatHistory:Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [], pendingFlow:normalizeStoredPending(parsed.pendingFlow) }; } catch { return cloneDefaults(); } }
+function saveState() { const snapshot = { activeRoot:['chat','manual','settings'].includes(state.activeRoot) ? state.activeRoot : 'manual', chatHistory:state.chatHistory.slice(-80), pendingFlow:state.pendingFlow }; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch {} }
 function formatBaht(value) { return `฿${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`; }
 function formatSatang(value) { return formatBaht(Number(value || 0) / 100); }
 function financeSnapshot() { const view = projectFinanceView(ledgerTruth); if (view.status !== READ_STATE.READY) return { status:view.status, cashSatang:null, todayIncomeSatang:null, todayExpenseSatang:null, netSatang:null }; return { status:view.status, cashSatang:view.cashSatang, todayIncomeSatang:view.todayIncomeSatang, todayExpenseSatang:view.todayExpenseSatang, netSatang:view.netSatang }; }
@@ -203,7 +186,6 @@ async function handleChatInput(text) { const clean = text.trim(); if (!clean) re
 async function submitChatText(text) { const clean = String(text || '').trim(); if (!clean) return; const userMessage=addMessage('user',clean); renderChat(); const previousMessageId=activeChatMessageId; activeChatMessageId=userMessage.id; try { await handleChatInput(clean); } finally { activeChatMessageId=previousMessageId; } renderChat(); }
 
 function showManualHub() {
-  state.manualView = null;
   manualHub.hidden = false;
   manualDetail.hidden = true;
   saveState();
