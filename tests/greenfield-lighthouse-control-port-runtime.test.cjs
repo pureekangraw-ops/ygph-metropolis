@@ -152,6 +152,79 @@ test('Confirmation-required command survives restart and completes only after co
   assert.equal(port.getMutationCount(), 1);
 });
 
+
+test('Confirmation queue advances work state to the next owner-confirmed command', async () => {
+  const { createLighthouseControlPortRuntime, createMemoryControlPortStorage } = await import(runtimeUrl);
+  const clock = { value:'2026-09-18T07:25:00.000Z' };
+  const storage = createMemoryControlPortStorage();
+  const port = fakePort(clock);
+  const runtime = createLighthouseControlPortRuntime({ port, storage, now:() => clock.value });
+
+  runtime.receive({
+    requestId:'income-queue-1',
+    capabilityId:'finance.income.create',
+    payload:{ source:'งาน', amountBaht:100 },
+  });
+  runtime.receive({
+    requestId:'expense-queue-2',
+    capabilityId:'finance.expense.create',
+    payload:{ title:'น้ำมัน', amountBaht:50 },
+  });
+
+  await runtime.processPending();
+  assert.equal(runtime.inbox().filter(entry => entry.status === 'CONFIRMATION_REQUIRED').length, 2);
+
+  const first = await runtime.confirm('income-queue-1');
+  assert.equal(first.status, 'DONE');
+  assert.deepEqual(runtime.workState(), {
+    pendingRequestId:'expense-queue-2',
+    blocker:'CONFIRMATION_REQUIRED',
+    nextAction:'AWAIT_CONFIRMATION',
+    lastSuccessfulReadback:{
+      requestId:'income-queue-1',
+      capabilityId:'finance.income.create',
+      revision:11,
+      updatedAt:clock.value,
+      readbackAt:clock.value,
+    },
+  });
+
+  const second = await runtime.confirm('expense-queue-2');
+  assert.equal(second.status, 'DONE');
+  assert.equal(runtime.workState().pendingRequestId, null);
+  assert.equal(runtime.workState().blocker, null);
+  assert.equal(runtime.workState().nextAction, 'WAITING_COMMAND');
+  assert.equal(port.getMutationCount(), 2);
+});
+
+test('Cancelling one confirmation keeps the next confirmation active', async () => {
+  const { createLighthouseControlPortRuntime, createMemoryControlPortStorage } = await import(runtimeUrl);
+  const clock = { value:'2026-09-18T07:26:00.000Z' };
+  const runtime = createLighthouseControlPortRuntime({
+    port:fakePort(clock),
+    storage:createMemoryControlPortStorage(),
+    now:() => clock.value,
+  });
+
+  runtime.receive({
+    requestId:'cancel-queue-1',
+    capabilityId:'finance.income.create',
+    payload:{ source:'งาน', amountBaht:100 },
+  });
+  runtime.receive({
+    requestId:'cancel-queue-2',
+    capabilityId:'finance.expense.create',
+    payload:{ title:'น้ำมัน', amountBaht:50 },
+  });
+  await runtime.processPending();
+
+  const cancelled = runtime.cancel('cancel-queue-1');
+  assert.equal(cancelled.reason, 'CANCELLED');
+  assert.equal(runtime.workState().pendingRequestId, 'cancel-queue-2');
+  assert.equal(runtime.workState().blocker, 'CONFIRMATION_REQUIRED');
+  assert.equal(runtime.workState().nextAction, 'AWAIT_CONFIRMATION');
+});
+
 test('Forbidden/secret commands are blocked without persisting secret payload', async () => {
   const { createLighthouseControlPortRuntime, createMemoryControlPortStorage, CONTROL_PORT_STORAGE_KEY } = await import(runtimeUrl);
   const clock = { value:'2026-09-18T07:30:00.000Z' };
