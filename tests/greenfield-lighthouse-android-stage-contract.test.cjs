@@ -15,6 +15,7 @@ const runtimeFiles = [
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'android-back.mjs',
   'surface-contract.mjs',
   'calendar-month.mjs',
   'settings-operations.mjs',
