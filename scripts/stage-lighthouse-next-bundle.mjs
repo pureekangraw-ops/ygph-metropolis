@@ -27,6 +27,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'chat-intent-recovery.mjs',
   'chat-path.mjs',
   'chat-lifecycle.mjs',
+  'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ]);
