@@ -250,6 +250,7 @@ export function installSettingsGoHub(root = globalThis.document) {
   if (!status || !toggle || !form || !bootstrap || !sync || !disconnect || toggle.dataset.bound === 'true') return false;
   toggle.dataset.bound = 'true';
 
+  let lastSyncText = '';
   let transport;
   try { transport = getSettingsHubTransport(); }
   catch {
@@ -258,16 +259,18 @@ export function installSettingsGoHub(root = globalThis.document) {
     return false;
   }
 
-  async function refresh() {
+  async function refresh({ preserveSync = false } = {}) {
     try {
       const current = await transport.status();
-      status.textContent = hubStatusText(current);
       const paired = current.status === 'PAIRED';
+      if (!paired) lastSyncText = '';
+      status.textContent = preserveSync && lastSyncText ? lastSyncText : hubStatusText(current);
       sync.hidden = !paired;
       disconnect.hidden = !paired;
       toggle.querySelector('strong').textContent = paired ? 'เปลี่ยนการเชื่อม GO Hub' : 'เชื่อม GO Hub';
       return current;
     } catch {
+      lastSyncText = '';
       status.textContent = 'ยังอ่านสถานะ GO Hub ไม่ได้';
       sync.hidden = true;
       disconnect.hidden = true;
@@ -287,6 +290,7 @@ export function installSettingsGoHub(root = globalThis.document) {
     status.textContent = 'กำลังบันทึกการเชื่อม…';
     try {
       await pairSettingsGoHub({ bootstrap:bootstrap.value, transport });
+      lastSyncText = '';
       bootstrap.value = '';
       form.hidden = true;
       await refresh();
@@ -299,7 +303,8 @@ export function installSettingsGoHub(root = globalThis.document) {
   });
 
   sync.addEventListener('click', () => {
-    status.textContent = 'กำลังซิงก์ GO Hub…';
+    lastSyncText = 'กำลังซิงก์ GO Hub…';
+    status.textContent = lastSyncText;
     globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-sync-request'));
   });
 
@@ -309,6 +314,7 @@ export function installSettingsGoHub(root = globalThis.document) {
     status.textContent = 'กำลังตัดการเชื่อม…';
     try {
       await transport.disconnect();
+      lastSyncText = '';
       await refresh();
     } catch (error) {
       status.textContent = hubOperationError(error);
@@ -319,11 +325,12 @@ export function installSettingsGoHub(root = globalThis.document) {
 
   globalThis.addEventListener?.('lighthouse:hub-status', event => {
     const detail = event?.detail || {};
-    if (detail.error) status.textContent = hubOperationError(detail.error);
-    else if (detail.report) status.textContent = detail.report.transport === 'ONLINE'
+    if (detail.error) lastSyncText = hubOperationError(detail.error);
+    else if (detail.report) lastSyncText = detail.report.transport === 'ONLINE'
       ? `เชื่อมแล้ว · sync ${detail.report.finishedAt || 'สำเร็จ'}`
       : 'เชื่อมแล้ว · ตอนนี้ Hub offline';
-    void refresh();
+    if (lastSyncText) status.textContent = lastSyncText;
+    void refresh({ preserveSync:true });
   });
 
   void refresh();

@@ -6,6 +6,15 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 
+test('LIGHTHOUSE Settings preserves the latest GO Hub sync result instead of overwriting it', () => {
+  const settings = read('lighthouse-next/settings-operations.mjs');
+  assert.match(settings, /let lastSyncText = ''/);
+  assert.match(settings, /refresh\(\{ preserveSync = false \} = \{\}\)/);
+  assert.match(settings, /void refresh\(\{ preserveSync:true \}\)/);
+  assert.match(settings, /เชื่อมแล้ว · sync/);
+  assert.doesNotMatch(settings, /if \(detail\.error\) status\.textContent = hubOperationError/);
+});
+
 test('LIGHTHOUSE Settings exposes GO Hub pairing without collecting Owner passcode', () => {
   const html = read('lighthouse-next/index.html');
   const settings = read('lighthouse-next/settings-operations.mjs');
