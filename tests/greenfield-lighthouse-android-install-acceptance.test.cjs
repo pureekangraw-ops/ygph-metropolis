@@ -31,12 +31,21 @@ function deviceEvidence(overrides = {}) {
     installedApkSha256: staticEvidence.apkSha256,
     beforeVersionCode: expected.baselineVersionCode,
     afterVersionCode: expected.targetVersionCode,
+    afterVersionName: expected.targetVersionName,
     launchedAfterInstall: true,
+    launchEvidence: {
+      source:'ADB_AM_START_WAIT',
+      capturedAt:'2026-09-18T01:20:00.000Z',
+      applicationId:expected.applicationId,
+      component:`${expected.applicationId}/.MainActivity`,
+      launched:true,
+      processId:'4242',
+    },
     readbackVersionCode: expected.targetVersionCode,
     persistenceProbe: {
-      key: 'owner-acceptance-probe',
-      before: 'preserve-me',
-      after: 'preserve-me',
+      key:'GREENFIELD_DATABASE_VAULT_SHA256',
+      before:'sha256:' + 'a'.repeat(64),
+      after:'sha256:' + 'a'.repeat(64),
     },
     ...overrides,
   };
@@ -89,7 +98,11 @@ test('identity, installed APK, downgrade, readback and persistence contradiction
     expected,
     staticEvidence,
     deviceEvidence: deviceEvidence({
-      persistenceProbe: { key: 'owner-acceptance-probe', before: 'preserve-me', after: null },
+      persistenceProbe: {
+        key:'GREENFIELD_DATABASE_VAULT_SHA256',
+        before:'sha256:' + 'a'.repeat(64),
+        after:'sha256:' + 'b'.repeat(64),
+      },
     }),
   });
   assert.equal(lostData.status, 'FAIL');
@@ -117,4 +130,39 @@ test('Android shell exposes one command lane for physical install-over evidence'
   assert.equal(pkg.scripts['acceptance:persistence-probe'], 'node tools/create-install-over-persistence-probe.mjs');
   assert.equal(pkg.scripts['acceptance:assemble'], 'node tools/create-install-over-device-evidence.mjs');
   assert.equal(pkg.scripts['acceptance:evaluate'], 'node tools/evaluate-install-over-acceptance.mjs');
+});
+
+
+test('hand-authored launch booleans cannot pass without valid ADB launch evidence', async () => {
+  const { evaluateAndroidInstallAcceptance } = await loadModule();
+
+  const missingReceipt = deviceEvidence({ launchEvidence:null });
+  const missing = evaluateAndroidInstallAcceptance({ expected, staticEvidence, deviceEvidence:missingReceipt });
+  assert.equal(missing.status, 'VERIFY');
+  assert.equal(missing.reasons.includes('DEVICE_EVIDENCE_INCOMPLETE'), true);
+
+  const forgedReceipt = deviceEvidence({
+    launchEvidence: {
+      source:'MANUAL_BOOLEAN',
+      capturedAt:'2026-09-18T01:20:00.000Z',
+      applicationId:expected.applicationId,
+      component:`${expected.applicationId}/.MainActivity`,
+      launched:true,
+      processId:'4242',
+    },
+  });
+  const forged = evaluateAndroidInstallAcceptance({ expected, staticEvidence, deviceEvidence:forgedReceipt });
+  assert.equal(forged.status, 'FAIL');
+  assert.equal(forged.reasons.includes('DEVICE_LAUNCH_EVIDENCE_INVALID'), true);
+});
+
+test('installed version name must match the Android target', async () => {
+  const { evaluateAndroidInstallAcceptance } = await loadModule();
+  const result = evaluateAndroidInstallAcceptance({
+    expected,
+    staticEvidence,
+    deviceEvidence:deviceEvidence({ afterVersionName:'wrong-version' }),
+  });
+  assert.equal(result.status, 'FAIL');
+  assert.equal(result.reasons.includes('DEVICE_TARGET_VERSION_NAME_MISMATCH'), true);
 });
