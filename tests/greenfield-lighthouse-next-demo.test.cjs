@@ -62,12 +62,15 @@ test('demo persists only its own namespaced state and restores deep pending acro
   assert.match(app, /restorePending/);
 });
 
-test('CHAT encodes Ambiguity Lock B-A-B-A and a supported local side-query reminder', () => {
+test('CHAT preserves pending work across supported side queries and reopen', () => {
   const app = read(appPath);
-  assert.match(app, /AMBIGUITY_LOCK\s*=\s*['"]BABA['"]/);
+  assert.doesNotMatch(app, /AMBIGUITY_LOCK|BABA/);
   assert.match(app, /วันนี้วันที่เท่าไร/);
   assert.match(app, /ยังรอที่มาของรายรับ/);
-  assert.match(app, /answerLocalSideQuery/);
+  assert.match(app, /function answerLocalSideQuery/);
+  assert.match(app, /if \(sideAnswer\)[\s\S]*?if \(state\.pendingFlow\) resumePendingPrompt\(\{ afterSideQuery:true \}\)/);
+  assert.match(app, /function restorePending\(\)/);
+  assert.match(app, /resumePendingPrompt\(\)/);
 });
 
 test('CHAT general income asks only for amount plus source and never forces a store-or-ride selector', () => {
