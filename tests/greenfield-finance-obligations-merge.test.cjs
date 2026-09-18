@@ -27,15 +27,13 @@ test('MANUAL keeps obligations inside Outcome instead of inventing a Finance or 
   assert.doesNotMatch(app, /\bobligations:\s*\{\s*title:\s*['"]ภาระ['"]/u);
 });
 
-test('legacy finance projection cannot become the authority for obligations', () => {
+test('legacy app projection is removed so Outcome is the only obligation surface authority', () => {
   const app = read(appPath);
-  assert.match(app, /function financeSnapshot\(/);
-  const start = app.indexOf('function renderFinanceDetail()');
-  const end = app.indexOf('function renderStoreDetail', start);
-  assert.notEqual(start, -1);
-  assert.notEqual(end, -1);
-  const body = app.slice(start, end);
-  assert.match(body, /ภาระใกล้สุด/);
-  assert.match(body, /ยังไม่เชื่อมข้อมูลจริง/);
-  assert.doesNotMatch(body, /state\.obligations/);
+  const surface = read(surfacePath);
+  assert.doesNotMatch(app, /function renderFinanceDetail\(/);
+  assert.doesNotMatch(app, /function openManualTask\(/);
+  assert.match(surface, /async function renderOutcome\(\)/);
+  assert.match(surface, /ledgerBridge\.createObligation\(/);
+  assert.match(surface, /ledgerBridge\.payObligation\(/);
+  assert.doesNotMatch(surface, /state\.obligations/);
 });
