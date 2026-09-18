@@ -1,6 +1,7 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { DEVICE_PIN_MIN_LENGTH } from '../greenfield/device-unlock.mjs';
 import { getNativeCapacitorApp } from './capacitor-app.mjs';
+import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 
 export async function loadSettingsBuildIdentity({ fetchImpl = globalThis.fetch, capacitor = globalThis.Capacitor } = {}) {
   const App = getNativeCapacitorApp(capacitor);
@@ -211,6 +212,124 @@ function installSettingsBackup(root = globalThis.document) {
   return true;
 }
 
+let settingsHubTransport = null;
+
+function getSettingsHubTransport() {
+  if (!settingsHubTransport) settingsHubTransport = createLighthouseHubControlPortTransport();
+  return settingsHubTransport;
+}
+
+function hubStatusText(value) {
+  if (value?.status === 'PAIRED') return `เชื่อมแล้ว · ${value.deviceLabel || 'LIGHTHOUSE Android'}`;
+  if (value?.status === 'EXPIRED') return 'การเชื่อมหมดอายุ · สร้าง Bootstrap ใหม่';
+  if (value?.status === 'UNPAIRED') return 'ยังไม่เชื่อม';
+  return 'ยังอ่านสถานะ GO Hub ไม่ได้';
+}
+
+function hubOperationError(error) {
+  const code = String(error?.message || error || '');
+  if (code === 'LIGHTHOUSE_HUB_BOOTSTRAP_UNEXPECTED_FIELD') return 'Bootstrap มีข้อมูลที่ไม่อนุญาต';
+  if (code.startsWith('LIGHTHOUSE_HUB_BOOTSTRAP_')) return 'Bootstrap ไม่ถูกต้อง';
+  if (code === 'LIGHTHOUSE_HUB_SESSION_EXPIRED' || code === 'SESSION_EXPIRED') return 'การเชื่อม GO Hub หมดอายุ';
+  if (code === 'LIGHTHOUSE_HUB_NOT_PAIRED') return 'ยังไม่ได้เชื่อม GO Hub';
+  if (code === 'SESSION_INACTIVE') return 'GO Hub session ไม่พร้อม · สร้าง Bootstrap ใหม่';
+  return 'ยังเชื่อม GO Hub ไม่ได้';
+}
+
+export async function pairSettingsGoHub({ bootstrap, transport = getSettingsHubTransport() } = {}) {
+  return transport.pair(bootstrap);
+}
+
+export function installSettingsGoHub(root = globalThis.document) {
+  const status = root?.querySelector?.('#go-hub-status');
+  const toggle = root?.querySelector?.('#go-hub-pair-toggle');
+  const form = root?.querySelector?.('#go-hub-pair-form');
+  const bootstrap = root?.querySelector?.('#go-hub-bootstrap');
+  const sync = root?.querySelector?.('#go-hub-sync-now');
+  const disconnect = root?.querySelector?.('#go-hub-disconnect');
+  if (!status || !toggle || !form || !bootstrap || !sync || !disconnect || toggle.dataset.bound === 'true') return false;
+  toggle.dataset.bound = 'true';
+
+  let transport;
+  try { transport = getSettingsHubTransport(); }
+  catch {
+    status.textContent = 'อุปกรณ์นี้ยังเก็บ GO Hub credential ไม่ได้';
+    toggle.disabled = true;
+    return false;
+  }
+
+  async function refresh() {
+    try {
+      const current = await transport.status();
+      status.textContent = hubStatusText(current);
+      const paired = current.status === 'PAIRED';
+      sync.hidden = !paired;
+      disconnect.hidden = !paired;
+      toggle.querySelector('strong').textContent = paired ? 'เปลี่ยนการเชื่อม GO Hub' : 'เชื่อม GO Hub';
+      return current;
+    } catch {
+      status.textContent = 'ยังอ่านสถานะ GO Hub ไม่ได้';
+      sync.hidden = true;
+      disconnect.hidden = true;
+      return null;
+    }
+  }
+
+  toggle.addEventListener('click', () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) bootstrap.focus();
+  });
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    status.textContent = 'กำลังบันทึกการเชื่อม…';
+    try {
+      await pairSettingsGoHub({ bootstrap:bootstrap.value, transport });
+      bootstrap.value = '';
+      form.hidden = true;
+      await refresh();
+      globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-sync-request'));
+    } catch (error) {
+      status.textContent = hubOperationError(error);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  sync.addEventListener('click', () => {
+    status.textContent = 'กำลังซิงก์ GO Hub…';
+    globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-sync-request'));
+  });
+
+  disconnect.addEventListener('click', async () => {
+    if (globalThis.confirm?.('ตัดการเชื่อม GO Hub จากเครื่องนี้?') !== true) return;
+    disconnect.disabled = true;
+    status.textContent = 'กำลังตัดการเชื่อม…';
+    try {
+      await transport.disconnect();
+      await refresh();
+    } catch (error) {
+      status.textContent = hubOperationError(error);
+    } finally {
+      disconnect.disabled = false;
+    }
+  });
+
+  globalThis.addEventListener?.('lighthouse:hub-status', event => {
+    const detail = event?.detail || {};
+    if (detail.error) status.textContent = hubOperationError(detail.error);
+    else if (detail.report) status.textContent = detail.report.transport === 'ONLINE'
+      ? `เชื่อมแล้ว · sync ${detail.report.finishedAt || 'สำเร็จ'}`
+      : 'เชื่อมแล้ว · ตอนนี้ Hub offline';
+    void refresh();
+  });
+
+  void refresh();
+  return true;
+}
+
 function installSettingsPinChange(root = globalThis.document) {
   const panel = root?.querySelector?.('#page-settings .settings-panel');
   if (!panel || panel.querySelector('[data-settings-pin-change]')) return false;
@@ -261,6 +380,7 @@ if (typeof document !== 'undefined') {
   installSettingsBackup(document);
   installSettingsRestore(document);
   installSettingsPinChange(document);
+  installSettingsGoHub(document);
 }
 
-export { backupFilename, installSettingsVersion, installSettingsBackup, installSettingsRestore, installSettingsPinChange, settingsError };
+export { backupFilename, installSettingsVersion, installSettingsBackup, installSettingsRestore, installSettingsPinChange, settingsError, hubStatusText, hubOperationError };

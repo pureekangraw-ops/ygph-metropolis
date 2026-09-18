@@ -72,6 +72,24 @@
         <section class="settings-panel">
           <div class="settings-row"><span><strong>ข้อมูลจริง</strong><small>การเงินและร้านค้ามาจาก Runtime · บทสนทนาและรายการค้างอยู่บนเครื่องนี้</small></span><span class="status-pill">Runtime</span></div>
           <div class="settings-row"><span><strong>เวอร์ชัน</strong><small id="settings-version">กำลังอ่านจาก Android build…</small></span><span class="status-pill">Android</span></div>
+          <div class="settings-row"><span><strong>GO Hub</strong><small id="go-hub-status">ยังไม่เชื่อม</small></span><span class="status-pill">Hub</span></div>
+          <button type="button" id="go-hub-pair-toggle" class="settings-button"><span><strong>เชื่อม GO Hub</strong><small>วาง Bootstrap ที่สร้างจาก GO Hub · รหัสเจ้าของไม่ถูกเก็บในแอป</small></span><b>›</b></button>
+          <form id="go-hub-pair-form" class="auth-form manual-direct-form" hidden>
+            <label for="go-hub-bootstrap">GO Hub Bootstrap</label>
+            <textarea id="go-hub-bootstrap" rows="5" autocomplete="off" spellcheck="false" placeholder='{"contract":"lighthouse-control-port-v1", ...}' required></textarea>
+            <button class="primary-button" type="submit">บันทึกการเชื่อม</button>
+          </form>
+          <button type="button" id="go-hub-sync-now" class="settings-button" hidden><span><strong>ซิงก์ GO Hub ตอนนี้</strong><small>Pull command → Control Port → Receipt + Snapshot</small></span><b>↻</b></button>
+          <button type="button" id="go-hub-disconnect" class="settings-button danger-soft" hidden><span><strong>ตัดการเชื่อม GO Hub</strong><small>ยกเลิก session บน Hub และลบ credential บนเครื่องนี้</small></span><b>×</b></button>
+          <section id="go-hub-confirmation" class="auth-warning" hidden>
+            <strong>GO Hub รอการยืนยันบนเครื่อง</strong>
+            <p>ตรวจคำสั่งด้านล่างก่อนอนุญาตให้ LIGHTHOUSE เขียนข้อมูลจริง</p>
+            <pre id="go-hub-confirmation-summary" class="hub-command-summary"></pre>
+            <div class="dialog-actions">
+              <button type="button" id="go-hub-command-reject" class="secondary-button">ปฏิเสธ</button>
+              <button type="button" id="go-hub-command-confirm" class="primary-button">ยืนยันคำสั่ง</button>
+            </div>
+          </section>
           <button type="button" id="backup-data" class="settings-button"><span><strong>สำรองข้อมูล</strong><small>สร้างไฟล์สำรองจากข้อมูลจริงที่เปิดอยู่ตอนนี้</small></span><b>›</b></button>
           <button type="button" id="restore-data" class="settings-button"><span><strong>กู้คืนจากข้อมูลสำรอง</strong><small>ตรวจไฟล์และ readback ก่อนยืนยันการกู้คืน</small></span><b>›</b></button>
           <input id="restore-file" type="file" accept="application/json,.json" hidden>
