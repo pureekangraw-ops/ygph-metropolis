@@ -155,3 +155,14 @@ test('CHAT app wires mutation drafts and durable outcomes into lifecycle without
   assert.match(app, /CANCELLED/);
   assert.doesNotMatch(fs.readFileSync(modulePath, 'utf8'), /LEDGER_CREATE|STORE_|RIDE_|otherIncome|sellProduct|expense\(/);
 });
+
+
+test('CHAT lifecycle reaches confirmation when an incomplete draft becomes visibly confirmable without erasing readback errors', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /function syncPendingLifecycleStage\(pending\)/);
+  assert.match(app, /current\.readbackState !== 'IDLE'/);
+  assert.match(app, /confirmationReady \? 'CONFIRMATION_REQUIRED' : 'WAITING'/);
+  assert.match(app, /function resumeGeneralIncomePrompt\(pending\)[\s\S]*?syncPendingLifecycleStage\(pending\)/);
+  assert.match(app, /function resumeStoreSalePrompt\(pending\)[\s\S]*?syncPendingLifecycleStage\(pending\)/);
+  assert.match(app, /function resumeStoreProductAddPrompt\(pending\)[\s\S]*?syncPendingLifecycleStage\(pending\)/);
+});
