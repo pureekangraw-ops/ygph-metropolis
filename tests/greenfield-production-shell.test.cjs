@@ -1,56 +1,38 @@
 "use strict";
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const root = path.resolve(__dirname, '..');
-const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const os=require('node:os');
 
-test('production navigation is icon command strip plus YGPH M Home/Back control', () => {
-  const html = read('index.html');
-  const nav = html.match(/<nav id="commandNav"[\s\S]*?<\/nav>/)?.[0] || '';
-  assert.deepEqual([...nav.matchAll(/data-command-destination="([^"]+)"/g)].map(m => m[1]), ['store','ride','finance']);
-  for (const label of ['ร้านค้า','วิ่งงาน','การเงิน','ตั้งค่า']) assert.match(nav, new RegExp(`aria-label="${label}"`));
-  assert.match(html, /id="brandHomeControl"[^>]*data-command-destination="home"[^>]*aria-label="หน้าหลัก"/);
-  assert.match(html, /id="brandBackIcon"[^>]*data-icon="arrow-left"/);
-  assert.doesNotMatch(html, /id="homeBubble"|id="bottomNav"|id="thumbRail"|class="rail-btn|data-area="money"/);
+const root=path.resolve(__dirname,'..');
+const read=file=>fs.readFileSync(path.join(root,file),'utf8');
+
+test('LIGHTHOUSE production source has exactly CHAT MANUAL SETTINGS roots',()=>{
+  const html=read('lighthouse-next/index.html');
+  const nav=html.match(/<nav id="bottom-nav"[\s\S]*?<\/nav>/)?.[0]||'';
+  assert.equal((nav.match(/data-root-target=/g)||[]).length,3);
+  for(const rootName of ['chat','manual','settings']) assert.match(nav,new RegExp('data-root-target=["\\\']'+rootName+'["\\\']'));
+  for(const stale of ['home','store','ride','finance']) assert.doesNotMatch(nav,new RegExp('data-root-target=["\\\']'+stale+'["\\\']'));
 });
 
-test('Home orders attention before summary before cash-flow chart and has no duplicate city doors', () => {
-  const html = read('index.html');
-  const home = html.match(/<section[^>]*data-area-page="home"[\s\S]*?<\/section>/)?.[0] || '';
-  const attention = home.indexOf('id="attentionList"');
-  const summary = home.indexOf('id="homeSummary"');
-  const chart = home.indexOf('id="homeCashFlowChart"');
-  assert.ok(attention >= 0 && summary > attention && chart > summary);
-  for (const id of ['homeBalance','homeGenerated','homeStock','homeDue']) assert.match(home, new RegExp(`id="${id}"`));
-  assert.doesNotMatch(home, /id="cityEntries"|data-city-entry=/);
-  assert.doesNotMatch(home.slice(0, chart), /<form\b/);
+test('production manifest names LIGHTHOUSE Next shell truth',()=>{
+  const manifest=JSON.parse(read('RELEASE_MANIFEST.json'));
+  assert.deepEqual(manifest.surfaces.roots,['CHAT','MANUAL','SETTINGS']);
+  assert.equal(manifest.authority.webEntrypoint,'lighthouse-next/index.html');
+  assert.equal(manifest.authority.androidBuilder,'android-shell/tools/stage-lighthouse-next.mjs');
+  assert.equal(manifest.authority.rule,'WEB_AND_ANDROID_MUST_USE_SAME_STAGED_BUNDLE');
 });
 
-test('Store Ride Finance are direct areas while Calendar is Finance-hosted and Settings is a dialog utility', () => {
-  const html = read('index.html');
-  for (const area of ['home','store','ride','finance']) assert.equal((html.match(new RegExp(`data-area-page="${area}"`, 'g')) || []).length, 1, area);
-  assert.equal((html.match(/data-area-page="calendar"/g) || []).length, 0, 'calendar visible area');
-  assert.equal((html.match(/data-area-page="system"/g) || []).length, 0, 'system page');
-  assert.match(html, /id="financeSchedule"/);
-  assert.match(html, /<dialog[^>]*id="settingsDialog"/);
-  assert.doesNotMatch(html, /data-area-page="money"|data-money-page=|id="moneyChildToggle"|id="moneyChildren"/);
-  assert.match(html, /id="settingsBtn"[^>]*aria-label="ตั้งค่า"/);
-});
-
-test('mobile CSS does not reserve a right-side or bottom navigation rail', () => {
-  const css = read('styles.css');
-  assert.match(css, /\.appbar\{[^}]*position:sticky[^}]*top:0/s);
-  assert.match(css, /\.brand-home-control\{[^}]*min-height:44px/s);
-  assert.doesNotMatch(css, /\.home-bubble|\.bottom-nav|\.thumb-rail/);
-  assert.doesNotMatch(css, /padding-right\s*:\s*76px/);
-});
-
-test('release manifest names the production shell truth', () => {
-  const manifest = JSON.parse(read('RELEASE_MANIFEST.json'));
-  assert.deepEqual(manifest.functionalShell.areas, ['HOME','STORE','RIDE','FINANCE']);
-  assert.equal(manifest.functionalShell.calendarSurface, 'FINANCE_SCHEDULE');
-  assert.deepEqual(manifest.functionalShell.utilities, ['SYSTEM']);
-  assert.equal(manifest.functionalShell.navigation, 'BRAND_HOME_BACK_COMMAND_STRIP_V2');
+test('canonical production bundle root routes only to LIGHTHOUSE Next',async()=>{
+  const {mkdtemp,readFile,rm}=require('node:fs/promises');
+  const mod=await import(path.join(root,'scripts/stage-lighthouse-next-bundle.mjs'));
+  const dest=await mkdtemp(path.join(os.tmpdir(),'lh-shell-'));
+  try{
+    await mod.stageLighthouseBundle({repoRoot:root,destinationRoot:dest});
+    const entry=await readFile(path.join(dest,'index.html'),'utf8');
+    assert.match(entry,/lighthouse-next\/index\.html/);
+    assert.match(entry,/<title>LIGHTHOUSE<\/title>/);
+    assert.doesNotMatch(entry,/YGPH METROPOLIS|HOME|STORE|RIDE|FINANCE|MASTER INPUT/);
+  }finally{await rm(dest,{recursive:true,force:true});}
 });
