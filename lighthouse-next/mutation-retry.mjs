@@ -1,9 +1,5 @@
 export const MANUAL_MUTATION_ATTEMPT_PREFIX = 'lighthouse-next-manual-attempt:';
 
-function clone(value) {
-  return value == null ? value : structuredClone(value);
-}
-
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === 'object') {
@@ -12,8 +8,19 @@ function stable(value) {
   return value;
 }
 
-function payloadKey(value) {
+function canonicalPayload(value) {
   return JSON.stringify(stable(value ?? null));
+}
+
+function bytesToHex(bytes) {
+  return [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+export async function fingerprintMutationPayload(value, cryptoImpl = globalThis.crypto) {
+  if (!cryptoImpl?.subtle?.digest) throw new Error('LIGHTHOUSE_MUTATION_CRYPTO_REQUIRED');
+  const material = new TextEncoder().encode(canonicalPayload(value));
+  const digest = await cryptoImpl.subtle.digest('SHA-256', material);
+  return `sha256:${bytesToHex(digest)}`;
 }
 
 function assertPersistence(storage, key) {
@@ -28,14 +35,21 @@ function restorePending(storage, key, prefixNames) {
   if (!storage || !key) return null;
   try {
     const parsed = JSON.parse(storage.getItem(key) || 'null');
-    if (!parsed || parsed.version !== 1 || parsed.verificationPending !== true || !parsed.ids || typeof parsed.ids !== 'object') return null;
+    if (!parsed || parsed.version !== 2 || parsed.verificationPending !== true ||
+        !/^sha256:[0-9a-f]{64}$/.test(String(parsed.payloadFingerprint || '')) ||
+        !parsed.ids || typeof parsed.ids !== 'object') return null;
     const ids = {};
     for (const name of prefixNames) {
       const value = String(parsed.ids[name] || '').trim();
       if (!value) return null;
       ids[name] = value;
     }
-    return { key:null, payload:null, ids, verificationPending:true, restored:true };
+    return {
+      payloadFingerprint:parsed.payloadFingerprint,
+      ids,
+      verificationPending:true,
+      restored:true,
+    };
   } catch {
     return null;
   }
@@ -56,6 +70,7 @@ export function createStableMutationAttempt({
   prefixes,
   storage = null,
   persistenceKey = null,
+  cryptoImpl = globalThis.crypto,
 } = {}) {
   if (typeof createId !== 'function') throw new TypeError('LIGHTHOUSE_MUTATION_ID_FACTORY_REQUIRED');
   if (!prefixes || typeof prefixes !== 'object' || Array.isArray(prefixes) || !Object.keys(prefixes).length) {
@@ -73,27 +88,24 @@ export function createStableMutationAttempt({
   function persistVerificationPending() {
     if (!persistentStorage || !key || !current?.verificationPending) return;
     persistentStorage.setItem(key, JSON.stringify({
-      version:1,
+      version:2,
       verificationPending:true,
+      payloadFingerprint:current.payloadFingerprint,
       ids:{ ...current.ids },
     }));
   }
 
-  function acquire(payload) {
-    const nextKey = payloadKey(payload);
+  async function acquire(payload) {
+    const payloadFingerprint = await fingerprintMutationPayload(payload, cryptoImpl);
     if (current?.verificationPending) {
-      if (current.key === null) {
-        current.key = nextKey;
-        current.payload = clone(payload);
-        return Object.freeze({ ...current.ids });
+      if (current.payloadFingerprint !== payloadFingerprint) {
+        throw new Error('LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED');
       }
-      if (current.key !== nextKey) throw new Error('LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED');
       return Object.freeze({ ...current.ids });
     }
-    if (!current || current.key !== nextKey) {
+    if (!current || current.payloadFingerprint !== payloadFingerprint) {
       current = {
-        key:nextKey,
-        payload:clone(payload),
+        payloadFingerprint,
         ids:Object.fromEntries(Object.entries(prefixes).map(([name, prefix]) => [name, createId(prefix)])),
         verificationPending:false,
         restored:false,
@@ -117,7 +129,7 @@ export function createStableMutationAttempt({
   function snapshot() {
     if (!current) return null;
     return Object.freeze({
-      payload:clone(current.payload),
+      payloadFingerprint:current.payloadFingerprint,
       ids:Object.freeze({ ...current.ids }),
       verificationPending:current.verificationPending,
       restored:current.restored === true,
