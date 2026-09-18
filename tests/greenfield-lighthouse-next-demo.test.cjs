@@ -145,15 +145,21 @@ test('registered product sale parser locks product then value then quantity', as
   assert.equal(parseStoreSale('ทิป 59', products), null);
 });
 
-test('Store sale flow is persisted, confirms before mutation, and protects stock truth', () => {
+test('Store sale flow persists the pending command and commits only through Store owner readback', () => {
   const app = read(appPath);
   assert.match(app, /interpretChatIntent/);
   assert.match(app, /kind:\s*['"]STORE_SALE['"]/);
   assert.match(app, /STORE_SALE_VALUE/);
   assert.match(app, /STORE_SALE_QUANTITY/);
+  assert.match(app, /CONFIRM_STORE_SALE/);
+  assert.match(app, /state\.pendingFlow/);
+  assert.match(app, /saveState\(\)/);
+  assert.match(app, /storeBridge\.sellProduct\(/);
+  assert.match(app, /storeBridge\.readStoreTruth\(\)/);
+  assert.match(app, /ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(app, /markReadbackVerified\(/);
   assert.match(app, /จำนวนไม่พอ|สินค้าไม่พอ/);
-  assert.match(app, /transactions/);
-  assert.match(app, /products/);
+  assert.doesNotMatch(app, /state\.products|state\.transactions|state\.cash|state\.todayIncome/);
 });
 
 test('LIGHTHOUSE staging uses the owner-locked lighthouse artwork as app identity', () => {
