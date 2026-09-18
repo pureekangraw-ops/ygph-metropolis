@@ -16,11 +16,11 @@ test('stable mutation attempt reuses ids for the same payload and rotates before
     prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
   });
 
-  const first = attempt.acquire({ amountBaht:65, title:'ข้าว' });
-  const retry = attempt.acquire({ title:'ข้าว', amountBaht:65 });
+  const first = await attempt.acquire({ amountBaht:65, title:'ข้าว' });
+  const retry = await attempt.acquire({ title:'ข้าว', amountBaht:65 });
   assert.deepEqual(retry, first);
 
-  const edited = attempt.acquire({ amountBaht:70, title:'ข้าว' });
+  const edited = await attempt.acquire({ amountBaht:70, title:'ข้าว' });
   assert.notEqual(edited.workflowId, first.workflowId);
   assert.notEqual(edited.ledgerTransactionId, first.ledgerTransactionId);
 });
@@ -32,14 +32,14 @@ test('ambiguous mutation locks payload while allowing exact-id readback retry', 
     createId:prefix => `${prefix}-${++serial}`,
     prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
   });
-  const ids = attempt.acquire({ amountBaht:65 });
+  const ids = await attempt.acquire({ amountBaht:65 });
   attempt.markVerificationPending();
 
-  assert.deepEqual(attempt.acquire({ amountBaht:65 }), ids);
-  assert.throws(() => attempt.acquire({ amountBaht:70 }), /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/);
+  assert.deepEqual(await attempt.acquire({ amountBaht:65 }), ids);
+  await assert.rejects(() => attempt.acquire({ amountBaht:70 }), /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/);
 
   attempt.clear();
-  assert.doesNotThrow(() => attempt.acquire({ amountBaht:70 }));
+  await assert.doesNotReject(() => attempt.acquire({ amountBaht:70 }));
 });
 
 test('mutation error classification fails closed except proven pre-write errors', async () => {
@@ -126,7 +126,7 @@ test('ambiguous retry ids survive reopen without persisting business payload pla
   });
 
   const payload = { title:'secret-lunch-note', amountBaht:987.65 };
-  const ids = first.acquire(payload);
+  const ids = await first.acquire(payload);
   first.markVerificationPending();
 
   const persisted = storage.dump(persistenceKey);
@@ -134,6 +134,8 @@ test('ambiguous retry ids survive reopen without persisting business payload pla
   assert.equal(persisted.includes('secret-lunch-note'), false);
   assert.equal(persisted.includes('987.65'), false);
   assert.match(persisted, /"verificationPending":true/);
+  assert.match(persisted, /"payloadFingerprint":"sha256:[0-9a-f]{64}"/);
+  assert.match(persisted, /"version":2/);
 
   const reopened = createStableMutationAttempt({
     createId:() => { throw new Error('restored retry must not mint new ids'); },
@@ -142,8 +144,8 @@ test('ambiguous retry ids survive reopen without persisting business payload pla
     persistenceKey,
   });
   assert.equal(reopened.snapshot().restored, true);
-  assert.deepEqual(reopened.acquire(payload), ids);
-  assert.throws(() => reopened.acquire({ ...payload, amountBaht:1000 }), /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/);
+  assert.deepEqual(await reopened.acquire(payload), ids);
+  await assert.rejects(() => reopened.acquire({ ...payload, amountBaht:1000 }), /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/);
 
   reopened.clear();
   assert.equal(storage.getItem(persistenceKey), null);
@@ -171,4 +173,31 @@ test('MANUAL surfaces assign persistent retry scopes instead of storing payload 
   assert.match(surface, /obligation-pay:\$\{obligation\.recordId\}:\$\{queue\.recordId\}/);
   assert.match(surface, /calendar-reschedule:\$\{record\.recordId\}/);
   assert.match(surface, /ledger-reversal:\$\{transaction\.recordId\}/);
+});
+
+
+test('restored ambiguous ids reject a changed payload before any retry command is issued', async () => {
+  const { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt } = await load();
+  const storage = localStorageLike();
+  let serial = 0;
+  const persistenceKey = `${MANUAL_MUTATION_ATTEMPT_PREFIX}income`;
+  const original = createStableMutationAttempt({
+    createId:prefix => `${prefix}-${++serial}`,
+    prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
+    storage,
+    persistenceKey,
+  });
+  await original.acquire({ source:'งาน A', amountBaht:500 });
+  original.markVerificationPending();
+
+  const reopened = createStableMutationAttempt({
+    createId:() => { throw new Error('must not mint a new id'); },
+    prefixes:{ workflowId:'WF', ledgerTransactionId:'TX' },
+    storage,
+    persistenceKey,
+  });
+  await assert.rejects(
+    () => reopened.acquire({ source:'งาน B', amountBaht:500 }),
+    /LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED/,
+  );
 });
