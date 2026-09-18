@@ -210,3 +210,25 @@ test('owner-locked app icon and transaction history have explicit mobile polish'
   assert.match(polish, /\.history-cancel\s*\{/);
   assert.match(polish, /min-height\s*:\s*44px/);
 });
+
+
+test('local UI persistence stores no fake business or financial truth', () => {
+  const app = read(appPath);
+  assert.match(app, /const STORAGE_KEY = 'lighthouse-next-demo-v1'/);
+  assert.match(app, /function saveState\(\)/);
+  assert.match(app, /chatHistory:state\.chatHistory\.slice\(-80\)/);
+  assert.match(app, /pendingFlow:state\.pendingFlow/);
+  for (const forbidden of [
+    'DEFAULT_PRODUCTS',
+    'DEFAULT_OBLIGATIONS',
+    'state.cash',
+    'state.expectedIncome',
+    'state.todayIncome',
+    'state.todayExpense',
+    'state.products',
+    'state.obligations',
+    'state.transactions',
+  ]) {
+    assert.equal(app.includes(forbidden), false, `${forbidden} must not be local UI truth`);
+  }
+});
