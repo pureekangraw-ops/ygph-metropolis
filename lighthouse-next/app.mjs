@@ -12,6 +12,8 @@ import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { createLighthouseControlPort } from './control-port/control-port.mjs';
 import { createLighthouseControlPortRuntime } from './control-port/control-port-runtime.mjs';
+import { createLighthouseControlPortSync } from './control-port/control-port-sync.mjs';
+import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 function registerProductionServiceWorker() {
@@ -104,6 +106,9 @@ const controlPortRuntime = createLighthouseControlPortRuntime({
   port:controlPort,
   snapshotMetadata:controlPortSnapshotMetadata,
 });
+const controlPortSync = createLighthouseControlPortSync({ runtime:controlPortRuntime });
+let hubControlPortTransport = null;
+try { hubControlPortTransport = createLighthouseHubControlPortTransport(); } catch {}
 const chatRead = createChatReadCapability({ ledgerBridge, storeBridge });
 const chatLifecycle = createChatLifecycle();
 
@@ -114,6 +119,33 @@ let realIncomeCommitBusy = false;
 let realStoreCommitBusy = false;
 let realExpenseCommitBusy = false;
 let activeChatMessageId = null;
+let hubSyncBusy = false;
+
+async function syncGoHubControlPort({ force = false } = {}) {
+  if (!hubControlPortTransport || hubSyncBusy) return null;
+  if (!force && appShell.hidden) return null;
+  hubSyncBusy = true;
+  try {
+    const pairing = await hubControlPortTransport.status();
+    if (pairing.status !== 'PAIRED') {
+      globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ pairing } }));
+      return Object.freeze({ status:pairing.status });
+    }
+    const report = await controlPortSync.reconcile({
+      pullInbox:() => hubControlPortTransport.pullInbox(),
+      pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
+      pushState:packet => hubControlPortTransport.pushState(packet),
+    });
+    globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ pairing, report } }));
+    return report;
+  } catch (error) {
+    globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ error } }));
+    return null;
+  } finally {
+    hubSyncBusy = false;
+  }
+}
+
 
 function newOperationId(prefix) { const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`; return `${prefix}-${suffix}`; }
 function ensureGeneralIncomeIdentity(pending) { if (!pending.workflowId) pending.workflowId = newOperationId('WF-LH-INCOME'); if (!pending.ledgerTransactionId) pending.ledgerTransactionId = newOperationId('TX-LH-INCOME'); saveState(); return pending; }
@@ -191,7 +223,7 @@ function showSetupRequired(reason) { authScreen.hidden = false; appShell.hidden 
 function showApp() { authScreen.hidden = true; appShell.hidden = false; renderHomeTruth(); selectRoot(state.activeRoot || 'manual'); restorePending(); }
 function clearRecoveryFields() { recoveryCodeInput.value = ''; newPasswordInput.value = ''; confirmPasswordInput.value = ''; }
 async function bootRuntimeGate() { authStatus.textContent = 'กำลังตรวจสถานะอุปกรณ์…'; try { const result = await runtimeGate.inspect(); if (result.status === 'LOGIN') showLoginGate(); else showSetupRequired(result.reason); } catch (error) { showSetupRequired(); authStatus.textContent = authMessage(error); } }
-async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
+async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); void syncGoHubControlPort({ force:true }); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
 function lockApp() { runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 
@@ -253,6 +285,12 @@ showRecoveryButton.addEventListener('click', () => { devicePassword.value = ''; 
 cancelRecoveryButton.addEventListener('click', () => { clearRecoveryFields(); showLoginGate(); });
 lockAppButton.addEventListener('click', lockApp);
 window.addEventListener('pagehide', () => { runtimeGate.lock(); });
+window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') void syncGoHubControlPort();
+});
+window.addEventListener('focus', () => { void syncGoHubControlPort(); });
+window.setInterval(() => { void syncGoHubControlPort(); }, 30_000);
 void bootRuntimeGate();
 root.querySelectorAll('[data-root-target]').forEach((button)=>button.addEventListener('click',()=>selectRoot(button.dataset.rootTarget)));
 root.querySelector('#manual-back').addEventListener('click',showManualHub);
