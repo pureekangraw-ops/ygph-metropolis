@@ -2,6 +2,11 @@ name: LIGHTHOUSE Owner Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - android-shell/version.json
 
 permissions:
   contents: read
