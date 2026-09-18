@@ -130,9 +130,9 @@ test('Settings reset is explicitly device-local and cannot erase Runtime busines
   assert.match(html, /ไม่ลบเงินจริงหรือสต็อกจริง/);
   assert.match(html, /id="confirm-reset"/);
 
-  const start = app.indexOf('function resetDemoState()');
+  const start = app.indexOf('function resetLocalState()');
   const end = app.indexOf('function setAuthBusy', start);
-  assert.ok(start >= 0 && end > start, 'resetDemoState block must exist');
+  assert.ok(start >= 0 && end > start, 'resetLocalState block must exist');
   const reset = app.slice(start, end);
   assert.match(reset, /localStorage\.removeItem\(STORAGE_KEY\)/);
   assert.match(reset, /chatLifecycle\.clear\(\)/);
