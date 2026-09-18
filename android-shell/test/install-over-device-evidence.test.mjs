@@ -30,6 +30,7 @@ test('builds device acceptance evidence from before/after installed snapshots an
       applicationId:'com.yggdrasil.lighthouse',
       component:'com.yggdrasil.lighthouse/.MainActivity',
       launched:true,
+      processId:'4242',
     },
   });
 
@@ -58,6 +59,7 @@ test('requires a real adb post-install launch receipt instead of a manual boolea
       applicationId:'other.app',
       component:'other.app/.MainActivity',
       launched:true,
+      processId:'4242',
     },
   }), /INSTALL_OVER_LAUNCH_APP_ID_MISMATCH/);
 });
