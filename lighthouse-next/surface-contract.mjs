@@ -413,7 +413,17 @@ async function renderCalendar() {
       });
       card.append(complete);
     } else if (ownerControlled) {
-      card.append(makeRow('การจ่าย/รับเงิน', 'จัดการที่ Owner ของรายการ'));
+      const obligationOwner = ['PAY_OBLIGATION','PAY_OBLIGATION_INSTALLMENT'].includes(record.type);
+      const ownerButton = document.createElement('button');
+      ownerButton.type = 'button';
+      ownerButton.className = 'secondary-button';
+      ownerButton.dataset.calendarOwnerRoute = obligationOwner ? 'outcome' : 'income';
+      ownerButton.textContent = obligationOwner ? 'ไป Outcome' : 'ไป Income';
+      ownerButton.addEventListener('click', () => {
+        if (obligationOwner) void renderOutcome();
+        else void renderIncome();
+      });
+      card.append(makeRow('การจ่าย/รับเงิน', 'จัดการที่ Owner ของรายการ'), ownerButton);
     }
     card.append(status);
     card.addEventListener('submit', async event => {
