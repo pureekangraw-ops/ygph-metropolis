@@ -423,7 +423,17 @@ export function createLighthouseLedgerBridge(deps = {}) {
     const transaction = requiredText(ledgerTransactionId, 'LIGHTHOUSE_LEDGER_TRANSACTION_ID_REQUIRED');
     const amountSatang = bahtToSatang(amountBaht);
     return withSession(async runtime => {
-      await runtime.payObligation({ workflowId:workflow, obligationId:obligation, queueId:queue, ledgerTransactionId:transaction, amountSatang });
+      const before = await runtime.readState();
+      const existing = ledgerRecord(before, transaction);
+      let recovered = Boolean(existing);
+      if (!existing) {
+        try {
+          await runtime.payObligation({ workflowId:workflow, obligationId:obligation, queueId:queue, ledgerTransactionId:transaction, amountSatang });
+        } catch (error) {
+          if (!duplicateCommand(error)) throw error;
+          recovered = true;
+        }
+      }
       const state = await runtime.readState();
       const owner = ledgerRecord(state, obligation);
       const calendar = calendarRecord(state, queue);
@@ -431,7 +441,7 @@ export function createLighthouseLedgerBridge(deps = {}) {
       if (!owner || owner.type !== 'OBLIGATION' || Number(owner.paidSatang) < amountSatang || Number(owner.remainingSatang) < 0 || !['PARTIAL','COMPLETED'].includes(owner.status)) throw new Error('LIGHTHOUSE_OBLIGATION_READBACK_MISMATCH');
       if (!calendar || !['PARTIAL','COMPLETED'].includes(calendar.status)) throw new Error('LIGHTHOUSE_CALENDAR_READBACK_MISMATCH');
       if (!tx || tx.type !== 'TRANSACTION' || tx.direction !== 'OUT' || tx.detail !== 'OUT:OBLIGATION_PAYMENT' || Number(tx.amountSatang) !== amountSatang || String(tx.sourceRef || '') !== `LEDGER/${obligation}`) throw new Error('LIGHTHOUSE_LEDGER_READBACK_MISMATCH');
-      return Object.freeze({ status:'VERIFIED', obligation:structuredClone(owner), queue:structuredClone(calendar), record:structuredClone(tx), truth:buildTruth(runtime, state, projectFinancial, now), calendarTruth:buildCalendarTruth(runtime, state) });
+      return Object.freeze({ status:'VERIFIED', recovered, obligation:structuredClone(owner), queue:structuredClone(calendar), record:structuredClone(tx), truth:buildTruth(runtime, state, projectFinancial, now), calendarTruth:buildCalendarTruth(runtime, state) });
     });
   }
 
@@ -440,11 +450,17 @@ export function createLighthouseLedgerBridge(deps = {}) {
     const queue = requiredText(queueId, 'LIGHTHOUSE_QUEUE_ID_REQUIRED');
     const due = requiredText(dueDate, 'LIGHTHOUSE_DUE_DATE_REQUIRED');
     return withSession(async runtime => {
-      await runtime.calendarReschedule({ workflowId:workflow, queueId:queue, dueDate:due });
+      let recovered = false;
+      try {
+        await runtime.calendarReschedule({ workflowId:workflow, queueId:queue, dueDate:due });
+      } catch (error) {
+        if (!duplicateCommand(error)) throw error;
+        recovered = true;
+      }
       const state = await runtime.readState();
       const record = calendarRecord(state, queue);
       if (!record || record.dueDate !== due) throw new Error('LIGHTHOUSE_CALENDAR_READBACK_MISMATCH');
-      return Object.freeze({ status:'VERIFIED', record:structuredClone(record), calendarTruth:buildCalendarTruth(runtime, state) });
+      return Object.freeze({ status:'VERIFIED', recovered, record:structuredClone(record), calendarTruth:buildCalendarTruth(runtime, state) });
     });
   }
 
@@ -453,11 +469,17 @@ export function createLighthouseLedgerBridge(deps = {}) {
     const queue = requiredText(queueId, 'LIGHTHOUSE_QUEUE_ID_REQUIRED');
     const nextStatus = requiredText(status, 'LIGHTHOUSE_CALENDAR_STATUS_REQUIRED');
     return withSession(async runtime => {
-      await runtime.calendarStatus({ workflowId:workflow, queueId:queue, status:nextStatus });
+      let recovered = false;
+      try {
+        await runtime.calendarStatus({ workflowId:workflow, queueId:queue, status:nextStatus });
+      } catch (error) {
+        if (!duplicateCommand(error)) throw error;
+        recovered = true;
+      }
       const state = await runtime.readState();
       const record = calendarRecord(state, queue);
       if (!record || record.status !== nextStatus) throw new Error('LIGHTHOUSE_CALENDAR_READBACK_MISMATCH');
-      return Object.freeze({ status:'VERIFIED', record:structuredClone(record), calendarTruth:buildCalendarTruth(runtime, state) });
+      return Object.freeze({ status:'VERIFIED', recovered, record:structuredClone(record), calendarTruth:buildCalendarTruth(runtime, state) });
     });
   }
 
