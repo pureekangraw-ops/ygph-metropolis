@@ -175,6 +175,23 @@ export function createLighthouseControlPortRuntime({
     return persist(next);
   }
 
+  function nextConfirmation(state) {
+    return Object.values(state?.inbox || {}).find(entry => entry?.status === 'CONFIRMATION_REQUIRED') || null;
+  }
+
+  function settleWorkAfterTerminal(state) {
+    const pending = nextConfirmation(state);
+    if (pending) {
+      state.work.pendingRequestId = pending.requestId;
+      state.work.blocker = 'CONFIRMATION_REQUIRED';
+      state.work.nextAction = 'AWAIT_CONFIRMATION';
+      return;
+    }
+    state.work.pendingRequestId = null;
+    state.work.blocker = null;
+    state.work.nextAction = 'WAITING_COMMAND';
+  }
+
   function audit(state, event) {
     state.audit.push(Object.freeze({
       at:now(),
@@ -351,9 +368,7 @@ export function createLighthouseControlPortRuntime({
         target.updatedAt = now();
         next.inbox[id] = target;
         next.outbox[id] = receipt;
-        next.work.pendingRequestId = null;
-        next.work.blocker = null;
-        next.work.nextAction = 'WAITING_COMMAND';
+        settleWorkAfterTerminal(next);
         next.work.lastSuccessfulReadback = readbackSummary;
         audit(next, {
           requestId:id,
@@ -410,9 +425,7 @@ export function createLighthouseControlPortRuntime({
     mutate(state => {
       state.inbox[rid] = { ...state.inbox[rid], status:'CANCELLED', updatedAt:now() };
       state.outbox[rid] = receipt;
-      state.work.pendingRequestId = null;
-      state.work.blocker = null;
-      state.work.nextAction = 'WAITING_COMMAND';
+      settleWorkAfterTerminal(state);
       audit(state, { requestId:rid, capabilityId:entry.capabilityId, action:entry.action, result:'CANCELLED' });
     });
     return clone(receipt);
