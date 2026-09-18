@@ -256,6 +256,7 @@ async function renderOutcome() {
       list.append(
         makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)),
         makeRow('ใช้ได้ตอนนี้', formatSatang(planning.spendableBalanceSatang)),
+        makeRow('เพดานใช้จ่าย', planning.spendingCeilingStatus === 'OWNER_RULE_REQUIRED' ? 'ยังไม่ได้กำหนดกติกา' : planning.spendingCeilingSatang == null ? '—' : formatSatang(planning.spendingCeilingSatang)),
         makeRow('ค่าใช้จ่ายงานวิ่ง', formatSatang(ride.expenseSatang)),
       );
       const outcomes = truth.transactions.filter(item => item.direction === 'OUT').slice(0, 10);
