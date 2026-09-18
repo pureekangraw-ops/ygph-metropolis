@@ -16,7 +16,7 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
   assert.equal(Number.isInteger(version.baselineVersionCode), true);
   assert.equal(Number.isInteger(version.versionCode), true);
   assert.equal(version.versionCode, version.baselineVersionCode + 1);
-  assert.match(version.versionName, /^1\\.0\\.0-owner\\.\\d+$/);
+  assert.match(version.versionName, /^1\.0\.0-owner\.\d+$/);
   assert.ok(version.versionCode > version.baselineVersionCode, 'candidate must install over the canonical previous owner build');
 
   const { assertUpgradeVersion, applyAndroidVersion } = await import(pathToFileURL(versionToolPath));
