@@ -93,3 +93,29 @@ test('Settings UI exposes Android version and restore-from-backup actions but no
   assert.doesNotMatch(html, /id="rollback-/);
   assert.doesNotMatch(settings, /fake.*rollback|rollback.*fake/i);
 });
+
+
+test('Settings Version prefers installed native App identity when Capacitor App plugin is available', async () => {
+  const { loadSettingsBuildIdentity } = await import(modulePath);
+  let fetched = false;
+  const App = {
+    async getInfo() {
+      return { id:'com.yggdrasil.lighthouse', name:'LIGHTHOUSE', version:'1.0.0-owner.3', build:'1008' };
+    },
+  };
+  const capacitor = {
+    Plugins:{ App },
+    isNativePlatform:()=>true,
+    isPluginAvailable:name=>name==='App',
+    registerPlugin(){ throw new Error('existing plugin proxy should be reused'); },
+  };
+  const result = await loadSettingsBuildIdentity({
+    capacitor,
+    fetchImpl:async () => { fetched=true; throw new Error('native must win'); },
+  });
+  assert.equal(fetched, false);
+  assert.equal(result.owner, 'ANDROID_INSTALLED_APP');
+  assert.equal(result.applicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(result.versionCode, 1008);
+  assert.equal(result.versionName, '1.0.0-owner.3');
+});
