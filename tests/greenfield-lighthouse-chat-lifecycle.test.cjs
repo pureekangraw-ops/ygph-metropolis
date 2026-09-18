@@ -166,3 +166,14 @@ test('CHAT lifecycle reaches confirmation when an incomplete draft becomes visib
   assert.match(app, /function resumeStoreSalePrompt\(pending\)[\s\S]*?syncPendingLifecycleStage\(pending\)/);
   assert.match(app, /function resumeStoreProductAddPrompt\(pending\)[\s\S]*?syncPendingLifecycleStage\(pending\)/);
 });
+
+
+test('ambiguous post-execution readback cannot be edited or cancelled into a duplicate command', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
+  assert.match(app, /function pendingRequiresReadbackRetry\(pending\)/);
+  assert.match(app, /chatLifecycle\.getMessage\(messageId\)\?\.readbackState === 'ERROR'/);
+  assert.match(app, /function cancelPending\(\)[\s\S]*?pendingRequiresReadbackRetry\(pending\)[\s\S]*?ยังยกเลิกไม่ได้/);
+  assert.match(app, /function editPending\(\)[\s\S]*?pendingRequiresReadbackRetry\(pending\)[\s\S]*?ยังแก้ไขไม่ได้/);
+  assert.match(app, /result\?\.status === 'VERIFY'[\s\S]*?markReadbackFailed\(pending, 'READBACK_UNAVAILABLE'\)/);
+  assert.match(app, /function markExecutionBlocked\(pending, error\)[\s\S]*?executionState:'BLOCKED'[\s\S]*?readbackState:'IDLE'/);
+});
