@@ -1,7 +1,26 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { DEVICE_PIN_MIN_LENGTH } from '../greenfield/device-unlock.mjs';
+import { getNativeCapacitorApp } from './capacitor-app.mjs';
 
-export async function loadSettingsBuildIdentity({ fetchImpl = globalThis.fetch } = {}) {
+export async function loadSettingsBuildIdentity({ fetchImpl = globalThis.fetch, capacitor = globalThis.Capacitor } = {}) {
+  const App = getNativeCapacitorApp(capacitor);
+  if (App && typeof App.getInfo === 'function') {
+    const info = await App.getInfo();
+    const applicationId = String(info?.id || '').trim();
+    const versionName = String(info?.version || '').trim();
+    const versionCode = Number(info?.build);
+    if (!applicationId || !versionName || !Number.isInteger(versionCode) || versionCode <= 0) {
+      throw new Error('LIGHTHOUSE_BUILD_IDENTITY_INVALID');
+    }
+    return Object.freeze({
+      owner:'ANDROID_INSTALLED_APP',
+      applicationId,
+      versionCode,
+      versionName,
+      baselineVersionCode:null,
+    });
+  }
+
   if (typeof fetchImpl !== 'function') throw new Error('LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE');
   const response = await fetchImpl('./build-identity.json', { cache:'no-store' });
   if (!response?.ok) throw new Error('LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE');
