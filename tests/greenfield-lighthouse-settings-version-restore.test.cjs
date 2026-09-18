@@ -139,3 +139,38 @@ test('Settings reset is explicitly device-local and cannot erase Runtime busines
   assert.match(reset, /clearStableMutationAttempts\(\{ storage:localStorage \}\)/);
   assert.doesNotMatch(reset, /ledgerBridge\.|storeBridge\.|runtimeGate\.|restoreBackup|exportBackup|deleteDatabase|clearVault|factoryReset/i);
 });
+
+
+test('Settings restore reports VERIFY instead of claiming rollback when post-commit readback diverges', async () => {
+  const { restoreSettingsBackup, settingsError } = await import(modulePath);
+  const backup = { backupFormat:'ygph-metropolis-greenfield-backup', backupVersion:1, vault:{} };
+  const result = await restoreSettingsBackup({
+    backup,
+    confirmRestore: async () => true,
+    withSession: async operation => operation({
+      restoreBackup: async () => ({ status:'VERIFIED', revision:55, replacedExisting:true }),
+      readState: async () => ({ revision:56 }),
+    }),
+  });
+
+  assert.deepEqual(result, {
+    status:'VERIFY',
+    code:'LIGHTHOUSE_RESTORE_POSTCOMMIT_READBACK_MISMATCH',
+    revision:55,
+    readbackRevision:56,
+    replacedExisting:true,
+  });
+  assert.match(
+    settingsError(new Error('LIGHTHOUSE_RESTORE_POSTCOMMIT_READBACK_MISMATCH')),
+    /ถูกเขียนแล้ว.*ห้ามกู้ซ้ำ/,
+  );
+  assert.match(
+    settingsError(new Error('GREENFIELD_BACKUP_ROLLBACK_FAILED')),
+    /คืนข้อมูลเดิมล้มเหลว/,
+  );
+
+  const source = fs.readFileSync(modulePath, 'utf8');
+  assert.match(source, /result\.status === 'VERIFY'/);
+  assert.match(source, /ห้ามกู้ซ้ำ/);
+  assert.doesNotMatch(source, /LIGHTHOUSE_RESTORE_READBACK_MISMATCH' \|\| code === 'GREENFIELD_BACKUP_READBACK_MISMATCH'\) return 'กู้คืนแล้วอ่านกลับไม่ตรง ระบบยกเลิกการเปลี่ยนแปลง'/);
+});
