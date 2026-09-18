@@ -1,5 +1,5 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
-import { projectFinancialTruth, projectReceivableTruth } from '../greenfield/calculation-authority.mjs';
+import { projectFinancialTruth, projectReceivableTruth, projectGeneratedIncome } from '../greenfield/calculation-authority.mjs';
 
 function requiredText(value, code) {
   const output = String(value ?? '').trim();
@@ -107,6 +107,12 @@ function buildPlanningTruth(runtime, state, projectFinancial, now) {
     throw new Error('LIGHTHOUSE_SPENDABLE_BALANCE_INVALID');
   }
 
+  const generated = projectGeneratedIncome(state, date);
+  const generatedTodaySatang = Number(generated.combinedSatang || 0);
+  if (!Number.isSafeInteger(generatedTodaySatang) || generatedTodaySatang < 0) {
+    throw new Error('LIGHTHOUSE_GENERATED_INCOME_INVALID');
+  }
+
   const receivables = projectReceivableTruth(state);
   const outstandingReceivableSatang = Number(receivables.totalOutstandingSatang || 0);
   if (!Number.isSafeInteger(outstandingReceivableSatang) || outstandingReceivableSatang < 0) {
@@ -149,6 +155,8 @@ function buildPlanningTruth(runtime, state, projectFinancial, now) {
   return Object.freeze({
     date,
     goalSatang,
+    generatedTodaySatang,
+    goalGapSatang:goalSatang === null ? null : Math.max(0, goalSatang - generatedTodaySatang),
     outstandingReceivableSatang,
     pendingRideCreditSatang,
     expectedIncomingSatang,
