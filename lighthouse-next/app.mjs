@@ -125,7 +125,7 @@ function formatBaht(value) { return `฿${Number(value || 0).toLocaleString('en-
 function formatSatang(value) { return formatBaht(Number(value || 0) / 100); }
 function financeSnapshot() { const view = projectFinanceView(ledgerTruth); if (view.status !== READ_STATE.READY) return { status:view.status, cashSatang:null, todayIncomeSatang:null, todayExpenseSatang:null, netSatang:null }; return { status:view.status, cashSatang:view.cashSatang, todayIncomeSatang:view.todayIncomeSatang, todayExpenseSatang:view.todayExpenseSatang, netSatang:view.netSatang }; }
 function renderHomeTruth() { const snapshot = financeSnapshot(); const ready = snapshot.status === READ_STATE.READY; homeCashValue.textContent = ready ? formatSatang(snapshot.cashSatang) : '—'; homeIncomeValue.textContent = ready ? formatSatang(snapshot.todayIncomeSatang) : '—'; homeExpenseValue.textContent = ready ? formatSatang(snapshot.todayExpenseSatang) : '—'; homeNetValue.textContent = ready ? `${snapshot.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(snapshot.netSatang))}` : '—'; }
-function resetDemoState() { state = cloneDefaults(); try { localStorage.removeItem(STORAGE_KEY); chatLifecycle.clear(); clearStableMutationAttempts({ storage:localStorage }); } catch {} renderHomeTruth(); manualDetail.hidden = true; manualHub.hidden = false; selectRoot('manual'); }
+function resetLocalState() { state = cloneDefaults(); try { localStorage.removeItem(STORAGE_KEY); chatLifecycle.clear(); clearStableMutationAttempts({ storage:localStorage }); } catch {} renderHomeTruth(); manualDetail.hidden = true; manualHub.hidden = false; selectRoot('manual'); }
 
 function setAuthBusy(busy) { loginSubmit.disabled = busy; devicePassword.disabled = busy; showRecoveryButton.disabled = busy; }
 function showLoginGate(message = 'พร้อมเข้าสู่ LIGHTHOUSE') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = false; recoveryForm.hidden = true; setupRequired.hidden = true; authStatus.textContent = message; setAuthBusy(false); }
@@ -202,8 +202,8 @@ root.querySelector('#manual-back').addEventListener('click',showManualHub);
 chatForm.addEventListener('submit', async event => { event.preventDefault(); const value = chatInput.value; chatInput.value = ''; if (chatSend) chatSend.disabled = true; await submitChatText(value); chatInput.focus({ preventScroll:true }); });
 chatInput.addEventListener('input',()=>{ chatInput.style.height='auto'; chatInput.style.height=`${Math.min(chatInput.scrollHeight,118)}px`; if (chatSend) chatSend.disabled=!chatInput.value.trim(); });
 chatInput.addEventListener('keydown',(event)=>{ if (event.key==='Enter'&&!event.shiftKey){ event.preventDefault(); chatForm.requestSubmit(); } });
-root.querySelector('#reset-demo').addEventListener('click',()=>{ if (typeof resetDialog.showModal==='function') resetDialog.showModal(); else if (window.confirm('เริ่มสนามใหม่และล้างข้อมูลทดลอง?')) resetDemoState(); });
-root.querySelector('#confirm-reset').addEventListener('click',()=>window.setTimeout(resetDemoState,0));
+root.querySelector('#reset-demo').addEventListener('click',()=>{ if (typeof resetDialog.showModal==='function') resetDialog.showModal(); else if (window.confirm('ล้างบทสนทนาและรายการค้างบนเครื่องนี้ โดยไม่ลบเงินจริงหรือสต็อกจริง?')) resetLocalState(); });
+root.querySelector('#confirm-reset').addEventListener('click',()=>window.setTimeout(resetLocalState,0));
 
 homeDate.textContent = formatThaiBangkokDate(new Date());
 renderHomeTruth();
