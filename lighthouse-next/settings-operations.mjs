@@ -1,6 +1,59 @@
 import { withRuntimeSession } from '../greenfield/runtime-session.mjs';
 import { DEVICE_PIN_MIN_LENGTH } from '../greenfield/device-unlock.mjs';
 
+export async function loadSettingsBuildIdentity({ fetchImpl = globalThis.fetch } = {}) {
+  if (typeof fetchImpl !== 'function') throw new Error('LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE');
+  const response = await fetchImpl('./build-identity.json', { cache:'no-store' });
+  if (!response?.ok) throw new Error('LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE');
+  const value = await response.json();
+  if (value?.owner !== 'ANDROID_APK' || typeof value?.applicationId !== 'string' || !value.applicationId.trim() ||
+      !Number.isInteger(Number(value?.versionCode)) || Number(value.versionCode) <= 0 ||
+      typeof value?.versionName !== 'string' || !value.versionName.trim()) {
+    throw new Error('LIGHTHOUSE_BUILD_IDENTITY_INVALID');
+  }
+  return Object.freeze({
+    owner:'ANDROID_APK',
+    applicationId:value.applicationId,
+    versionCode:Number(value.versionCode),
+    versionName:value.versionName,
+    baselineVersionCode:Number.isInteger(Number(value.baselineVersionCode)) ? Number(value.baselineVersionCode) : null,
+  });
+}
+
+export async function restoreSettingsBackup({
+  backup,
+  confirmRestore = async () => false,
+  withSession = withRuntimeSession,
+} = {}) {
+  if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('LIGHTHOUSE_BACKUP_INVALID');
+  if (typeof confirmRestore !== 'function') throw new TypeError('LIGHTHOUSE_RESTORE_CONFIRM_REQUIRED');
+  if (await confirmRestore() !== true) return Object.freeze({ status:'CANCELLED' });
+  return withSession(async runtime => {
+    if (!runtime || typeof runtime.restoreBackup !== 'function' || typeof runtime.readState !== 'function') {
+      throw new Error('LIGHTHOUSE_RESTORE_UNAVAILABLE');
+    }
+    const result = await runtime.restoreBackup(backup, { allowOverwrite:true });
+    const state = await runtime.readState();
+    if (!state || Number(state.revision) !== Number(result?.revision)) {
+      throw new Error('LIGHTHOUSE_RESTORE_READBACK_MISMATCH');
+    }
+    return Object.freeze({
+      status:'VERIFIED',
+      revision:Number(result.revision),
+      replacedExisting:Boolean(result.replacedExisting),
+    });
+  });
+}
+
+async function readSettingsBackupFile(file) {
+  if (!file || typeof file.text !== 'function') throw new Error('LIGHTHOUSE_BACKUP_FILE_REQUIRED');
+  let backup;
+  try { backup = JSON.parse(await file.text()); }
+  catch { throw new Error('LIGHTHOUSE_BACKUP_INVALID'); }
+  if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('LIGHTHOUSE_BACKUP_INVALID');
+  return backup;
+}
+
 function backupFilename(now = new Date()) {
   const stamp = now.toISOString().replaceAll(':', '-').replaceAll('.', '-');
   return `lighthouse-backup-${stamp}.json`;
@@ -45,7 +98,65 @@ function settingsError(error) {
   if (code === 'RUNTIME_SESSION_LOCKED') return 'แอปถูกล็อก กรุณาเข้าใหม่';
   if (code === 'DEVICE_PIN_TOO_SHORT') return `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} ตัวอักษร`;
   if (code === 'DEVICE_PIN_CONFIRM_MISMATCH') return 'PIN ใหม่ทั้งสองช่องไม่ตรงกัน';
+  if (code === 'LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE' || code === 'LIGHTHOUSE_BUILD_IDENTITY_INVALID') return 'ยังอ่านเวอร์ชันจาก Android build ไม่ได้';
+  if (code === 'LIGHTHOUSE_BACKUP_INVALID' || code.startsWith('INVALID_GREENFIELD_BACKUP') || code === 'GREENFIELD_BACKUP_DATABASE_IDENTITY_MISMATCH') return 'ไฟล์สำรองไม่ถูกต้องหรือไม่เข้ากับ LIGHTHOUSE';
+  if (code === 'GREENFIELD_VAULT_DECRYPT_FAILED' || code === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองเปิดไม่ได้ด้วย Recovery Code ของฐานนี้';
+  if (code === 'LIGHTHOUSE_RESTORE_READBACK_MISMATCH' || code === 'GREENFIELD_BACKUP_READBACK_MISMATCH') return 'กู้คืนแล้วอ่านกลับไม่ตรง ระบบยกเลิกการเปลี่ยนแปลง';
   return 'ยังดำเนินการไม่ได้';
+}
+
+function installSettingsVersion(root = globalThis.document) {
+  const target = root?.querySelector?.('#settings-version');
+  if (!target || target.dataset.bound === 'true') return false;
+  target.dataset.bound = 'true';
+  target.textContent = 'กำลังอ่านจาก Android build…';
+  void loadSettingsBuildIdentity()
+    .then(identity => {
+      target.textContent = `${identity.versionName} · code ${identity.versionCode}`;
+      target.dataset.versionCode = String(identity.versionCode);
+      target.dataset.applicationId = identity.applicationId;
+    })
+    .catch(() => { target.textContent = 'ยังอ่านเวอร์ชันไม่ได้'; });
+  return true;
+}
+
+function installSettingsRestore(root = globalThis.document) {
+  const button = root?.querySelector?.('#restore-data');
+  const input = root?.querySelector?.('#restore-file');
+  if (!button || !input || button.dataset.bound === 'true') return false;
+  button.dataset.bound = 'true';
+  const status = root.querySelector?.('#settings-operations-status');
+
+  button.addEventListener('click', () => {
+    input.value = '';
+    input.click();
+  });
+
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    button.disabled = true;
+    if (status) status.textContent = 'กำลังตรวจไฟล์สำรอง…';
+    try {
+      const backup = await readSettingsBackupFile(file);
+      const result = await restoreSettingsBackup({
+        backup,
+        confirmRestore: async () => globalThis.confirm?.('กู้คืนจากข้อมูลสำรองนี้? ข้อมูลจริงปัจจุบันจะถูกแทนที่ และระบบจะตรวจ readback ก่อนยืนยัน') === true,
+      });
+      if (result.status === 'CANCELLED') {
+        if (status) status.textContent = 'ยกเลิกการกู้คืนแล้ว';
+        return;
+      }
+      if (status) status.textContent = `กู้คืนแล้ว · revision ${result.revision} · กำลังโหลดข้อมูลใหม่`;
+      globalThis.location?.reload?.();
+    } catch (error) {
+      if (status) status.textContent = settingsError(error);
+    } finally {
+      button.disabled = false;
+      input.value = '';
+    }
+  });
+  return true;
 }
 
 function installSettingsBackup(root = globalThis.document) {
@@ -115,8 +226,10 @@ function installSettingsPinChange(root = globalThis.document) {
 }
 
 if (typeof document !== 'undefined') {
+  installSettingsVersion(document);
   installSettingsBackup(document);
+  installSettingsRestore(document);
   installSettingsPinChange(document);
 }
 
-export { backupFilename, installSettingsBackup, installSettingsPinChange, settingsError };
+export { backupFilename, installSettingsVersion, installSettingsBackup, installSettingsRestore, installSettingsPinChange, settingsError };
