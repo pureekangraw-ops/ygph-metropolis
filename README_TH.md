@@ -1,50 +1,72 @@
-# YGPH METROPOLIS — Production Shell
+# LIGHTHOUSE — Production Surface
 
-**Release:** `5.1.0-functional-rc1`  
-**Status:** PRODUCTION  
-**Production branch:** `main`
+**Repository:** `pureekangraw-ops/ygph-metropolis`  
+**Production branch:** `main`  
+**Production UI authority:** `LIGHTHOUSE Next`
 
-รุ่นนี้คือ Greenfield Production runtime สำหรับการใช้งานประจำ โดยทางเข้าหลักเป็น `LOGIN / HOME` ก่อนเข้าสู่พื้นที่ทำงาน `STORE / RIDE / FINANCE / CALENDAR` ผ่าน Bottom Navigation บนมือถือ ส่วน `SYSTEM` เป็น utility แยกจากเมืองธุรกิจ โดยคง source-of-truth และ persistence contract ของ Greenfield ไว้
+Repository นี้ยังเป็นเจ้าของ METROPOLIS runtime/backend truth เดิม เช่น Ledger, Store, Calendar, Ride, persistence, Worker และ API แต่ **ไม่ได้ใช้ YGPH METROPOLIS shell เก่าเป็น Production UI อีกต่อไป**
 
-## Storage
+## Single Release Authority
 
-- State Schema `2`
-- Database `ygph-metropolis-greenfield-secure` v1 — ชื่อและฐานเดิมไม่เปลี่ยน
-- Vault `ygph-metropolis-greenfield-vault` v1 — รูปแบบเข้ารหัสเดิมไม่เปลี่ยน
-- AES-GCM 256-bit + PBKDF2-SHA256 600,000 iterations
-- Schema 1 migrate เป็น Schema 2 โดยเพิ่ม `RIDE` ว่างและรักษา STORE / LEDGER / CALENDAR / revision / import metadata เดิม
-- ฐานเก่า `stock-pocket-secure` เป็น rollback source เท่านั้น Greenfield ไม่เปิด ไม่เขียน และไม่ลบฐานนี้
+Web และ Android ต้องสร้างจาก builder ตัวเดียว:
 
-## Front-end Flow
+```text
+scripts/stage-lighthouse-next-bundle.mjs
+```
 
-- `HOME` เป็น attention/projection layer: แสดงเรื่องสำคัญก่อน ตามด้วย summary ที่ช่วยตัดสินใจ แล้วจึงเป็นประตูเข้าเมือง
-- `STORE` และ `RIDE` เป็น working areas โดยตรง ไม่ซ่อนอยู่หลัง top-level `MAKE MONEY` navigation
-- `FINANCE` แสดงเงินจริงและภาระ; generated income ที่ยังไม่เป็นเงินจริงไม่เพิ่ม spendable balance
-- `CALENDAR` แสดงเวลาและ Action Queue; contextual money actions route กลับไปยัง owner workflow
-- `SYSTEM` เป็น utility สำหรับ security, backup/restore และ diagnostics ไม่แข่งขันกับงานประจำใน primary navigation
-- Bottom Navigation เปลี่ยน context เท่านั้น ไม่ทำ business mutation
+ผลลัพธ์ Production Web อยู่ที่ `.lighthouse-production` และ Android ใช้ wrapper:
 
-## Domain Ownership
+```text
+android-shell/tools/stage-lighthouse-next.mjs
+```
 
-- `STORE` — ความจริงฝั่งร้านและสต็อก; workflow authority ห้าม commit สต็อกติดลบ
-- `LEDGER` — เงินจริงและภาระ
-- `CALENDAR` — มุมเวลาและ Action Queue ไม่สร้างเงินเอง; `OPEN` และ `PARTIAL` ยัง actionable จนกว่าจะ `COMPLETED` หรือ `CANCELLED`
-- `RIDE` — ความจริงเชิงปฏิบัติการของงานวิ่งใหม่; CASH / ค่าใช้จ่าย / การเบิกเครดิตที่เกิดเงินจริง route เข้า LEDGER
+ห้าม deploy repository root โดยตรง และห้ามนำ `ui/lighthouse-shell.mjs`, Home/Store/Ride/Finance shell เก่า หรือ MASTER INPUT surface กลับมาเป็น Production entrypoint
 
-Generated income เป็น projection ของรายได้ที่สร้างได้ ไม่ใช่ยอดเงินใช้ได้ ส่วน Daily Goal เก็บเป็น app-plan metadata และไม่เขียนทับ Ledger
+## Production Surface
 
-## Cutover Evidence
+LIGHTHOUSE มี root สำหรับผู้ใช้ 3 จุด:
 
-Evidence ตั้งต้นยังคงล็อกที่ `FLOW-1786527289637` source revision `28` แบบ one-time import และยัง **EXCLUDE RIDE** ตาม cutover เดิม ก่อนนำ record เข้า Greenfield ต้องผ่าน FLOW v3 package checksum + event checksum และ Ledger reconciliation. RIDE ใน Schema 2 ใช้สำหรับข้อมูล live ใหม่เท่านั้น
+- CHAT
+- MANUAL
+- SETTINGS
 
-## Release / Publication Contract
+ตัว UI อยู่ใน `lighthouse-next/` ส่วน `greenfield/` และ `lighthouse/` บางส่วนยังเป็น runtime/capability dependency ที่ LIGHTHOUSE ใช้จริง แต่ไม่ใช่ UI authority
 
-`RELEASE_MANIFEST.json` เป็นรายการ production files แบบ exact. `.assetsignore` ต้องตรงกับ manifest โดยไม่มี directory-wide wildcard bypass. Service Worker cache identity ใช้ release + asset revision ที่ถูกตรวจจาก SHA-256 ของ production assets ใน deploy gate ดังนั้นการเปลี่ยน shell asset โดยไม่เปลี่ยน asset revision จะทำให้ CI ล้ม
+## GO Client
 
-## GO PATCHMASTER — START HERE
+`/client` เป็น public surface แยกของ GO Client ภายใน deployment เดียวกัน โดยใช้ `client/index.html` ที่ถูกสร้างเข้า canonical bundle โดยตรง ไม่ยืม owner shell เก่า
 
-งานระบบอัปเดตแบบ trusted release แยกจาก production business truth. ผู้พัฒนาหรือ GO ห้องใหม่ให้เริ่มจาก `docs/patchmaster/development-evidence.md` แล้วตาม route ไป Design Spec → Implementation Plan → Release Manifest contract → `lighthouse-next/update/` → tests → Android release evidence. อย่าอนุมานว่า Native Android Installer Bridge มีแล้ว; ขอบเขตนั้นแยกจาก Trust Kernel และต้องพิสูจน์ด้วย installed-state readback จริงก่อนอ้างว่าสำเร็จ
+## Service Worker
+
+Service Worker ถูกสร้างโดย canonical bundle builder และใช้ cache prefix `lighthouse-`. เมื่อ activate จะล้าง cache เก่า prefix `ygph-metropolis-` ด้วย
+
+## Build / Deploy
+
+PR และ main ใช้ `.github/workflows/greenfield-deploy-gate.yml` ชื่อ workflow **LIGHTHOUSE Deploy Gate**:
+
+1. รัน repository tests
+2. รัน Android shell tests
+3. stage Android จาก canonical builder
+4. stage Web Production เป็น `.lighthouse-production`
+5. ตรวจว่า legacy shell ไม่หลุดเข้า bundle
+6. dry-run Wrangler
+7. PR deploy staging
+8. main deploy Production
+
+APK owner build ใช้ `.github/workflows/lighthouse-owner-build.yml` และมี gate ปฏิเสธ legacy shell ก่อนสร้าง Android project
+
+## Release / Update
+
+`release/lighthouse-update.json` และ APK release assets เป็นเส้น updater แยกจาก Web deployment. ห้าม activate manifest ชี้ APK ใหม่จนกว่า APK นั้น build/verify/test บนเครื่องจริงและผ่าน Owner Acceptance
+
+## Rollback
+
+source เก่าอาจยังอยู่ใน repository ชั่วคราวเพื่อ rollback/การย้ายออก แต่มีสถานะ **ROLLBACK ONLY — NOT PRODUCTION AUTHORITY**. หลักฐานเก่าถูกเก็บใน Drive archive ก่อน cleanup
 
 ## Verification
 
-`npm run deploy:gate` รัน Greenfield tests, production syntax และ UTF-8 gate. Pull request ไม่ deploy Production. เมื่อ merge เข้า `main` แล้ว workflow จะรัน safety gate ก่อน deploy Cloudflare Production; client-visible/cache changes ยังต้องตรวจ real-device readbackก่อนปิด defect ที่เกี่ยวข้อง
+```bash
+npm run deploy:gate
+```
+
+การผ่าน CI ไม่เท่ากับ Device Acceptance. งาน Android ปิดได้หลังติดตั้งจริง, อ่าน version/source กลับได้, flow หลักผ่าน และ Owner ยืนยัน acceptance เท่านั้น
