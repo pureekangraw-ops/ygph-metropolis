@@ -2,12 +2,27 @@ import { CONTROL_PORT_GUARD } from './control-port.mjs';
 
 export const CONTROL_PORT_STORAGE_KEY = 'lighthouse-control-port-v1';
 export const CONTROL_PORT_STATE_SCHEMA = 1;
+export const CONTROL_PORT_SNAPSHOT_CONTRACT_VERSION = 1;
 
 const TERMINAL = new Set(['COMPLETE','ERROR','CANCELLED']);
 const SECRET_KEY = /(pin|password|recovery|vault|secret|token|passphrase)/i;
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
+}
+
+function optionalText(value) {
+  const output = String(value ?? '').trim();
+  return output || null;
+}
+
+function stateRecord(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = clone(value);
+    const status = optionalText(record.status) || 'UNKNOWN';
+    return Object.freeze({ ...record, status });
+  }
+  return Object.freeze({ status:optionalText(value) || 'UNKNOWN' });
 }
 
 function text(value, code) {
@@ -95,12 +110,44 @@ export function createLighthouseControlPortRuntime({
   now = () => new Date().toISOString(),
   staleAfterMs = 5 * 60 * 1000,
   actor = 'GO_HUB',
+  snapshotMetadata = {},
 } = {}) {
   if (!port || typeof port.propose !== 'function' || typeof port.commit !== 'function') {
     throw new Error('LIGHTHOUSE_CONTROL_PORT_RUNTIME_PORT_REQUIRED');
   }
   if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
     throw new Error('LIGHTHOUSE_CONTROL_PORT_STORAGE_UNAVAILABLE');
+  }
+
+  async function resolveSnapshotMetadata(runtimeStatus) {
+    const supplied = typeof snapshotMetadata === 'function'
+      ? await snapshotMetadata()
+      : snapshotMetadata;
+    const metadata = supplied && typeof supplied === 'object' && !Array.isArray(supplied) ? supplied : {};
+    const ownerInput = metadata.owner && typeof metadata.owner === 'object' && !Array.isArray(metadata.owner)
+      ? metadata.owner
+      : { system:metadata.owner };
+
+    return Object.freeze({
+      contractVersion:CONTROL_PORT_SNAPSHOT_CONTRACT_VERSION,
+      appVersion:optionalText(metadata.appVersion),
+      mainSha:optionalText(metadata.mainSha),
+      buildState:stateRecord(metadata.buildState),
+      deployState:stateRecord(metadata.deployState),
+      runtimeState:Object.freeze({
+        status:runtimeStatus?.status === 'READY' ? 'ACTIVE' : 'INACTIVE',
+        controlPortStatus:optionalText(runtimeStatus?.status) || 'UNAVAILABLE',
+      }),
+      updaterState:stateRecord(metadata.updaterState),
+      source:Object.freeze({
+        repository:optionalText(metadata.source?.repository) || 'pureekangraw-ops/ygph-metropolis',
+        branch:optionalText(metadata.source?.branch),
+      }),
+      owner:Object.freeze({
+        system:optionalText(ownerInput.system) || 'METROPOLIS',
+        runtime:optionalText(ownerInput.runtime) || 'LIGHTHOUSE_CONTROL_PORT',
+      }),
+    });
   }
 
   function load() {
@@ -435,11 +482,16 @@ export function createLighthouseControlPortRuntime({
     if (Number.isSafeInteger(Number(health.revision))) revisions.add(Number(health.revision));
     if (revisions.size > 1) throw new Error('LIGHTHOUSE_CONTROL_PORT_SNAPSHOT_REVISION_DRIFT');
 
+    const runtimeStatus = await port.status();
+    const contract = await resolveSnapshotMetadata(runtimeStatus);
+    const currentState = load();
     const snapshot = {
+      ...contract,
       revision:revisions.size ? [...revisions][0] : null,
       updatedAt:health.updatedAt || updatedAt,
       capturedAt:now(),
       health:clone(health),
+      readbackSummary:clone(currentState.work.lastSuccessfulReadback),
       values,
     };
     mutate(state => {
@@ -452,22 +504,42 @@ export function createLighthouseControlPortRuntime({
     const state = load();
     const snapshot = clone(state.snapshot);
     const runtimeStatus = await port.status();
+    const currentContract = await resolveSnapshotMetadata(runtimeStatus);
+    const contract = snapshot
+      ? {
+          contractVersion:snapshot.contractVersion ?? currentContract.contractVersion,
+          appVersion:snapshot.appVersion ?? currentContract.appVersion,
+          mainSha:snapshot.mainSha ?? currentContract.mainSha,
+          buildState:clone(snapshot.buildState ?? currentContract.buildState),
+          deployState:clone(snapshot.deployState ?? currentContract.deployState),
+          runtimeState:currentContract.runtimeState,
+          updaterState:clone(snapshot.updaterState ?? currentContract.updaterState),
+          source:clone(snapshot.source ?? currentContract.source),
+          owner:clone(snapshot.owner ?? currentContract.owner),
+        }
+      : currentContract;
+    const readbackSummary = clone(state.work.lastSuccessfulReadback ?? snapshot?.readbackSummary ?? null);
+
     if (!snapshot) {
       return {
+        ...contract,
         freshness:'OFFLINE',
         revision:null,
         updatedAt:null,
         capturedAt:null,
+        readbackSummary,
         snapshot:null,
         runtimeStatus:runtimeStatus.status,
       };
     }
     if (runtimeStatus.status !== 'READY') {
       return {
+        ...contract,
         freshness:'OFFLINE',
         revision:snapshot.revision,
         updatedAt:snapshot.updatedAt,
         capturedAt:snapshot.capturedAt,
+        readbackSummary,
         snapshot,
         runtimeStatus:runtimeStatus.status,
       };
@@ -475,10 +547,12 @@ export function createLighthouseControlPortRuntime({
     const age = new Date(now()).getTime() - new Date(snapshot.capturedAt).getTime();
     const freshness = Number.isFinite(age) && age <= staleAfterMs ? 'LIVE' : 'STALE';
     return {
+      ...contract,
       freshness,
       revision:snapshot.revision,
       updatedAt:snapshot.updatedAt,
       capturedAt:snapshot.capturedAt,
+      readbackSummary,
       snapshot,
       runtimeStatus:runtimeStatus.status,
     };
