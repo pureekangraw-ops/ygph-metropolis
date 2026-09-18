@@ -110,18 +110,17 @@ test('MANUAL exposes the four owner houses while Settings distinguishes durable 
   assert.doesNotMatch(html, /ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น/);
 });
 
-test('demo staging is isolated from the production asset allowlist and verifies its own public URL', () => {
-  const config = read(stagingConfigPath);
+test('Web production and Android share the same canonical LIGHTHOUSE bundle builder', () => {
   const workflow = read(deployWorkflowPath);
-  const productionIgnore = read(path.join(root, '.assetsignore'));
+  const wrangler = read(path.join(root, 'wrangler.jsonc'));
+  const androidStage = read(path.join(root, 'android-shell/tools/stage-lighthouse-next.mjs'));
 
-  assert.match(config, /"name"\s*:\s*"lighthouse-next-staging"/);
-  assert.match(config, /"directory"\s*:\s*"\.\/\.lighthouse-next-staging"/);
-  assert.doesNotMatch(productionIgnore, /lighthouse-next/);
-  assert.match(workflow, /stage-lighthouse-next-bundle\.mjs \.lighthouse-next-staging/);
-  assert.match(workflow, /wrangler\.lighthouse-next-staging\.jsonc/);
-  assert.match(workflow, /https:\/\/lighthouse-next-staging\.pureekangraw\.workers\.dev/);
-  assert.match(workflow, /LIGHTHOUSE/);
+  assert.match(wrangler, /"directory"\s*:\s*"\.\/\.lighthouse-production"/);
+  assert.match(workflow, /stage-lighthouse-next-bundle\.mjs \.lighthouse-production/);
+  assert.match(workflow, /Reject legacy production shell/);
+  assert.doesNotMatch(workflow, /Deploy isolated LIGHTHOUSE next demo staging/);
+  assert.match(androidStage, /stageLighthouseBundle/);
+  assert.match(workflow, /YGPH METROPOLIS\|MASTER INPUT/);
 });
 
 test('registered product sale parser locks product then value then quantity', async () => {
