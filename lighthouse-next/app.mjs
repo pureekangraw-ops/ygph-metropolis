@@ -13,7 +13,6 @@ import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
-const AMBIGUITY_LOCK = 'BABA';
 const DEFAULT_STATE = Object.freeze({ activeRoot:'manual', chatHistory:[], pendingFlow:null });
 
 const root = document.querySelector('#demo-root');
@@ -209,7 +208,6 @@ root.querySelector('#confirm-reset').addEventListener('click',()=>window.setTime
 homeDate.textContent = formatThaiBangkokDate(new Date());
 renderHomeTruth();
 restoreManualView();
-void AMBIGUITY_LOCK;
 
 const visualViewport = window.visualViewport;
 let keyboardBaselineHeight = visualViewport?.height || window.innerHeight;
