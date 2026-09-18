@@ -14,6 +14,14 @@ import { createLighthouseControlPort } from './control-port/control-port.mjs';
 import { createLighthouseControlPortRuntime } from './control-port/control-port-runtime.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
+function registerProductionServiceWorker() {
+  if (!globalThis.navigator?.serviceWorker) return;
+  if (!/^https?:$/.test(globalThis.location?.protocol || '')) return;
+  globalThis.navigator.serviceWorker.register('/sw.js', { scope:'/' }).catch(() => {});
+}
+
+registerProductionServiceWorker();
+
 const STORAGE_KEY = 'lighthouse-next-demo-v1';
 const DEFAULT_STATE = Object.freeze({ activeRoot:'manual', chatHistory:[], pendingFlow:null });
 let controlPortBuildIdentityPromise = null;
@@ -37,9 +45,9 @@ async function controlPortSnapshotMetadata() {
     : null;
   return {
     appVersion:versionName,
-    mainSha:null,
+    mainSha:typeof identity?.sourceCommit === 'string' && /^[a-f0-9]{40}$/i.test(identity.sourceCommit) ? identity.sourceCommit : null,
     buildState:{
-      status:'UNKNOWN',
+      status:identity ? 'STAGED' : 'UNKNOWN',
       identity:identity ? {
         owner:identity.owner || null,
         applicationId:identity.applicationId || null,
@@ -49,7 +57,12 @@ async function controlPortSnapshotMetadata() {
     },
     deployState:{ status:'UNKNOWN' },
     updaterState:{ status:'UNKNOWN' },
-    source:{ repository:'pureekangraw-ops/ygph-metropolis', branch:null },
+    source:{
+      repository:typeof identity?.sourceRepository === 'string' && identity.sourceRepository.trim()
+        ? identity.sourceRepository.trim()
+        : 'pureekangraw-ops/ygph-metropolis',
+      branch:typeof identity?.sourceRef === 'string' && identity.sourceRef.trim() ? identity.sourceRef.trim() : null,
+    },
     owner:{ system:'METROPOLIS', runtime:'LIGHTHOUSE_CONTROL_PORT' },
   };
 }
