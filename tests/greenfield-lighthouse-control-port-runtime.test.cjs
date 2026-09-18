@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
+const { readFileSync } = require('node:fs');
 
 const runtimeUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/control-port/control-port-runtime.mjs')).href;
 
@@ -79,6 +80,18 @@ function fakePort(clock) {
   };
   return port;
 }
+
+
+test('LIGHTHOUSE app activates Control Port only after owner unlock and reads staged build identity', () => {
+  const appSource = readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
+  assert.match(appSource, /createLighthouseControlPort\(\{ ledgerBridge, storeBridge \}\)/);
+  assert.match(appSource, /createLighthouseControlPortRuntime\(/);
+  assert.match(appSource, /fetch\('\.\/build-identity\.json', \{ cache:'no-store' \}\)/);
+  assert.match(appSource, /buildState:\{\s*status:'UNKNOWN'/);
+  assert.match(appSource, /try \{ await controlPortRuntime\.refreshSnapshot\(\); \} catch \{\}/);
+  assert.doesNotMatch(appSource, /mainSha:\s*['"][0-9a-f]{40}['"]/);
+});
+
 
 test('Inbox persists across restart and stable requestId prevents duplicate mutation', async () => {
   const { createLighthouseControlPortRuntime, createMemoryControlPortStorage } = await import(runtimeUrl);
