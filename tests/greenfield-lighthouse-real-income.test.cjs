@@ -166,7 +166,7 @@ test('real general-income confirmation does not mutate demo finance authority', 
 test('Home finance renders through the Ledger truth view-model instead of demo cash defaults', () => {
   const app = fs.readFileSync(appPath, 'utf8');
   const start = app.indexOf('function financeSnapshot()');
-  const end = app.indexOf('function resetDemoState', start);
+  const end = app.indexOf('function resetLocalState', start);
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const body = app.slice(start, end);
