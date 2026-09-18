@@ -458,7 +458,7 @@ export function createLighthouseControlPortRuntime({
         runtimeStatus:runtimeStatus.status,
       };
     }
-    const age = Date.now() - new Date(snapshot.capturedAt).getTime();
+    const age = new Date(now()).getTime() - new Date(snapshot.capturedAt).getTime();
     const freshness = Number.isFinite(age) && age <= staleAfterMs ? 'LIVE' : 'STALE';
     return {
       freshness,
