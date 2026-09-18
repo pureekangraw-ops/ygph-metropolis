@@ -1,4 +1,4 @@
-name: Greenfield Deploy Gate
+name: LIGHTHOUSE Deploy Gate
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   safety-gate:
-    name: Greenfield safety gate
+    name: LIGHTHOUSE canonical bundle gate
     runs-on: ubuntu-latest
     steps:
       - name: Check out release candidate
@@ -59,15 +59,22 @@ jobs:
             }
           }
           NODE
+      - name: Stage canonical LIGHTHOUSE production bundle
+        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-production
+      - name: Reject legacy production shell
+        run: |
+          test ! -e .lighthouse-production/ui/lighthouse-shell.mjs
+          test ! -e .lighthouse-production/ui/home-ui.mjs
+          test ! -e .lighthouse-production/ui/store-ui.mjs
+          test ! -e .lighthouse-production/ui/finance-ui.mjs
+          test ! -e .lighthouse-production/ui/ride-ui.mjs
+          ! grep -R -n -E 'YGPH METROPOLIS|MASTER INPUT' .lighthouse-production/lighthouse-next .lighthouse-production/index.html
+          grep -q '"product": "LIGHTHOUSE"' .lighthouse-production/release-manifest.json
       - name: Validate Wrangler production config
         run: npx --yes wrangler@4.126.0 deploy --dry-run --env=""
-      - name: Stage isolated LIGHTHOUSE bundle for validation
-        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-next-staging
-      - name: Validate isolated LIGHTHOUSE demo staging config
-        run: npx --yes wrangler@4.126.0 deploy --dry-run --config wrangler.lighthouse-next-staging.jsonc
 
   staging:
-    name: Deploy Master Input candidate to staging
+    name: Deploy canonical LIGHTHOUSE candidate to staging
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: safety-gate
     runs-on: ubuntu-latest
@@ -75,6 +82,12 @@ jobs:
     steps:
       - name: Check out release candidate
         uses: actions/checkout@v7.0.1
+      - name: Stage canonical LIGHTHOUSE production bundle
+        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-production
+      - name: Reject legacy production shell
+        run: |
+          test ! -e .lighthouse-production/ui/lighthouse-shell.mjs
+          ! grep -R -n -E 'YGPH METROPOLIS|MASTER INPUT' .lighthouse-production/lighthouse-next .lighthouse-production/index.html
       - name: Prepare disabled staging secret contract
         run: printf '%s\n' 'OPENAI_API_KEY=STAGING_DISABLED_PLACEHOLDER' > "$RUNNER_TEMP/metro-staging.secrets"
       - name: Deploy staging Worker with provider disabled
@@ -100,31 +113,9 @@ jobs:
           code="$(curl --silent --show-error --output "$RUNNER_TEMP/interpret.json" --write-out '%{http_code}' -X POST "$base/api/v1/interpret" -H 'content-type: application/json' --data '{"version":"1","text":"staging gate","context":{}}')"
           test "$code" = "503"
           node -e 'const fs=require("fs"); const x=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(x.code!=="INTERPRETER_NOT_CONFIGURED"||!x.requestId) process.exit(1)' "$RUNNER_TEMP/interpret.json"
-      - name: Stage isolated LIGHTHOUSE bundle for deploy
-        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-next-staging
-      - name: Deploy isolated LIGHTHOUSE next demo staging
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.126.0"
-          command: deploy --config wrangler.lighthouse-next-staging.jsonc
-      - name: Verify LIGHTHOUSE next demo staging
-        run: |
-          base="https://lighthouse-next-staging.pureekangraw.workers.dev"
-          ready=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            code="$(curl --silent --show-error --output "$RUNNER_TEMP/lighthouse-next.html" --write-out '%{http_code}' "$base/" || true)"
-            if [ "$code" = "200" ] && grep -q 'LIGHTHOUSE' "$RUNNER_TEMP/lighthouse-next.html"; then
-              ready=1
-              break
-            fi
-            sleep 2
-          done
-          test "$ready" = "1"
 
   deploy:
-    name: Deploy YGPH METROPOLIS Greenfield to Cloudflare
+    name: Deploy canonical LIGHTHOUSE to Cloudflare
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: safety-gate
     runs-on: ubuntu-latest
@@ -132,6 +123,13 @@ jobs:
     steps:
       - name: Check out production commit
         uses: actions/checkout@v7.0.1
+      - name: Stage canonical LIGHTHOUSE production bundle
+        run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-production
+      - name: Reject legacy production shell
+        run: |
+          test ! -e .lighthouse-production/ui/lighthouse-shell.mjs
+          ! grep -R -n -E 'YGPH METROPOLIS|MASTER INPUT' .lighthouse-production/lighthouse-next .lighthouse-production/index.html
+          grep -q '"product": "LIGHTHOUSE"' .lighthouse-production/release-manifest.json
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
