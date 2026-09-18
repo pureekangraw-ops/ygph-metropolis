@@ -166,3 +166,17 @@ test('installed version name must match the Android target', async () => {
   assert.equal(result.status, 'FAIL');
   assert.equal(result.reasons.includes('DEVICE_TARGET_VERSION_NAME_MISMATCH'), true);
 });
+
+
+test('malformed persistence evidence is FAIL, not VERIFY', async () => {
+  const { evaluateAndroidInstallAcceptance } = await loadModule();
+  const result = evaluateAndroidInstallAcceptance({
+    expected,
+    staticEvidence,
+    deviceEvidence:deviceEvidence({
+      persistenceProbe:{ key:'manual-probe', before:'same', after:'same' },
+    }),
+  });
+  assert.equal(result.status, 'FAIL');
+  assert.equal(result.reasons.includes('DEVICE_PERSISTENCE_PROBE_INVALID'), true);
+});
