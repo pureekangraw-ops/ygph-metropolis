@@ -1,5 +1,6 @@
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
+import { createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
@@ -104,6 +105,25 @@ function errorText(error) {
   if (code.includes('RUNTIME_SESSION_LOCKED')) return 'แอปถูกล็อก กรุณาเข้าใหม่';
   if (code.includes('PAYMENT_OVER_REMAINING')) return 'จำนวนที่จ่ายเกินยอดคงเหลือ';
   return 'ยังบันทึกไม่สำเร็จ · ไม่มีข้อมูลถูกเปลี่ยน';
+}
+
+function createManualAttempt(prefixes) {
+  return createStableMutationAttempt({ createId:operationId, prefixes });
+}
+
+function handleManualMutationFailure(attempt, error, status) {
+  const code = String(error?.message || error || '');
+  if (code === 'LIGHTHOUSE_MUTATION_RETRY_PAYLOAD_LOCKED') {
+    if (status) status.textContent = 'รายการเดิมยังรอตรวจกลับ · กรุณาลองซ้ำด้วยข้อมูลเดิมก่อน';
+    return;
+  }
+  if (mutationErrorNeedsVerification(error)) {
+    try { attempt.markVerificationPending(); } catch {}
+    if (status) status.textContent = 'รายการอาจบันทึกแล้วแต่ยังตรวจกลับไม่ได้ · ลองซ้ำด้วยข้อมูลเดิม';
+    return;
+  }
+  attempt.clear();
+  if (status) status.textContent = errorText(error);
 }
 
 async function renderIncome() {
