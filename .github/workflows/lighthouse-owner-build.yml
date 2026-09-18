@@ -2,6 +2,9 @@ name: LIGHTHOUSE Owner Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ops/lighthouse-owner-build-trigger-20260918
 
 permissions:
   contents: read
