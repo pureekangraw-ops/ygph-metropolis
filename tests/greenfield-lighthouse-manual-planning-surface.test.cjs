@@ -41,6 +41,11 @@ test('Income exposes receivables, pending Ride credit, expected incoming and run
   assert.match(surface, /ledgerBridge\.readRideTruth\(\)/);
   assert.match(surface, /outstandingReceivableSatang/);
   assert.match(surface, /pendingCreditSatang/);
+  assert.match(surface, /manual-receivable-payment/);
+  assert.match(surface, /ledgerBridge\.receiveReceivablePayment\(/);
+  assert.match(surface, /item\.queueState === 'SCHEDULED'/);
+  assert.match(surface, /VERIFY_DUPLICATE/);
+  assert.match(surface, /Store, Ledger และ Calendar อ่านกลับตรงกัน/);
   assert.match(surface, /manual-daily-goal-form/);
   assert.match(surface, /ledgerBridge\.setDailyGoal\(/);
   assert.match(surface, /อ่านกลับจาก Runtime สำเร็จ/);
