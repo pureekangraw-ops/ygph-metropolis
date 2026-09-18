@@ -7,6 +7,7 @@ const root = process.cwd();
 const htmlPath = path.join(root, 'lighthouse-next/index.html');
 const cssPath = path.join(root, 'lighthouse-next/styles.css');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const surfacePath = path.join(root, 'lighthouse-next/surface-contract.mjs');
 const incomeParserPath = path.join(root, 'lighthouse-next/general-income.mjs');
 const stagingConfigPath = path.join(root, 'wrangler.lighthouse-next-staging.jsonc');
 const deployWorkflowPath = path.join(root, '.github/workflows/greenfield-deploy-gate.yml');
@@ -176,30 +177,25 @@ test('Dashboard renders real cash truth from ledgerTruth', () => {
   assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
 });
 
-test('legacy Store projection and Ledger history still render durable truth through view-model projections', () => {
+test('MANUAL Store and Ledger render fresh owner truth without legacy app projections', () => {
   const app = read(appPath);
-  const storeDetail = app.match(/function renderStoreDetail\(\)[\s\S]*?function renderRideDetail\(\)/)?.[0];
-  const historyDetail = app.match(/function renderHistoryDetail\(\)[\s\S]*?function openManualTask\(/)?.[0];
-
-  assert.ok(storeDetail, 'renderStoreDetail block must exist');
-  assert.ok(historyDetail, 'renderHistoryDetail block must exist');
-  assert.match(storeDetail, /projectStoreView\(storeTruth\)/);
-  assert.doesNotMatch(storeDetail, /state\.products/);
-  assert.match(storeDetail, /เหลือ.*ชิ้น/u);
-  assert.match(historyDetail, /projectLedgerHistoryView\(ledgerTruth\)/);
-  assert.doesNotMatch(historyDetail, /ledgerTruth\?\.transactions|state\.transactions/);
+  const surface = read(surfacePath);
+  assert.doesNotMatch(app, /function renderStoreDetail\(|function renderHistoryDetail\(|function openManualTask\(/);
+  assert.match(surface, /async function renderStore\(\)[\s\S]*?storeBridge\.readStoreTruth\(\)/);
+  assert.match(surface, /async function renderLedger\(\)[\s\S]*?ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(surface, /เหลือ.*ชิ้น/u);
+  assert.doesNotMatch(surface, /state\.products|state\.transactions/);
 });
 
-test('sale cancellation is confirmed, append-only, and protected from double reversal', () => {
+test('Ledger reversal uses durable Runtime control and never mutates demo transaction arrays', () => {
   const app = read(appPath);
-  assert.match(app, /function ensureSaleReversalDialog\(/);
-  assert.match(app, /ยกเลิกรายการ/);
-  assert.match(app, /CANCELLED/);
-  assert.match(app, /REVERSAL/);
-  assert.match(app, /reversalOf/);
-  assert.match(app, /showModal\(/);
-  assert.doesNotMatch(app, /transactions\.splice\(/);
-  assert.doesNotMatch(app, /transactions\s*=\s*state\.transactions\.filter/);
+  const surface = read(surfacePath);
+  assert.doesNotMatch(app, /ensureSaleReversalDialog|confirmSaleReversal|requestSaleReversal/);
+  assert.match(surface, /manual-ledger-reversal/);
+  assert.match(surface, /ledgerBridge\.reverseLedgerTransaction\(/);
+  assert.match(surface, /reversedIds/);
+  assert.match(surface, /ถูกย้อนรายการแล้ว/u);
+  assert.doesNotMatch(surface, /transactions\.splice\(|state\.transactions/);
 });
 
 test('owner-locked app icon and transaction history have explicit mobile polish', () => {
