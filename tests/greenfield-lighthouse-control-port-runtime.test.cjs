@@ -188,6 +188,65 @@ test('Readback mismatch emits VERIFY and runtime-blocked command can reconcile l
   assert.equal(processed.some(item => item.requestId === 'offline-1' && item.status === 'DONE'), true);
 });
 
+
+test('Snapshot contract carries source metadata and latest owner readback without inventing unknown states', async () => {
+  const {
+    createLighthouseControlPortRuntime,
+    createMemoryControlPortStorage,
+    CONTROL_PORT_SNAPSHOT_CONTRACT_VERSION,
+  } = await import(runtimeUrl);
+  const clock = { value:'2026-09-18T07:50:00.000Z' };
+  const storage = createMemoryControlPortStorage();
+  const port = fakePort(clock);
+  const runtime = createLighthouseControlPortRuntime({
+    port,
+    storage,
+    now:() => clock.value,
+    snapshotMetadata:() => ({
+      appVersion:'1.0.0-owner.3',
+      mainSha:'main-sha-123',
+      buildState:{ status:'PASS', runId:42 },
+      deployState:{ status:'STAGING', environment:'staging' },
+      updaterState:{ status:'IDLE' },
+      source:{ repository:'pureekangraw-ops/ygph-metropolis', branch:'feat/lighthouse-hub-control-port-20260918' },
+      owner:{ system:'METROPOLIS', runtime:'LIGHTHOUSE_CONTROL_PORT' },
+    }),
+  });
+
+  runtime.receive({
+    requestId:'goal-contract-1',
+    capabilityId:'finance.dailyGoal',
+    payload:{ goalBaht:1400 },
+  });
+  const receipt = await runtime.process('goal-contract-1');
+  assert.equal(receipt.status, 'DONE');
+
+  const snapshot = await runtime.refreshSnapshot();
+  assert.equal(snapshot.contractVersion, CONTROL_PORT_SNAPSHOT_CONTRACT_VERSION);
+  assert.equal(snapshot.appVersion, '1.0.0-owner.3');
+  assert.equal(snapshot.mainSha, 'main-sha-123');
+  assert.equal(snapshot.buildState.status, 'PASS');
+  assert.equal(snapshot.deployState.status, 'STAGING');
+  assert.equal(snapshot.runtimeState.status, 'ACTIVE');
+  assert.equal(snapshot.updaterState.status, 'IDLE');
+  assert.equal(snapshot.source.repository, 'pureekangraw-ops/ygph-metropolis');
+  assert.equal(snapshot.owner.system, 'METROPOLIS');
+  assert.equal(snapshot.readbackSummary.requestId, 'goal-contract-1');
+
+  const unknownRuntime = createLighthouseControlPortRuntime({
+    port,
+    storage:createMemoryControlPortStorage(),
+    now:() => clock.value,
+  });
+  const unknown = await unknownRuntime.refreshSnapshot();
+  assert.equal(unknown.appVersion, null);
+  assert.equal(unknown.mainSha, null);
+  assert.equal(unknown.buildState.status, 'UNKNOWN');
+  assert.equal(unknown.deployState.status, 'UNKNOWN');
+  assert.equal(unknown.updaterState.status, 'UNKNOWN');
+});
+
+
 test('Snapshot freshness distinguishes LIVE, STALE, and OFFLINE without rewriting owner updatedAt', async () => {
   const { createLighthouseControlPortRuntime, createMemoryControlPortStorage } = await import(runtimeUrl);
   const clock = { value:'2026-09-18T08:00:00.000Z' };
