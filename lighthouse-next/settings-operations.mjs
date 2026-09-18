@@ -54,7 +54,13 @@ export async function restoreSettingsBackup({
     const result = await runtime.restoreBackup(backup, { allowOverwrite:true });
     const state = await runtime.readState();
     if (!state || Number(state.revision) !== Number(result?.revision)) {
-      throw new Error('LIGHTHOUSE_RESTORE_READBACK_MISMATCH');
+      return Object.freeze({
+        status:'VERIFY',
+        code:'LIGHTHOUSE_RESTORE_POSTCOMMIT_READBACK_MISMATCH',
+        revision:Number(result?.revision),
+        readbackRevision:Number.isFinite(Number(state?.revision)) ? Number(state.revision) : null,
+        replacedExisting:Boolean(result?.replacedExisting),
+      });
     }
     return Object.freeze({
       status:'VERIFIED',
@@ -120,7 +126,9 @@ function settingsError(error) {
   if (code === 'LIGHTHOUSE_BUILD_IDENTITY_UNAVAILABLE' || code === 'LIGHTHOUSE_BUILD_IDENTITY_INVALID') return 'ยังอ่านเวอร์ชันจาก Android build ไม่ได้';
   if (code === 'LIGHTHOUSE_BACKUP_INVALID' || code.startsWith('INVALID_GREENFIELD_BACKUP') || code === 'GREENFIELD_BACKUP_DATABASE_IDENTITY_MISMATCH') return 'ไฟล์สำรองไม่ถูกต้องหรือไม่เข้ากับ LIGHTHOUSE';
   if (code === 'GREENFIELD_VAULT_DECRYPT_FAILED' || code === 'GREENFIELD_BACKUP_RECOVERY_KEY_MISSING') return 'ไฟล์สำรองเปิดไม่ได้ด้วย Recovery Code ของฐานนี้';
-  if (code === 'LIGHTHOUSE_RESTORE_READBACK_MISMATCH' || code === 'GREENFIELD_BACKUP_READBACK_MISMATCH') return 'กู้คืนแล้วอ่านกลับไม่ตรง ระบบยกเลิกการเปลี่ยนแปลง';
+  if (code === 'GREENFIELD_BACKUP_READBACK_MISMATCH') return 'กู้คืนไม่ผ่าน readback และ Runtime คืนข้อมูลเดิมแล้ว';
+  if (code === 'GREENFIELD_BACKUP_ROLLBACK_FAILED') return 'การคืนข้อมูลเดิมล้มเหลว · หยุดใช้งานและตรวจไฟล์สำรองก่อนทำต่อ';
+  if (code === 'LIGHTHOUSE_RESTORE_POSTCOMMIT_READBACK_MISMATCH' || code === 'LIGHTHOUSE_RESTORE_READBACK_MISMATCH') return 'กู้คืนถูกเขียนแล้วแต่สถานะอ่านซ้ำยังไม่ชัด · ห้ามกู้ซ้ำจนกว่าจะตรวจสถานะ';
   return 'ยังดำเนินการไม่ได้';
 }
 
@@ -164,6 +172,10 @@ function installSettingsRestore(root = globalThis.document) {
       });
       if (result.status === 'CANCELLED') {
         if (status) status.textContent = 'ยกเลิกการกู้คืนแล้ว';
+        return;
+      }
+      if (result.status === 'VERIFY') {
+        if (status) status.textContent = 'กู้คืนผ่าน durable verify แล้ว แต่ readback รอบสองไม่ตรง · ห้ามกู้ซ้ำ กรุณาปิดและเปิด LIGHTHOUSE เพื่อตรวจสถานะ';
         return;
       }
       if (status) status.textContent = `กู้คืนแล้ว · revision ${result.revision} · กำลังโหลดข้อมูลใหม่`;
