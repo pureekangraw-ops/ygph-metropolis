@@ -119,3 +119,22 @@ test('Settings Version prefers installed native App identity when Capacitor App 
   assert.equal(result.versionCode, 1008);
   assert.equal(result.versionName, '1.0.0-owner.3');
 });
+
+
+test('Settings reset is explicitly device-local and cannot erase Runtime business truth', () => {
+  const html = fs.readFileSync(path.join(root, 'lighthouse-next', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'lighthouse-next', 'app.mjs'), 'utf8');
+  assert.match(html, /id="reset-demo"/);
+  assert.match(html, /id="reset-dialog"/);
+  assert.match(html, /ล้างสถานะบนเครื่อง/);
+  assert.match(html, /ไม่ลบเงินจริงหรือสต็อกจริง/);
+  assert.match(html, /id="confirm-reset"/);
+
+  const start = app.indexOf('function resetDemoState()');
+  const end = app.indexOf('function setAuthBusy', start);
+  assert.ok(start >= 0 && end > start, 'resetDemoState block must exist');
+  const reset = app.slice(start, end);
+  assert.match(reset, /localStorage\.removeItem\(STORAGE_KEY\)/);
+  assert.match(reset, /chatLifecycle\.clear\(\)/);
+  assert.doesNotMatch(reset, /ledgerBridge\.|storeBridge\.|runtimeGate\.|restoreBackup|exportBackup|deleteDatabase|clearVault|factoryReset/i);
+});
