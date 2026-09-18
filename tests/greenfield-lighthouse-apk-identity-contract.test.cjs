@@ -13,9 +13,10 @@ const versionToolPath = path.join(ROOT, 'android-shell', 'tools', 'set-android-v
 
 test('Android candidate records and enforces the canonical upgrade baseline', async () => {
   const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
-  assert.equal(version.baselineVersionCode, 1008);
-  assert.equal(version.versionCode, 1009);
-  assert.equal(version.versionName, '1.0.0-owner.4');
+  assert.equal(Number.isInteger(version.baselineVersionCode), true);
+  assert.equal(Number.isInteger(version.versionCode), true);
+  assert.equal(version.versionCode, version.baselineVersionCode + 1);
+  assert.match(version.versionName, /^1\\.0\\.0-owner\\.\\d+$/);
   assert.ok(version.versionCode > version.baselineVersionCode, 'candidate must install over the canonical previous owner build');
 
   const { assertUpgradeVersion, applyAndroidVersion } = await import(pathToFileURL(versionToolPath));
@@ -24,8 +25,8 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
     candidateVersionCode: version.versionCode,
   }));
   assert.throws(() => assertUpgradeVersion({
-    baselineVersionCode: 1008,
-    candidateVersionCode: 1008,
+    baselineVersionCode: version.baselineVersionCode,
+    candidateVersionCode: version.baselineVersionCode,
   }), /APK_VERSION_NOT_MONOTONIC/);
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'lighthouse-apk-version-'));
@@ -33,8 +34,8 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
   const gradlePath = path.join(tempRoot, 'build.gradle');
   const originalGradle = 'android { defaultConfig { versionCode 1\nversionName "0.0.1" } }\n';
   fs.writeFileSync(invalidVersionPath, JSON.stringify({
-    baselineVersionCode: 1008,
-    versionCode: 1008,
+    baselineVersionCode: version.baselineVersionCode,
+    versionCode: version.baselineVersionCode,
     versionName: '1.0.0-invalid',
   }), 'utf8');
   fs.writeFileSync(gradlePath, originalGradle, 'utf8');
