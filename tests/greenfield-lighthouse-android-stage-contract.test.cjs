@@ -34,6 +34,7 @@ const runtimeFiles = [
   'chat-intent-recovery.mjs',
   'chat-path.mjs',
   'chat-lifecycle.mjs',
+  'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ];
