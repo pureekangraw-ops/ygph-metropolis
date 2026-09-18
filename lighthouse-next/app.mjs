@@ -3,6 +3,7 @@ import { parseProductAddText, suggestProductQuestion, resolveProductDraft } from
 import { interpretChatIntent } from './chat-intent.mjs';
 import { createChatReadCapability } from './chat-read.mjs';
 import { createChatLifecycle } from './chat-lifecycle.mjs';
+import { clearStableMutationAttempts } from './mutation-retry.mjs';
 import { recoverIntentSlot } from './chat-intent-recovery.mjs';
 import { createExpenseDraft, commitExpenseDraft } from './chat-path.mjs';
 import { formatThaiBangkokDate } from './bangkok-date.mjs';
@@ -145,7 +146,7 @@ function formatBaht(value) { return `฿${Number(value || 0).toLocaleString('en-
 function formatSatang(value) { return formatBaht(Number(value || 0) / 100); }
 function financeSnapshot() { const view = projectFinanceView(ledgerTruth); if (view.status !== READ_STATE.READY) return { status:view.status, cashSatang:null, todayIncomeSatang:null, todayExpenseSatang:null, netSatang:null }; return { status:view.status, cashSatang:view.cashSatang, todayIncomeSatang:view.todayIncomeSatang, todayExpenseSatang:view.todayExpenseSatang, netSatang:view.netSatang }; }
 function renderHomeTruth() { const snapshot = financeSnapshot(); const ready = snapshot.status === READ_STATE.READY; homeCashValue.textContent = ready ? formatSatang(snapshot.cashSatang) : '—'; homeIncomeValue.textContent = ready ? formatSatang(snapshot.todayIncomeSatang) : '—'; homeExpenseValue.textContent = ready ? formatSatang(snapshot.todayExpenseSatang) : '—'; homeNetValue.textContent = ready ? `${snapshot.netSatang >= 0 ? '+' : '-'}${formatSatang(Math.abs(snapshot.netSatang))}` : '—'; }
-function resetDemoState() { state = cloneDefaults(); pendingReversalSaleId = null; try { localStorage.removeItem(STORAGE_KEY); chatLifecycle.clear(); } catch {} renderHomeTruth(); manualDetail.hidden = true; manualHub.hidden = false; selectRoot('manual'); }
+function resetDemoState() { state = cloneDefaults(); pendingReversalSaleId = null; try { localStorage.removeItem(STORAGE_KEY); chatLifecycle.clear(); clearStableMutationAttempts({ storage:localStorage }); } catch {} renderHomeTruth(); manualDetail.hidden = true; manualHub.hidden = false; selectRoot('manual'); }
 
 function setAuthBusy(busy) { loginSubmit.disabled = busy; devicePassword.disabled = busy; showRecoveryButton.disabled = busy; }
 function showLoginGate(message = 'พร้อมเข้าสู่ LIGHTHOUSE') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = false; recoveryForm.hidden = true; setupRequired.hidden = true; authStatus.textContent = message; setAuthBusy(false); }
