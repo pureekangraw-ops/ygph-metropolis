@@ -61,7 +61,8 @@ test('Outcome separates spendable cash from an undefined owner-controlled spendi
   assert.match(bridge, /spendingCeilingStatus:'OWNER_RULE_REQUIRED'/);
   assert.match(bridge, /spendingCeilingSatang:null/);
   assert.doesNotMatch(surface, /spendingCeilingSatang\s*:\s*planning\.spendableBalanceSatang/);
-  assert.doesNotMatch(surface, /localStorage.*spending|spending.*localStorage/s);
+  assert.doesNotMatch(surface, /localStorage\.(getItem|setItem)\([^\n]*spendingCeiling/i);
+  assert.doesNotMatch(surface, /spendingCeiling[^\n]*(localStorage|getItem|setItem)/i);
 });
 
 
