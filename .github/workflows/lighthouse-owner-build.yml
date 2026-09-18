@@ -2,6 +2,9 @@ name: LIGHTHOUSE Owner Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ops/lighthouse-owner-build-exact-2e75102
 
 permissions:
   contents: read
@@ -16,7 +19,7 @@ jobs:
       - name: Checkout owner-approved LIGHTHOUSE ref
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: 2e751022eaaf06f4f6d584d340d88bd039ecfb22
 
       - name: Show exact source commit
         run: git rev-parse HEAD
@@ -124,7 +127,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-1.0.0-owner-test
+          name: lighthouse-owner-test-2e75102
           path: |
             android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
             android-shell/release/apk-identity-evidence.json
