@@ -66,6 +66,11 @@ test('Calendar surface routes reschedule/status through runtime bridge and does 
   assert.match(surface, /PAY_OBLIGATION_INSTALLMENT/);
   assert.match(surface, /RECEIVE_CUSTOMER_PAYMENT/);
   assert.match(surface, /จัดการที่ Owner ของรายการ/);
+  assert.match(surface, /data\.calendarOwnerRoute|dataset\.calendarOwnerRoute/);
+  assert.match(surface, /ไป Outcome/);
+  assert.match(surface, /ไป Income/);
+  assert.match(surface, /void renderOutcome\(\)/);
+  assert.match(surface, /void renderIncome\(\)/);
 });
 
 test('unlock surface is presented as a PIN gate without narrowing the existing credential format', () => {
@@ -76,4 +81,18 @@ test('unlock surface is presented as a PIN gate without narrowing the existing c
   assert.match(html, />ลืม PIN<\/button>/);
   assert.doesNotMatch(html, /inputmode="numeric"/);
   assert.doesNotMatch(html, /<label for="device-password">รหัสเข้าแอป<\/label>/);
+});
+
+
+test('Store Ride and Ledger descendants read fresh owner truth on every open', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
+
+  assert.match(surface, /createLighthouseStoreBridge/);
+  assert.match(surface, /async function renderStore\(\)[\s\S]*storeBridge\.readStoreTruth\(\)/);
+  assert.match(surface, /async function renderRide\(\)[\s\S]*ledgerBridge\.readRideTruth\(\)/);
+  assert.match(surface, /async function renderLedger\(\)[\s\S]*ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(surface, /manual-ledger-reversal/);
+  assert.match(surface, /ledgerBridge\.reverseLedgerTransaction\(/);
+  assert.match(surface, /sourceRef \|\| ''\) === 'LEDGER\/MANUAL'/);
+  assert.doesNotMatch(surface, /renderLedger\(\)[\s\S]*\bledgerTruth\b/);
 });

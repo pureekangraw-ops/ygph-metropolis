@@ -7,6 +7,7 @@ const root = process.cwd();
 const htmlPath = path.join(root, 'lighthouse-next/index.html');
 const cssPath = path.join(root, 'lighthouse-next/styles.css');
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const surfacePath = path.join(root, 'lighthouse-next/surface-contract.mjs');
 const incomeParserPath = path.join(root, 'lighthouse-next/general-income.mjs');
 const stagingConfigPath = path.join(root, 'wrangler.lighthouse-next-staging.jsonc');
 const deployWorkflowPath = path.join(root, '.github/workflows/greenfield-deploy-gate.yml');
@@ -61,12 +62,15 @@ test('demo persists only its own namespaced state and restores deep pending acro
   assert.match(app, /restorePending/);
 });
 
-test('CHAT encodes Ambiguity Lock B-A-B-A and a supported local side-query reminder', () => {
+test('CHAT preserves pending work across supported side queries and reopen', () => {
   const app = read(appPath);
-  assert.match(app, /AMBIGUITY_LOCK\s*=\s*['"]BABA['"]/);
+  assert.doesNotMatch(app, /AMBIGUITY_LOCK|BABA/);
   assert.match(app, /วันนี้วันที่เท่าไร/);
   assert.match(app, /ยังรอที่มาของรายรับ/);
-  assert.match(app, /answerLocalSideQuery/);
+  assert.match(app, /function answerLocalSideQuery/);
+  assert.match(app, /if \(sideAnswer\)[\s\S]*?if \(state\.pendingFlow\) resumePendingPrompt\(\{ afterSideQuery:true \}\)/);
+  assert.match(app, /function restorePending\(\)/);
+  assert.match(app, /resumePendingPrompt\(\)/);
 });
 
 test('CHAT general income asks only for amount plus source and never forces a store-or-ride selector', () => {
@@ -141,15 +145,21 @@ test('registered product sale parser locks product then value then quantity', as
   assert.equal(parseStoreSale('ทิป 59', products), null);
 });
 
-test('Store sale flow is persisted, confirms before mutation, and protects stock truth', () => {
+test('Store sale flow persists the pending command and commits only through Store owner readback', () => {
   const app = read(appPath);
   assert.match(app, /interpretChatIntent/);
   assert.match(app, /kind:\s*['"]STORE_SALE['"]/);
   assert.match(app, /STORE_SALE_VALUE/);
   assert.match(app, /STORE_SALE_QUANTITY/);
+  assert.match(app, /CONFIRM_STORE_SALE/);
+  assert.match(app, /state\.pendingFlow/);
+  assert.match(app, /saveState\(\)/);
+  assert.match(app, /storeBridge\.sellProduct\(/);
+  assert.match(app, /storeBridge\.readStoreTruth\(\)/);
+  assert.match(app, /ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(app, /markReadbackVerified\(/);
   assert.match(app, /จำนวนไม่พอ|สินค้าไม่พอ/);
-  assert.match(app, /transactions/);
-  assert.match(app, /products/);
+  assert.doesNotMatch(app, /state\.products|state\.transactions|state\.cash|state\.todayIncome/);
 });
 
 test('LIGHTHOUSE staging uses the owner-locked lighthouse artwork as app identity', () => {
@@ -176,30 +186,25 @@ test('Dashboard renders real cash truth from ledgerTruth', () => {
   assert.doesNotMatch(app, /function renderHomeTruth\([^)]*\)[\s\S]{0,1200}state\.cash/);
 });
 
-test('legacy Store projection and Ledger history still render durable truth through view-model projections', () => {
+test('MANUAL Store and Ledger render fresh owner truth without legacy app projections', () => {
   const app = read(appPath);
-  const storeDetail = app.match(/function renderStoreDetail\(\)[\s\S]*?function renderRideDetail\(\)/)?.[0];
-  const historyDetail = app.match(/function renderHistoryDetail\(\)[\s\S]*?function openManualTask\(/)?.[0];
-
-  assert.ok(storeDetail, 'renderStoreDetail block must exist');
-  assert.ok(historyDetail, 'renderHistoryDetail block must exist');
-  assert.match(storeDetail, /projectStoreView\(storeTruth\)/);
-  assert.doesNotMatch(storeDetail, /state\.products/);
-  assert.match(storeDetail, /เหลือ.*ชิ้น/u);
-  assert.match(historyDetail, /projectLedgerHistoryView\(ledgerTruth\)/);
-  assert.doesNotMatch(historyDetail, /ledgerTruth\?\.transactions|state\.transactions/);
+  const surface = read(surfacePath);
+  assert.doesNotMatch(app, /function renderStoreDetail\(|function renderHistoryDetail\(|function openManualTask\(/);
+  assert.match(surface, /async function renderStore\(\)[\s\S]*?storeBridge\.readStoreTruth\(\)/);
+  assert.match(surface, /async function renderLedger\(\)[\s\S]*?ledgerBridge\.readLedgerTruth\(\)/);
+  assert.match(surface, /เหลือ.*ชิ้น/u);
+  assert.doesNotMatch(surface, /state\.products|state\.transactions/);
 });
 
-test('sale cancellation is confirmed, append-only, and protected from double reversal', () => {
+test('Ledger reversal uses durable Runtime control and never mutates demo transaction arrays', () => {
   const app = read(appPath);
-  assert.match(app, /function ensureSaleReversalDialog\(/);
-  assert.match(app, /ยกเลิกรายการ/);
-  assert.match(app, /CANCELLED/);
-  assert.match(app, /REVERSAL/);
-  assert.match(app, /reversalOf/);
-  assert.match(app, /showModal\(/);
-  assert.doesNotMatch(app, /transactions\.splice\(/);
-  assert.doesNotMatch(app, /transactions\s*=\s*state\.transactions\.filter/);
+  const surface = read(surfacePath);
+  assert.doesNotMatch(app, /ensureSaleReversalDialog|confirmSaleReversal|requestSaleReversal/);
+  assert.match(surface, /manual-ledger-reversal/);
+  assert.match(surface, /ledgerBridge\.reverseLedgerTransaction\(/);
+  assert.match(surface, /reversedIds/);
+  assert.match(surface, /ถูกย้อนรายการแล้ว/u);
+  assert.doesNotMatch(surface, /transactions\.splice\(|state\.transactions/);
 });
 
 test('owner-locked app icon and transaction history have explicit mobile polish', () => {
@@ -213,4 +218,26 @@ test('owner-locked app icon and transaction history have explicit mobile polish'
   assert.match(polish, /object-fit\s*:\s*cover/);
   assert.match(polish, /\.history-cancel\s*\{/);
   assert.match(polish, /min-height\s*:\s*44px/);
+});
+
+
+test('local UI persistence stores no fake business or financial truth', () => {
+  const app = read(appPath);
+  assert.match(app, /const STORAGE_KEY = 'lighthouse-next-demo-v1'/);
+  assert.match(app, /function saveState\(\)/);
+  assert.match(app, /chatHistory:state\.chatHistory\.slice\(-80\)/);
+  assert.match(app, /pendingFlow:state\.pendingFlow/);
+  for (const forbidden of [
+    'DEFAULT_PRODUCTS',
+    'DEFAULT_OBLIGATIONS',
+    'state.cash',
+    'state.expectedIncome',
+    'state.todayIncome',
+    'state.todayExpense',
+    'state.products',
+    'state.obligations',
+    'state.transactions',
+  ]) {
+    assert.equal(app.includes(forbidden), false, `${forbidden} must not be local UI truth`);
+  }
 });

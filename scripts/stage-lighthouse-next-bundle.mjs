@@ -8,7 +8,10 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'android-back.mjs',
+  'capacitor-app.mjs',
   'surface-contract.mjs',
+  'calendar-month.mjs',
   'settings-operations.mjs',
   'setup.mjs',
   'view-model.mjs',
@@ -20,7 +23,11 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'store-product.mjs',
   'store-sale.mjs',
   'chat-intent.mjs',
+  'chat-read.mjs',
   'chat-intent-recovery.mjs',
+  'chat-path.mjs',
+  'chat-lifecycle.mjs',
+  'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ]);
@@ -30,6 +37,13 @@ export const GREENFIELD_ENTRYPOINTS = Object.freeze([
   'runtime-session.mjs',
   'calculation-authority.mjs',
   'first-run.mjs',
+]);
+
+export const LIGHTHOUSE_PATH_ENTRYPOINTS = Object.freeze([
+  'path-contract.mjs',
+  'path-kernel.mjs',
+  'pattern-input.mjs',
+  'capabilities/expense.mjs',
 ]);
 
 const REQUIRED_ASSETS = Object.freeze([
@@ -69,14 +83,33 @@ const ROOT_ENTRY = '<!doctype html><html><head><meta charset="utf-8"><meta name=
 export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   const lighthouseRoot = join(repoRoot, 'lighthouse-next');
   const greenfieldRoot = join(repoRoot, 'greenfield');
+  const lighthousePathRoot = join(repoRoot, 'lighthouse');
   for (const relative of [...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS]) {
     if (!(await exists(join(lighthouseRoot, relative)))) throw new Error(`LIGHTHOUSE_NEXT_SOURCE_MISSING:${relative}`);
   }
   const greenfieldFiles = await collectGreenfieldModuleClosure(greenfieldRoot);
+  const lighthousePathFiles = await collectGreenfieldModuleClosure(lighthousePathRoot, LIGHTHOUSE_PATH_ENTRYPOINTS);
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(join(destinationRoot, 'lighthouse-next', 'assets'), { recursive: true });
   await mkdir(join(destinationRoot, 'greenfield'), { recursive: true });
+  await mkdir(join(destinationRoot, 'lighthouse', 'capabilities'), { recursive: true });
   await writeFile(join(destinationRoot, 'index.html'), ROOT_ENTRY, 'utf8');
+  const [androidVersion, androidIdentity] = await Promise.all([
+    readFile(join(repoRoot, 'android-shell', 'version.json'), 'utf8').then(JSON.parse),
+    readFile(join(repoRoot, 'android-shell', 'apk-identity.json'), 'utf8').then(JSON.parse),
+  ]);
+  if (androidVersion?.owner !== 'ANDROID_APK') throw new Error('LIGHTHOUSE_ANDROID_VERSION_OWNER_INVALID');
+  if (!androidIdentity?.applicationId || !Number.isInteger(Number(androidVersion?.versionCode)) || !String(androidVersion?.versionName || '').trim()) {
+    throw new Error('LIGHTHOUSE_ANDROID_BUILD_IDENTITY_INVALID');
+  }
+  const buildIdentity = {
+    owner:'ANDROID_APK',
+    applicationId:androidIdentity.applicationId,
+    versionCode:Number(androidVersion.versionCode),
+    versionName:String(androidVersion.versionName),
+    baselineVersionCode:Number(androidVersion.baselineVersionCode),
+  };
+  await writeFile(join(destinationRoot, 'lighthouse-next', 'build-identity.json'), `${JSON.stringify(buildIdentity, null, 2)}\n`, 'utf8');
   for (const relative of LIGHTHOUSE_RUNTIME_FILES) {
     const target = join(destinationRoot, 'lighthouse-next', relative);
     await mkdir(dirname(target), { recursive: true });
@@ -92,7 +125,12 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     await mkdir(dirname(target), { recursive: true });
     await cp(join(greenfieldRoot, relative), target, { force: true });
   }
-  return { lighthouseFiles:[...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS], greenfieldFiles };
+  for (const relative of lighthousePathFiles) {
+    const target = join(destinationRoot, 'lighthouse', relative);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(join(lighthousePathRoot, relative), target, { force: true });
+  }
+  return { lighthouseFiles:[...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS], greenfieldFiles, lighthousePathFiles };
 }
 
 const modulePath = fileURLToPath(import.meta.url);

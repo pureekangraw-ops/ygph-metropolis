@@ -15,7 +15,10 @@ const runtimeFiles = [
   'styles.css',
   'owner-polish.css',
   'app.mjs',
+  'android-back.mjs',
+  'capacitor-app.mjs',
   'surface-contract.mjs',
+  'calendar-month.mjs',
   'settings-operations.mjs',
   'setup.mjs',
   'view-model.mjs',
@@ -27,7 +30,11 @@ const runtimeFiles = [
   'store-product.mjs',
   'store-sale.mjs',
   'chat-intent.mjs',
+  'chat-read.mjs',
   'chat-intent-recovery.mjs',
+  'chat-path.mjs',
+  'chat-lifecycle.mjs',
+  'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ];
@@ -60,7 +67,17 @@ test('Android stage is owned by the shared LIGHTHOUSE bundle and preserves runti
     assert.deepEqual(staged, source, `staged Greenfield bytes drifted for ${relative}`);
   }
 
+  for (const relative of [
+    'path-contract.mjs',
+    'path-kernel.mjs',
+    'pattern-input.mjs',
+    'capabilities/expense.mjs',
+  ]) {
+    const source = await fsp.readFile(path.join(root, 'lighthouse', relative));
+    const staged = await fsp.readFile(path.join(shellRoot, 'www', 'lighthouse', relative));
+    assert.deepEqual(staged, source, `staged Direct Path bytes drifted for ${relative}`);
+  }
+
   assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'app.mjs')), false, 'legacy flat app must not ship');
   assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'preview.html')), false, 'preview must not ship in the APK runtime');
-  assert.equal(fs.existsSync(path.join(shellRoot, 'www', 'lighthouse')), false, 'legacy lighthouse donor runtime must not ship in the APK runtime');
 });

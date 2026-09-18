@@ -114,3 +114,46 @@ test('surface adapter exposes direct Outcome controls without routing through Ch
   assert.match(source, /ledgerBridge\.payObligation\(/);
   assert.doesNotMatch(source, /submitChatText\(/);
 });
+
+
+test('payObligation retry reuses durable transaction evidence instead of paying twice', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  const obligation = { recordId:'OB-RETRY', type:'OBLIGATION', title:'ค่าห้อง', amountSatang:100000, originalSatang:100000, paidSatang:40000, remainingSatang:60000, status:'PARTIAL' };
+  const tx = { recordId:'TX-PAY-RETRY', type:'TRANSACTION', direction:'OUT', amountSatang:40000, title:'ชำระ OB-RETRY', detail:'OUT:OBLIGATION_PAYMENT', sourceRef:'LEDGER/OB-RETRY', status:'COMPLETED' };
+  const queue = { recordId:'CAL-OB-RETRY', type:'PAY_OBLIGATION', title:'จ่ายภาระ', detail:'LEDGER/OB-RETRY', amountSatang:60000, paidSatang:40000, dueDate:'2026-09-16', status:'PARTIAL' };
+  const state = stateWith({ ledger:[obligation, tx], calendar:[queue] });
+  let mutationCalls = 0;
+  const runtime = {
+    async payObligation() { mutationCalls += 1; throw new Error('must not pay twice'); },
+    async readState() { return state; },
+    project() { return projectFor(state); },
+  };
+  const bridge = createLighthouseLedgerBridge({ withSession: operation => operation(runtime), projectFinancial: () => ({ todayInSatang:0, todayOutSatang:40000 }) });
+  const result = await bridge.payObligation({ workflowId:'WF-PAY-RETRY', obligationId:'OB-RETRY', queueId:'CAL-OB-RETRY', ledgerTransactionId:'TX-PAY-RETRY', amountBaht:400 });
+  assert.equal(mutationCalls, 0);
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.recovered, true);
+  assert.equal(result.record.recordId, 'TX-PAY-RETRY');
+});
+
+test('Calendar retries recover duplicate command only when durable readback matches requested state', async () => {
+  const { createLighthouseLedgerBridge } = await loadBridge();
+  const rescheduled = { recordId:'CAL-RETRY', type:'TASK', title:'ตรวจของ', detail:'', amountSatang:0, dueDate:'2026-09-20', status:'OPEN' };
+  let state = stateWith({ calendar:[rescheduled] });
+  const runtime = {
+    async calendarReschedule() { throw new Error('DUPLICATE_COMMAND:WF-CAL-1:CALENDAR:CAL-RETRY'); },
+    async calendarStatus() { throw new Error('DUPLICATE_COMMAND:WF-CAL-2:CALENDAR:CAL-RETRY'); },
+    async readState() { return state; },
+    project() { return projectFor(state); },
+  };
+  const bridge = createLighthouseLedgerBridge({ withSession: operation => operation(runtime), projectFinancial: () => ({ todayInSatang:0, todayOutSatang:0 }) });
+
+  const moved = await bridge.rescheduleCalendar({ workflowId:'WF-CAL-1', queueId:'CAL-RETRY', dueDate:'2026-09-20' });
+  assert.equal(moved.recovered, true);
+  assert.equal(moved.record.dueDate, '2026-09-20');
+
+  state = stateWith({ calendar:[{ ...rescheduled, status:'COMPLETED' }] });
+  const completed = await bridge.setCalendarStatus({ workflowId:'WF-CAL-2', queueId:'CAL-RETRY', status:'COMPLETED' });
+  assert.equal(completed.recovered, true);
+  assert.equal(completed.record.status, 'COMPLETED');
+});

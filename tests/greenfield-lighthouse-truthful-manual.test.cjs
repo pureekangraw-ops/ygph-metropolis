@@ -3,60 +3,57 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const appPath = path.join(process.cwd(), 'lighthouse-next', 'app.mjs');
-const bridgePath = path.join(process.cwd(), 'lighthouse-next', 'runtime-ledger.mjs');
+const root = process.cwd();
+const appPath = path.join(root, 'lighthouse-next', 'app.mjs');
+const surfacePath = path.join(root, 'lighthouse-next', 'surface-contract.mjs');
+const ledgerBridgePath = path.join(root, 'lighthouse-next', 'runtime-ledger.mjs');
+const storeBridgePath = path.join(root, 'lighthouse-next', 'runtime-store.mjs');
 
-function readApp() {
-  assert.equal(fs.existsSync(appPath), true, 'missing lighthouse-next/app.mjs');
-  return fs.readFileSync(appPath, 'utf8');
+function read(file) {
+  assert.equal(fs.existsSync(file), true, `missing ${path.relative(root, file)}`);
+  return fs.readFileSync(file, 'utf8');
 }
 
-function between(source, start, end) {
-  const from = source.indexOf(start);
-  const to = source.indexOf(end, from + start.length);
-  assert.ok(from >= 0, `missing ${start}`);
-  assert.ok(to > from, `missing ${end} after ${start}`);
-  return source.slice(from, to);
-}
+test('Home keeps its finance projection while MANUAL detail authority lives only in surface-contract', () => {
+  const app = read(appPath);
+  const surface = read(surfacePath);
 
-test('live LIGHTHOUSE reads Home and MANUAL truth through the pure view-model boundary', () => {
-  const app = readApp();
   assert.match(app, /from ['"]\.\/view-model\.mjs['"]/);
   assert.match(app, /projectFinanceView\(ledgerTruth\)/);
-  assert.match(app, /projectStoreView\(storeTruth\)/);
-  assert.match(app, /projectRideView\(rideTruth\)/);
-  assert.match(app, /projectCalendarView\(calendarTruth\)/);
-  assert.match(app, /projectLedgerHistoryView\(ledgerTruth\)/);
+  assert.doesNotMatch(app, /function renderStoreDetail\(|function renderRideDetail\(|function renderCalendarDetail\(|function renderHistoryDetail\(|function openManualTask\(/);
+
+  for (const name of ['renderIncome','renderOutcome','renderCalendar','renderLedger','renderStore','renderRide']) {
+    assert.match(surface, new RegExp(`(?:async\\s+)?function ${name}\\(\\)`));
+  }
 });
 
-test('MANUAL Ride and Calendar read durable runtime truth instead of demo values', () => {
-  const app = readApp();
-  const bridge = fs.readFileSync(bridgePath, 'utf8');
-  const manualContent = between(app, 'const manualContent =', 'function showManualHub');
-  const calendar = between(app, 'function renderCalendarDetail()', 'function transactionLabel');
-  const routing = between(app, 'function openManualTask(taskId)', 'function restoreManualView');
+test('MANUAL Ride Calendar Store and Ledger read fresh durable owner truth instead of demo snapshots', () => {
+  const surface = read(surfacePath);
+  const ledgerBridge = read(ledgerBridgePath);
+  const storeBridge = read(storeBridgePath);
 
-  assert.doesNotMatch(manualContent, /\['รายได้วันนี้','฿0'\]|\['ค่าใช้จ่ายวันนี้','฿0'\]/u);
-  assert.doesNotMatch(calendar, /state\.obligations/);
-  assert.match(bridge, /async function readRideTruth\(/);
-  assert.match(bridge, /async function readCalendarTruth\(/);
-  assert.match(app, /ledgerBridge\.readRideTruth\(\)/);
-  assert.match(app, /ledgerBridge\.readCalendarTruth\(\)/);
-  assert.match(app, /function renderRideDetail\(\).*projectRideView\(rideTruth\)/s);
-  assert.match(calendar, /projectCalendarView\(calendarTruth\)/);
-  assert.match(routing, /taskId===['"]ride['"].*renderRideDetail\(/);
-  assert.match(routing, /taskId===['"]calendar['"].*renderCalendarDetail\(/);
+  assert.match(ledgerBridge, /async function readRideTruth\(/);
+  assert.match(ledgerBridge, /async function readCalendarTruth\(/);
+  assert.match(storeBridge, /async function readStoreTruth\(/);
+
+  assert.match(surface, /async function renderRide\(\)[\s\S]*?ledgerBridge\.readRideTruth\(\)/);
+  assert.match(surface, /async function renderCalendar\(\)[\s\S]*?ledgerBridge\.readCalendarTruth\(\)/);
+  assert.match(surface, /async function renderStore\(\)[\s\S]*?storeBridge\.readStoreTruth\(\)/);
+  assert.match(surface, /async function renderLedger\(\)[\s\S]*?ledgerBridge\.readLedgerTruth\(\)/);
+  assert.doesNotMatch(surface, /state\.products|state\.transactions|state\.obligations/);
 });
 
-test('truthful MANUAL distinguishes unavailable from empty durable Store and Ledger truth', () => {
-  const app = readApp();
-  const store = between(app, 'function renderStoreDetail()', 'function renderCalendarDetail');
-  const history = between(app, 'function renderHistoryDetail()', 'function openManualTask');
+test('truthful MANUAL distinguishes unavailable owner reads from durable empty state', () => {
+  const surface = read(surfacePath);
 
-  assert.match(store, /READ_STATE\.UNAVAILABLE/);
-  assert.match(store, /READ_STATE\.EMPTY/);
-  assert.match(store, /ยังไม่มีสินค้า/u);
-  assert.match(history, /READ_STATE\.UNAVAILABLE/);
-  assert.match(history, /READ_STATE\.EMPTY/);
-  assert.match(history, /ยังไม่มีรายการ/u);
+  assert.match(surface, /ยังอ่าน Store Owner ไม่ได้/);
+  assert.match(surface, /ยังอ่าน Ride Owner ไม่ได้/);
+  assert.match(surface, /ยังอ่าน Ledger Owner ไม่ได้/);
+  assert.match(surface, /ยังอ่านข้อมูลจริงไม่ได้/);
+
+  assert.match(surface, /ยังไม่มีสินค้า/);
+  assert.match(surface, /ยังไม่มีรายการ/);
+  assert.match(surface, /ไม่มีรายการค้างรับ/);
+  assert.match(surface, /ยังไม่มีรายจ่าย/);
+  assert.match(surface, /ยังไม่มีภาระ/);
 });
