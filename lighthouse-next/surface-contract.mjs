@@ -1,4 +1,5 @@
 import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
+import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
 import { createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
 
@@ -9,6 +10,7 @@ const manualHub = root?.querySelector('#manual-hub');
 const manualDetail = root?.querySelector('#manual-detail');
 const manualDetailContent = root?.querySelector('#manual-detail-content');
 const ledgerBridge = createLighthouseLedgerBridge();
+const storeBridge = createLighthouseStoreBridge();
 
 function operationId(prefix) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -407,6 +409,129 @@ async function renderOutcome() {
   await refresh();
 }
 
+
+async function renderStore() {
+  openSurfaceDetail();
+  manualDetailContent.append(makeHero('ร้านค้า', 'สต็อกอ่านใหม่จาก Store Owner ทุกครั้ง ไม่ใช้ snapshot ตอนเข้าสู่แอป'));
+  const list = document.createElement('div');
+  list.className = 'detail-list';
+  manualDetailContent.append(list);
+  try {
+    const truth = await storeBridge.readStoreTruth();
+    list.append(makeRow('สต็อกรวม', `${Number(truth.stockQuantity || 0)} ชิ้น`));
+    if (Number(truth.legacyUnassignedQuantity || 0) > 0) {
+      list.append(makeRow('สต็อกเดิมที่ยังไม่ผูกสินค้า', `${Number(truth.legacyUnassignedQuantity)} ชิ้น`));
+    }
+    if (!truth.products.length) list.append(makeRow('สินค้า', 'ยังไม่มีสินค้า'));
+    for (const product of truth.products) {
+      const identity = [product.name, product.model, product.color, ...(product.descriptors || [])].filter(Boolean).join(' · ');
+      list.append(makeRow(identity || 'สินค้า', `เหลือ ${Number(product.quantity || 0)} ชิ้น`));
+    }
+  } catch {
+    list.append(makeRow('สถานะ', 'ยังอ่าน Store Owner ไม่ได้'));
+  }
+}
+
+async function renderRide() {
+  openSurfaceDetail();
+  manualDetailContent.append(makeHero('งานวิ่ง', 'รายได้ เครดิต และค่าใช้จ่ายอ่านใหม่จาก Ride Owner ทุกครั้ง'));
+  const list = document.createElement('div');
+  list.className = 'detail-list';
+  manualDetailContent.append(list);
+  try {
+    const truth = await ledgerBridge.readRideTruth();
+    const stateLabel = truth.todayRoundState === 'ACTIVE' ? 'กำลังวิ่ง' : truth.todayRoundState === 'COMPLETED' ? 'จบรอบแล้ว' : 'ยังไม่เริ่มรอบ';
+    list.append(
+      makeRow('รอบวันนี้', stateLabel),
+      makeRow('รายได้วันนี้', formatSatang(truth.generatedSatang)),
+      makeRow('เงินสด', formatSatang(truth.cashJobSatang)),
+      makeRow('เครดิต', formatSatang(truth.creditJobSatang)),
+      makeRow('ค่าใช้จ่าย', formatSatang(truth.expenseSatang)),
+      makeRow('เครดิตค้างรับ', formatSatang(truth.pendingCreditSatang)),
+    );
+  } catch {
+    list.append(makeRow('สถานะ', 'ยังอ่าน Ride Owner ไม่ได้'));
+  }
+}
+
+function ledgerTransactionValue(transaction) {
+  const amount = formatSatang(transaction.amountSatang);
+  return transaction.direction === 'OUT' ? `-${amount}` : `+${amount}`;
+}
+
+async function renderLedger() {
+  openSurfaceDetail();
+  manualDetailContent.append(makeHero('Ledger', 'เงินจริงและประวัติอ่านใหม่จาก Ledger Owner การย้อนรายการใช้ Runtime + readback เท่านั้น'));
+  const list = document.createElement('div');
+  list.className = 'detail-list';
+  manualDetailContent.append(list);
+
+  async function refresh() {
+    list.replaceChildren();
+    try {
+      const truth = await ledgerBridge.readLedgerTruth();
+      syncDashboardFromTruth(truth);
+      list.append(
+        makeRow('เงินจริง', formatSatang(truth.balanceSatang)),
+        makeRow('เงินเข้าวันนี้', formatSatang(truth.todayInSatang)),
+        makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)),
+      );
+      if (!truth.transactions.length) {
+        list.append(makeRow('ประวัติ', 'ยังไม่มีรายการ'));
+        return;
+      }
+
+      const reversedIds = new Set(truth.transactions.map(item => item?.reversalOf).filter(Boolean));
+      for (const transaction of truth.transactions.slice(0, 30)) {
+        const card = document.createElement('div');
+        card.className = 'auth-form manual-direct-form manual-ledger-record';
+        card.append(makeRow(transaction.title || 'รายการเงิน', ledgerTransactionValue(transaction)));
+
+        const reversible = String(transaction.sourceRef || '') === 'LEDGER/MANUAL' &&
+          !transaction.reversalOf && !reversedIds.has(transaction.recordId);
+        if (reversible) {
+          const form = document.createElement('form');
+          form.className = 'manual-ledger-reversal';
+          form.innerHTML = '<label>เหตุผลการย้อนรายการ</label><input name="reason" type="text" maxlength="120" required><button class="secondary-button" type="submit">ย้อนรายการ</button>';
+          const status = makeStatus();
+          const attempt = createManualAttempt({
+            workflowId:'WF-LH-MANUAL-REVERSAL',
+            reversalRecordId:'TX-LH-MANUAL-REVERSAL',
+          });
+          form.append(status);
+          form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const reason = String(new FormData(form).get('reason') || '').trim();
+            status.textContent = 'กำลังย้อนรายการ…';
+            try {
+              const ids = attempt.acquire({ originalRecordId:transaction.recordId, reason });
+              const result = await ledgerBridge.reverseLedgerTransaction({
+                ...ids,
+                originalRecordId:transaction.recordId,
+                reason,
+              });
+              attempt.clear();
+              syncDashboardFromTruth(result.truth);
+              status.textContent = 'ย้อนรายการแล้ว · Ledger readback ตรงกัน';
+              await refresh();
+            } catch (error) {
+              handleManualMutationFailure(attempt, error, status);
+            }
+          });
+          card.append(form);
+        } else if (reversedIds.has(transaction.recordId)) {
+          card.append(makeRow('สถานะ', 'ถูกย้อนรายการแล้ว'));
+        }
+        list.append(card);
+      }
+    } catch {
+      list.append(makeRow('สถานะ', 'ยังอ่าน Ledger Owner ไม่ได้'));
+    }
+  }
+
+  await refresh();
+}
+
 function calendarMonthLabel(year, month) {
   return new Intl.DateTimeFormat('th-TH', { month:'long', year:'numeric', timeZone:'Asia/Bangkok' }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
@@ -559,12 +684,15 @@ root?.addEventListener('click', event => {
   }
 
   const task = event.target.closest?.('[data-task]')?.dataset.task;
-  if (!['income','outcome','calendar'].includes(task)) return;
+  if (!['income','outcome','calendar','ledger','store','ride'].includes(task)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   if (task === 'income') void renderIncome();
   else if (task === 'outcome') void renderOutcome();
-  else void renderCalendar();
+  else if (task === 'calendar') void renderCalendar();
+  else if (task === 'ledger') void renderLedger();
+  else if (task === 'store') void renderStore();
+  else void renderRide();
 }, true);
 
 let shellWasVisible = false;
