@@ -81,7 +81,9 @@ function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
     'installedApkSha256',
     'beforeVersionCode',
     'afterVersionCode',
+    'afterVersionName',
     'launchedAfterInstall',
+    'launchEvidence',
     'readbackVersionCode',
     'persistenceProbe',
   ];
@@ -90,8 +92,11 @@ function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
   }
 
   const probe = evidence.persistenceProbe;
-  if (!probe || typeof probe !== 'object' || typeof probe.key !== 'string' || probe.key.trim() === '' ||
-      probe.before === undefined || probe.after === undefined) {
+  const launch = evidence.launchEvidence;
+  if (!probe || typeof probe !== 'object' || probe.key !== 'GREENFIELD_DATABASE_VAULT_SHA256' ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.before || '')) ||
+      !/^sha256:[0-9a-f]{64}$/i.test(String(probe.after || '')) ||
+      !launch || typeof launch !== 'object') {
     return { status: 'VERIFY', reasons: ['DEVICE_EVIDENCE_INCOMPLETE'] };
   }
 
@@ -106,11 +111,19 @@ function evaluateDeviceEvidence(expected, staticEvidence, evidence) {
   }
   if (evidence.beforeVersionCode !== expected.baselineVersionCode) reasons.push('DEVICE_BASELINE_VERSION_MISMATCH');
   if (evidence.afterVersionCode !== expected.targetVersionCode) reasons.push('DEVICE_TARGET_VERSION_MISMATCH');
+  if (evidence.afterVersionName !== expected.targetVersionName) reasons.push('DEVICE_TARGET_VERSION_NAME_MISMATCH');
   if (!isPositiveInteger(evidence.beforeVersionCode) || !isPositiveInteger(evidence.afterVersionCode) ||
       evidence.afterVersionCode <= evidence.beforeVersionCode) {
     reasons.push('DEVICE_VERSION_NOT_MONOTONIC');
   }
   if (evidence.launchedAfterInstall !== true) reasons.push('DEVICE_POST_INSTALL_LAUNCH_MISSING');
+  if (launch.source !== 'ADB_AM_START_WAIT' || launch.launched !== true ||
+      launch.applicationId !== expected.applicationId ||
+      !String(launch.component || '').startsWith(`${expected.applicationId}/`) ||
+      !/^d+$/.test(String(launch.processId || '')) ||
+      !launch.capturedAt || !Number.isFinite(Date.parse(String(launch.capturedAt)))) {
+    reasons.push('DEVICE_LAUNCH_EVIDENCE_INVALID');
+  }
   if (evidence.readbackVersionCode !== expected.targetVersionCode) reasons.push('DEVICE_VERSION_READBACK_MISMATCH');
   if (!sameValue(probe.before, probe.after)) reasons.push('PERSISTENCE_READBACK_MISMATCH');
 
