@@ -45,6 +45,20 @@ function makeHero(title, intro) {
   return hero;
 }
 
+function makeSectionHeading(title, copy = '') {
+  const heading = document.createElement('div');
+  heading.className = 'manual-section-heading';
+  const label = document.createElement('strong');
+  label.textContent = title;
+  heading.append(label);
+  if (copy) {
+    const detail = document.createElement('small');
+    detail.textContent = copy;
+    heading.append(detail);
+  }
+  return heading;
+}
+
 function makeStatus() {
   const status = document.createElement('p');
   status.className = 'pin-status';
@@ -143,22 +157,30 @@ async function renderIncome() {
   routes.className = 'task-grid income-route-grid';
   routes.dataset.incomeRoutes = '';
   routes.innerHTML = '<button type="button" class="task-card" data-income-target="store" data-task="store"><span class="task-copy"><strong>ร้านค้า</strong><small>ขาย · สต็อก · ค้างรับ · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="ride" data-task="ride"><span class="task-copy"><strong>งานวิ่ง</strong><small>รายได้ · เครดิต · รอบงาน · ประวัติ</small></span><span class="task-icon" aria-hidden="true">›</span></button><button type="button" class="task-card" data-income-target="other-general"><span class="task-copy"><strong>รายรับอื่น</strong><small>บันทึกรายรับตรงพร้อมที่มา</small></span><span class="task-icon" aria-hidden="true">›</span></button>';
-  manualDetailContent.append(routes);
-
   const goalForm = document.createElement('form');
   goalForm.className = 'auth-form manual-direct-form';
   goalForm.id = 'manual-daily-goal-form';
   goalForm.innerHTML = '<label>เป้ารายได้วันนี้ (บาท)</label><input name="goal" type="number" min="0" step="0.01" inputmode="decimal" required><button class="secondary-button" type="submit">บันทึกเป้าวันนี้</button>';
   const goalStatus = makeStatus();
   goalForm.append(goalStatus);
-  manualDetailContent.append(goalForm);
 
-  const summary = document.createElement('div');
-  summary.className = 'detail-list';
-  manualDetailContent.append(summary);
+  const overview = document.createElement('div');
+  overview.className = 'detail-list manual-overview manual-income-overview';
+  const records = document.createElement('div');
+  records.className = 'detail-list manual-record-list manual-income-records';
+  manualDetailContent.append(
+    makeSectionHeading('ภาพรวม', 'ตัวเลขสำคัญก่อนลงมือ'),
+    overview,
+    makeSectionHeading('ทำต่อ', 'เลือก Owner หรือปรับเป้าของวันนี้'),
+    routes,
+    goalForm,
+    makeSectionHeading('รายการจริง', 'ค้างรับและรายการที่ต้องจัดการต่อ'),
+    records,
+  );
 
   async function refresh() {
-    summary.replaceChildren();
+    overview.replaceChildren();
+    records.replaceChildren();
     try {
       const [incomeTruth, rideTruth, planning] = await Promise.all([
         ledgerBridge.readIncomeTruth(),
@@ -170,7 +192,7 @@ async function renderIncome() {
       const goalInput = goalForm.elements.namedItem('goal');
       if (goalInput && document.activeElement !== goalInput) goalInput.value = planning.goalSatang == null ? '' : String(planning.goalSatang / 100);
 
-      summary.append(
+      overview.append(
         makeRow('เงินจริง', formatSatang(incomeTruth.balanceSatang)),
         makeRow('เงินเข้าวันนี้', formatSatang(incomeTruth.todayInSatang)),
         makeRow('ลูกหนี้ร้าน', formatSatang(incomeTruth.outstandingReceivableSatang)),
@@ -178,7 +200,7 @@ async function renderIncome() {
         makeRow('คาดว่าจะเข้า', formatSatang(planning.expectedIncomingSatang)),
         makeRow('เป้าที่สร้างได้วันนี้', formatSatang(planning.generatedTodaySatang)),
       );
-      if (!incomeTruth.receivables.length) summary.append(makeRow('ลูกหนี้', 'ไม่มีรายการค้างรับ'));
+      if (!incomeTruth.receivables.length) records.append(makeRow('ลูกหนี้', 'ไม่มีรายการค้างรับ'));
       for (const item of incomeTruth.receivables.slice(0, 10)) {
         const outstandingSatang = Number(item.outstandingSatang);
         const amount = Number.isSafeInteger(outstandingSatang) ? formatSatang(outstandingSatang) : 'ต้องตรวจสอบ';
@@ -219,10 +241,10 @@ async function renderIncome() {
         } else {
           card.append(makeRow('สถานะ', 'ยังไม่มีคิวรับชำระที่ปลอดภัย'));
         }
-        summary.append(card);
+        records.append(card);
       }
     } catch {
-      summary.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้'));
+      records.append(makeRow('สถานะ', 'ยังอ่านข้อมูลจริงไม่ได้'));
     }
   }
 
@@ -320,13 +342,25 @@ async function renderOutcome() {
     queueId:'CAL-LH-MANUAL-OBLIGATION',
   });
   obligationForm.append(obligationStatus);
-  manualDetailContent.append(expenseForm, obligationForm);
 
+  const overview = document.createElement('div');
+  overview.className = 'detail-list manual-overview manual-outcome-overview';
+  const actions = document.createElement('div');
+  actions.className = 'manual-action-grid';
+  actions.append(expenseForm, obligationForm);
   const list = document.createElement('div');
-  list.className = 'detail-list';
-  manualDetailContent.append(list);
+  list.className = 'detail-list manual-record-list manual-outcome-records';
+  manualDetailContent.append(
+    makeSectionHeading('ภาพรวม', 'ดูแรงกดดันก่อนบันทึกรายการใหม่'),
+    overview,
+    makeSectionHeading('บันทึก', 'รายจ่ายทันทีหรือภาระที่มีวันครบกำหนด'),
+    actions,
+    makeSectionHeading('รายการจริง', 'รายจ่ายและภาระจาก Runtime'),
+    list,
+  );
 
   async function refresh() {
+    overview.replaceChildren();
     list.replaceChildren();
     try {
       const [truth, calendar, planning, ride] = await Promise.all([
@@ -337,7 +371,7 @@ async function renderOutcome() {
       ]);
       syncDashboardFromTruth(truth);
       syncDashboardFromPlanning(planning);
-      list.append(
+      overview.append(
         makeRow('เงินออกวันนี้', formatSatang(truth.todayOutSatang)),
         makeRow('ใช้ได้ตอนนี้', formatSatang(planning.spendableBalanceSatang)),
         makeRow('เพดานใช้จ่าย', planning.spendingCeilingStatus === 'OWNER_RULE_REQUIRED' ? 'ยังไม่ได้กำหนดกติกา' : planning.spendingCeilingSatang == null ? '—' : formatSatang(planning.spendingCeilingSatang)),
@@ -650,7 +684,7 @@ async function renderCalendar() {
         if (cell.date === selectedDate) button.classList.add('is-selected');
         button.dataset.calendarDate = cell.date;
         button.setAttribute('role', 'gridcell');
-        button.innerHTML = `<strong>${Number(cell.date.slice(-2))}</strong>${cell.items.length ? `<small>${cell.items.length} รายการ</small>` : '<small>—</small>'}`;
+        button.innerHTML = `<strong>${Number(cell.date.slice(-2))}</strong><small aria-label="${cell.items.length} รายการ">${cell.items.length || '—'}</small>`;
         button.addEventListener('click', () => { selectedDate = cell.date; void draw(); });
         grid.append(button);
       }

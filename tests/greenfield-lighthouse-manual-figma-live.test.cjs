@@ -21,8 +21,11 @@ test('LIGHTHOUSE root navigation is CHAT / MANUAL / SETTINGS only', () => {
   assert.match(html, /data-root-target="chat"/);
   assert.match(html, /data-root-target="manual"/);
   assert.match(html, /data-root-target="settings"/);
+  const styles = read('lighthouse-next/styles.css');
   assert.match(surface, /ensureVisibleRoot/);
   assert.match(surface, /manualNav\?\.click\(\)/);
+  assert.match(styles, /\.bottom-nav\{[\s\S]*grid-template-columns:repeat\(3,1fr\)/);
+  assert.doesNotMatch(styles, /\.bottom-nav\{[\s\S]*grid-template-columns:repeat\(4,1fr\)/);
 });
 
 test('MANUAL owns the Today dashboard and exposes only the four owner houses', () => {
@@ -56,6 +59,22 @@ test('MANUAL direct Income and Outcome mutate through owner bridges, never Chat 
   assert.match(surface, /ledgerBridge\.payObligation\(/);
   assert.match(surface, /ledgerBridge\.readLedgerTruth\(/);
   assert.doesNotMatch(surface, /submitChatText/);
+});
+
+test('MANUAL detail composition separates overview actions and real records', () => {
+  const surface = read('lighthouse-next/surface-contract.mjs');
+  const polish = read('lighthouse-next/owner-polish.css');
+
+  assert.match(surface, /makeSectionHeading\('ภาพรวม'/);
+  assert.match(surface, /makeSectionHeading\('ทำต่อ'/);
+  assert.match(surface, /makeSectionHeading\('บันทึก'/);
+  assert.match(surface, /makeSectionHeading\('รายการจริง'/);
+  assert.match(surface, /manual-income-overview/);
+  assert.match(surface, /manual-outcome-overview/);
+  assert.match(surface, /manual-action-grid/);
+  assert.match(polish, /\.manual-overview\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(polish, /\.task-card\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+60px/);
+  assert.doesNotMatch(polish, /grid-template-columns:\s*64px\s+minmax\(0,\s*1fr\)\s+18px/);
 });
 
 test('Calendar surface routes reschedule/status through runtime bridge and does not close owner-controlled payments', () => {

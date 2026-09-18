@@ -17,6 +17,15 @@ test('Calendar recovery restores the proven month navigation surface', () => {
   assert.match(surface, /ledgerBridge\.readCalendarTruth\(\)/);
 });
 
+test('Calendar mobile layout keeps seven columns contained on narrow screens', () => {
+  const styles = read('lighthouse-next/styles.css');
+  const surface = read('lighthouse-next/surface-contract.mjs');
+  assert.match(styles, /\.calendar-month-grid\{[\s\S]*grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.calendar-day\{[\s\S]*min-width:0;[\s\S]*overflow:hidden/);
+  assert.match(styles, /@media\(max-width:380px\)[\s\S]*data-calendar-today/);
+  assert.match(surface, /<small aria-label="\$\{cell\.items\.length\} รายการ">\$\{cell\.items\.length \|\| '—'\}<\/small>/);
+});
+
 test('Calendar month projection is a read-only 42-cell view over durable records', async () => {
   const moduleUrl = pathToFileURL(path.join(root, 'lighthouse-next/calendar-month.mjs')).href + `?t=${Date.now()}`;
   const { projectCalendarMonth } = await import(moduleUrl);
