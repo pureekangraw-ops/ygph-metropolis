@@ -107,3 +107,14 @@ test('missing device fields stay VERIFY rather than being promoted to PASS', asy
   assert.equal(result.reasons.includes('DEVICE_EVIDENCE_INCOMPLETE'), true);
   assert.throws(() => assertAndroidInstallAccepted(result), /ANDROID_INSTALL_NOT_ACCEPTED:VERIFY/);
 });
+
+
+test('Android shell exposes one command lane for physical install-over evidence', () => {
+  const fs = require('node:fs');
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../android-shell/package.json'), 'utf8'));
+  assert.equal(pkg.scripts['acceptance:capture-installed'], 'node tools/capture-installed-apk-evidence.mjs');
+  assert.equal(pkg.scripts['acceptance:capture-launch'], 'node tools/capture-app-launch-evidence.mjs');
+  assert.equal(pkg.scripts['acceptance:persistence-probe'], 'node tools/create-install-over-persistence-probe.mjs');
+  assert.equal(pkg.scripts['acceptance:assemble'], 'node tools/create-install-over-device-evidence.mjs');
+  assert.equal(pkg.scripts['acceptance:evaluate'], 'node tools/evaluate-install-over-acceptance.mjs');
+});
