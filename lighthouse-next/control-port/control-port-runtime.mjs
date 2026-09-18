@@ -3,7 +3,7 @@ import { CONTROL_PORT_GUARD } from './control-port.mjs';
 export const CONTROL_PORT_STORAGE_KEY = 'lighthouse-control-port-v1';
 export const CONTROL_PORT_STATE_SCHEMA = 1;
 
-const TERMINAL = new Set(['COMPLETE','BLOCKED','ERROR','CANCELLED']);
+const TERMINAL = new Set(['COMPLETE','ERROR','CANCELLED']);
 const SECRET_KEY = /(pin|password|recovery|vault|secret|token|passphrase)/i;
 
 function clone(value) {
@@ -20,6 +20,14 @@ function requestId(value) {
   const id = text(value, 'LIGHTHOUSE_CONTROL_PORT_REQUEST_ID_REQUIRED');
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)) throw new Error('LIGHTHOUSE_CONTROL_PORT_REQUEST_ID_INVALID');
   return id;
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function containsSecret(value, seen = new Set()) {
@@ -152,9 +160,14 @@ export function createLighthouseControlPortRuntime({
     const id = requestId(command.requestId);
     const capabilityId = text(command.capabilityId, 'LIGHTHOUSE_CONTROL_PORT_CAPABILITY_REQUIRED');
     const current = load();
-    if (current.inbox[id]) return clone(current.inbox[id]);
-
     const proposal = port.propose({ requestId:id, capabilityId, payload:command.payload || {} });
+    if (current.inbox[id]) {
+      const existing = current.inbox[id];
+      const sameCapability = existing.capabilityId === capabilityId;
+      const samePayload = existing.payloadRedacted || canonical(existing.payload || {}) === canonical(command.payload || {});
+      if (!sameCapability || !samePayload) throw new Error(`LIGHTHOUSE_CONTROL_PORT_REQUEST_ID_CONFLICT:${id}`);
+      return clone(existing);
+    }
     const forbiddenPayload = containsSecret(command.payload || {});
     const effectiveGuard = forbiddenPayload ? CONTROL_PORT_GUARD.FORBIDDEN : proposal.guard;
     const safePayload = effectiveGuard === CONTROL_PORT_GUARD.FORBIDDEN ? null : clone(command.payload || {});
@@ -386,6 +399,7 @@ export function createLighthouseControlPortRuntime({
     const results = [];
     for (const entry of entries) {
       if (entry.status === 'CONFIRMATION_REQUIRED') continue;
+      if (entry.status === 'BLOCKED' && entry.guard === CONTROL_PORT_GUARD.FORBIDDEN) continue;
       results.push(await process(entry.requestId, { confirmed:Boolean(entry.confirmed) }));
     }
     return results;
