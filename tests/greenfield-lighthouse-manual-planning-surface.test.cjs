@@ -52,3 +52,22 @@ test('Outcome shows spendable balance from calculation authority without inventi
   assert.match(surface, /ใช้ได้ตอนนี้/);
   assert.doesNotMatch(surface, /localStorage.*spending|spending.*localStorage/s);
 });
+
+
+test('legacy app finance refresh cannot overwrite planning fields owned by surface contract', () => {
+  const app = read(path.join(root, 'lighthouse-next', 'app.mjs'));
+  const start = app.indexOf('function renderHomeTruth()');
+  const end = app.indexOf('function resetDemoState', start);
+  assert.ok(start >= 0 && end > start, 'renderHomeTruth block must exist');
+  const body = app.slice(start, end);
+  for (const symbol of [
+    'homeExpectedValue',
+    'homeObligationTitle',
+    'homeObligationDue',
+    'homeObligationValue',
+    'homeGapValue',
+    'homeTargetValue',
+  ]) {
+    assert.doesNotMatch(body, new RegExp(symbol), `${symbol} belongs to planning surface contract`);
+  }
+});
