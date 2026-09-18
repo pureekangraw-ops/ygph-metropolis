@@ -87,7 +87,8 @@ test('LIGHTHOUSE app activates Control Port only after owner unlock and reads st
   assert.match(appSource, /createLighthouseControlPort\(\{ ledgerBridge, storeBridge \}\)/);
   assert.match(appSource, /createLighthouseControlPortRuntime\(/);
   assert.match(appSource, /fetch\('\.\/build-identity\.json', \{ cache:'no-store' \}\)/);
-  assert.match(appSource, /buildState:\{\s*status:'UNKNOWN'/);
+  assert.match(appSource, /buildState:\{\s*status:identity \? 'STAGED' : 'UNKNOWN'/);
+  assert.match(appSource, /mainSha:typeof identity\?\.sourceCommit/);
   assert.match(appSource, /try \{ await controlPortRuntime\.refreshSnapshot\(\); \} catch \{\}/);
   assert.doesNotMatch(appSource, /mainSha:\s*['"][0-9a-f]{40}['"]/);
 });
