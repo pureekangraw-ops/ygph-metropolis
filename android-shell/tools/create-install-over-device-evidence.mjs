@@ -19,11 +19,25 @@ function requireProbe(value) {
   return value;
 }
 
+function requireLaunchEvidence(value, applicationId) {
+  if (!value || typeof value !== 'object') throw new Error('INSTALL_OVER_LAUNCH_EVIDENCE_REQUIRED');
+  if (value.source !== 'ADB_AM_START_WAIT' || value.launched !== true) {
+    throw new Error('INSTALL_OVER_LAUNCH_EVIDENCE_INVALID');
+  }
+  if (String(value.applicationId || '') !== String(applicationId || '')) {
+    throw new Error('INSTALL_OVER_LAUNCH_APP_ID_MISMATCH');
+  }
+  if (!String(value.component || '').startsWith(`${applicationId}/`)) {
+    throw new Error('INSTALL_OVER_LAUNCH_COMPONENT_MISMATCH');
+  }
+  return value;
+}
+
 export function createInstallOverDeviceEvidence({
   beforeInstalled,
   afterInstalled,
   persistenceProbe,
-  launchedAfterInstall = false,
+  launchEvidence,
 } = {}) {
   const before = requireSnapshot(beforeInstalled, 'BEFORE');
   const after = requireSnapshot(afterInstalled, 'AFTER');
@@ -35,6 +49,7 @@ export function createInstallOverDeviceEvidence({
   if (String(before.installedSignerCertificateSha256).toLowerCase() !== String(after.installedSignerCertificateSha256).toLowerCase()) {
     throw new Error('INSTALL_OVER_SIGNER_DRIFT');
   }
+  const launch = requireLaunchEvidence(launchEvidence, after.installedApplicationId);
 
   return Object.freeze({
     installMode: 'INSTALL_OVER',
@@ -43,7 +58,8 @@ export function createInstallOverDeviceEvidence({
     installedApkSha256: after.apkSha256,
     beforeVersionCode: before.versionCode,
     afterVersionCode: after.versionCode,
-    launchedAfterInstall: launchedAfterInstall === true,
+    launchedAfterInstall: true,
+    launchEvidence: Object.freeze({ ...launch }),
     readbackVersionCode: after.versionCode,
     persistenceProbe: Object.freeze({ ...probe }),
   });
@@ -57,21 +73,22 @@ export async function createInstallOverDeviceEvidenceFromFiles({
   beforeInstalledPath,
   afterInstalledPath,
   persistenceProbePath,
-  launchedAfterInstall = false,
+  launchEvidencePath,
 } = {}) {
-  if (!beforeInstalledPath || !afterInstalledPath || !persistenceProbePath) {
+  if (!beforeInstalledPath || !afterInstalledPath || !persistenceProbePath || !launchEvidencePath) {
     throw new Error('INSTALL_OVER_EVIDENCE_PATHS_REQUIRED');
   }
-  const [beforeInstalled, afterInstalled, persistenceProbe] = await Promise.all([
+  const [beforeInstalled, afterInstalled, persistenceProbe, launchEvidence] = await Promise.all([
     readJson(beforeInstalledPath),
     readJson(afterInstalledPath),
     readJson(persistenceProbePath),
+    readJson(launchEvidencePath),
   ]);
   return createInstallOverDeviceEvidence({
     beforeInstalled,
     afterInstalled,
     persistenceProbe,
-    launchedAfterInstall,
+    launchEvidence,
   });
 }
 
@@ -81,7 +98,7 @@ if (process.argv[1] && resolve(process.argv[1]) === modulePath) {
     beforeInstalledPath: process.argv[2],
     afterInstalledPath: process.argv[3],
     persistenceProbePath: process.argv[4],
-    launchedAfterInstall: process.argv.includes('--launched-after-install'),
+    launchEvidencePath: process.argv[5],
   });
   console.log(JSON.stringify(result, null, 2));
 }
