@@ -14,6 +14,7 @@ import { createLighthouseControlPort } from './control-port/control-port.mjs';
 import { createLighthouseControlPortRuntime } from './control-port/control-port-runtime.mjs';
 import { createLighthouseControlPortSync } from './control-port/control-port-sync.mjs';
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
+import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 function registerProductionServiceWorker() {
@@ -285,6 +286,7 @@ showRecoveryButton.addEventListener('click', () => { devicePassword.value = ''; 
 cancelRecoveryButton.addEventListener('click', () => { clearRecoveryFields(); showLoginGate(); });
 lockAppButton.addEventListener('click', lockApp);
 window.addEventListener('pagehide', () => { runtimeGate.lock(); });
+installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') void syncGoHubControlPort();
