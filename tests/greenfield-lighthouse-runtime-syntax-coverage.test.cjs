@@ -12,10 +12,7 @@ test('syntax gate directly checks every staged LIGHTHOUSE JavaScript runtime mod
   const command = String(pkg.scripts?.['check:syntax'] || '');
 
   for (const relative of stage.LIGHTHOUSE_RUNTIME_FILES.filter(file => file.endsWith('.mjs'))) {
-    assert.match(
-      command,
-      new RegExp(`node --check lighthouse-next/${relative.replace(/[.*+?^$\{\}()|[\]\\\\]/g, '\\\\$&')}`),
-      `${relative} must be directly syntax checked`,
-    );
+    const token = `node --check lighthouse-next/${relative}`;
+    assert.equal(command.includes(token), true, `${relative} must be directly syntax checked`);
   }
 });
