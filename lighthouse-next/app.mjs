@@ -1,3 +1,4 @@
+import './android-back.mjs';
 import { parseProductAddText, suggestProductQuestion, resolveProductDraft } from './store-product.mjs';
 import { interpretChatIntent } from './chat-intent.mjs';
 import { createChatReadCapability } from './chat-read.mjs';
