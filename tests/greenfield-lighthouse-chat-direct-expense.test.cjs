@@ -60,7 +60,7 @@ test('CHAT app keeps expense draft pending until COMPLETE durable readback', () 
   assert.match(app, /DIRECT_EXPENSE/);
   assert.match(app, /CONFIRM_DIRECT_EXPENSE/);
   assert.match(app, /requestId/);
-  assert.match(app, /result\.status\s*===\s*['"]COMPLETE['"]/);
+  assert.match(app, /result\?\.status\s*===\s*['"]COMPLETE['"]/);
   assert.match(app, /บันทึกอาจสำเร็จแล้ว แต่ยังอ่านกลับไม่ได้/);
   assert.match(app, /รายการยังค้างอยู่/);
 });
