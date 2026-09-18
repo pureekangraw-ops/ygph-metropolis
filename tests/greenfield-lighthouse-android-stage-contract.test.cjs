@@ -33,6 +33,7 @@ const runtimeFiles = [
   'chat-read.mjs',
   'chat-intent-recovery.mjs',
   'chat-path.mjs',
+  'chat-lifecycle.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
 ];
