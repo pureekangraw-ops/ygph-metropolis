@@ -60,11 +60,23 @@ export async function captureAppLaunchEvidence({
   );
   const component = parseResolvedActivity(resolveResult.stdout, appId);
 
+  assertRun(
+    await runner(adb, ['shell','am','force-stop',appId]),
+    `${adb} shell am force-stop`,
+  );
+
   const launchResult = assertRun(
     await runner(adb, ['shell','am','start','-W','-n',component]),
     `${adb} shell am start -W`,
   );
   const receipt = parseAmStartWait(launchResult.stdout);
+
+  const pidResult = assertRun(
+    await runner(adb, ['shell','pidof',appId]),
+    `${adb} shell pidof`,
+  );
+  const processId = String(pidResult.stdout || '').trim().split(/\s+/).find(Boolean) || null;
+  if (!processId || !/^\d+$/.test(processId)) throw new Error('ADB_LAUNCH_PROCESS_MISSING');
 
   return Object.freeze({
     source:'ADB_AM_START_WAIT',
@@ -72,6 +84,7 @@ export async function captureAppLaunchEvidence({
     applicationId:appId,
     component,
     launched:true,
+    processId,
     activity:receipt.activity,
     totalTimeMs:receipt.totalTimeMs,
   });
