@@ -84,12 +84,13 @@ export function createIndexedDbLighthouseHubCredentialStore({ indexedDBImpl = gl
     try {
       const tx = db.transaction('credentials', mode);
       const store = tx.objectStore('credentials');
-      const result = await operation(store);
-      await new Promise((resolve, reject) => {
+      const completed = new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onabort = () => reject(tx.error || new Error('LIGHTHOUSE_HUB_CREDENTIAL_DB_ABORTED'));
         tx.onerror = () => reject(tx.error || new Error('LIGHTHOUSE_HUB_CREDENTIAL_DB_FAILED'));
       });
+      const result = await operation(store);
+      await completed;
       return result;
     } finally {
       db.close();
