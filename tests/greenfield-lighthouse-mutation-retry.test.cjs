@@ -71,6 +71,8 @@ test('MANUAL mutation surfaces reuse stable attempts instead of minting new ids 
     'TX-LH-MANUAL-PAY',
     'WF-LH-CALENDAR-RESCHEDULE',
     'WF-LH-CALENDAR-STATUS',
+    'WF-LH-MANUAL-REVERSAL',
+    'TX-LH-MANUAL-REVERSAL',
   ]) {
     assert.match(surface, new RegExp(prefix));
   }
@@ -84,6 +86,7 @@ test('MANUAL mutation surfaces reuse stable attempts instead of minting new ids 
   assert.match(surface, /payAttempt\.acquire/);
   assert.match(surface, /rescheduleAttempt\.acquire/);
   assert.match(surface, /statusAttempt\.acquire/);
+  assert.match(surface, /attempt\.acquire\(\{ originalRecordId:transaction\.recordId, reason \}\)/);
 
   for (const forbidden of [
     "workflowId:operationId('WF-LH-MANUAL-INCOME')",
