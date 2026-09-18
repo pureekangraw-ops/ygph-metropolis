@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const root = process.cwd();
 const appPath = path.join(root, 'lighthouse-next/app.mjs');
+const surfacePath = path.join(root, 'lighthouse-next/surface-contract.mjs');
 
 function readApp() {
   assert.equal(fs.existsSync(appPath), true, 'missing lighthouse-next/app.mjs');
@@ -133,19 +134,19 @@ test('real paid sale path never mutates demo cash, stock, or transaction authori
   assert.doesNotMatch(body, /state\.transactions\.push/);
 });
 
-test('Manual Store renders durable Product attributes and quantity through the Store truth view-model', () => {
-  const app = readApp();
-  const body = functionBody(app, 'renderStoreDetail', 'renderRideDetail');
-  assert.match(body, /projectStoreView\(storeTruth\)/);
-  assert.doesNotMatch(body, /state\.products/);
+test('Manual Store reads fresh durable Product attributes and quantity from Store owner', () => {
+  const surface = fs.readFileSync(surfacePath, 'utf8');
+  const body = functionBody(surface, 'renderStore', 'renderRide');
+  assert.match(body, /storeBridge\.readStoreTruth\(\)/);
+  assert.doesNotMatch(body, /state\.products|\bstoreTruth\b/);
   for (const field of ['name', 'model', 'color', 'descriptors', 'quantity']) {
     assert.match(body, new RegExp(`product\\.${field}\\b`), `Manual Store must render Product ${field}`);
   }
 });
 
-test('Manual Store keeps legacy unassigned stock separate through the Store truth view-model', () => {
-  const app = readApp();
-  const body = functionBody(app, 'renderStoreDetail', 'renderRideDetail');
-  assert.match(body, /view\.legacyUnassignedQuantity/);
+test('Manual Store keeps legacy unassigned stock separate from active products', () => {
+  const surface = fs.readFileSync(surfacePath, 'utf8');
+  const body = functionBody(surface, 'renderStore', 'renderRide');
+  assert.match(body, /truth\.legacyUnassignedQuantity/);
   assert.match(body, /สต็อกเดิมที่ยังไม่ผูกสินค้า/);
 });
