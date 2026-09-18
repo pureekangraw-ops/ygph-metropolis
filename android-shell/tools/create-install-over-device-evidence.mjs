@@ -4,10 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 function requireSnapshot(value, label) {
   if (!value || typeof value !== 'object') throw new Error(`INSTALL_OVER_${label}_SNAPSHOT_REQUIRED`);
-  for (const key of ['installedApplicationId', 'installedSignerCertificateSha256', 'versionCode', 'apkSha256']) {
+  for (const key of ['source', 'capturedAt', 'installedApplicationId', 'installedSignerCertificateSha256', 'versionCode', 'versionName', 'apkSha256']) {
     if (value[key] === undefined || value[key] === null || value[key] === '') {
       throw new Error(`INSTALL_OVER_${label}_SNAPSHOT_INCOMPLETE`);
     }
+  }
+  if (value.source !== 'ADB_INSTALLED_APK' || !Number.isFinite(Date.parse(String(value.capturedAt))) ||
+      !Number.isInteger(Number(value.versionCode)) || Number(value.versionCode) <= 0 ||
+      !/^[0-9a-f]{64}$/i.test(String(value.apkSha256 || '')) ||
+      !/^[0-9a-f:]{64,95}$/i.test(String(value.installedSignerCertificateSha256 || ''))) {
+    throw new Error(`INSTALL_OVER_${label}_SNAPSHOT_INVALID`);
   }
   return value;
 }
