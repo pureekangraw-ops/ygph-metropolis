@@ -161,6 +161,8 @@ function buildPlanningTruth(runtime, state, projectFinancial, now) {
     pendingRideCreditSatang,
     expectedIncomingSatang,
     spendableBalanceSatang,
+    spendingCeilingStatus:'OWNER_RULE_REQUIRED',
+    spendingCeilingSatang:null,
     nextObligation,
   });
 }
