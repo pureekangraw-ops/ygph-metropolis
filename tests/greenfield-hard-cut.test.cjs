@@ -15,7 +15,7 @@ test('release authority is LIGHTHOUSE Next and legacy METROPOLIS shell is rollba
   assert.equal(manifest.productionBranch,'main');
   assert.equal(manifest.authority.builder,'scripts/stage-lighthouse-next-bundle.mjs');
   assert.equal(manifest.authority.assetsDirectory,'.lighthouse-production');
-  assert.deepEqual(manifest.surfaces.roots,['CHAT','MANUAL','SETTINGS']);
+  assert.deepEqual(manifest.surfaces.roots,['CHAT','MANUAL','GO','SETTINGS']);
   assert.equal(manifest.legacy.shellAuthority,'ROLLBACK_ONLY_NOT_DEPLOYED');
   assert.equal(manifest.runtimeTruth.greenfield,'RUNTIME_DEPENDENCY_ONLY_NOT_UI_AUTHORITY');
 });
