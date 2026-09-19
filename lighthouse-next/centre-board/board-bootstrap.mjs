@@ -111,8 +111,6 @@ export function createPinOnCentreBoard(boardValue, {
   const receiptId = id(receiptValue, 'CENTRE_BOARD_RECEIPT_ID_INVALID');
   const workId = id(workValue, 'CENTRE_BOARD_WORK_ID_INVALID');
   const at = requiredText(atValue, 'CENTRE_BOARD_AT_REQUIRED');
-  if (board.workId !== workId) throw new Error('CENTRE_BOARD_WORK_ID_MISMATCH');
-
   const pin = createCentrePin({
     ...(pinValue && typeof pinValue === 'object' && !Array.isArray(pinValue) ? pinValue : {}),
     workId,
@@ -169,7 +167,7 @@ export function createPinOnCentreBoard(boardValue, {
   });
 
   const readback = nextBoard.pins.find(item => item.pinId === pin.pinId);
-  if (!readback || nextBoard.revision !== nextRevision || readback.title !== pin.title || readback.status !== pin.status) {
+  if (!readback || nextBoard.revision !== nextRevision || readback.title !== pin.title || readback.status !== pin.status || readback.workId !== workId) {
     throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
   }
   return deepFreeze({ board:nextBoard, receipt });

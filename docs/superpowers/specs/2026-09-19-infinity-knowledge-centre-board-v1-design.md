@@ -2,13 +2,13 @@
 
 ## Goal
 
-สร้างสัญญากลางของบอร์ดสดใน LIGHTHOUSE เพื่อให้ห้องใหม่อ่านและรับหมุดก่อนทำงาน ห้องเดิมคืนผลพร้อมหลักฐานก่อนออก และสามารถพักงานเป็น Emergency Capsule เมื่อเส้นหลักใช้ไม่ได้ โดยไม่แตะ transport, realtime sync, UI หรือ Notion archival ในรอบนี้
+สร้างสัญญากลางของบอร์ดสดใน LIGHTHOUSE เพื่อให้ห้องใหม่อ่านและรับหมุดก่อนทำงาน ห้องเดิมคืนผลพร้อมหลักฐานก่อนออก และสามารถพักงานเป็น Emergency Capsule เมื่อเส้นหลักใช้ไม่ได้ โดยไม่ให้ห้องแชตกลายเป็น source of truth
 
 ## Authority and boundaries
 
 - GO Hub/Centre เป็นทางเข้าและทางออกที่บังคับใช้ Work ID
 - LIGHTHOUSE เป็นเจ้าของ live Centre Board และ local working-memory truth
-- Control Port เป็นเส้นทางเชื่อม แต่ transport/realtime wiring เป็นงานของ Work อื่น
+- Control Port เป็นเส้นทางเชื่อมและ readback
 - Notion รับเฉพาะ COMPLETED/CANCELLED/SUPERSEDED หลังแม่บ้านตรวจในรอบถัดไป
 - MIMIR ใช้ค้นประวัติ ไม่เป็น live board authority
 - ChatGPT memory ไม่เป็น authority
@@ -17,11 +17,17 @@
 
 ### Board
 
-บอร์ดหนึ่งชุดผูกกับ Work ID เดียว มี schemaVersion, boardId, workId, revision, updatedAt, pins และ audit
+บอร์ดหนึ่งชุดเป็น live circulation authority ระยะยาว มี schemaVersion, boardId, workId, revision, updatedAt, pins และ audit
+
+`board.workId` คือ Work ID ที่สร้าง/ถือ authority ของตัว Board และคงที่เพื่อรักษา provenance ของ storage identity
+
+Board ไม่ได้จำกัดให้ทุก Pin ต้องเป็น Work ID เดียวกับ Board อีกต่อไป
 
 ### Pin
 
-หมุดมี pinId, workId, title, detail, status, ownerEmployeeId, touchedBy, evidence, links, createdAt, updatedAt และ revision
+แต่ละหมุดมี `pinId` และ `workId` ของงานจริงที่กำลังหมุนเวียน พร้อม title, detail, status, ownerEmployeeId, touchedBy, evidence, links, createdAt, updatedAt และ revision
+
+Board เดียวจึงถือหลาย Work ID พร้อมกันได้ โดย CLAIM/RETURN ต้องส่ง Work ID ที่ตรงกับ Pin ที่เลือกทุกครั้ง
 
 สถานะ V1: OPEN, DOING, VERIFY, ARCHIVED, REOPENED, PENDING_RECOVERY
 
@@ -30,9 +36,10 @@ Employee ID ไม่มีทะเบียนถาวรส่วนกล�
 ### Entry receipt
 
 ห้องเริ่มงานได้เมื่อ:
-- Work ID ตรงกับบอร์ด
+- ระบุ Work ID ของ Pin ที่จะรับ
 - Employee ID ไม่ซ้ำกับผู้ทำงานอื่นบน live board
 - ระบุหมุดที่จะ claim
+- ทุก Pin ที่ claim มี Work ID ตรงกับ Work ID ที่ส่งมา
 - expected board revision ตรงกับ revision ปัจจุบัน
 
 ผลคือ BOARD_READ receipt ซึ่งบันทึก boardRevision และ claimedPinIds
@@ -40,6 +47,7 @@ Employee ID ไม่มีทะเบียนถาวรส่วนกล�
 ### Return receipt
 
 ห้องออกได้เมื่อ:
+- ระบุ Work ID ตรงกับ Pin ที่เคย claim/touch
 - แก้เฉพาะหมุดที่ claim/touch
 - ส่งผลจริง งานค้าง ขั้นต่อไป และหลักฐาน
 - expected board revision ตรง
@@ -53,11 +61,12 @@ Employee ID ไม่มีทะเบียนถาวรส่วนกล�
 
 ### Emergency Capsule
 
-เมื่อ Hub, LIGHTHOUSE หรือ readback ใช้ไม่ได้ ให้หยุด mutation และสร้าง capsule แบบ immutable ซึ่งเก็บ capsuleId, Work ID, Employee ID, base board revision, claimed pins, pending changes, evidence, reason, fingerprint และ PENDING_RECOVERY
+เมื่อ Hub, LIGHTHOUSE หรือ readback ใช้ไม่ได้ ให้หยุด mutation และสร้าง capsule แบบ immutable ซึ่งเก็บ capsuleId, Work ID ของ Pin, Employee ID, base board revision, claimed pins, pending changes, evidence, reason, fingerprint และ PENDING_RECOVERY
 
 Recovery ต้อง:
 - อ่าน live board ล่าสุด
 - ตรวจ base revision
+- ตรวจว่า Work ID ของ capsule ตรงกับ Pin ที่จะคืน
 - หากขัดแย้งให้คืน CONFLICT โดยไม่ replay
 - หากตรงจึง apply แล้วออก RECOVERY receipt
 - ห้ามปิด capsule ก่อน readback สำเร็จ
@@ -69,6 +78,7 @@ Recovery ต้อง:
 - CENTRE_BOARD_EMPLOYEE_ID_REQUIRED
 - CENTRE_BOARD_EMPLOYEE_ID_CONFLICT
 - CENTRE_BOARD_PIN_NOT_FOUND
+- CENTRE_BOARD_PIN_WORK_ID_MISMATCH
 - CENTRE_BOARD_PIN_NOT_CLAIMED
 - CENTRE_BOARD_REVISION_CONFLICT
 - CENTRE_BOARD_READBACK_MISMATCH
@@ -77,14 +87,16 @@ Recovery ต้อง:
 
 ## Persistence boundary
 
-V1 เป็น pure contract modules รับ/คืน plain objects และไม่เข้าถึง localStorage โดยตรง ห้อง transport จะเชื่อม persistence ภายหลัง วิธีนี้ป้องกันไม่ให้สอง Work แก้ Control Port transport พร้อมกัน
+Board ใช้ identity ของ Board คงที่ใน storage เดิม แต่ Pin ภายในสามารถเป็นคนละ Work ID ได้ การ write ยังคง optimistic revision + exact readback เหมือนเดิม
 
 ## Acceptance
 
-- สร้างบอร์ดและหมุด immutable ได้
-- ตรวจ Employee ID เฉพาะ live board ได้
+- สร้าง Board authority ครั้งเดียวได้
+- Board เดียวถือ Pin จากหลาย Work ID ได้
+- CLAIM/RETURN ตรวจ Work ID ที่ Pin ไม่ใช่บังคับเท่ากับ Board
 - Entry และ Return ออก receipt หลัง revision/readback ถูกต้อง
 - mutation ที่ revision เก่าไม่เปลี่ยนบอร์ด
+- Work ID ผิด Pin ถูกปฏิเสธแบบ atomic
 - Emergency Capsule มี deterministic fingerprint
 - recovery ที่ conflict ไม่ replay
-- tests ใหม่และ test suite เดิมผ่าน
+- test suite เดิมและ multi-work regression ผ่าน

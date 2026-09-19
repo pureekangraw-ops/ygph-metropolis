@@ -105,11 +105,7 @@ export function createCentreBoard(input = {}) {
   const workId = identifier(input.workId, 'CENTRE_BOARD_WORK_ID_REQUIRED', 'CENTRE_BOARD_WORK_ID_INVALID');
   const at = requiredText(input.at ?? input.updatedAt, 'CENTRE_BOARD_AT_REQUIRED');
   if (input.pins != null && !Array.isArray(input.pins)) throw new Error('CENTRE_BOARD_PINS_INVALID');
-  const pins = (input.pins || []).map(pin => {
-    const normalized = createCentrePin(pin);
-    if (normalized.workId !== workId) throw new Error('CENTRE_BOARD_PIN_WORK_ID_MISMATCH');
-    return normalized;
-  });
+  const pins = (input.pins || []).map(pin => createCentrePin(pin));
   if (new Set(pins.map(pin => pin.pinId)).size !== pins.length) {
     throw new Error('CENTRE_BOARD_PIN_ID_CONFLICT');
   }

@@ -51,10 +51,14 @@ function boardInput(board) {
   return board;
 }
 
-function assertWork(board, workId) {
-  const expected = id(workId, 'CENTRE_BOARD_WORK_ID_REQUIRED', 'CENTRE_BOARD_WORK_ID_INVALID');
-  if (board.workId !== expected) throw new Error('CENTRE_BOARD_WORK_ID_MISMATCH');
-  return expected;
+function workIdInput(value) {
+  return id(value, 'CENTRE_BOARD_WORK_ID_REQUIRED', 'CENTRE_BOARD_WORK_ID_INVALID');
+}
+
+function assertPinWork(pin, workId) {
+  if (pin?.workId !== workId) {
+    throw new Error(`CENTRE_BOARD_PIN_WORK_ID_MISMATCH:${pin?.pinId || 'unknown'}`);
+  }
 }
 
 function assertRevision(board, expectedRevision) {
@@ -84,7 +88,7 @@ export function enterCentreBoard(boardValue, {
 } = {}) {
   const board = boardInput(boardValue);
   const receiptId = id(receiptValue, 'CENTRE_BOARD_RECEIPT_ID_REQUIRED', 'CENTRE_BOARD_RECEIPT_ID_INVALID');
-  const workId = assertWork(board, workValue);
+  const workId = workIdInput(workValue);
   const employeeId = id(employeeValue, 'CENTRE_BOARD_EMPLOYEE_ID_REQUIRED', 'CENTRE_BOARD_EMPLOYEE_ID_INVALID');
   const claimedPinIds = pinIds(pinValues);
   const at = requiredText(atValue, 'CENTRE_BOARD_AT_REQUIRED');
@@ -99,6 +103,7 @@ export function enterCentreBoard(boardValue, {
   for (const pinId of selected) {
     const pin = board.pins.find(item => item.pinId === pinId);
     if (!pin) throw new Error(`CENTRE_BOARD_PIN_NOT_FOUND:${pinId}`);
+    assertPinWork(pin, workId);
     if (!['OPEN', 'REOPENED'].includes(pin.status)) {
       throw new Error(`CENTRE_BOARD_PIN_NOT_CLAIMABLE:${pinId}`);
     }
@@ -152,14 +157,13 @@ export function enterCentreBoard(boardValue, {
   if (
     nextBoard.revision !== nextRevision
     || readbackPins.length !== selected.size
-    || readbackPins.some(pin => pin.status !== 'DOING' || pin.ownerEmployeeId !== employeeId)
+    || readbackPins.some(pin => pin.status !== 'DOING' || pin.ownerEmployeeId !== employeeId || pin.workId !== workId)
   ) {
     throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
   }
 
   return deepFreeze({ board:nextBoard, receipt });
 }
-
 
 function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -221,7 +225,7 @@ export function returnCentreBoard(boardValue, {
 } = {}) {
   const board = boardInput(boardValue);
   const receiptId = id(receiptValue, 'CENTRE_BOARD_RECEIPT_ID_REQUIRED', 'CENTRE_BOARD_RECEIPT_ID_INVALID');
-  const workId = assertWork(board, workValue);
+  const workId = workIdInput(workValue);
   const employeeId = id(employeeValue, 'CENTRE_BOARD_EMPLOYEE_ID_REQUIRED', 'CENTRE_BOARD_EMPLOYEE_ID_INVALID');
   const updates = returnUpdates(updateValues);
   const at = requiredText(atValue, 'CENTRE_BOARD_AT_REQUIRED');
@@ -235,6 +239,7 @@ export function returnCentreBoard(boardValue, {
   for (const update of updates) {
     const pin = byId.get(update.pinId);
     if (!pin) throw new Error(`CENTRE_BOARD_PIN_NOT_FOUND:${update.pinId}`);
+    assertPinWork(pin, workId);
     if (pin.ownerEmployeeId !== employeeId && !pin.touchedBy.includes(employeeId)) {
       throw new Error(`CENTRE_BOARD_PIN_NOT_CLAIMED:${update.pinId}`);
     }
@@ -290,6 +295,7 @@ export function returnCentreBoard(boardValue, {
   const matches = updates.every(update => {
     const pin = readback.get(update.pinId);
     return pin
+      && pin.workId === workId
       && pin.status === update.status
       && pin.result === update.result
       && pin.nextAction === update.nextAction
