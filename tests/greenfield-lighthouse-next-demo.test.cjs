@@ -40,7 +40,7 @@ test('user surface is LIGHTHOUSE with Today dashboard inside MANUAL and exactly 
     const matches = nav.match(new RegExp(`>${label}<`, 'g')) || [];
     assert.equal(matches.length, 1, `${label} must appear exactly once in bottom root navigation`);
   }
-  assert.equal((nav.match(/data-root-target=/g) || []).length, 3, 'bottom root navigation must contain exactly three root controls');
+  assert.equal((nav.match(/data-root-target=/g) || []).length, 4, 'bottom root navigation must contain exactly four root controls');
   assert.doesNotMatch(nav, />หน้าหลัก</);
   assert.doesNotMatch(html, /เปิดแชต|เปิด MANUAL/);
 });
