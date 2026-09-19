@@ -47,7 +47,7 @@ function activePin(pins) {
     })[0] || null;
 }
 
-function routeMode({ hubStatus = {}, runtimeState = {}, snapshotStatus = {} } = {}) {
+function routeMode({ hubStatus = {}, runtimeState = {}, snapshotStatus = {}, emergencyCount = 0 } = {}) {
   const pairing = text(hubStatus?.pairing?.status);
   const realtime = text(hubStatus?.realtime?.status);
   const transport = text(hubStatus?.report?.transport);
@@ -59,6 +59,7 @@ function routeMode({ hubStatus = {}, runtimeState = {}, snapshotStatus = {} } = 
     nextAction === 'REVIEW_ERROR' ||
     nextAction === 'REQUIRES_ALLOWED_CAPABILITY';
 
+  if (emergencyCount > 0) return 'EMERGENCY';
   if (realtime === 'LIVE') return 'LIVE';
   if (realtime === 'CONNECTING' || realtime === 'RECONNECT_WAIT') return 'RECOVERY';
   if (recovery) return 'RECOVERY';
@@ -75,6 +76,7 @@ export function createGoBoardView({
   runtimeState = {},
   snapshotStatus = {},
   boardState = null,
+  emergencyCapsules = [],
 } = {}) {
   const inbox = Object.values(runtimeState?.inbox || {});
   const outbox = Object.values(runtimeState?.outbox || {});
@@ -87,7 +89,12 @@ export function createGoBoardView({
 
   return Object.freeze({
     route:Object.freeze({
-      mode:routeMode({ hubStatus, runtimeState, snapshotStatus }),
+      mode:routeMode({
+        hubStatus,
+        runtimeState,
+        snapshotStatus,
+        emergencyCount:Array.isArray(emergencyCapsules) ? emergencyCapsules.length : 0,
+      }),
       pairing:text(hubStatus?.pairing?.status) || 'UNKNOWN',
       realtime:text(hubStatus?.realtime?.status) || 'UNKNOWN',
       transport:text(hubStatus?.report?.transport) || 'UNKNOWN',
@@ -139,6 +146,18 @@ export function createGoBoardView({
       verify:pins.filter(pin => pin.status === 'VERIFY').length,
       recovery:pins.filter(pin => pin.status === 'PENDING_RECOVERY').length,
       pins,
+    }),
+    emergency:Object.freeze({
+      count:Array.isArray(emergencyCapsules) ? emergencyCapsules.length : 0,
+      items:Object.freeze((Array.isArray(emergencyCapsules) ? emergencyCapsules : []).map(capsule => Object.freeze({
+        capsuleId:text(capsule?.capsuleId),
+        workId:text(capsule?.workId),
+        employeeId:text(capsule?.employeeId),
+        reason:text(capsule?.reason),
+        status:text(capsule?.status) || 'PENDING_RECOVERY',
+        baseBoardRevision:numberOrNull(capsule?.baseBoardRevision),
+        at:text(capsule?.at),
+      }))),
     }),
   });
 }
