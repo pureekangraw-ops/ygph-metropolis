@@ -64,6 +64,7 @@ test('Centre Board capabilities are exposed without device confirmation and rema
   assert.equal(read.owner, 'LIGHTHOUSE:CENTRE_BOARD');
 
   for (const [id, action] of [
+    ['centreBoard.initialize','initializeBoard'],
     ['centreBoard.claim','claimPins'],
     ['centreBoard.return','returnPins'],
     ['centreBoard.recover','recoverEmergency'],
