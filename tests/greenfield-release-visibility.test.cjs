@@ -32,6 +32,9 @@ test('visible release authority is generated from Android identity into the cano
     assert.equal(identity.versionName,version.versionName);
     assert.equal(identity.versionCode,version.versionCode);
     assert.equal(runtimeManifest.authority,'scripts/stage-lighthouse-next-bundle.mjs');
+    assert.deepEqual(runtimeManifest.roots,['CHAT','MANUAL','GO','SETTINGS']);
+    assert.ok(runtimeManifest.applicationFiles.includes('lighthouse-next/go-board-live.mjs'));
+    assert.ok(runtimeManifest.applicationFiles.includes('lighthouse-next/centre-board/board-store.mjs'));
   }finally{await rm(dest,{recursive:true,force:true});}
 });
 
