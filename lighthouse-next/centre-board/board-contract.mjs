@@ -42,7 +42,7 @@ function requiredText(value, code) {
 
 function stringArray(value, code) {
   if (value == null) return [];
-  if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !item.trim())) {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string' || !IDENTIFIER.test(item.trim()))) {
     throw new Error(code);
   }
   return [...new Set(value.map(item => item.trim()))];
