@@ -11,7 +11,7 @@ function count(haystack, needle) {
   return haystack.split(needle).length - 1;
 }
 
-test('LIGHTHOUSE V2 keeps PIN outside a three-root live shell', () => {
+test('LIGHTHOUSE V2 keeps PIN outside a four-root live shell', () => {
   assert.match(html, /<section id="auth-screen"/);
   assert.match(html, /<section id="app-shell"/);
   assert.ok(html.indexOf('id="auth-screen"') < html.indexOf('id="app-shell"'));
