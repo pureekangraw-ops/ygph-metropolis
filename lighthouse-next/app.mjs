@@ -121,29 +121,79 @@ let realStoreCommitBusy = false;
 let realExpenseCommitBusy = false;
 let activeChatMessageId = null;
 let hubSyncBusy = false;
+let hubSyncRequested = false;
+let hubLiveController = null;
+let hubLiveStarting = false;
+
+function dispatchHubStatus(detail) {
+  globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail }));
+}
+
+function stopGoHubRealtime(reason = 'APP_INACTIVE') {
+  try { hubLiveController?.close?.(); } catch {}
+  hubLiveController = null;
+  dispatchHubStatus({ realtime:{ status:'OFFLINE', reason } });
+}
+
+async function ensureGoHubRealtime({ force = false } = {}) {
+  if (!hubControlPortTransport || typeof hubControlPortTransport.openLive !== 'function') return null;
+  if (hubLiveController || hubLiveStarting) return hubLiveController;
+  if (!force && appShell.hidden) return null;
+  hubLiveStarting = true;
+  try {
+    const pairing = await hubControlPortTransport.status();
+    if (pairing.status !== 'PAIRED') return null;
+    const controller = await hubControlPortTransport.openLive({
+      onSignal:signal => {
+        if (signal?.type === 'READY' || signal?.type === 'COMMAND_AVAILABLE') {
+          void syncGoHubControlPort({ force:true });
+        }
+      },
+      onStatus:realtime => {
+        dispatchHubStatus({ pairing, realtime });
+      },
+    });
+    hubLiveController = controller;
+    return controller;
+  } catch (error) {
+    dispatchHubStatus({ realtime:{ status:'OFFLINE', reason:String(error?.message || error || 'LIVE_CONNECT_FAILED') } });
+    return null;
+  } finally {
+    hubLiveStarting = false;
+  }
+}
 
 async function syncGoHubControlPort({ force = false } = {}) {
-  if (!hubControlPortTransport || hubSyncBusy) return null;
+  if (!hubControlPortTransport) return null;
+  if (hubSyncBusy) {
+    if (force) hubSyncRequested = true;
+    return null;
+  }
   if (!force && appShell.hidden) return null;
   hubSyncBusy = true;
   try {
     const pairing = await hubControlPortTransport.status();
     if (pairing.status !== 'PAIRED') {
-      globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ pairing } }));
+      dispatchHubStatus({ pairing });
       return Object.freeze({ status:pairing.status });
     }
+    void ensureGoHubRealtime({ force });
     const report = await controlPortSync.reconcile({
       pullInbox:() => hubControlPortTransport.pullInbox(),
       pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
       pushState:packet => hubControlPortTransport.pushState(packet),
     });
-    globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ pairing, report } }));
+    dispatchHubStatus({ pairing, report });
     return report;
   } catch (error) {
-    globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:{ error } }));
+    dispatchHubStatus({ error });
     return null;
   } finally {
     hubSyncBusy = false;
+    if (hubSyncRequested) {
+      hubSyncRequested = false;
+      void syncGoHubControlPort({ force:true });
+    }
   }
 }
 
@@ -285,13 +335,28 @@ recoveryForm.addEventListener('submit', submitRecovery);
 showRecoveryButton.addEventListener('click', () => { devicePassword.value = ''; showRecoveryGate(); });
 cancelRecoveryButton.addEventListener('click', () => { clearRecoveryFields(); showLoginGate(); });
 lockAppButton.addEventListener('click', lockApp);
-window.addEventListener('pagehide', () => { runtimeGate.lock(); });
+window.addEventListener('pagehide', () => {
+  stopGoHubRealtime('PAGE_HIDDEN');
+  runtimeGate.lock();
+});
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') void syncGoHubControlPort();
+  if (document.visibilityState === 'visible') {
+    void ensureGoHubRealtime();
+    void syncGoHubControlPort();
+  } else {
+    stopGoHubRealtime('APP_BACKGROUND');
+  }
 });
-window.addEventListener('focus', () => { void syncGoHubControlPort(); });
+window.addEventListener('focus', () => {
+  void ensureGoHubRealtime();
+  void syncGoHubControlPort();
+});
+window.addEventListener('online', () => {
+  void ensureGoHubRealtime({ force:true });
+  void syncGoHubControlPort({ force:true });
+});
 window.setInterval(() => { void syncGoHubControlPort(); }, 30_000);
 void bootRuntimeGate();
 root.querySelectorAll('[data-root-target]').forEach((button)=>button.addEventListener('click',()=>selectRoot(button.dataset.rootTarget)));
