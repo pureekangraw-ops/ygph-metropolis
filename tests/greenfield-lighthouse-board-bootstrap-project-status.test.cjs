@@ -91,11 +91,24 @@ test('Pin create uses Board revision/readback and replays the same receipt witho
     receiptId:'CREATE-PIN-1',
     workId:'WORK-PIN',
     expectedRevision:1,
-    pin:{ pinId:'PIN-SYSTEM-MAP', title:'SYSTEM SPACE MAP', status:'OPEN' },
+    pin:{
+      pinId:'PIN-SYSTEM-MAP',
+      title:'SYSTEM SPACE MAP',
+      detail:'หนึ่งข้อมูลมีบ้านหลักหนึ่งที่ ที่อื่นเก็บ Reference',
+      status:'OPEN',
+      evidence:[],
+      links:[],
+    },
   });
   assert.equal(replay.replay, true);
   assert.equal(replay.boardRevision, 2);
   assert.equal(bridge.readBoard().pins.length, 1);
+  assert.throws(() => bridge.createPin({
+    receiptId:'CREATE-PIN-1',
+    workId:'WORK-PIN',
+    expectedRevision:1,
+    pin:{ pinId:'PIN-SYSTEM-MAP', title:'changed payload', status:'OPEN' },
+  }), /CENTRE_BOARD_RECEIPT_ID_CONFLICT/);
 
   assert.throws(() => bridge.createPin({
     receiptId:'CREATE-PIN-2',
