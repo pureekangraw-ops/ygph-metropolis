@@ -203,6 +203,99 @@ test('successful Emergency recovery clears both capsule and LIGHTHOUSE working t
   assert.equal(fx.bridge.readBoard().pins[0].status, 'PENDING_RECOVERY');
 });
 
+test('revision conflict on normal return automatically stages an Emergency Capsule and keeps the working ticket', async () => {
+  const fx = await fixture({ workId:'WORK-CIRC-AUTO', pinId:'PIN-CIRC-AUTO' });
+
+  fx.circulation.claimPins({
+    receiptId:'CLAIM-CIRC-AUTO',
+    workId:fx.workId,
+    employeeId:'GO-CIRC-AUTO',
+    pinIds:[fx.pinId],
+    expectedRevision:1,
+    at:'2026-09-19T05:24:00.000Z',
+  });
+
+  fx.bridge.returnPins({
+    receiptId:'RETURN-CIRC-AUTO-NEWER',
+    workId:fx.workId,
+    employeeId:'GO-CIRC-AUTO',
+    expectedRevision:2,
+    updates:[{
+      pinId:fx.pinId,
+      status:'DOING',
+      result:'newer board change',
+      nextAction:'continue',
+      evidence:[],
+    }],
+    at:'2026-09-19T05:25:00.000Z',
+  });
+
+  assert.throws(() => fx.circulation.returnPins({
+    receiptId:'RETURN-CIRC-AUTO',
+    workId:fx.workId,
+    employeeId:'GO-CIRC-AUTO',
+    expectedRevision:2,
+    updates:[{
+      pinId:fx.pinId,
+      status:'VERIFY',
+      result:'factory result prepared against rev2',
+      nextAction:'recover safely',
+      evidence:[{ kind:'factory', reference:'auto-conflict' }],
+    }],
+    at:'2026-09-19T05:26:00.000Z',
+  }), /CENTRE_BOARD_REVISION_CONFLICT/);
+
+  const tickets = fx.circulation.activeTickets();
+  assert.equal(tickets.length, 1);
+  assert.equal(tickets[0].status, 'RECOVERY');
+  assert.equal(tickets[0].emergencyCapsuleId, 'RETURN-CIRC-AUTO');
+  const capsules = fx.boardStore.readEmergencyCapsules();
+  assert.equal(capsules.length, 1);
+  assert.equal(capsules[0].capsuleId, 'RETURN-CIRC-AUTO');
+  assert.equal(capsules[0].baseBoardRevision, 2);
+  assert.equal(fx.bridge.readBoard().revision, 3);
+});
+
+test('circulation reconcile repairs crash windows from Board truth without making a second truth store', async () => {
+  const fx = await fixture({ workId:'WORK-CIRC-RECON', pinId:'PIN-CIRC-RECON' });
+
+  fx.bridge.claimPins({
+    receiptId:'CLAIM-BEFORE-CRASH',
+    workId:fx.workId,
+    employeeId:'GO-CIRC-RECON',
+    pinIds:[fx.pinId],
+    expectedRevision:1,
+    at:'2026-09-19T05:27:00.000Z',
+  });
+  assert.equal(fx.circulation.activeTickets().length, 0, 'simulated crash occurs before ticket persistence');
+
+  const repaired = fx.circulation.reconcile();
+  assert.equal(Object.keys(repaired.active).length, 1);
+  assert.equal(fx.circulation.activeTickets()[0].employeeId, 'GO-CIRC-RECON');
+  assert.equal(fx.circulation.activeTickets()[0].boardRevision, 2);
+
+  fx.bridge.returnPins({
+    receiptId:'RETURN-BEFORE-CRASH-CLOSE',
+    workId:fx.workId,
+    employeeId:'GO-CIRC-RECON',
+    expectedRevision:2,
+    updates:[{
+      pinId:fx.pinId,
+      status:'VERIFY',
+      result:'board already accepted result',
+      nextAction:'verify evidence',
+      evidence:[],
+    }],
+    at:'2026-09-19T05:28:00.000Z',
+  });
+  assert.equal(fx.circulation.activeTickets().length, 1, 'simulated crash occurs before ticket close');
+
+  fx.circulation.reconcile();
+  assert.equal(fx.circulation.activeTickets().length, 0);
+  assert.equal(fx.circulation.history().at(-1).status, 'RETURNED');
+  assert.equal(fx.bridge.readBoard().pins[0].status, 'VERIFY');
+});
+
 test('GO live monitor exposes the LIGHTHOUSE working set without treating it as Board truth', async () => {
   const { createGoBoardView } = await import(viewUrl);
   const view = createGoBoardView({
