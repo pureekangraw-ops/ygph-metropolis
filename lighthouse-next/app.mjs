@@ -108,6 +108,7 @@ const goBoardList = root.querySelector('#go-board-list');
 const goPendingList = root.querySelector('#go-pending-list');
 const goEmergencyList = root.querySelector('#go-emergency-list');
 const goProjectSources = root.querySelector('#go-project-sources');
+const goProjectRefresh = root.querySelector('#go-project-refresh');
 const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
@@ -713,6 +714,15 @@ window.addEventListener('lighthouse:centre-board-emergency', () => {
 });
 window.addEventListener('lighthouse:work-circulation', () => {
   if (state.activeRoot === 'go') void renderGoPage();
+});
+goProjectRefresh?.addEventListener('click', async () => {
+  goProjectRefresh.disabled = true;
+  try {
+    await syncGoHubControlPort({ force:true });
+    await renderGoPage();
+  } finally {
+    goProjectRefresh.disabled = false;
+  }
 });
 window.addEventListener('storage', event => {
   if (event.key !== centreBoardStore.storageKey && event.key !== centreBoardStore.emergencyStorageKey) return;
