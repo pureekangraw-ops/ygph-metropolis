@@ -159,3 +159,145 @@ export function enterCentreBoard(boardValue, {
 
   return deepFreeze({ board:nextBoard, receipt });
 }
+
+
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function returnUpdates(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('CENTRE_BOARD_RETURN_UPDATES_REQUIRED');
+  }
+  const statuses = new Set(['OPEN', 'DOING', 'VERIFY', 'PENDING_RECOVERY']);
+  const output = value.map(update => {
+    if (!update || typeof update !== 'object' || Array.isArray(update)) {
+      throw new Error('CENTRE_BOARD_RETURN_UPDATE_INVALID');
+    }
+    const pinId = id(update.pinId, 'CENTRE_BOARD_PIN_ID_REQUIRED', 'CENTRE_BOARD_PIN_ID_INVALID');
+    const status = String(update.status ?? '').trim();
+    if (!statuses.has(status)) throw new Error('CENTRE_BOARD_RETURN_STATUS_INVALID');
+    const result = requiredText(update.result, 'CENTRE_BOARD_RETURN_RESULT_REQUIRED');
+    const nextAction = requiredText(update.nextAction, 'CENTRE_BOARD_RETURN_NEXT_ACTION_REQUIRED');
+    if (!Array.isArray(update.evidence) || update.evidence.some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
+      throw new Error('CENTRE_BOARD_EVIDENCE_INVALID');
+    }
+    return {
+      pinId,
+      status,
+      result,
+      nextAction,
+      evidence:structuredClone(update.evidence),
+    };
+  });
+  if (new Set(output.map(update => update.pinId)).size !== output.length) {
+    throw new Error('CENTRE_BOARD_PIN_ID_CONFLICT');
+  }
+  return output;
+}
+
+function returnReplay(board, receiptId, workId, employeeId, fingerprint) {
+  const previous = board.audit.find(event => event?.receiptId === receiptId);
+  if (!previous) return null;
+  const same = previous.type === 'BOARD_RETURN'
+    && previous.workId === workId
+    && previous.employeeId === employeeId
+    && previous.requestFingerprint === fingerprint;
+  if (!same) throw new Error(`CENTRE_BOARD_RECEIPT_ID_CONFLICT:${receiptId}`);
+  return deepFreeze({ board, receipt:previous.receipt });
+}
+
+export function returnCentreBoard(boardValue, {
+  receiptId:receiptValue,
+  workId:workValue,
+  employeeId:employeeValue,
+  expectedRevision,
+  updates:updateValues,
+  at:atValue,
+} = {}) {
+  const board = boardInput(boardValue);
+  const receiptId = id(receiptValue, 'CENTRE_BOARD_RECEIPT_ID_REQUIRED', 'CENTRE_BOARD_RECEIPT_ID_INVALID');
+  const workId = assertWork(board, workValue);
+  const employeeId = id(employeeValue, 'CENTRE_BOARD_EMPLOYEE_ID_REQUIRED', 'CENTRE_BOARD_EMPLOYEE_ID_INVALID');
+  const updates = returnUpdates(updateValues);
+  const at = requiredText(atValue, 'CENTRE_BOARD_AT_REQUIRED');
+  const requestFingerprint = canonical({ workId, employeeId, updates });
+
+  const replay = returnReplay(board, receiptId, workId, employeeId, requestFingerprint);
+  if (replay) return replay;
+
+  assertRevision(board, expectedRevision);
+  const byId = new Map(board.pins.map(pin => [pin.pinId, pin]));
+  for (const update of updates) {
+    const pin = byId.get(update.pinId);
+    if (!pin) throw new Error(`CENTRE_BOARD_PIN_NOT_FOUND:${update.pinId}`);
+    if (pin.ownerEmployeeId !== employeeId && !pin.touchedBy.includes(employeeId)) {
+      throw new Error(`CENTRE_BOARD_PIN_NOT_CLAIMED:${update.pinId}`);
+    }
+  }
+
+  const updateById = new Map(updates.map(update => [update.pinId, update]));
+  const nextRevision = board.revision + 1;
+  const nextPins = board.pins.map(pin => {
+    const update = updateById.get(pin.pinId);
+    if (!update) return pin;
+    return createCentrePin({
+      ...pin,
+      ...update,
+      touchedBy:[...new Set([...(pin.touchedBy || []), employeeId])],
+      revision:pin.revision + 1,
+      updatedAt:at,
+      at,
+    });
+  });
+  const updatedPinIds = updates.map(update => update.pinId);
+  const receipt = deepFreeze({
+    receiptId,
+    type:'BOARD_RETURN',
+    workId,
+    employeeId,
+    beforeRevision:board.revision,
+    afterRevision:nextRevision,
+    updatedPinIds,
+    readbackRevision:nextRevision,
+    at,
+  });
+  const event = deepFreeze({
+    type:'BOARD_RETURN',
+    receiptId,
+    workId,
+    employeeId,
+    pinIds:updatedPinIds,
+    requestFingerprint,
+    beforeRevision:board.revision,
+    afterRevision:nextRevision,
+    at,
+    receipt,
+  });
+  const nextBoard = deepFreeze({
+    ...board,
+    revision:nextRevision,
+    updatedAt:at,
+    pins:nextPins,
+    audit:[...board.audit, event],
+  });
+
+  const readback = new Map(nextBoard.pins.map(pin => [pin.pinId, pin]));
+  const matches = updates.every(update => {
+    const pin = readback.get(update.pinId);
+    return pin
+      && pin.status === update.status
+      && pin.result === update.result
+      && pin.nextAction === update.nextAction
+      && canonical(pin.evidence) === canonical(update.evidence);
+  });
+  if (nextBoard.revision !== nextRevision || !matches) {
+    throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
+  }
+
+  return deepFreeze({ board:nextBoard, receipt });
+}
