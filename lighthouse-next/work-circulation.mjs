@@ -157,6 +157,71 @@ export function createLighthouseWorkCirculation({
     ) || null;
   }
 
+  function sameActive(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
+  function boardWorkingTickets() {
+    const board = readBoard();
+    if (!board || !Array.isArray(board.pins)) return {};
+    const capsules = readEmergencyCapsules();
+    const capsuleByOwner = new Map(
+      capsules.map(capsule => [`${capsule.workId}::${capsule.employeeId}`, capsule]),
+    );
+    const groups = new Map();
+    for (const pin of board.pins) {
+      const employeeId = optionalText(pin?.ownerEmployeeId);
+      if (!employeeId || !['DOING','PENDING_RECOVERY'].includes(String(pin?.status || ''))) continue;
+      const key = `${board.workId}::${employeeId}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(pin);
+    }
+
+    const expected = {};
+    const current = load();
+    for (const [key, pins] of groups) {
+      const employeeId = pins[0].ownerEmployeeId;
+      const capsule = capsuleByOwner.get(key) || null;
+      const existing = Object.values(current.active).find(ticket =>
+        ticket.workId === board.workId && ticket.employeeId === employeeId,
+      ) || null;
+      const ticketId = existing?.ticketId || `board:${board.workId}:${employeeId}`;
+      expected[ticketId] = normalizeTicket({
+        ticketId,
+        workId:board.workId,
+        employeeId,
+        pinIds:pins.map(pin => pin.pinId),
+        status:capsule || pins.some(pin => pin.status === 'PENDING_RECOVERY') ? 'RECOVERY' : 'ACTIVE',
+        boardRevision:board.revision,
+        claimReceiptId:existing?.claimReceiptId ?? null,
+        lastReceiptId:existing?.lastReceiptId ?? null,
+        emergencyCapsuleId:capsule?.capsuleId ?? existing?.emergencyCapsuleId ?? null,
+        claimedAt:existing?.claimedAt ?? pins.map(pin => pin.updatedAt).sort()[0] ?? board.updatedAt,
+        updatedAt:board.updatedAt ?? now(),
+      });
+    }
+    return expected;
+  }
+
+  function reconcile() {
+    const current = load();
+    const expected = boardWorkingTickets();
+    if (sameActive(current.active, expected)) return current;
+    return persist(next => {
+      const previous = next.active || {};
+      for (const [ticketId, ticket] of Object.entries(previous)) {
+        if (expected[ticketId]) continue;
+        next.history.push({
+          ...ticket,
+          status:'RETURNED',
+          updatedAt:now(),
+          closedAt:now(),
+        });
+      }
+      next.active = clone(expected);
+    });
+  }
+
   function readBoard() {
     return boardBridge.readBoard();
   }
@@ -233,15 +298,35 @@ export function createLighthouseWorkCirculation({
 
   function returnPins(input = {}) {
     const ticket = assertReturnTicket(input);
-    const verified = boardBridge.returnPins(input);
-    if (!verified || verified.status !== 'VERIFIED') {
-      throw new Error('LIGHTHOUSE_CIRCULATION_RETURN_NOT_VERIFIED');
+    try {
+      const verified = boardBridge.returnPins(input);
+      if (!verified || verified.status !== 'VERIFIED') {
+        throw new Error('LIGHTHOUSE_CIRCULATION_RETURN_NOT_VERIFIED');
+      }
+      const state = closeTicket(ticket, verified);
+      return Object.freeze({
+        ...verified,
+        circulation:Object.freeze({ ticketId:ticket.ticketId, status:'RETURNED', state }),
+      });
+    } catch (error) {
+      const code = String(error?.message || error || 'LIGHTHOUSE_CIRCULATION_RETURN_FAILED');
+      if (/CENTRE_BOARD_REVISION_CONFLICT:/.test(code) && typeof boardBridge.stageEmergency === 'function') {
+        try {
+          stageEmergency({
+            capsuleId:optionalText(input.capsuleId) || requiredText(input.receiptId, 'CENTRE_BOARD_CAPSULE_ID_REQUIRED'),
+            workId:ticket.workId,
+            employeeId:ticket.employeeId,
+            reason:'CENTRE_BOARD_REVISION_CONFLICT',
+            baseBoardRevision:Number(input.expectedRevision),
+            claimedPinIds:ticket.pinIds,
+            pendingChanges:clone(input.updates),
+            evidence:[],
+            at:optionalText(input.at) || now(),
+          });
+        } catch {}
+      }
+      throw error;
     }
-    const state = closeTicket(ticket, verified);
-    return Object.freeze({
-      ...verified,
-      circulation:Object.freeze({ ticketId:ticket.ticketId, status:'RETURNED', state }),
-    });
   }
 
   function stageEmergency(capsule) {
@@ -335,5 +420,6 @@ export function createLighthouseWorkCirculation({
     state,
     activeTickets,
     history,
+    reconcile,
   });
 }
