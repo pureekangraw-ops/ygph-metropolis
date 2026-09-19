@@ -278,12 +278,6 @@ function routeLabel(mode) {
 }
 
 function readCentreBoard() {
-  if (latestCentreBoard) return latestCentreBoard;
-  try {
-    latestCentreBoard = centreBoardStore.read();
-  } catch {
-    latestCentreBoard = null;
-  }
   return latestCentreBoard;
 }
 
@@ -719,9 +713,7 @@ window.addEventListener('pagehide', () => {
   runtimeGate.lock();
 });
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
-window.addEventListener('lighthouse:centre-board', event => {
-  const detail = event?.detail;
-  latestCentreBoard = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : null;
+window.addEventListener('lighthouse:centre-board', () => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:centre-board-emergency', () => {
@@ -732,7 +724,6 @@ window.addEventListener('lighthouse:work-circulation', () => {
 });
 window.addEventListener('storage', event => {
   if (event.key !== centreBoardStore.storageKey && event.key !== centreBoardStore.emergencyStorageKey) return;
-  if (event.key === centreBoardStore.storageKey) latestCentreBoard = null;
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
