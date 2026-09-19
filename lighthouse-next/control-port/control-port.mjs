@@ -220,6 +220,41 @@ export function createLighthouseControlPort(deps = {}) {
     });
   }
 
+  function commandPackProposals(payload = {}) {
+    const commands = payload?.commands;
+    if (!Array.isArray(commands) || commands.length < 1 || commands.length > 25) {
+      throw new Error('LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_SIZE_INVALID');
+    }
+    const seen = new Set();
+    return commands.map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_ITEM_INVALID:${index + 1}`);
+      }
+      const childRequestId = requestId(item.requestId);
+      if (seen.has(childRequestId)) {
+        throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_REQUEST_ID_DUPLICATE:${childRequestId}`);
+      }
+      seen.add(childRequestId);
+      const childCapabilityId = capabilityId(item.capabilityId);
+      if (childCapabilityId === 'system.commandPack') {
+        throw new Error('LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_NESTING_FORBIDDEN');
+      }
+      const childCapability = getLighthouseCapability(childCapabilityId);
+      if (guardFor(childCapability) === CONTROL_PORT_GUARD.FORBIDDEN) {
+        throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_CAPABILITY_FORBIDDEN:${childCapabilityId}`);
+      }
+      const childPayload = item.payload ?? {};
+      if (!childPayload || typeof childPayload !== 'object' || Array.isArray(childPayload)) {
+        throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_PAYLOAD_INVALID:${index + 1}`);
+      }
+      return propose({
+        requestId:childRequestId,
+        capabilityId:childCapabilityId,
+        payload:childPayload,
+      });
+    });
+  }
+
   async function dispatch(proposal) {
     const id = proposal.requestId;
     const payload = proposal.payload || {};
@@ -330,6 +365,55 @@ export function createLighthouseControlPort(deps = {}) {
     });
   }
 
+  async function commitCommandPack({ id, payload, guard }) {
+    const children = commandPackProposals(payload);
+    const before = await meta();
+    const itemResults = [];
+
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index];
+      try {
+        const result = await commit(child, { confirmed:true });
+        if (!result || result.status !== 'VERIFIED') {
+          throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_CHILD_NOT_VERIFIED:${child.requestId}`);
+        }
+        itemResults.push(Object.freeze({
+          requestId:child.requestId,
+          capabilityId:child.capabilityId,
+          status:'VERIFIED',
+          beforeRevision:result.beforeRevision ?? null,
+          afterRevision:result.afterRevision ?? result.revision ?? null,
+          revision:result.revision ?? null,
+          updatedAt:result.updatedAt ?? null,
+          readbackAt:result.readbackAt ?? null,
+        }));
+      } catch (error) {
+        const reason = String(error?.message || error || 'COMMAND_PACK_ITEM_FAILED');
+        throw new Error(`LIGHTHOUSE_CONTROL_PORT_COMMAND_PACK_ITEM_FAILED:${index + 1}:${child.requestId}:${reason}`);
+      }
+    }
+
+    const after = await meta();
+    return Object.freeze({
+      status:'VERIFIED',
+      requestId:id,
+      capabilityId:'system.commandPack',
+      guard,
+      ownerStatus:'VERIFIED',
+      revision:after.revision,
+      updatedAt:after.updatedAt,
+      readbackAt:now(),
+      beforeRevision:before.revision,
+      afterRevision:after.revision,
+      evidence:Object.freeze({
+        kind:'COMMAND_PACK',
+        title:String(payload?.title || '').trim().slice(0, 120) || null,
+        count:itemResults.length,
+        items:Object.freeze(itemResults),
+      }),
+    });
+  }
+
   async function commit(proposal, { confirmed = false } = {}) {
     if (!proposal || typeof proposal !== 'object') throw new Error('LIGHTHOUSE_CONTROL_PORT_PROPOSAL_REQUIRED');
     const id = requestId(proposal.requestId);
@@ -348,6 +432,14 @@ export function createLighthouseControlPort(deps = {}) {
         status:'CONFIRMATION_REQUIRED',
         requestId:id,
         capabilityId:capId,
+        guard,
+      });
+    }
+
+    if (capId === 'system.commandPack') {
+      return commitCommandPack({
+        id,
+        payload:clone(proposal.payload) || {},
         guard,
       });
     }
