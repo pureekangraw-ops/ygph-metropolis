@@ -8,6 +8,11 @@ const RAW_CAPABILITIES = [
   { id:'centreBoard.return', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'returnPins', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'centreBoard.recover', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'recoverEmergency', confirmationRequired:false, readback:'readBoard', derived:false },
 
+  { id:'board.read', readable:true, editable:false, owner:'LIGHTHOUSE:CENTRE_BOARD', action:null, confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'board.claim', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'claimPins', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'board.return', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'returnPins', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'board.recover', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'recoverEmergency', confirmationRequired:false, readback:'readBoard', derived:false },
+
   { id:'finance.balance', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.balanceSatang', derived:true },
   { id:'finance.todayIn', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.todayInSatang', derived:true },
   { id:'finance.todayOut', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.todayOutSatang', derived:true },
