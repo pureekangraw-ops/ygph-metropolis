@@ -56,3 +56,6 @@
 .go-project-badges span[data-freshness="OFFLINE"]{color:var(--danger);border-color:rgba(255,157,157,.35)}
 .go-project-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.go-project-detail div{min-width:0;display:grid;gap:3px}.go-project-detail span{font-size:10px;color:var(--muted)}.go-project-detail strong{font-size:12px;overflow-wrap:anywhere}
 @media(max-width:380px){.go-project-detail{grid-template-columns:1fr}.go-project-source-head{display:grid}.go-project-badges{justify-content:flex-start}}
+
+.go-project-refresh{width:100%;margin-top:10px;margin-bottom:12px;border:1px solid rgba(102,228,255,.24);border-radius:12px;padding:9px 12px;background:rgba(102,228,255,.045);color:var(--cyan);font:inherit;font-size:11px;font-weight:800}
+.go-project-refresh:disabled{opacity:.55}
