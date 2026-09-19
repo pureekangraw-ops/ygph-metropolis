@@ -17,6 +17,7 @@ import { createLighthouseHubControlPortTransport } from './control-port/control-
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
 import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
 import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
+import { createLighthouseWorkCirculation } from './work-circulation.mjs';
 import { createGoBoardView } from './go-board-live.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
@@ -111,10 +112,14 @@ const ledgerBridge = createLighthouseLedgerBridge();
 const storeBridge = createLighthouseStoreBridge();
 const centreBoardStore = createLighthouseCentreBoardStore();
 const centreBoardBridge = createLighthouseCentreBoardBridge({ store:centreBoardStore });
+const workCirculation = createLighthouseWorkCirculation({
+  boardBridge:centreBoardBridge,
+});
+try { workCirculation.reconcile(); } catch {}
 const controlPort = createLighthouseControlPort({
   ledgerBridge,
   storeBridge,
-  boardBridge:centreBoardBridge,
+  boardBridge:workCirculation,
 });
 const controlPortRuntime = createLighthouseControlPortRuntime({
   port:controlPort,
@@ -402,6 +407,7 @@ function renderGoEmergency(view) {
 
 async function renderGoPage() {
   if (!goPage || goPage.hidden) return;
+  try { workCirculation.reconcile(); } catch {}
   let snapshot = null;
   try { snapshot = await controlPortRuntime.snapshotStatus(); } catch {}
   let emergencyCapsules = [];
@@ -412,6 +418,7 @@ async function renderGoPage() {
     snapshotStatus:snapshot || {},
     boardState:readCentreBoard(),
     emergencyCapsules,
+    circulationState:workCirculation.state(),
   });
 
   const mode = root.querySelector('#go-route-mode');
@@ -432,6 +439,8 @@ async function renderGoPage() {
   setGoText('go-pin-id', view.work.pinId);
   setGoText('go-pin-status', view.work.pinStatus);
   setGoText('go-board-revision', view.board.revision == null ? '—' : String(view.board.revision));
+  setGoText('go-circulation-status', view.circulation.status);
+  setGoText('go-circulation-ticket', view.circulation.ticketId);
   setGoText('go-next-action', view.work.nextAction);
   setGoText('go-pending-request', view.work.pendingRequestId);
   setGoText('go-blocker', view.work.blocker);
@@ -615,6 +624,9 @@ window.addEventListener('lighthouse:centre-board', event => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:centre-board-emergency', () => {
+  if (state.activeRoot === 'go') void renderGoPage();
+});
+window.addEventListener('lighthouse:work-circulation', () => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('storage', event => {

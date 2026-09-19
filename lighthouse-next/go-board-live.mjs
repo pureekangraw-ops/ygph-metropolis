@@ -77,6 +77,7 @@ export function createGoBoardView({
   snapshotStatus = {},
   boardState = null,
   emergencyCapsules = [],
+  circulationState = null,
 } = {}) {
   const inbox = Object.values(runtimeState?.inbox || {});
   const outbox = Object.values(runtimeState?.outbox || {});
@@ -86,6 +87,13 @@ export function createGoBoardView({
   const pending = inbox.filter(entry => !TERMINAL_INBOX.has(String(entry?.status || '')));
   const confirmations = inbox.filter(entry => entry?.status === 'CONFIRMATION_REQUIRED');
   const recoveryItems = inbox.filter(entry => ['BLOCKED','ERROR','READBACK'].includes(String(entry?.status || '')));
+  const circulationTickets = Object.values(
+    circulationState?.active && typeof circulationState.active === 'object' && !Array.isArray(circulationState.active)
+      ? circulationState.active
+      : {},
+  );
+  const circulationRecovery = circulationTickets.filter(ticket => ticket?.status === 'RECOVERY');
+  const circulationTicket = circulationRecovery[0] || circulationTickets[0] || null;
 
   return Object.freeze({
     route:Object.freeze({
@@ -133,6 +141,18 @@ export function createGoBoardView({
         owner:text(entry.owner),
         updatedAt:text(entry.updatedAt ?? entry.receivedAt),
       }))),
+    }),
+    circulation:Object.freeze({
+      active:circulationTickets.length,
+      recovery:circulationRecovery.length,
+      status:circulationTicket?.status || 'IDLE',
+      ticketId:text(circulationTicket?.ticketId),
+      workId:text(circulationTicket?.workId),
+      employeeId:text(circulationTicket?.employeeId),
+      pinIds:Object.freeze(Array.isArray(circulationTicket?.pinIds) ? [...circulationTicket.pinIds] : []),
+      boardRevision:numberOrNull(circulationTicket?.boardRevision),
+      updatedAt:text(circulationTicket?.updatedAt ?? circulationState?.updatedAt),
+      revision:numberOrNull(circulationState?.revision),
     }),
     board:Object.freeze({
       available:Boolean(boardState && pins.length >= 0 && text(boardState.boardId) && text(boardState.workId)),

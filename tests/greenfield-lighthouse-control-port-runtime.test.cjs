@@ -84,7 +84,8 @@ function fakePort(clock) {
 
 test('LIGHTHOUSE app activates Control Port only after owner unlock and reads staged build identity', () => {
   const appSource = readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
-  assert.match(appSource, /createLighthouseControlPort\(\{[\s\S]*boardBridge:centreBoardBridge[\s\S]*\}\)/);
+  assert.match(appSource, /createLighthouseWorkCirculation\(\{[\s\S]*boardBridge:centreBoardBridge[\s\S]*\}\)/);
+  assert.match(appSource, /createLighthouseControlPort\(\{[\s\S]*boardBridge:workCirculation[\s\S]*\}\)/);
   assert.match(appSource, /createLighthouseControlPortRuntime\(/);
   assert.match(appSource, /fetch\('\.\/build-identity\.json', \{ cache:'no-store' \}\)/);
   assert.match(appSource, /buildState:\{\s*status:identity \? 'STAGED' : 'UNKNOWN'/);
