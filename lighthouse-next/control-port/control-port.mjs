@@ -339,6 +339,33 @@ export function createLighthouseControlPort(deps = {}) {
           title:payload.title || 'Hub stock adjustment',
           quantity:payload.quantity,
         });
+      case 'centreBoard.initialize':
+      case 'board.initialize':
+        if (!board || typeof board.initializeBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.initializeBoard({
+          receiptId:payload.receiptId || `CP-BOARD-INIT-${safeId(id)}`,
+          boardId:payload.boardId,
+          workId:payload.workId,
+          at:payload.at || now(),
+        });
+      case 'centreBoard.pin.create':
+      case 'pin.create':
+        if (!board || typeof board.createPin !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.createPin({
+          receiptId:payload.receiptId || `CP-BOARD-PIN-${safeId(id)}`,
+          workId:payload.workId,
+          expectedRevision:payload.expectedRevision,
+          pin:{
+            pinId:payload.pinId,
+            title:payload.title,
+            detail:payload.detail || '',
+            status:'OPEN',
+            evidence:Array.isArray(payload.evidence) ? payload.evidence : [],
+            links:Array.isArray(payload.links) ? payload.links : [],
+            nextAction:payload.nextAction == null ? null : String(payload.nextAction),
+          },
+          at:payload.at || now(),
+        });
       case 'centreBoard.claim':
       case 'board.claim':
         if (!board || typeof board.claimPins !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
@@ -383,7 +410,10 @@ export function createLighthouseControlPort(deps = {}) {
     if (capId === 'finance.receivable.payment') return ledger.readIncomeTruth();
     if (['finance.obligation.dueDate','calendar.status'].includes(capId)) return ledger.readCalendarTruth();
     if (['store.product.create','store.stock.add'].includes(capId)) return store.readStoreTruth();
-    if (['centreBoard.claim','centreBoard.return','centreBoard.recover','board.claim','board.return','board.recover'].includes(capId)) {
+    if ([
+      'centreBoard.initialize','centreBoard.pin.create','centreBoard.claim','centreBoard.return','centreBoard.recover',
+      'board.initialize','pin.create','board.claim','board.return','board.recover',
+    ].includes(capId)) {
       if (!board || typeof board.readBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
       return board.readBoard();
     }
