@@ -104,6 +104,7 @@ const manualDetail = root.querySelector('#manual-detail');
 const goPage = root.querySelector('#page-go');
 const goBoardList = root.querySelector('#go-board-list');
 const goPendingList = root.querySelector('#go-pending-list');
+const goEmergencyList = root.querySelector('#go-emergency-list');
 const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
@@ -364,15 +365,53 @@ function renderGoPending(view) {
   }
 }
 
+function renderGoEmergency(view) {
+  if (!goEmergencyList) return;
+  goEmergencyList.replaceChildren();
+  setGoText('go-emergency-count', String(view.emergency.count), '0');
+  if (!view.emergency.count) {
+    const empty = document.createElement('div');
+    empty.className = 'go-empty-state';
+    const title = document.createElement('strong');
+    title.textContent = 'ไม่มี Emergency Capsule ค้าง';
+    const detail = document.createElement('span');
+    detail.textContent = 'Capsule จะอยู่จน revision/readback recovery สำเร็จ';
+    empty.append(title, detail);
+    goEmergencyList.append(empty);
+    return;
+  }
+  for (const capsule of view.emergency.items) {
+    const row = document.createElement('div');
+    row.className = 'go-pending-item';
+    const copy = document.createElement('div');
+    const id = document.createElement('strong');
+    id.textContent = goText(capsule.capsuleId);
+    const detail = document.createElement('small');
+    detail.textContent = [
+      capsule.employeeId,
+      capsule.baseBoardRevision == null ? null : 'base rev ' + capsule.baseBoardRevision,
+      capsule.reason,
+    ].filter(Boolean).join(' · ');
+    copy.append(id, detail);
+    const status = document.createElement('span');
+    status.textContent = capsule.status;
+    row.append(copy, status);
+    goEmergencyList.append(row);
+  }
+}
+
 async function renderGoPage() {
   if (!goPage || goPage.hidden) return;
   let snapshot = null;
   try { snapshot = await controlPortRuntime.snapshotStatus(); } catch {}
+  let emergencyCapsules = [];
+  try { emergencyCapsules = centreBoardStore.readEmergencyCapsules(); } catch {}
   const view = createGoBoardView({
     hubStatus:latestHubStatus,
     runtimeState:controlPortRuntime.state(),
     snapshotStatus:snapshot || {},
     boardState:readCentreBoard(),
+    emergencyCapsules,
   });
 
   const mode = root.querySelector('#go-route-mode');
@@ -414,6 +453,7 @@ async function renderGoPage() {
 
   renderGoBoardPins(view);
   renderGoPending(view);
+  renderGoEmergency(view);
 }
 
 
@@ -574,9 +614,12 @@ window.addEventListener('lighthouse:centre-board', event => {
   latestCentreBoard = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : null;
   if (state.activeRoot === 'go') void renderGoPage();
 });
+window.addEventListener('lighthouse:centre-board-emergency', () => {
+  if (state.activeRoot === 'go') void renderGoPage();
+});
 window.addEventListener('storage', event => {
-  if (event.key !== centreBoardStore.storageKey) return;
-  latestCentreBoard = null;
+  if (event.key !== centreBoardStore.storageKey && event.key !== centreBoardStore.emergencyStorageKey) return;
+  if (event.key === centreBoardStore.storageKey) latestCentreBoard = null;
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });

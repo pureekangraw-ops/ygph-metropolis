@@ -23,6 +23,19 @@ export function createLighthouseCentreBoardBridge({
     return store.read();
   }
 
+  function readEmergencyCapsules() {
+    return typeof store.readEmergencyCapsules === 'function'
+      ? store.readEmergencyCapsules()
+      : [];
+  }
+
+  function stageEmergency(capsule) {
+    if (typeof store.saveEmergencyCapsule !== 'function') {
+      throw new Error('CENTRE_BOARD_EMERGENCY_STORE_UNAVAILABLE');
+    }
+    return store.saveEmergencyCapsule(capsule);
+  }
+
   function verified(board, receipt, extra = {}) {
     return Object.freeze({
       status:'VERIFIED',
@@ -85,12 +98,23 @@ export function createLighthouseCentreBoardBridge({
 
   function recoverEmergency({
     capsule,
+    capsuleId,
     receiptId,
     at = now(),
   } = {}) {
     const current = readBoard();
     if (!current) throw new Error('CENTRE_BOARD_NOT_INITIALIZED');
-    const output = recoverEmergencyCapsule(current, capsule, {
+
+    let pending = capsule;
+    if (pending && typeof store.saveEmergencyCapsule === 'function') {
+      pending = store.saveEmergencyCapsule(pending);
+    } else if (!pending && capsuleId != null && typeof store.readEmergencyCapsules === 'function') {
+      const id = text(capsuleId, 'CENTRE_BOARD_CAPSULE_ID_REQUIRED');
+      pending = store.readEmergencyCapsules().find(item => item.capsuleId === id) || null;
+      if (!pending) throw new Error(`CENTRE_BOARD_CAPSULE_NOT_FOUND:${id}`);
+    }
+
+    const output = recoverEmergencyCapsule(current, pending, {
       receiptId:text(receiptId, 'CENTRE_BOARD_RECEIPT_ID_REQUIRED'),
       at,
     });
@@ -104,6 +128,11 @@ export function createLighthouseCentreBoardBridge({
     if (saved.revision !== output.receipt.readbackRevision) {
       throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
     }
+    if (typeof store.removeEmergencyCapsule === 'function' && output.capsule?.capsuleId) {
+      store.removeEmergencyCapsule(output.capsule.capsuleId, {
+        fingerprint:output.capsule.fingerprint,
+      });
+    }
     return verified(saved, output.receipt, {
       recovered:true,
       capsuleId:output.capsule?.capsuleId ?? null,
@@ -113,6 +142,8 @@ export function createLighthouseCentreBoardBridge({
 
   return Object.freeze({
     readBoard,
+    readEmergencyCapsules,
+    stageEmergency,
     claimPins,
     returnPins,
     recoverEmergency,

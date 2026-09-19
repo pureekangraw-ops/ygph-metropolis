@@ -76,3 +76,25 @@ test('Centre Board capabilities are exposed without device confirmation and rema
     assert.equal(capability.readback, 'readBoard', id);
   }
 });
+
+
+test('board.* compatibility aliases resolve to the same Centre Board owner contract', async () => {
+  const registry = await import(moduleUrl);
+  const pairs = [
+    ['board.read','centreBoard.read'],
+    ['board.claim','centreBoard.claim'],
+    ['board.return','centreBoard.return'],
+    ['board.recover','centreBoard.recover'],
+  ];
+  for (const [alias, canonical] of pairs) {
+    const left = registry.getLighthouseCapability(alias);
+    const right = registry.getLighthouseCapability(canonical);
+    assert.ok(left, alias);
+    assert.equal(left.owner, right.owner, alias);
+    assert.equal(left.readable, right.readable, alias);
+    assert.equal(left.editable, right.editable, alias);
+    assert.equal(left.action, right.action, alias);
+    assert.equal(left.confirmationRequired, right.confirmationRequired, alias);
+    assert.equal(left.readback, right.readback, alias);
+  }
+});
