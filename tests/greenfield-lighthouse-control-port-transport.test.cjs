@@ -157,4 +157,5 @@ test('LIGHTHOUSE app uses live notification as primary trigger while retaining 3
   assert.match(appSource, /window\.setInterval\(\(\) => \{ void syncGoHubControlPort\(\); \}, 30_000\)/);
   assert.match(appSource, /window\.addEventListener\('online'/);
   assert.match(appSource, /stopGoHubRealtime\('APP_BACKGROUND'\)/);
+  assert.match(appSource, /function markReadbackVerified[\s\S]*syncGoHubControlPort\(\{ force:true \}\)/);
 });

@@ -248,7 +248,17 @@ function syncPendingLifecycleStage(pending) {
   } catch {}
 }
 function markExecutionStarted(pending) { transitionPendingLifecycle(pending, { executionState:'WAITING', readbackState:'PENDING', requestId:lifecycleRequestId(pending), error:null, eventType:'EXECUTION_STARTED' }); }
-function markReadbackVerified(pending, result) { transitionPendingLifecycle(pending, { executionState:'SUCCESS', readbackState:'VERIFIED', requestId:lifecycleRequestId(pending), result, error:null, eventType:'READBACK_VERIFIED' }); }
+function markReadbackVerified(pending, result) {
+  transitionPendingLifecycle(pending, {
+    executionState:'SUCCESS',
+    readbackState:'VERIFIED',
+    requestId:lifecycleRequestId(pending),
+    result,
+    error:null,
+    eventType:'READBACK_VERIFIED',
+  });
+  void syncGoHubControlPort({ force:true });
+}
 function markReadbackFailed(pending, error) { transitionPendingLifecycle(pending, { executionState:'WAITING', readbackState:'ERROR', requestId:lifecycleRequestId(pending), error:String(error || 'READBACK_UNAVAILABLE'), eventType:'READBACK_FAILED' }); }
 function markExecutionBlocked(pending, error) { transitionPendingLifecycle(pending, { executionState:'BLOCKED', readbackState:'IDLE', requestId:lifecycleRequestId(pending), error:String(error || 'EXECUTION_BLOCKED'), eventType:'EXECUTION_BLOCKED' }); }
 function pendingRequiresReadbackRetry(pending) {
