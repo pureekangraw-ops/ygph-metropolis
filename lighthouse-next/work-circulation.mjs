@@ -163,41 +163,68 @@ export function createLighthouseWorkCirculation({
 
   function boardWorkingTickets() {
     const board = readBoard();
-    if (!board || !Array.isArray(board.pins)) return {};
     const capsules = readEmergencyCapsules();
-    const capsuleByOwner = new Map(
-      capsules.map(capsule => [`${capsule.workId}::${capsule.employeeId}`, capsule]),
-    );
     const groups = new Map();
-    for (const pin of board.pins) {
-      const employeeId = optionalText(pin?.ownerEmployeeId);
-      if (!employeeId || !['DOING','PENDING_RECOVERY'].includes(String(pin?.status || ''))) continue;
-      const key = `${board.workId}::${employeeId}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(pin);
+
+    if (board && Array.isArray(board.pins)) {
+      for (const pin of board.pins) {
+        const employeeId = optionalText(pin?.ownerEmployeeId);
+        if (!employeeId || !['DOING','PENDING_RECOVERY'].includes(String(pin?.status || ''))) continue;
+        const key = `${board.workId}::${employeeId}`;
+        const group = groups.get(key) || {
+          workId:board.workId,
+          employeeId,
+          pinIds:[],
+          hasPendingRecovery:false,
+          boardRevision:board.revision,
+          updatedAt:board.updatedAt,
+          capsule:null,
+        };
+        if (!group.pinIds.includes(pin.pinId)) group.pinIds.push(pin.pinId);
+        if (pin.status === 'PENDING_RECOVERY') group.hasPendingRecovery = true;
+        groups.set(key, group);
+      }
+    }
+
+    for (const capsule of capsules) {
+      const key = `${capsule.workId}::${capsule.employeeId}`;
+      const group = groups.get(key) || {
+        workId:capsule.workId,
+        employeeId:capsule.employeeId,
+        pinIds:[],
+        hasPendingRecovery:true,
+        boardRevision:board?.workId === capsule.workId ? board.revision : capsule.baseBoardRevision,
+        updatedAt:board?.workId === capsule.workId ? board.updatedAt : capsule.at,
+        capsule:null,
+      };
+      for (const pinId of capsule.claimedPinIds || []) {
+        if (!group.pinIds.includes(pinId)) group.pinIds.push(pinId);
+      }
+      group.hasPendingRecovery = true;
+      group.capsule = capsule;
+      groups.set(key, group);
     }
 
     const expected = {};
     const current = load();
-    for (const [key, pins] of groups) {
-      const employeeId = pins[0].ownerEmployeeId;
-      const capsule = capsuleByOwner.get(key) || null;
+    for (const group of groups.values()) {
+      if (!group.pinIds.length) continue;
       const existing = Object.values(current.active).find(ticket =>
-        ticket.workId === board.workId && ticket.employeeId === employeeId,
+        ticket.workId === group.workId && ticket.employeeId === group.employeeId,
       ) || null;
-      const ticketId = existing?.ticketId || `board:${board.workId}:${employeeId}`;
+      const ticketId = existing?.ticketId || `board:${group.workId}:${group.employeeId}`;
       expected[ticketId] = normalizeTicket({
         ticketId,
-        workId:board.workId,
-        employeeId,
-        pinIds:pins.map(pin => pin.pinId),
-        status:capsule || pins.some(pin => pin.status === 'PENDING_RECOVERY') ? 'RECOVERY' : 'ACTIVE',
-        boardRevision:board.revision,
+        workId:group.workId,
+        employeeId:group.employeeId,
+        pinIds:group.pinIds,
+        status:group.capsule || group.hasPendingRecovery ? 'RECOVERY' : 'ACTIVE',
+        boardRevision:group.boardRevision,
         claimReceiptId:existing?.claimReceiptId ?? null,
         lastReceiptId:existing?.lastReceiptId ?? null,
-        emergencyCapsuleId:capsule?.capsuleId ?? existing?.emergencyCapsuleId ?? null,
-        claimedAt:existing?.claimedAt ?? pins.map(pin => pin.updatedAt).sort()[0] ?? board.updatedAt,
-        updatedAt:board.updatedAt ?? now(),
+        emergencyCapsuleId:group.capsule?.capsuleId ?? existing?.emergencyCapsuleId ?? null,
+        claimedAt:existing?.claimedAt ?? group.capsule?.at ?? group.updatedAt ?? now(),
+        updatedAt:group.updatedAt ?? group.capsule?.at ?? now(),
       });
     }
     return expected;
