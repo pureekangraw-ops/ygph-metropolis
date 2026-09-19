@@ -1,7 +1,7 @@
 import { returnCentreBoard } from './board-session.mjs';
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SECRET_KEY = /(pin|password|recovery|vault|secret|token|passphrase)/i;
+const SECRET_KEY = /^(pin|recovery(code|key|phrase|token)|vault(key|password|secret|token)|.*(password|passphrase|secret|token))$/i;
 
 function deepFreeze(value, seen = new Set()) {
   if (!value || typeof value !== 'object' || seen.has(value)) return value;
@@ -56,7 +56,7 @@ function containsSecret(value, seen = new Set()) {
   if (!value || typeof value !== 'object' || seen.has(value)) return false;
   seen.add(value);
   return Object.entries(value).some(([key, nested]) =>
-    SECRET_KEY.test(key) || containsSecret(nested, seen),
+    SECRET_KEY.test(String(key).replace(/[^A-Za-z0-9]/g, '')) || containsSecret(nested, seen),
   );
 }
 
