@@ -73,3 +73,88 @@ test('expired local pairing fails before network request', async () => {
   await assert.rejects(transport.pullInbox(), /SESSION_EXPIRED/);
   assert.equal(called, false);
 });
+
+
+test('realtime transport authenticates after connect, keeps credentials out of URL, and triggers authoritative pull on live signals', async () => {
+  const { createMemoryLighthouseHubCredentialStore } = await import(credentialUrl);
+  const { createLighthouseHubControlPortTransport } = await import(transportUrl);
+  const store = createMemoryLighthouseHubCredentialStore();
+  const sockets = [];
+  const scheduled = [];
+
+  class FakeWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+      this.sent = [];
+      this.closed = false;
+      sockets.push(this);
+    }
+    addEventListener(type, handler) {
+      const list = this.listeners.get(type) || [];
+      list.push(handler);
+      this.listeners.set(type, list);
+    }
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) handler(event);
+    }
+    send(value) { this.sent.push(String(value)); }
+    close() { this.closed = true; }
+  }
+
+  const signals = [];
+  const statuses = [];
+  const transport = createLighthouseHubControlPortTransport({
+    fetchImpl:async () => new Response('{}', { status:200, headers:{'content-type':'application/json'} }),
+    WebSocketImpl:FakeWebSocket,
+    credentialStore:store,
+    now:() => 1,
+    setTimeoutImpl:fn => { scheduled.push(fn); return scheduled.length; },
+    clearTimeoutImpl:() => {},
+  });
+  await transport.pair(bootstrap);
+  const controller = await transport.openLive({
+    onSignal:signal => signals.push(signal),
+    onStatus:status => statuses.push(status),
+    minRetryMs:10,
+    maxRetryMs:20,
+  });
+
+  assert.equal(sockets.length, 1);
+  const liveUrl = new URL(sockets[0].url);
+  assert.equal(liveUrl.protocol, 'wss:');
+  assert.equal(liveUrl.pathname, '/hub/api/lighthouse-control-port/live');
+  assert.equal(liveUrl.search, '');
+  assert.equal(sockets[0].url.includes(token), false);
+
+  sockets[0].emit('open');
+  assert.equal(sockets[0].sent.length, 1);
+  const auth = JSON.parse(sockets[0].sent[0]);
+  assert.deepEqual(auth, { type:'AUTH', sessionId:'lh-session-1', sessionToken:token });
+
+  sockets[0].emit('message', { data:JSON.stringify({ type:'READY', sessionId:'lh-session-1' }) });
+  sockets[0].emit('message', { data:JSON.stringify({ type:'COMMAND_AVAILABLE', requestId:'r1', capabilityId:'finance.expense.create' }) });
+  sockets[0].emit('message', { data:JSON.stringify({ type:'STATE_UPDATED' }) });
+  assert.deepEqual(signals.map(value => value.type), ['READY','COMMAND_AVAILABLE']);
+  assert.equal(statuses.some(value => value.status === 'LIVE'), true);
+
+  sockets[0].emit('close', { reason:'network' });
+  assert.equal(scheduled.length, 1);
+  scheduled[0]();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(sockets.length, 2, 'reconnect should create a new socket while controller is active');
+
+  controller.close();
+  assert.equal(sockets[1].closed, true);
+});
+
+test('LIGHTHOUSE app uses live notification as primary trigger while retaining 30-second reconcile and online recovery', () => {
+  const fs = require('node:fs');
+  const appSource = fs.readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
+  assert.match(appSource, /hubControlPortTransport\.openLive\(/);
+  assert.match(appSource, /signal\?\.type === 'READY' \|\| signal\?\.type === 'COMMAND_AVAILABLE'/);
+  assert.match(appSource, /syncGoHubControlPort\(\{ force:true \}\)/);
+  assert.match(appSource, /window\.setInterval\(\(\) => \{ void syncGoHubControlPort\(\); \}, 30_000\)/);
+  assert.match(appSource, /window\.addEventListener\('online'/);
+  assert.match(appSource, /stopGoHubRealtime\('APP_BACKGROUND'\)/);
+});
