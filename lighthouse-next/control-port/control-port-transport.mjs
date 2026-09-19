@@ -39,8 +39,7 @@ export function createLighthouseHubControlPortTransport({
     return value;
   }
 
-  async function post(path, body) {
-    const paired = await credential();
+  async function postWithCredential(paired, path, body) {
     const headers = {
       'x-lighthouse-session-id':paired.sessionId,
       'x-lighthouse-session-token':paired.sessionToken,
@@ -53,6 +52,10 @@ export function createLighthouseHubControlPortTransport({
       ...(body === undefined ? {} : { body:JSON.stringify(body) }),
     });
     return responseJson(response);
+  }
+
+  async function post(path, body) {
+    return postWithCredential(await credential(), path, body);
   }
 
   const liveControllers = new Set();
@@ -68,6 +71,7 @@ export function createLighthouseHubControlPortTransport({
   async function openLive({
     onSignal = () => {},
     onStatus = () => {},
+    isActive = () => true,
     reconnect = true,
     minRetryMs = 1_000,
     maxRetryMs = 30_000,
@@ -75,7 +79,7 @@ export function createLighthouseHubControlPortTransport({
     if (typeof WebSocketImpl !== 'function') {
       throw new Error('LIGHTHOUSE_HUB_WEBSOCKET_UNAVAILABLE');
     }
-    const paired = await credential();
+    if (typeof isActive !== 'function' || !isActive()) throw new Error('LIGHTHOUSE_HUB_LIVE_INACTIVE');
     let active = true;
     let socket = null;
     let retryTimer = null;
@@ -99,7 +103,7 @@ export function createLighthouseHubControlPortTransport({
     }
 
     function scheduleReconnect() {
-      if (!active || !reconnect || typeof setTimeoutImpl !== 'function') return;
+      if (!active || !isActive() || !reconnect || typeof setTimeoutImpl !== 'function') return;
       if (retryTimer != null) return;
       const waitMs = retryMs;
       retryMs = Math.min(retryCap, retryMs * 2);
@@ -110,26 +114,36 @@ export function createLighthouseHubControlPortTransport({
       }, waitMs);
     }
 
-    async function connect() {
-      if (!active) return;
+    async function connect({ required = false } = {}) {
+      if (!active || !isActive()) {
+        if (required) throw new Error('LIGHTHOUSE_HUB_LIVE_INACTIVE');
+        return false;
+      }
       let current;
       try {
         current = await credential();
       } catch (error) {
         status({ status:'OFFLINE', reason:String(error?.message || error || 'CREDENTIAL_UNAVAILABLE') });
         scheduleReconnect();
-        return;
+        if (required) throw error;
+        return false;
+      }
+      if (!active || !isActive()) {
+        if (required) throw new Error('LIGHTHOUSE_HUB_LIVE_INACTIVE');
+        return false;
       }
       try {
         socket = new WebSocketImpl(liveEndpoint(current.hubOrigin));
       } catch (error) {
         status({ status:'OFFLINE', reason:String(error?.message || error || 'WEBSOCKET_CONNECT_FAILED') });
         scheduleReconnect();
-        return;
+        if (required) throw error;
+        return false;
       }
       status({ status:'CONNECTING' });
 
       socket.addEventListener?.('open', () => {
+        if (!active || !isActive()) { try { socket?.close?.(); } catch {} return; }
         retryMs = Math.max(250, Number(minRetryMs) || 1_000);
         try {
           socket.send(JSON.stringify({
@@ -144,6 +158,7 @@ export function createLighthouseHubControlPortTransport({
       });
 
       socket.addEventListener?.('message', event => {
+        if (!active || !isActive()) return;
         let message = null;
         try { message = JSON.parse(String(event?.data || '')); } catch {}
         if (!message || typeof message !== 'object') return;
@@ -180,9 +195,15 @@ export function createLighthouseHubControlPortTransport({
       socket.addEventListener?.('error', () => {
         status({ status:'OFFLINE', reason:'WEBSOCKET_ERROR' });
       });
+      return true;
     }
 
-    await connect();
+    try {
+      await connect({ required:true });
+    } catch (error) {
+      controller.close();
+      throw error;
+    }
     return Object.freeze(controller);
   }
 
@@ -210,8 +231,11 @@ export function createLighthouseHubControlPortTransport({
     });
   }
 
-  async function pullInbox() {
-    const body = await post('/pull');
+  async function pullInbox({ isActive = () => true } = {}) {
+    if (typeof isActive !== 'function' || !isActive()) throw new Error('LIGHTHOUSE_HUB_PULL_INACTIVE');
+    const paired = await credential();
+    if (!isActive()) throw new Error('LIGHTHOUSE_HUB_PULL_INACTIVE');
+    const body = await postWithCredential(paired, '/pull');
     return Array.isArray(body?.commands) ? body.commands : [];
   }
 

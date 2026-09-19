@@ -74,6 +74,29 @@ test('expired local pairing fails before network request', async () => {
   assert.equal(called, false);
 });
 
+test('HTTP pull does not start when Runtime authority is revoked during credential read', async () => {
+  const { parseLighthouseHubBootstrap } = await import(credentialUrl);
+  const { createLighthouseHubControlPortTransport } = await import(transportUrl);
+  let releaseCredential;
+  const credentialReady = new Promise(resolve => { releaseCredential = resolve; });
+  let authority = true;
+  let fetchCalls = 0;
+  const transport = createLighthouseHubControlPortTransport({
+    credentialStore:{
+      async load() { await credentialReady; return parseLighthouseHubBootstrap(bootstrap); },
+      async save() {},
+    },
+    now:() => 1,
+    fetchImpl:async () => { fetchCalls += 1; return new Response('{}'); },
+  });
+
+  const pulling = transport.pullInbox({ isActive:() => authority });
+  authority = false;
+  releaseCredential();
+  await assert.rejects(pulling, /LIGHTHOUSE_HUB_PULL_INACTIVE/);
+  assert.equal(fetchCalls, 0);
+});
+
 
 test('realtime transport authenticates after connect, keeps credentials out of URL, and triggers authoritative pull on live signals', async () => {
   const { createMemoryLighthouseHubCredentialStore } = await import(credentialUrl);
@@ -148,6 +171,32 @@ test('realtime transport authenticates after connect, keeps credentials out of U
   assert.equal(sockets[1].closed, true);
 });
 
+test('realtime transport does not create a socket when live authority is revoked during credential read', async () => {
+  const { parseLighthouseHubBootstrap } = await import(credentialUrl);
+  const { createLighthouseHubControlPortTransport } = await import(transportUrl);
+  let releaseCredential;
+  const credentialReady = new Promise(resolve => { releaseCredential = resolve; });
+  const paired = parseLighthouseHubBootstrap(bootstrap);
+  const sockets = [];
+  let liveAuthority = true;
+  class FakeWebSocket { constructor(url) { sockets.push(url); } }
+  const transport = createLighthouseHubControlPortTransport({
+    fetchImpl:async () => new Response('{}'),
+    WebSocketImpl:FakeWebSocket,
+    credentialStore:{
+      async load() { await credentialReady; return paired; },
+      async save() {},
+    },
+    now:() => 1,
+  });
+
+  const opening = transport.openLive({ isActive:() => liveAuthority });
+  liveAuthority = false;
+  releaseCredential();
+  await assert.rejects(opening, /LIGHTHOUSE_HUB_LIVE_INACTIVE/);
+  assert.equal(sockets.length, 0);
+});
+
 test('LIGHTHOUSE app uses live notification as primary trigger while retaining 30-second reconcile and online recovery', () => {
   const fs = require('node:fs');
   const appSource = fs.readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
@@ -155,7 +204,10 @@ test('LIGHTHOUSE app uses live notification as primary trigger while retaining 3
   assert.match(appSource, /signal\?\.type === 'READY' \|\| signal\?\.type === 'COMMAND_AVAILABLE'/);
   assert.match(appSource, /syncGoHubControlPort\(\{ force:true \}\)/);
   assert.match(appSource, /window\.setInterval\(\(\) => \{ void syncGoHubControlPort\(\); \}, 30_000\)/);
-  assert.match(appSource, /window\.addEventListener\('online'/);
-  assert.match(appSource, /stopGoHubRealtime\('APP_BACKGROUND'\)/);
+  assert.match(appSource, /installControlPortBackgroundSync\(\{/);
+  assert.doesNotMatch(appSource, /stopGoHubRealtime\('APP_BACKGROUND'\)/);
+  assert.match(appSource, /const pairing = await hubControlPortTransport\.status\(\);\s*if \(!runtimeGate\.isUnlocked\(\)\) return null/);
+  assert.match(appSource, /pullInbox:\(\) => runtimeGate\.isUnlocked\(\)\s*\? hubControlPortTransport\.pullInbox\(\{ isActive:\(\) => runtimeGate\.isUnlocked\(\) \}\)\s*:\s*\[\]/);
+  assert.match(appSource, /isActive:\(\) => runtimeGate\.isUnlocked\(\)/);
   assert.match(appSource, /function markReadbackVerified[\s\S]*syncGoHubControlPort\(\{ force:true \}\)/);
 });

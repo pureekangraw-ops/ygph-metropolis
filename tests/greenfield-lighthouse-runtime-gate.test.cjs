@@ -43,9 +43,12 @@ test('login reads durable state before activating the shared Runtime Session', a
     deactivateSession: value => { assert.equal(value, runtime); calls.push('deactivate'); return true; },
   }));
 
+  assert.equal(gate.isUnlocked(), false);
   assert.deepEqual(await gate.login('123456'), { status: 'UNLOCKED', state: { revision: 41 } });
+  assert.equal(gate.isUnlocked(), true);
   assert.deepEqual(calls, ['open:123456', 'read', 'activate']);
   assert.equal(gate.lock(), true);
+  assert.equal(gate.isUnlocked(), false);
   assert.deepEqual(calls, ['open:123456', 'read', 'activate', 'deactivate', 'close']);
 });
 

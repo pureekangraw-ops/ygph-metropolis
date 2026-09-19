@@ -15,6 +15,8 @@ import { createLighthouseControlPortRuntime } from './control-port/control-port-
 import { createLighthouseControlPortSync } from './control-port/control-port-sync.mjs';
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
+import { installControlPortBackgroundSync } from './control-port/control-port-background-sync.mjs';
+import { getNativeCapacitorApp } from './capacitor-app.mjs';
 import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
 import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
 import { createLighthouseWorkCirculation } from './work-circulation.mjs';
@@ -168,13 +170,16 @@ function stopGoHubRealtime(reason = 'APP_INACTIVE') {
 
 async function ensureGoHubRealtime({ force = false } = {}) {
   if (!hubControlPortTransport || typeof hubControlPortTransport.openLive !== 'function') return null;
+  if (!runtimeGate.isUnlocked()) return null;
   if (hubLiveController || hubLiveStarting) return hubLiveController;
   if (!force && appShell.hidden) return null;
   hubLiveStarting = true;
   try {
     const pairing = await hubControlPortTransport.status();
+    if (!runtimeGate.isUnlocked()) return null;
     if (pairing.status !== 'PAIRED') return null;
     const controller = await hubControlPortTransport.openLive({
+      isActive:() => runtimeGate.isUnlocked(),
       onSignal:signal => {
         if (signal?.type === 'READY' || signal?.type === 'COMMAND_AVAILABLE') {
           void syncGoHubControlPort({ force:true });
@@ -196,6 +201,7 @@ async function ensureGoHubRealtime({ force = false } = {}) {
 
 async function syncGoHubControlPort({ force = false } = {}) {
   if (!hubControlPortTransport) return null;
+  if (!runtimeGate.isUnlocked()) return null;
   if (hubSyncBusy) {
     if (force) hubSyncRequested = true;
     return null;
@@ -204,13 +210,14 @@ async function syncGoHubControlPort({ force = false } = {}) {
   hubSyncBusy = true;
   try {
     const pairing = await hubControlPortTransport.status();
+    if (!runtimeGate.isUnlocked()) return null;
     if (pairing.status !== 'PAIRED') {
       dispatchHubStatus({ pairing });
       return Object.freeze({ status:pairing.status });
     }
     void ensureGoHubRealtime({ force });
     const report = await controlPortSync.reconcile({
-      pullInbox:() => hubControlPortTransport.pullInbox(),
+      pullInbox:() => runtimeGate.isUnlocked() ? hubControlPortTransport.pullInbox({ isActive:() => runtimeGate.isUnlocked() }) : [],
       pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
       pushState:packet => hubControlPortTransport.pushState(packet),
     });
@@ -639,7 +646,7 @@ function clearRecoveryFields() { recoveryCodeInput.value = ''; newPasswordInput.
 async function bootRuntimeGate() { authStatus.textContent = 'กำลังตรวจสถานะอุปกรณ์…'; try { const result = await runtimeGate.inspect(); if (result.status === 'LOGIN') showLoginGate(); else showSetupRequired(result.reason); } catch (error) { showSetupRequired(); authStatus.textContent = authMessage(error); } }
 async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); void syncGoHubControlPort({ force:true }); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
-function lockApp() { runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
+function lockApp() { stopGoHubRealtime('APP_LOCKED'); runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 
 function selectRoot(rootId) { const allowed = ['chat','manual','go','settings']; const next = allowed.includes(rootId) ? rootId : 'manual'; state.activeRoot = next; saveState(); root.querySelectorAll('.app-page').forEach((page) => { const active = page.dataset.root === next; page.hidden = !active; page.classList.toggle('active', active); }); root.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.rootTarget === next; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }); pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : next === 'go' ? 'สถานะสด' : 'ดูแลแอป'; if (next === 'chat') { ensureChatWelcome(); renderChat(); requestAnimationFrame(() => chatInput.focus({ preventScroll:true })); } if (next === 'manual') showManualHub(); if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); } }
 function addMessage(role, text, kind = role) { const message={ id:`${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text, kind, createdAt:new Date().toISOString() }; state.chatHistory.push(message); state.chatHistory = state.chatHistory.slice(-80); saveState(); return message; }
@@ -720,21 +727,11 @@ window.addEventListener('storage', event => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    void ensureGoHubRealtime();
-    void syncGoHubControlPort();
-  } else {
-    stopGoHubRealtime('APP_BACKGROUND');
-  }
-});
-window.addEventListener('focus', () => {
-  void ensureGoHubRealtime();
-  void syncGoHubControlPort();
-});
-window.addEventListener('online', () => {
-  void ensureGoHubRealtime({ force:true });
-  void syncGoHubControlPort({ force:true });
+void installControlPortBackgroundSync({
+  nativeApp:getNativeCapacitorApp(),
+  canSync:() => runtimeGate.isUnlocked(),
+  ensureLive:ensureGoHubRealtime,
+  reconcile:syncGoHubControlPort,
 });
 window.setInterval(() => { void syncGoHubControlPort(); }, 30_000);
 void bootRuntimeGate();
