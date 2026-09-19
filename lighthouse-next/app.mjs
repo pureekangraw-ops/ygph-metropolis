@@ -176,8 +176,10 @@ async function ensureGoHubRealtime({ force = false } = {}) {
   hubLiveStarting = true;
   try {
     const pairing = await hubControlPortTransport.status();
+    if (!runtimeGate.isUnlocked()) return null;
     if (pairing.status !== 'PAIRED') return null;
     const controller = await hubControlPortTransport.openLive({
+      isActive:() => runtimeGate.isUnlocked(),
       onSignal:signal => {
         if (signal?.type === 'READY' || signal?.type === 'COMMAND_AVAILABLE') {
           void syncGoHubControlPort({ force:true });
@@ -208,13 +210,14 @@ async function syncGoHubControlPort({ force = false } = {}) {
   hubSyncBusy = true;
   try {
     const pairing = await hubControlPortTransport.status();
+    if (!runtimeGate.isUnlocked()) return null;
     if (pairing.status !== 'PAIRED') {
       dispatchHubStatus({ pairing });
       return Object.freeze({ status:pairing.status });
     }
     void ensureGoHubRealtime({ force });
     const report = await controlPortSync.reconcile({
-      pullInbox:() => hubControlPortTransport.pullInbox(),
+      pullInbox:() => runtimeGate.isUnlocked() ? hubControlPortTransport.pullInbox() : [],
       pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
       pushState:packet => hubControlPortTransport.pushState(packet),
     });
