@@ -16,6 +16,7 @@ import { createLighthouseControlPortSync } from './control-port/control-port-syn
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
 import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
+import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
 import { createGoBoardView } from './go-board-live.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
@@ -107,13 +108,18 @@ const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
 const storeBridge = createLighthouseStoreBridge();
-const controlPort = createLighthouseControlPort({ ledgerBridge, storeBridge });
+const centreBoardStore = createLighthouseCentreBoardStore();
+const centreBoardBridge = createLighthouseCentreBoardBridge({ store:centreBoardStore });
+const controlPort = createLighthouseControlPort({
+  ledgerBridge,
+  storeBridge,
+  boardBridge:centreBoardBridge,
+});
 const controlPortRuntime = createLighthouseControlPortRuntime({
   port:controlPort,
   snapshotMetadata:controlPortSnapshotMetadata,
 });
 const controlPortSync = createLighthouseControlPortSync({ runtime:controlPortRuntime });
-const centreBoardStore = createLighthouseCentreBoardStore();
 let hubControlPortTransport = null;
 try { hubControlPortTransport = createLighthouseHubControlPortTransport(); } catch {}
 const chatRead = createChatReadCapability({ ledgerBridge, storeBridge });
