@@ -45,6 +45,7 @@ test('rejects malformed pin identity, status, evidence, and links', async () => 
   assert.throws(() => createCentrePin({ ...base, status:'DONE' }), /CENTRE_BOARD_PIN_STATUS_INVALID/);
   assert.throws(() => createCentrePin({ ...base, evidence:{} }), /CENTRE_BOARD_EVIDENCE_INVALID/);
   assert.throws(() => createCentrePin({ ...base, links:{} }), /CENTRE_BOARD_LINKS_INVALID/);
+  assert.throws(() => createCentrePin({ ...base, touchedBy:['bad employee id'] }), /CENTRE_BOARD_TOUCHED_BY_INVALID/);
 });
 
 test('checks Employee ID uniqueness only against current live pins', async () => {
