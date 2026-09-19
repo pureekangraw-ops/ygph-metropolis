@@ -64,6 +64,8 @@ test('Centre Board capabilities are exposed without device confirmation and rema
   assert.equal(read.owner, 'LIGHTHOUSE:CENTRE_BOARD');
 
   for (const [id, action] of [
+    ['centreBoard.initialize','initializeBoard'],
+    ['centreBoard.pin.create','createPin'],
     ['centreBoard.claim','claimPins'],
     ['centreBoard.return','returnPins'],
     ['centreBoard.recover','recoverEmergency'],
@@ -82,6 +84,8 @@ test('board.* compatibility aliases resolve to the same Centre Board owner contr
   const registry = await import(moduleUrl);
   const pairs = [
     ['board.read','centreBoard.read'],
+    ['board.initialize','centreBoard.initialize'],
+    ['pin.create','centreBoard.pin.create'],
     ['board.claim','centreBoard.claim'],
     ['board.return','centreBoard.return'],
     ['board.recover','centreBoard.recover'],
