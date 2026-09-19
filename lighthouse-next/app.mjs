@@ -121,6 +121,7 @@ let realStoreCommitBusy = false;
 let realExpenseCommitBusy = false;
 let activeChatMessageId = null;
 let hubSyncBusy = false;
+let hubSyncRequested = false;
 let hubLiveController = null;
 let hubLiveStarting = false;
 
@@ -163,7 +164,11 @@ async function ensureGoHubRealtime({ force = false } = {}) {
 }
 
 async function syncGoHubControlPort({ force = false } = {}) {
-  if (!hubControlPortTransport || hubSyncBusy) return null;
+  if (!hubControlPortTransport) return null;
+  if (hubSyncBusy) {
+    if (force) hubSyncRequested = true;
+    return null;
+  }
   if (!force && appShell.hidden) return null;
   hubSyncBusy = true;
   try {
@@ -185,6 +190,10 @@ async function syncGoHubControlPort({ force = false } = {}) {
     return null;
   } finally {
     hubSyncBusy = false;
+    if (hubSyncRequested) {
+      hubSyncRequested = false;
+      void syncGoHubControlPort({ force:true });
+    }
   }
 }
 
