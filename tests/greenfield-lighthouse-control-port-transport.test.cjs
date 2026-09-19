@@ -74,6 +74,29 @@ test('expired local pairing fails before network request', async () => {
   assert.equal(called, false);
 });
 
+test('HTTP pull does not start when Runtime authority is revoked during credential read', async () => {
+  const { parseLighthouseHubBootstrap } = await import(credentialUrl);
+  const { createLighthouseHubControlPortTransport } = await import(transportUrl);
+  let releaseCredential;
+  const credentialReady = new Promise(resolve => { releaseCredential = resolve; });
+  let authority = true;
+  let fetchCalls = 0;
+  const transport = createLighthouseHubControlPortTransport({
+    credentialStore:{
+      async load() { await credentialReady; return parseLighthouseHubBootstrap(bootstrap); },
+      async save() {},
+    },
+    now:() => 1,
+    fetchImpl:async () => { fetchCalls += 1; return new Response('{}'); },
+  });
+
+  const pulling = transport.pullInbox({ isActive:() => authority });
+  authority = false;
+  releaseCredential();
+  await assert.rejects(pulling, /LIGHTHOUSE_HUB_PULL_INACTIVE/);
+  assert.equal(fetchCalls, 0);
+});
+
 
 test('realtime transport authenticates after connect, keeps credentials out of URL, and triggers authoritative pull on live signals', async () => {
   const { createMemoryLighthouseHubCredentialStore } = await import(credentialUrl);
@@ -184,7 +207,7 @@ test('LIGHTHOUSE app uses live notification as primary trigger while retaining 3
   assert.match(appSource, /installControlPortBackgroundSync\(\{/);
   assert.doesNotMatch(appSource, /stopGoHubRealtime\('APP_BACKGROUND'\)/);
   assert.match(appSource, /const pairing = await hubControlPortTransport\.status\(\);\s*if \(!runtimeGate\.isUnlocked\(\)\) return null/);
-  assert.match(appSource, /pullInbox:\(\) => runtimeGate\.isUnlocked\(\)\s*\? hubControlPortTransport\.pullInbox\(\)\s*:\s*\[\]/);
+  assert.match(appSource, /pullInbox:\(\) => runtimeGate\.isUnlocked\(\)\s*\? hubControlPortTransport\.pullInbox\(\{ isActive:\(\) => runtimeGate\.isUnlocked\(\) \}\)\s*:\s*\[\]/);
   assert.match(appSource, /isActive:\(\) => runtimeGate\.isUnlocked\(\)/);
   assert.match(appSource, /function markReadbackVerified[\s\S]*syncGoHubControlPort\(\{ force:true \}\)/);
 });

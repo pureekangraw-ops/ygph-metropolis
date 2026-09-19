@@ -217,7 +217,7 @@ async function syncGoHubControlPort({ force = false } = {}) {
     }
     void ensureGoHubRealtime({ force });
     const report = await controlPortSync.reconcile({
-      pullInbox:() => runtimeGate.isUnlocked() ? hubControlPortTransport.pullInbox() : [],
+      pullInbox:() => runtimeGate.isUnlocked() ? hubControlPortTransport.pullInbox({ isActive:() => runtimeGate.isUnlocked() }) : [],
       pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
       pushState:packet => hubControlPortTransport.pushState(packet),
     });
