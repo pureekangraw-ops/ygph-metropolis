@@ -15,6 +15,8 @@ import { createLighthouseControlPortRuntime } from './control-port/control-port-
 import { createLighthouseControlPortSync } from './control-port/control-port-sync.mjs';
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
+import { installControlPortBackgroundSync } from './control-port/control-port-background-sync.mjs';
+import { getNativeCapacitorApp } from './capacitor-app.mjs';
 import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
 import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
 import { createLighthouseWorkCirculation } from './work-circulation.mjs';
@@ -720,21 +722,11 @@ window.addEventListener('storage', event => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    void ensureGoHubRealtime();
-    void syncGoHubControlPort();
-  } else {
-    stopGoHubRealtime('APP_BACKGROUND');
-  }
-});
-window.addEventListener('focus', () => {
-  void ensureGoHubRealtime();
-  void syncGoHubControlPort();
-});
-window.addEventListener('online', () => {
-  void ensureGoHubRealtime({ force:true });
-  void syncGoHubControlPort({ force:true });
+void installControlPortBackgroundSync({
+  nativeApp:getNativeCapacitorApp(),
+  canSync:() => !appShell.hidden,
+  ensureLive:ensureGoHubRealtime,
+  reconcile:syncGoHubControlPort,
 });
 window.setInterval(() => { void syncGoHubControlPort(); }, 30_000);
 void bootRuntimeGate();

@@ -43,7 +43,7 @@ test('LIGHTHOUSE app reconciles GO Hub through existing Control Port sync only a
   assert.match(app, /pushOutbox:receipts => hubControlPortTransport\.pushOutbox\(receipts\)/);
   assert.match(app, /pushState:packet => hubControlPortTransport\.pushState\(packet\)/);
   assert.match(app, /showApp\(\); void syncGoHubControlPort\(\{ force:true \}\)/);
-  assert.match(app, /visibilitychange/);
+  assert.match(app, /installControlPortBackgroundSync\(\{/);
   assert.match(app, /30_000/);
   assert.doesNotMatch(app, /confirmed:\s*true/);
   assert.doesNotMatch(app, /runtime\.(?:readState|write|commit)/);
