@@ -84,6 +84,105 @@ test('Control Port refuses unconfirmed guarded mutation and commits through owne
   assert.equal(committed.updatedAt, '2026-09-18T07:02:00.000Z');
 });
 
+
+test('Control Port command pack requires one confirmation and commits all validated child commands in order', async () => {
+  const { createLighthouseControlPort } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+  const proposal = port.propose({
+    requestId:'pack-1',
+    capabilityId:'system.commandPack',
+    payload:{
+      title:'Finance pack',
+      commands:[
+        {
+          requestId:'pack-1-income',
+          capabilityId:'finance.income.create',
+          payload:{ source:'งาน', amountBaht:100 },
+        },
+        {
+          requestId:'pack-1-expense',
+          capabilityId:'finance.expense.create',
+          payload:{ title:'น้ำมัน', amountBaht:50 },
+        },
+      ],
+    },
+  });
+
+  assert.equal(proposal.guard, 'CONFIRM_REQUIRED');
+  const blocked = await port.commit(proposal);
+  assert.equal(blocked.status, 'CONFIRMATION_REQUIRED');
+
+  const result = await port.commit(proposal, { confirmed:true });
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.capabilityId, 'system.commandPack');
+  assert.equal(result.beforeRevision, 7);
+  assert.equal(result.afterRevision, 9);
+  assert.equal(result.evidence.kind, 'COMMAND_PACK');
+  assert.equal(result.evidence.count, 2);
+  assert.deepEqual(result.evidence.items.map(item => item.requestId), ['pack-1-income','pack-1-expense']);
+  assert.deepEqual(result.evidence.items.map(item => item.status), ['VERIFIED','VERIFIED']);
+});
+
+test('Control Port command pack validates every child before the first mutation', async () => {
+  const { createLighthouseControlPort } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+  const proposal = port.propose({
+    requestId:'pack-invalid',
+    capabilityId:'system.commandPack',
+    payload:{
+      commands:[
+        {
+          requestId:'pack-invalid-income',
+          capabilityId:'finance.income.create',
+          payload:{ source:'งาน', amountBaht:100 },
+        },
+        {
+          requestId:'pack-invalid-balance',
+          capabilityId:'finance.balance',
+          payload:{},
+        },
+      ],
+    },
+  });
+
+  await assert.rejects(
+    () => port.commit(proposal, { confirmed:true }),
+    /COMMAND_PACK_CAPABILITY_FORBIDDEN:finance\.balance/,
+  );
+  const money = await port.query({ capabilityId:'finance.balance' });
+  assert.equal(money.revision, 7, 'prevalidation must prevent the first child from mutating owner state');
+});
+
+test('Control Port command pack forbids nested packs and duplicate child request ids', async () => {
+  const { createLighthouseControlPort } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+
+  await assert.rejects(
+    () => port.commit(port.propose({
+      requestId:'pack-nested',
+      capabilityId:'system.commandPack',
+      payload:{ commands:[{
+        requestId:'nested-child',
+        capabilityId:'system.commandPack',
+        payload:{ commands:[] },
+      }] },
+    }), { confirmed:true }),
+    /COMMAND_PACK_NESTING_FORBIDDEN/,
+  );
+
+  await assert.rejects(
+    () => port.commit(port.propose({
+      requestId:'pack-duplicate',
+      capabilityId:'system.commandPack',
+      payload:{ commands:[
+        { requestId:'same-child', capabilityId:'finance.income.create', payload:{ source:'A', amountBaht:1 } },
+        { requestId:'same-child', capabilityId:'finance.expense.create', payload:{ title:'B', amountBaht:1 } },
+      ] },
+    }), { confirmed:true }),
+    /COMMAND_PACK_REQUEST_ID_DUPLICATE:same-child/,
+  );
+});
+
 test('Control Port derived balance cannot be committed', async () => {
   const { createLighthouseControlPort } = await import(moduleUrl);
   const port = createLighthouseControlPort(fixture());
