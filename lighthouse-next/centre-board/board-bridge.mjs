@@ -23,6 +23,19 @@ export function createLighthouseCentreBoardBridge({
     return store.read();
   }
 
+  function initializeBoard({
+    board,
+    expectedRevision = 0,
+  } = {}) {
+    if (readBoard()) throw new Error('CENTRE_BOARD_ALREADY_INITIALIZED');
+    if (Number(expectedRevision) !== 0) {
+      throw new Error('CENTRE_BOARD_INITIALIZE_EXPECTED_REVISION_INVALID');
+    }
+    const saved = store.write(board, { expectedRevision:0 });
+    if (!saved || saved.revision !== 1) throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
+    return verified(saved, null, { initialized:true });
+  }
+
   function verified(board, receipt, extra = {}) {
     return Object.freeze({
       status:'VERIFIED',
@@ -113,6 +126,7 @@ export function createLighthouseCentreBoardBridge({
 
   return Object.freeze({
     readBoard,
+    initializeBoard,
     claimPins,
     returnPins,
     recoverEmergency,
