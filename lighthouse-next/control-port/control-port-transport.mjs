@@ -21,8 +21,11 @@ async function responseJson(response) {
 
 export function createLighthouseHubControlPortTransport({
   fetchImpl = globalThis.fetch,
+  WebSocketImpl = globalThis.WebSocket,
   credentialStore = createIndexedDbLighthouseHubCredentialStore(),
   now = () => Date.now(),
+  setTimeoutImpl = globalThis.setTimeout?.bind(globalThis),
+  clearTimeoutImpl = globalThis.clearTimeout?.bind(globalThis),
 } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('LIGHTHOUSE_HUB_FETCH_UNAVAILABLE');
   if (!credentialStore || typeof credentialStore.load !== 'function' || typeof credentialStore.save !== 'function') {
@@ -50,6 +53,137 @@ export function createLighthouseHubControlPortTransport({
       ...(body === undefined ? {} : { body:JSON.stringify(body) }),
     });
     return responseJson(response);
+  }
+
+  const liveControllers = new Set();
+
+  function liveEndpoint(origin) {
+    const url = new URL(API_ROOT + '/live', origin);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  }
+
+  async function openLive({
+    onSignal = () => {},
+    onStatus = () => {},
+    reconnect = true,
+    minRetryMs = 1_000,
+    maxRetryMs = 30_000,
+  } = {}) {
+    if (typeof WebSocketImpl !== 'function') {
+      throw new Error('LIGHTHOUSE_HUB_WEBSOCKET_UNAVAILABLE');
+    }
+    const paired = await credential();
+    let active = true;
+    let socket = null;
+    let retryTimer = null;
+    let retryMs = Math.max(250, Number(minRetryMs) || 1_000);
+    const retryCap = Math.max(retryMs, Number(maxRetryMs) || 30_000);
+
+    const controller = {
+      close() {
+        active = false;
+        if (retryTimer != null && typeof clearTimeoutImpl === 'function') clearTimeoutImpl(retryTimer);
+        retryTimer = null;
+        try { socket?.close?.(1000, 'LIGHTHOUSE_APP_INACTIVE'); } catch {}
+        socket = null;
+        liveControllers.delete(controller);
+      },
+    };
+    liveControllers.add(controller);
+
+    function status(value) {
+      try { onStatus(Object.freeze({ ...value })); } catch {}
+    }
+
+    function scheduleReconnect() {
+      if (!active || !reconnect || typeof setTimeoutImpl !== 'function') return;
+      if (retryTimer != null) return;
+      const waitMs = retryMs;
+      retryMs = Math.min(retryCap, retryMs * 2);
+      status({ status:'RECONNECT_WAIT', retryInMs:waitMs });
+      retryTimer = setTimeoutImpl(() => {
+        retryTimer = null;
+        void connect();
+      }, waitMs);
+    }
+
+    async function connect() {
+      if (!active) return;
+      let current;
+      try {
+        current = await credential();
+      } catch (error) {
+        status({ status:'OFFLINE', reason:String(error?.message || error || 'CREDENTIAL_UNAVAILABLE') });
+        scheduleReconnect();
+        return;
+      }
+      try {
+        socket = new WebSocketImpl(liveEndpoint(current.hubOrigin));
+      } catch (error) {
+        status({ status:'OFFLINE', reason:String(error?.message || error || 'WEBSOCKET_CONNECT_FAILED') });
+        scheduleReconnect();
+        return;
+      }
+      status({ status:'CONNECTING' });
+
+      socket.addEventListener?.('open', () => {
+        retryMs = Math.max(250, Number(minRetryMs) || 1_000);
+        try {
+          socket.send(JSON.stringify({
+            type:'AUTH',
+            sessionId:current.sessionId,
+            sessionToken:current.sessionToken,
+          }));
+        } catch (error) {
+          status({ status:'OFFLINE', reason:String(error?.message || error || 'WEBSOCKET_AUTH_SEND_FAILED') });
+          try { socket.close?.(); } catch {}
+        }
+      });
+
+      socket.addEventListener?.('message', event => {
+        let message = null;
+        try { message = JSON.parse(String(event?.data || '')); } catch {}
+        if (!message || typeof message !== 'object') return;
+        if (message.type === 'READY') {
+          status({ status:'LIVE' });
+          try { onSignal(Object.freeze({ type:'READY' })); } catch {}
+          return;
+        }
+        if (message.type === 'COMMAND_AVAILABLE') {
+          try {
+            onSignal(Object.freeze({
+              type:'COMMAND_AVAILABLE',
+              requestId:message.requestId || null,
+              capabilityId:message.capabilityId || null,
+            }));
+          } catch {}
+          return;
+        }
+        if (message.type === 'ERROR') {
+          status({ status:'ERROR', reason:String(message.code || 'LIVE_ERROR') });
+        }
+      });
+
+      socket.addEventListener?.('close', event => {
+        socket = null;
+        if (!active) return;
+        status({
+          status:'OFFLINE',
+          reason:event?.reason ? String(event.reason) : 'WEBSOCKET_CLOSED',
+        });
+        scheduleReconnect();
+      });
+
+      socket.addEventListener?.('error', () => {
+        status({ status:'OFFLINE', reason:'WEBSOCKET_ERROR' });
+      });
+    }
+
+    await connect();
+    return Object.freeze(controller);
   }
 
   async function pair(input) {
@@ -94,6 +228,7 @@ export function createLighthouseHubControlPortTransport({
   }
 
   async function disconnect() {
+    for (const controller of [...liveControllers]) controller.close();
     let stopped = false;
     try {
       await post('/session/stop');
@@ -110,6 +245,7 @@ export function createLighthouseHubControlPortTransport({
     pullInbox,
     pushOutbox,
     pushState,
+    openLive,
     disconnect,
   });
 }
