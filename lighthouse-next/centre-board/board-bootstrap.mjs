@@ -21,6 +21,32 @@ function requiredText(value, code) {
   return output;
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function pinFingerprint(pin, workId) {
+  return canonical({
+    workId,
+    pin:{
+      pinId:pin.pinId,
+      title:pin.title,
+      detail:pin.detail,
+      status:pin.status,
+      ownerEmployeeId:pin.ownerEmployeeId,
+      touchedBy:pin.touchedBy,
+      result:pin.result,
+      nextAction:pin.nextAction,
+      evidence:pin.evidence,
+      links:pin.links,
+    },
+  });
+}
+
 function assertBoard(board) {
   if (!board || typeof board !== 'object' || Array.isArray(board) || !Array.isArray(board.pins) || !Array.isArray(board.audit)) {
     throw new Error('CENTRE_BOARD_INVALID');
@@ -87,16 +113,6 @@ export function createPinOnCentreBoard(boardValue, {
   const at = requiredText(atValue, 'CENTRE_BOARD_AT_REQUIRED');
   if (board.workId !== workId) throw new Error('CENTRE_BOARD_WORK_ID_MISMATCH');
 
-  const previous = board.audit.find(event => event?.receiptId === receiptId);
-  if (previous) {
-    const same = previous.type === 'BOARD_PIN_CREATE'
-      && previous.workId === workId
-      && previous.pinId === String(pinValue?.pinId ?? '').trim();
-    if (!same) throw new Error(`CENTRE_BOARD_RECEIPT_ID_CONFLICT:${receiptId}`);
-    return deepFreeze({ board, receipt:previous.receipt });
-  }
-
-  assertRevision(board, expectedRevision);
   const pin = createCentrePin({
     ...(pinValue && typeof pinValue === 'object' && !Array.isArray(pinValue) ? pinValue : {}),
     workId,
@@ -104,6 +120,18 @@ export function createPinOnCentreBoard(boardValue, {
     createdAt:pinValue?.createdAt ?? at,
     updatedAt:at,
   });
+  const requestFingerprint = pinFingerprint(pin, workId);
+  const previous = board.audit.find(event => event?.receiptId === receiptId);
+  if (previous) {
+    const same = previous.type === 'BOARD_PIN_CREATE'
+      && previous.workId === workId
+      && previous.pinId === pin.pinId
+      && previous.requestFingerprint === requestFingerprint;
+    if (!same) throw new Error(`CENTRE_BOARD_RECEIPT_ID_CONFLICT:${receiptId}`);
+    return deepFreeze({ board, receipt:previous.receipt });
+  }
+
+  assertRevision(board, expectedRevision);
   if (board.pins.some(item => item.pinId === pin.pinId)) {
     throw new Error(`CENTRE_BOARD_PIN_ID_CONFLICT:${pin.pinId}`);
   }
@@ -131,6 +159,7 @@ export function createPinOnCentreBoard(boardValue, {
       boardId:board.boardId,
       workId,
       pinId:pin.pinId,
+      requestFingerprint,
       beforeRevision:board.revision,
       afterRevision:nextRevision,
       at,
