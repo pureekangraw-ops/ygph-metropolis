@@ -383,7 +383,7 @@ export function createLighthouseControlPortRuntime({
       return clone(receipt);
     } catch (error) {
       const code = String(error?.message || error || 'CONTROL_PORT_PROCESS_FAILED');
-      const verify = /READBACK|OWNER_NOT_VERIFIED|REVISION/.test(code);
+      const verify = /READBACK|OWNER_NOT_VERIFIED|REVISION|RECOVERY_CONFLICT/.test(code);
       const blocked = code === 'RUNTIME_SESSION_LOCKED';
       const receiptStatus = verify ? 'VERIFY' : blocked ? 'BLOCKED' : 'FAILED';
       const inboxStatus = blocked ? 'BLOCKED' : 'ERROR';
@@ -477,6 +477,7 @@ export function createLighthouseControlPortRuntime({
       'calendar.records',
       'store.products',
       'ride.summary',
+      'centreBoard.read',
       'system.appState',
     ];
     const values = {};
