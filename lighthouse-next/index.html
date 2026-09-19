@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/lighthouse-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./owner-polish.css">
+  <link rel="stylesheet" href="./owner-polish.css">\n  <link rel="stylesheet" href="./go-board-live.css">
   <style>
     .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(520px,100%);display:grid;gap:18px}.auth-form{display:grid;gap:10px}.auth-form label{font-size:13px;color:var(--muted,#9da7b8)}.auth-form input{width:100%;box-sizing:border-box;border:1px solid var(--line,#30394a);border-radius:14px;padding:13px 14px;background:rgba(255,255,255,.04);color:#f5f7fb;font:inherit}.auth-form[hidden],.auth-warning[hidden],.auth-screen[hidden]{display:none}.auth-warning{border:1px solid rgba(255,190,80,.35);border-radius:16px;padding:14px}.text-button{border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:3px;padding:10px;cursor:pointer}.settings-button span{display:grid;text-align:left}.settings-button small{font-weight:400}
     #manual-hub{padding-bottom:calc(var(--nav-height) + 28px)}
@@ -67,6 +67,62 @@
         <section id="manual-detail" class="manual-detail" hidden><button type="button" id="manual-back" class="back-button">‹ กลับ</button><div id="manual-detail-content"></div></section>
       </div>
 
+      <div id="page-go" class="app-page go-page" data-root="go" hidden>
+        <div class="page-title-block go-page-title">
+          <p class="eyebrow">GO LIVE</p>
+          <div class="go-title-row"><h1>GO</h1><span id="go-route-mode" class="go-mode-pill" data-mode="UNKNOWN">UNKNOWN</span></div>
+          <p class="muted">สถานะงานและ Centre Board จากเส้น GO Hub ↔ LIGHTHOUSE แบบสด</p>
+        </div>
+
+        <section class="go-live-card" aria-labelledby="go-route-title">
+          <div class="go-section-head"><div><p class="eyebrow">เส้นเชื่อม</p><h2 id="go-route-title">Hub ↔ LIGHTHOUSE</h2></div><span id="go-freshness" class="status-pill">UNKNOWN</span></div>
+          <div class="go-route-rail" aria-label="สถานะเส้นเชื่อม">
+            <span>GO Hub</span><i aria-hidden="true"></i><strong id="go-route-label">กำลังอ่านสถานะ…</strong><i aria-hidden="true"></i><span>LIGHTHOUSE</span>
+          </div>
+          <div class="go-stat-grid">
+            <div><span>Realtime</span><strong id="go-realtime-status">—</strong></div>
+            <div><span>Transport</span><strong id="go-transport-status">—</strong></div>
+            <div><span>Revision</span><strong id="go-revision">—</strong></div>
+            <div><span>อัปเดตล่าสุด</span><strong id="go-updated-at">—</strong></div>
+          </div>
+        </section>
+
+        <section class="go-live-card" aria-labelledby="go-work-title">
+          <div class="go-section-head"><div><p class="eyebrow">งานปัจจุบัน</p><h2 id="go-work-title">GO Work</h2></div><span id="go-next-action" class="status-pill">WAITING</span></div>
+          <div class="go-work-grid">
+            <div><span>Work ID</span><strong id="go-work-id">—</strong></div>
+            <div><span>Employee ID</span><strong id="go-employee-id">—</strong></div>
+            <div><span>Owner</span><strong id="go-work-owner">—</strong></div>
+            <div><span>Phase</span><strong id="go-work-phase">—</strong></div>
+            <div><span>Checkpoint</span><strong id="go-checkpoint-id">—</strong></div>
+            <div><span>Return Address</span><strong id="go-return-address">—</strong></div>
+          </div>
+          <div class="go-work-foot">
+            <span>Pending Request</span><strong id="go-pending-request">—</strong>
+            <span>Blocker</span><strong id="go-blocker">—</strong>
+          </div>
+        </section>
+
+        <section class="go-live-card" aria-labelledby="go-board-title">
+          <div class="go-section-head"><div><p class="eyebrow">พื้นที่ทำงานสด</p><h2 id="go-board-title">Centre Board</h2></div><span id="go-board-count" class="status-pill">0</span></div>
+          <div id="go-board-list" class="go-board-list" aria-live="polite">
+            <div class="go-empty-state"><strong>ยังไม่มี Board snapshot บนเส้นนี้</strong><span>หน้าจอนี้จะไม่สร้างหมุดหรือสถานะแทนข้อมูลจริง</span></div>
+          </div>
+        </section>
+
+        <section class="go-live-card" aria-labelledby="go-queue-title">
+          <div class="go-section-head"><div><p class="eyebrow">Control Port</p><h2 id="go-queue-title">คิวและ Readback</h2></div><span id="go-queue-health" class="status-pill">0 pending</span></div>
+          <div class="go-queue-metrics">
+            <div><span>รอดำเนินการ</span><strong id="go-queue-pending">0</strong></div>
+            <div><span>รอยืนยัน</span><strong id="go-queue-confirm">0</strong></div>
+            <div><span>Recovery</span><strong id="go-queue-recovery">0</strong></div>
+            <div><span>Receipts</span><strong id="go-queue-receipts">0</strong></div>
+          </div>
+          <div id="go-pending-list" class="go-pending-list"></div>
+          <p id="go-last-readback" class="go-readback-line">ยังไม่มี readback</p>
+        </section>
+      </div>
+
       <div id="page-settings" class="app-page" data-root="settings" hidden>
         <div class="page-title-block"><p class="eyebrow">ดูแล LIGHTHOUSE</p><h1>ตั้งค่า</h1></div>
         <section class="settings-panel">
@@ -103,6 +159,7 @@
       <nav id="bottom-nav" class="bottom-nav" aria-label="เมนูหลัก">
         <button type="button" class="nav-item" data-root-target="chat"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="chat" viewBox="0 0 24 24"><path d="M5 5.5h14v10H10l-5 4z"></path><path d="M8 9.5h8M8 12.5h5"></path></svg></span><small>แชต</small></button>
         <button type="button" class="nav-item active" data-root-target="manual"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="manual" viewBox="0 0 24 24"><rect x="5" y="5" width="5.5" height="5.5" rx="1"></rect><rect x="13.5" y="5" width="5.5" height="5.5" rx="1"></rect><rect x="5" y="13.5" width="5.5" height="5.5" rx="1"></rect><rect x="13.5" y="13.5" width="5.5" height="5.5" rx="1"></rect></svg></span><small>MANUAL</small></button>
+        <button type="button" class="nav-item" data-root-target="go"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="go" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.2"></circle><circle cx="18" cy="6" r="2.2"></circle><circle cx="18" cy="18" r="2.2"></circle><path d="M8.2 12h3.2c2.2 0 2.6-6 4.4-6M11.4 12c2.2 0 2.6 6 4.4 6"></path></svg></span><small>GO</small></button>
         <button type="button" class="nav-item" data-root-target="settings"><span class="nav-icon" aria-hidden="true"><svg class="ui-icon" data-icon="settings" viewBox="0 0 24 24"><path d="M5 7h6M15 7h4M5 12h2M11 12h8M5 17h9M18 17h1"></path><circle cx="13" cy="7" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="16" cy="17" r="2"></circle></svg></span><small>ตั้งค่า</small></button>
       </nav>
     </section>
