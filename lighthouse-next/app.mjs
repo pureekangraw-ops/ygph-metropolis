@@ -115,6 +115,7 @@ const centreBoardBridge = createLighthouseCentreBoardBridge({ store:centreBoardS
 const workCirculation = createLighthouseWorkCirculation({
   boardBridge:centreBoardBridge,
 });
+try { workCirculation.reconcile(); } catch {}
 const controlPort = createLighthouseControlPort({
   ledgerBridge,
   storeBridge,
@@ -406,6 +407,7 @@ function renderGoEmergency(view) {
 
 async function renderGoPage() {
   if (!goPage || goPage.hidden) return;
+  try { workCirculation.reconcile(); } catch {}
   let snapshot = null;
   try { snapshot = await controlPortRuntime.snapshotStatus(); } catch {}
   let emergencyCapsules = [];
