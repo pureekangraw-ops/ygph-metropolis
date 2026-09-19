@@ -170,6 +170,7 @@ function stopGoHubRealtime(reason = 'APP_INACTIVE') {
 
 async function ensureGoHubRealtime({ force = false } = {}) {
   if (!hubControlPortTransport || typeof hubControlPortTransport.openLive !== 'function') return null;
+  if (!runtimeGate.isUnlocked()) return null;
   if (hubLiveController || hubLiveStarting) return hubLiveController;
   if (!force && appShell.hidden) return null;
   hubLiveStarting = true;
@@ -198,6 +199,7 @@ async function ensureGoHubRealtime({ force = false } = {}) {
 
 async function syncGoHubControlPort({ force = false } = {}) {
   if (!hubControlPortTransport) return null;
+  if (!runtimeGate.isUnlocked()) return null;
   if (hubSyncBusy) {
     if (force) hubSyncRequested = true;
     return null;
@@ -641,7 +643,7 @@ function clearRecoveryFields() { recoveryCodeInput.value = ''; newPasswordInput.
 async function bootRuntimeGate() { authStatus.textContent = 'กำลังตรวจสถานะอุปกรณ์…'; try { const result = await runtimeGate.inspect(); if (result.status === 'LOGIN') showLoginGate(); else showSetupRequired(result.reason); } catch (error) { showSetupRequired(); authStatus.textContent = authMessage(error); } }
 async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); void syncGoHubControlPort({ force:true }); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
-function lockApp() { runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
+function lockApp() { stopGoHubRealtime('APP_LOCKED'); runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 
 function selectRoot(rootId) { const allowed = ['chat','manual','go','settings']; const next = allowed.includes(rootId) ? rootId : 'manual'; state.activeRoot = next; saveState(); root.querySelectorAll('.app-page').forEach((page) => { const active = page.dataset.root === next; page.hidden = !active; page.classList.toggle('active', active); }); root.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.rootTarget === next; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }); pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : next === 'go' ? 'สถานะสด' : 'ดูแลแอป'; if (next === 'chat') { ensureChatWelcome(); renderChat(); requestAnimationFrame(() => chatInput.focus({ preventScroll:true })); } if (next === 'manual') showManualHub(); if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); } }
 function addMessage(role, text, kind = role) { const message={ id:`${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text, kind, createdAt:new Date().toISOString() }; state.chatHistory.push(message); state.chatHistory = state.chatHistory.slice(-80); saveState(); return message; }
@@ -724,7 +726,7 @@ window.addEventListener('storage', event => {
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
 void installControlPortBackgroundSync({
   nativeApp:getNativeCapacitorApp(),
-  canSync:() => !appShell.hidden,
+  canSync:() => runtimeGate.isUnlocked(),
   ensureLive:ensureGoHubRealtime,
   reconcile:syncGoHubControlPort,
 });

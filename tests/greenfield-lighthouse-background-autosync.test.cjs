@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const lifecycleUrl = pathToFileURL(path.resolve(
   __dirname,
@@ -97,4 +98,13 @@ test('background lifecycle does not pull Hub work while LIGHTHOUSE is locked', a
   documentTarget.emit('visibilitychange');
   windowTarget.emit('online');
   assert.equal(syncCalls, 0);
+});
+
+test('app enforces Runtime unlock at the live pull boundary and closes live route on explicit lock', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
+  const syncBody = /async function syncGoHubControlPort[\s\S]*?\n}/.exec(source)?.[0] || '';
+  const liveBody = /async function ensureGoHubRealtime[\s\S]*?\n}/.exec(source)?.[0] || '';
+  assert.match(syncBody, /if \(!runtimeGate\.isUnlocked\(\)\) return null/);
+  assert.match(liveBody, /if \(!runtimeGate\.isUnlocked\(\)\) return null/);
+  assert.match(source, /function lockApp\(\)[\s\S]*?stopGoHubRealtime\('APP_LOCKED'\)/);
 });

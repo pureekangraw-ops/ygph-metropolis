@@ -96,5 +96,9 @@ export function createLighthouseRuntimeGate(deps = {}) {
     return true;
   }
 
-  return Object.freeze({ inspect, login, setupFirstRun, resetPassword, lock });
+  function isUnlocked() {
+    return activeRuntime !== null;
+  }
+
+  return Object.freeze({ inspect, login, setupFirstRun, resetPassword, lock, isUnlocked });
 }
