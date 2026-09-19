@@ -40,3 +40,19 @@
 .go-pending-item>span{flex:0 0 auto;font-size:10px;color:var(--gold);border:1px solid rgba(255,216,138,.24);border-radius:999px;padding:4px 7px}
 .go-readback-line{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
 @media(max-width:380px){.go-live-card{padding:14px}.go-route-rail{gap:5px}.go-route-rail span{font-size:10px}.go-stat-grid,.go-work-grid,.go-board-meta{grid-template-columns:1fr}.go-board-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.go-work-foot{grid-template-columns:1fr}.go-work-foot strong{text-align:left}.bottom-nav{padding-left:6px;padding-right:6px}.nav-item{min-width:0}.nav-item small{font-size:10px}}
+
+.go-project-list{display:grid;gap:8px;margin-top:12px}
+.go-project-source-card{border:1px solid rgba(92,127,160,.32);border-left-width:3px;border-radius:16px;padding:12px;background:rgba(255,255,255,.018);display:grid;gap:9px}
+.go-project-source-card[data-source="github"]{border-left-color:#63e6a7}
+.go-project-source-card[data-source="board"]{border-left-color:#ffad59}
+.go-project-source-card[data-source="factory"]{border-left-color:#a877ff}
+.go-project-source-card[data-source="lighthouse"]{border-left-color:#66e4ff}
+.go-project-source-card[data-source="drive"]{border-left-color:#62e9a1}
+.go-project-source-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.go-project-source-head>div:first-child{min-width:0;display:grid;gap:3px}.go-project-source-head strong{font-size:14px}.go-project-source-head small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.go-project-badges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.go-project-badges span{font-size:9px;font-weight:800;padding:4px 6px;border-radius:999px;border:1px solid rgba(102,228,255,.25);color:var(--cyan)}
+.go-project-badges span[data-freshness="LIVE"]{color:#86f0c2;border-color:rgba(86,230,165,.35)}
+.go-project-badges span[data-freshness="STALE"]{color:var(--gold);border-color:rgba(255,216,138,.35)}
+.go-project-badges span[data-freshness="OFFLINE"]{color:var(--danger);border-color:rgba(255,157,157,.35)}
+.go-project-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.go-project-detail div{min-width:0;display:grid;gap:3px}.go-project-detail span{font-size:10px;color:var(--muted)}.go-project-detail strong{font-size:12px;overflow-wrap:anywhere}
+@media(max-width:380px){.go-project-detail{grid-template-columns:1fr}.go-project-source-head{display:grid}.go-project-badges{justify-content:flex-start}}

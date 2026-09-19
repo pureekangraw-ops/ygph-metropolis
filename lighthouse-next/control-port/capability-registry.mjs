@@ -4,11 +4,15 @@ const RAW_CAPABILITIES = [
   { id:'system.commandPack', readable:false, editable:true, owner:'CONTROL_PORT', action:'commitCommandPack', confirmationRequired:true, readback:'perItemReadback', derived:false },
 
   { id:'centreBoard.read', readable:true, editable:false, owner:'LIGHTHOUSE:CENTRE_BOARD', action:null, confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'centreBoard.initialize', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'initializeBoard', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'centreBoard.pin.create', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'createPin', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'centreBoard.claim', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'claimPins', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'centreBoard.return', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'returnPins', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'centreBoard.recover', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'recoverEmergency', confirmationRequired:false, readback:'readBoard', derived:false },
 
   { id:'board.read', readable:true, editable:false, owner:'LIGHTHOUSE:CENTRE_BOARD', action:null, confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'board.initialize', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'initializeBoard', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'pin.create', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'createPin', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'board.claim', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'claimPins', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'board.return', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'returnPins', confirmationRequired:false, readback:'readBoard', derived:false },
   { id:'board.recover', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'recoverEmergency', confirmationRequired:false, readback:'readBoard', derived:false },

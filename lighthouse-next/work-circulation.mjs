@@ -259,6 +259,24 @@ export function createLighthouseWorkCirculation({
       : [];
   }
 
+  function initializeBoard(input = {}) {
+    if (typeof boardBridge.initializeBoard !== 'function') {
+      throw new Error('LIGHTHOUSE_CIRCULATION_BOARD_INITIALIZE_UNAVAILABLE');
+    }
+    const result = boardBridge.initializeBoard(input);
+    reconcile();
+    return result;
+  }
+
+  function createPin(input = {}) {
+    if (typeof boardBridge.createPin !== 'function') {
+      throw new Error('LIGHTHOUSE_CIRCULATION_PIN_CREATE_UNAVAILABLE');
+    }
+    const result = boardBridge.createPin(input);
+    reconcile();
+    return result;
+  }
+
   function claimPins(input = {}) {
     const verified = boardBridge.claimPins(input);
     if (!verified || verified.status !== 'VERIFIED') {
@@ -440,6 +458,8 @@ export function createLighthouseWorkCirculation({
     storageKey,
     readBoard,
     readEmergencyCapsules,
+    initializeBoard,
+    createPin,
     claimPins,
     returnPins,
     stageEmergency,

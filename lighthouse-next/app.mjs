@@ -19,6 +19,7 @@ import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs
 import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
 import { createLighthouseWorkCirculation } from './work-circulation.mjs';
 import { createGoBoardView } from './go-board-live.mjs';
+import { createProjectStatusProjection } from './project-status-envelope.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 function registerProductionServiceWorker() {
@@ -106,6 +107,7 @@ const goPage = root.querySelector('#page-go');
 const goBoardList = root.querySelector('#go-board-list');
 const goPendingList = root.querySelector('#go-pending-list');
 const goEmergencyList = root.querySelector('#go-emergency-list');
+const goProjectSources = root.querySelector('#go-project-sources');
 const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
@@ -351,6 +353,75 @@ function renderGoBoardPins(view) {
   }
 }
 
+function projectDetailRows(source, detail) {
+  if (!detail || typeof detail !== 'object') return [];
+  const maps = {
+    github:[['Repo',detail.repo],['Branch',detail.branch],['SHA',detail.sha],['Version',detail.versionName]],
+    board:[['Work ID',detail.workId],['Pin ID',detail.pinId],['Employee',detail.employeeId],['Revision',detail.revision],['Next',detail.nextAction]],
+    factory:[['Queue',detail.queueId],['Task',detail.task],['QC',detail.qc],['Blocker',detail.blocker]],
+    lighthouse:[['Working Ticket',detail.workingTicket],['Circulation',detail.circulation],['Work ID',detail.workId],['Employee',detail.employeeId],['Board rev',detail.boardRevision],['Blocker',detail.blocker]],
+    drive:[['Artifact',detail.artifactName],['Type',detail.type],['Size',detail.size],['SHA256',detail.sha256],['Path',detail.path]],
+  };
+  return (maps[source] || Object.entries(detail)).filter(([,value]) => value != null && String(value).trim() !== '');
+}
+
+function renderProjectStatus(project) {
+  if (!goProjectSources) return;
+  setGoText('go-project-overall', project?.status || 'IDLE');
+  setGoText('go-project-source-count', String(project?.sources?.length || 0) + ' systems');
+  setGoText('go-project-updated-at', goDateTime(project?.updatedAt));
+  goProjectSources.replaceChildren();
+
+  for (const source of project?.sources || []) {
+    const card = document.createElement('article');
+    card.className = 'go-project-source-card';
+    card.dataset.source = source.source;
+
+    const head = document.createElement('div');
+    head.className = 'go-project-source-head';
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = source.title;
+    const subtitle = document.createElement('small');
+    subtitle.textContent = source.summary || source.sourceRef || '—';
+    copy.append(title, subtitle);
+    const badges = document.createElement('div');
+    badges.className = 'go-project-badges';
+    const status = document.createElement('span');
+    status.textContent = source.sourceStatus || source.status;
+    const fresh = document.createElement('span');
+    fresh.textContent = source.freshness;
+    fresh.dataset.freshness = source.freshness;
+    badges.append(status, fresh);
+    head.append(copy, badges);
+    card.append(head);
+
+    const rows = projectDetailRows(source.source, source.detail);
+    if (rows.length) {
+      const meta = document.createElement('div');
+      meta.className = 'go-project-detail';
+      for (const [label, value] of rows) {
+        const cell = document.createElement('div');
+        const key = document.createElement('span');
+        key.textContent = label;
+        const val = document.createElement('strong');
+        val.textContent = Array.isArray(value) ? value.join(', ') : goText(value);
+        cell.append(key, val);
+        meta.append(cell);
+      }
+      card.append(meta);
+    }
+    goProjectSources.append(card);
+  }
+
+  if (!goProjectSources.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'go-empty-state';
+    empty.innerHTML = '<strong>ยังไม่มีแหล่งสถานะ</strong><span>Project Status เป็น projection เท่านั้น ไม่สร้าง Truth ใหม่</span>';
+    goProjectSources.append(empty);
+  }
+}
+
 function renderGoPending(view) {
   if (!goPendingList) return;
   goPendingList.replaceChildren();
@@ -412,13 +483,26 @@ async function renderGoPage() {
   try { snapshot = await controlPortRuntime.snapshotStatus(); } catch {}
   let emergencyCapsules = [];
   try { emergencyCapsules = centreBoardStore.readEmergencyCapsules(); } catch {}
+  const boardState = readCentreBoard();
+  const circulationState = workCirculation.state();
   const view = createGoBoardView({
     hubStatus:latestHubStatus,
     runtimeState:controlPortRuntime.state(),
     snapshotStatus:snapshot || {},
-    boardState:readCentreBoard(),
+    boardState,
     emergencyCapsules,
-    circulationState:workCirculation.state(),
+    circulationState,
+  });
+  let buildIdentity = null;
+  try { buildIdentity = await readControlPortBuildIdentity(); } catch {}
+  const projectStatus = createProjectStatusProjection({
+    projectId:'LIGHTHOUSE',
+    buildIdentity,
+    boardState,
+    circulationState,
+    hubStatus:latestHubStatus,
+    snapshotStatus:snapshot || {},
+    routeMode:view.route.mode,
   });
 
   const mode = root.querySelector('#go-route-mode');
@@ -460,6 +544,7 @@ async function renderGoPage() {
     'ยังไม่มี readback',
   );
 
+  renderProjectStatus(projectStatus);
   renderGoBoardPins(view);
   renderGoPending(view);
   renderGoEmergency(view);
