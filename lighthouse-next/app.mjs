@@ -15,6 +15,8 @@ import { createLighthouseControlPortRuntime } from './control-port/control-port-
 import { createLighthouseControlPortSync } from './control-port/control-port-sync.mjs';
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
+import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
+import { createGoBoardView } from './go-board-live.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 function registerProductionServiceWorker() {
@@ -98,6 +100,9 @@ const chatInput = root.querySelector('#chat-input');
 const chatSend = root.querySelector('#chat-send');
 const manualHub = root.querySelector('#manual-hub');
 const manualDetail = root.querySelector('#manual-detail');
+const goPage = root.querySelector('#page-go');
+const goBoardList = root.querySelector('#go-board-list');
+const goPendingList = root.querySelector('#go-pending-list');
 const resetDialog = root.querySelector('#reset-dialog');
 const runtimeGate = createLighthouseRuntimeGate();
 const ledgerBridge = createLighthouseLedgerBridge();
@@ -108,6 +113,7 @@ const controlPortRuntime = createLighthouseControlPortRuntime({
   snapshotMetadata:controlPortSnapshotMetadata,
 });
 const controlPortSync = createLighthouseControlPortSync({ runtime:controlPortRuntime });
+const centreBoardStore = createLighthouseCentreBoardStore();
 let hubControlPortTransport = null;
 try { hubControlPortTransport = createLighthouseHubControlPortTransport(); } catch {}
 const chatRead = createChatReadCapability({ ledgerBridge, storeBridge });
@@ -124,9 +130,20 @@ let hubSyncBusy = false;
 let hubSyncRequested = false;
 let hubLiveController = null;
 let hubLiveStarting = false;
+let latestHubStatus = {};
+let latestCentreBoard = null;
 
 function dispatchHubStatus(detail) {
-  globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail }));
+  const input = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : {};
+  latestHubStatus = {
+    ...latestHubStatus,
+    ...input,
+    error:Object.hasOwn(input, 'error')
+      ? input.error
+      : (input.report || input.realtime || input.pairing ? null : latestHubStatus.error),
+  };
+  globalThis.dispatchEvent?.(new CustomEvent('lighthouse:hub-status', { detail:input }));
+  if (state.activeRoot === 'go') void renderGoPage();
 }
 
 function stopGoHubRealtime(reason = 'APP_INACTIVE') {
@@ -195,6 +212,202 @@ async function syncGoHubControlPort({ force = false } = {}) {
       void syncGoHubControlPort({ force:true });
     }
   }
+}
+
+function goText(value, fallback = '—') {
+  const output = String(value ?? '').trim();
+  return output || fallback;
+}
+
+function goDateTime(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '—';
+  const date = new Date(text);
+  if (!Number.isFinite(date.getTime())) return text;
+  return date.toLocaleString('th-TH', {
+    timeZone:'Asia/Bangkok',
+    day:'2-digit',
+    month:'short',
+    hour:'2-digit',
+    minute:'2-digit',
+  });
+}
+
+function setGoText(id, value, fallback = '—') {
+  const element = root.querySelector('#' + id);
+  if (element) element.textContent = goText(value, fallback);
+}
+
+function routeLabel(mode) {
+  if (mode === 'LIVE') return 'สด';
+  if (mode === 'FALLBACK') return 'สำรอง';
+  if (mode === 'RECOVERY') return 'กำลังกู้เส้น';
+  if (mode === 'EMERGENCY') return 'ฉุกเฉิน';
+  if (mode === 'OFFLINE') return 'ออฟไลน์';
+  return 'ไม่ทราบ';
+}
+
+function readCentreBoard() {
+  if (latestCentreBoard) return latestCentreBoard;
+  try {
+    latestCentreBoard = centreBoardStore.read();
+  } catch {
+    latestCentreBoard = null;
+  }
+  return latestCentreBoard;
+}
+
+function renderGoBoardPins(view) {
+  if (!goBoardList) return;
+  goBoardList.replaceChildren();
+  setGoText('go-board-count', view.board.total + ' pins', '0 pins');
+  setGoText('go-board-active', String(view.board.active), '0');
+  setGoText('go-board-doing', String(view.board.doing), '0');
+  setGoText('go-board-verify', String(view.board.verify), '0');
+  setGoText('go-board-recovery', String(view.board.recovery), '0');
+
+  if (!view.board.available) {
+    const empty = document.createElement('div');
+    empty.className = 'go-empty-state';
+    const title = document.createElement('strong');
+    title.textContent = 'ยังไม่มี Centre Board ใน local working memory';
+    const copy = document.createElement('span');
+    copy.textContent = 'หน้านี้จะไม่สร้างหมุดหรือสถานะแทนข้อมูลจริง';
+    empty.append(title, copy);
+    goBoardList.append(empty);
+    return;
+  }
+
+  if (!view.board.pins.length) {
+    const empty = document.createElement('div');
+    empty.className = 'go-empty-state';
+    const title = document.createElement('strong');
+    title.textContent = 'Board พร้อมแล้ว · ยังไม่มี Pin';
+    const copy = document.createElement('span');
+    copy.textContent = 'Work ID ' + goText(view.board.workId);
+    empty.append(title, copy);
+    goBoardList.append(empty);
+    return;
+  }
+
+  for (const pin of view.board.pins) {
+    const item = document.createElement('article');
+    item.className = 'go-board-card';
+    item.dataset.status = pin.status;
+
+    const head = document.createElement('div');
+    head.className = 'go-board-card-head';
+    const copy = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = pin.title;
+    const pinId = document.createElement('small');
+    pinId.textContent = goText(pin.pinId);
+    copy.append(title, pinId);
+    const status = document.createElement('span');
+    status.className = 'go-board-status';
+    status.textContent = pin.status;
+    head.append(copy, status);
+
+    const meta = document.createElement('div');
+    meta.className = 'go-board-meta';
+    for (const [label, value] of [
+      ['Employee ID', pin.ownerEmployeeId],
+      ['Pin rev', pin.revision == null ? null : String(pin.revision)],
+      ['Touched by', pin.touchedBy.length ? pin.touchedBy.join(', ') : null],
+      ['อัปเดต', pin.updatedAt ? goDateTime(pin.updatedAt) : null],
+    ]) {
+      const cell = document.createElement('div');
+      const key = document.createElement('span');
+      key.textContent = label;
+      const val = document.createElement('strong');
+      val.textContent = goText(value);
+      cell.append(key, val);
+      meta.append(cell);
+    }
+
+    item.append(head, meta);
+    if (pin.result || pin.nextAction) {
+      const next = document.createElement('p');
+      next.className = 'go-board-next';
+      next.textContent = [
+        pin.result ? 'ผล: ' + pin.result : null,
+        pin.nextAction ? 'ถัดไป: ' + pin.nextAction : null,
+      ].filter(Boolean).join(' · ');
+      item.append(next);
+    }
+    goBoardList.append(item);
+  }
+}
+
+function renderGoPending(view) {
+  if (!goPendingList) return;
+  goPendingList.replaceChildren();
+  for (const item of view.queue.pendingItems.slice(0, 8)) {
+    const row = document.createElement('div');
+    row.className = 'go-pending-item';
+    const copy = document.createElement('div');
+    const id = document.createElement('strong');
+    id.textContent = goText(item.requestId);
+    const detail = document.createElement('small');
+    detail.textContent = [item.capabilityId, item.owner].filter(Boolean).join(' · ') || 'Control Port';
+    copy.append(id, detail);
+    const status = document.createElement('span');
+    status.textContent = item.status;
+    row.append(copy, status);
+    goPendingList.append(row);
+  }
+}
+
+async function renderGoPage() {
+  if (!goPage || goPage.hidden) return;
+  let snapshot = null;
+  try { snapshot = await controlPortRuntime.snapshotStatus(); } catch {}
+  const view = createGoBoardView({
+    hubStatus:latestHubStatus,
+    runtimeState:controlPortRuntime.state(),
+    snapshotStatus:snapshot || {},
+    boardState:readCentreBoard(),
+  });
+
+  const mode = root.querySelector('#go-route-mode');
+  if (mode) {
+    mode.textContent = view.route.mode;
+    mode.dataset.mode = view.route.mode;
+  }
+  setGoText('go-route-label', routeLabel(view.route.mode));
+  setGoText('go-realtime-status', view.route.realtime);
+  setGoText('go-transport-status', view.route.transport);
+  setGoText('go-freshness', view.truth.freshness);
+  setGoText('go-revision', view.truth.revision == null ? '—' : String(view.truth.revision));
+  setGoText('go-updated-at', goDateTime(view.truth.updatedAt));
+
+  setGoText('go-board-id', view.work.boardId);
+  setGoText('go-work-id', view.work.workId);
+  setGoText('go-employee-id', view.work.employeeId);
+  setGoText('go-pin-id', view.work.pinId);
+  setGoText('go-pin-status', view.work.pinStatus);
+  setGoText('go-board-revision', view.board.revision == null ? '—' : String(view.board.revision));
+  setGoText('go-next-action', view.work.nextAction);
+  setGoText('go-pending-request', view.work.pendingRequestId);
+  setGoText('go-blocker', view.work.blocker);
+
+  setGoText('go-queue-pending', String(view.queue.pending), '0');
+  setGoText('go-queue-confirm', String(view.queue.confirmations), '0');
+  setGoText('go-queue-recovery', String(view.queue.recovery), '0');
+  setGoText('go-queue-receipts', String(view.queue.receipts), '0');
+  setGoText('go-queue-health', view.queue.pending + ' pending');
+
+  const readback = view.work.lastSuccessfulReadback;
+  setGoText(
+    'go-last-readback',
+    readback
+      ? ['Readback', readback.requestId, readback.capabilityId, readback.revision != null ? 'rev ' + readback.revision : null, goDateTime(readback.readbackAt || readback.updatedAt)].filter(Boolean).join(' · ')
+      : 'ยังไม่มี readback',
+    'ยังไม่มี readback',
+  );
+
+  renderGoBoardPins(view);
+  renderGoPending(view);
 }
 
 
@@ -269,8 +482,8 @@ function pendingRequiresReadbackRetry(pending) {
 function markCancelled(pending, eventType='CANCELLED') { transitionPendingLifecycle(pending, { executionState:'CANCELLED', readbackState:'IDLE', requestId:lifecycleRequestId(pending), eventType }); }
 function storeSaleStage(pending) { if (!Number.isInteger(Number(pending.quantity)) || Number(pending.quantity) <= 0) return 'STORE_SALE_QUANTITY'; if (!Number.isFinite(Number(pending.priceBaht)) || Number(pending.priceBaht) <= 0) return 'STORE_SALE_VALUE'; if (Number(pending.quantity) > 1 && pending.priceBasis !== 'UNIT' && pending.priceBasis !== 'TOTAL') return 'STORE_SALE_PRICE_BASIS'; return 'CONFIRM_STORE_SALE'; }
 function normalizeStoredPending(pending) { if (!pending || typeof pending !== 'object') return null; if (pending.kind === 'DIRECT_EXPENSE') { const requestId=optionalStoredText(pending.requestId); const title=optionalStoredText(pending.title); const amountSatang=Number(pending.amountSatang); if (!requestId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/.test(requestId) || !title || !Number.isSafeInteger(amountSatang) || amountSatang <= 0) return null; return { kind:'DIRECT_EXPENSE', stage:'CONFIRM_DIRECT_EXPENSE', requestId, title, amountSatang, messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'GENERAL_INCOME') { if (!Number.isFinite(Number(pending.amount)) || Number(pending.amount) <= 0) return null; const source = typeof pending.source === 'string' && pending.source.trim() ? pending.source.trim() : null; const workflowId = typeof pending.workflowId === 'string' && pending.workflowId.trim() ? pending.workflowId.trim() : null; const ledgerTransactionId = typeof pending.ledgerTransactionId === 'string' && pending.ledgerTransactionId.trim() ? pending.ledgerTransactionId.trim() : null; return { kind:'GENERAL_INCOME', stage:source ? 'CONFIRM_GENERAL_INCOME' : 'GENERAL_INCOME_SOURCE', amount:Number(pending.amount), source, workflowId, ledgerTransactionId, messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'STORE_PRODUCT_ADD' && optionalStoredText(pending.name)) { const quantity = Number.isInteger(Number(pending.quantity)) && Number(pending.quantity) > 0 ? Number(pending.quantity) : null; const descriptors = Array.isArray(pending.descriptors) ? pending.descriptors.map(optionalStoredText).filter(Boolean) : []; const allowedStages = new Set(['STORE_PRODUCT_MODEL','STORE_PRODUCT_COLOR','STORE_PRODUCT_DESCRIPTORS','STORE_PRODUCT_QUANTITY','CONFIRM_STORE_PRODUCT_ADD']); const stage = allowedStages.has(pending.stage) ? pending.stage : quantity ? 'CONFIRM_STORE_PRODUCT_ADD' : 'STORE_PRODUCT_QUANTITY'; return { kind:'STORE_PRODUCT_ADD', stage, name:optionalStoredText(pending.name), model:optionalStoredText(pending.model), color:optionalStoredText(pending.color), descriptors, modelExplicitlyAbsent:Boolean(pending.modelExplicitlyAbsent), colorExplicitlyAbsent:Boolean(pending.colorExplicitlyAbsent), quantity, isExisting:Boolean(pending.isExisting), workflowId:optionalStoredText(pending.workflowId), productId:optionalStoredText(pending.productId), stockRecordId:optionalStoredText(pending.stockRecordId), messageId:pendingLifecycleMessageId(pending) }; } if (pending.kind === 'STORE_SALE' && pending.productId && pending.productName) { const rawPrice = pending.priceBaht ?? pending.value; const normalized = { kind:'STORE_SALE', stage:pending.stage, productId:String(pending.productId), productName:String(pending.productName), quantity:Number.isInteger(Number(pending.quantity)) && Number(pending.quantity) > 0 ? Number(pending.quantity) : null, priceBaht:Number.isFinite(Number(rawPrice)) && Number(rawPrice) > 0 ? Number(rawPrice) : null, priceBasis:pending.priceBasis === 'UNIT' || pending.priceBasis === 'TOTAL' ? pending.priceBasis : null, totalBaht:Number.isFinite(Number(pending.totalBaht)) && Number(pending.totalBaht) > 0 ? Number(pending.totalBaht) : null, workflowId:optionalStoredText(pending.workflowId), saleId:optionalStoredText(pending.saleId), ledgerTransactionId:optionalStoredText(pending.ledgerTransactionId), messageId:pendingLifecycleMessageId(pending) }; normalized.stage = storeSaleStage(normalized); return normalized; } return null; }
-function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return cloneDefaults(); const parsed = JSON.parse(raw); return { activeRoot:['chat','manual','settings'].includes(parsed.activeRoot) ? parsed.activeRoot : 'manual', chatHistory:Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [], pendingFlow:normalizeStoredPending(parsed.pendingFlow) }; } catch { return cloneDefaults(); } }
-function saveState() { const snapshot = { activeRoot:['chat','manual','settings'].includes(state.activeRoot) ? state.activeRoot : 'manual', chatHistory:state.chatHistory.slice(-80), pendingFlow:state.pendingFlow }; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch {} }
+function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return cloneDefaults(); const parsed = JSON.parse(raw); return { activeRoot:['chat','manual','go','settings'].includes(parsed.activeRoot) ? parsed.activeRoot : 'manual', chatHistory:Array.isArray(parsed.chatHistory) ? parsed.chatHistory.slice(-80) : [], pendingFlow:normalizeStoredPending(parsed.pendingFlow) }; } catch { return cloneDefaults(); } }
+function saveState() { const snapshot = { activeRoot:['chat','manual','go','settings'].includes(state.activeRoot) ? state.activeRoot : 'manual', chatHistory:state.chatHistory.slice(-80), pendingFlow:state.pendingFlow }; try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch {} }
 function formatBaht(value) { return `฿${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`; }
 function formatSatang(value) { return formatBaht(Number(value || 0) / 100); }
 function financeSnapshot() { const view = projectFinanceView(ledgerTruth); if (view.status !== READ_STATE.READY) return { status:view.status, cashSatang:null, todayIncomeSatang:null, todayExpenseSatang:null, netSatang:null }; return { status:view.status, cashSatang:view.cashSatang, todayIncomeSatang:view.todayIncomeSatang, todayExpenseSatang:view.todayExpenseSatang, netSatang:view.netSatang }; }
@@ -288,7 +501,7 @@ async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); a
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
 function lockApp() { runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 
-function selectRoot(rootId) { const allowed = ['chat','manual','settings']; const next = allowed.includes(rootId) ? rootId : 'manual'; state.activeRoot = next; saveState(); root.querySelectorAll('.app-page').forEach((page) => { const active = page.dataset.root === next; page.hidden = !active; page.classList.toggle('active', active); }); root.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.rootTarget === next; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }); pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : 'ดูแลแอป'; if (next === 'chat') { ensureChatWelcome(); renderChat(); requestAnimationFrame(() => chatInput.focus({ preventScroll: true })); } if (next === 'manual') showManualHub(); }
+function selectRoot(rootId) { const allowed = ['chat','manual','go','settings']; const next = allowed.includes(rootId) ? rootId : 'manual'; state.activeRoot = next; saveState(); root.querySelectorAll('.app-page').forEach((page) => { const active = page.dataset.root === next; page.hidden = !active; page.classList.toggle('active', active); }); root.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.rootTarget === next; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }); pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : next === 'go' ? 'สถานะสด' : 'ดูแลแอป'; if (next === 'chat') { ensureChatWelcome(); renderChat(); requestAnimationFrame(() => chatInput.focus({ preventScroll:true })); } if (next === 'manual') showManualHub(); if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); } }
 function addMessage(role, text, kind = role) { const message={ id:`${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text, kind, createdAt:new Date().toISOString() }; state.chatHistory.push(message); state.chatHistory = state.chatHistory.slice(-80); saveState(); return message; }
 function ensureChatWelcome() { if (state.chatHistory.length) return; addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายจ่ายตรงใช้ “รายการ + จำนวน” เช่น “ข้าว 65”\nรายรับทั่วไปใช้ “จำนวนเงิน + ที่มา” เช่น “ทิป 59”\nเพิ่มสต็อกใช้ “เพิ่ม + สินค้า + จำนวน” เช่น “เพิ่มน้ำ 6 ขวด”\nสินค้าที่รู้จักใช้ “สินค้า + ราคา + จำนวน” เช่น “ขายมือถือ 566 2”\nหรือถาม “วันนี้วันที่เท่าไร”'); }
 function renderChat() { ensureChatWelcome(); chatThread.replaceChildren(); for (const message of state.chatHistory) { const bubble = document.createElement('div'); bubble.className = `message ${message.kind === 'note' ? 'note' : message.role === 'user' ? 'user' : 'app'}`; bubble.textContent = message.text; chatThread.append(bubble); } renderChatActions(); if (chatSend) chatSend.disabled = !chatInput.value.trim(); requestAnimationFrame(() => { chatThread.scrollTop = chatThread.scrollHeight; }); }
@@ -350,6 +563,16 @@ window.addEventListener('pagehide', () => {
   runtimeGate.lock();
 });
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
+window.addEventListener('lighthouse:centre-board', event => {
+  const detail = event?.detail;
+  latestCentreBoard = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : null;
+  if (state.activeRoot === 'go') void renderGoPage();
+});
+window.addEventListener('storage', event => {
+  if (event.key !== centreBoardStore.storageKey) return;
+  latestCentreBoard = null;
+  if (state.activeRoot === 'go') void renderGoPage();
+});
 window.addEventListener('lighthouse:hub-sync-request', () => { void syncGoHubControlPort({ force:true }); });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
