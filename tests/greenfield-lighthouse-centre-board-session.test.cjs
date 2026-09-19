@@ -98,3 +98,101 @@ test('entry receipt replay is idempotent and conflicting receipt reuse is reject
     pinIds:['pin-2'], expectedRevision:1, at,
   }), /CENTRE_BOARD_RECEIPT_ID_CONFLICT:read-1/);
 });
+
+
+test('return updates only claimed pins and emits BOARD_RETURN after readback', async () => {
+  const { enterCentreBoard, returnCentreBoard } = await import(sessionUrl);
+  const board = await fixture();
+  const entered = enterCentreBoard(board, {
+    receiptId:'read-return', workId:'WORK-1', employeeId:'GO-1',
+    pinIds:['pin-1'], expectedRevision:1, at,
+  });
+  const output = returnCentreBoard(entered.board, {
+    receiptId:'return-1',
+    workId:'WORK-1',
+    employeeId:'GO-1',
+    expectedRevision:2,
+    at:'2026-09-19T02:10:00.000Z',
+    updates:[{
+      pinId:'pin-1',
+      status:'VERIFY',
+      result:'Contract implemented',
+      nextAction:'Verify CI',
+      evidence:[{ type:'commit', ref:'abc123' }],
+    }],
+  });
+
+  assert.equal(entered.board.revision, 2, 'input board must remain unchanged');
+  assert.equal(entered.board.pins[0].status, 'DOING');
+  assert.equal(output.board.revision, 3);
+  assert.equal(output.board.pins[0].status, 'VERIFY');
+  assert.equal(output.board.pins[0].result, 'Contract implemented');
+  assert.equal(output.board.pins[0].nextAction, 'Verify CI');
+  assert.deepEqual(output.board.pins[0].evidence, [{ type:'commit', ref:'abc123' }]);
+  assert.equal(output.board.pins[0].revision, 3);
+  assert.equal(output.receipt.type, 'BOARD_RETURN');
+  assert.equal(output.receipt.beforeRevision, 2);
+  assert.equal(output.receipt.afterRevision, 3);
+  assert.equal(output.receipt.readbackRevision, 3);
+  assert.deepEqual(output.receipt.updatedPinIds, ['pin-1']);
+  assert.equal(Object.isFrozen(output.receipt), true);
+});
+
+test('return rejects stale, unclaimed, archived, and malformed updates atomically', async () => {
+  const { enterCentreBoard, returnCentreBoard } = await import(sessionUrl);
+  const board = await fixture();
+  const entered = enterCentreBoard(board, {
+    receiptId:'read-return', workId:'WORK-1', employeeId:'GO-1',
+    pinIds:['pin-1'], expectedRevision:1, at,
+  }).board;
+  const raw = JSON.stringify(entered);
+  const valid = {
+    receiptId:'return-x', workId:'WORK-1', employeeId:'GO-1',
+    expectedRevision:2, at,
+    updates:[{
+      pinId:'pin-1', status:'OPEN', result:'Paused',
+      nextAction:'Continue later', evidence:[],
+    }],
+  };
+
+  assert.throws(() => returnCentreBoard(entered, {
+    ...valid, receiptId:'stale', expectedRevision:1,
+  }), /CENTRE_BOARD_REVISION_CONFLICT/);
+  assert.throws(() => returnCentreBoard(entered, {
+    ...valid, receiptId:'unclaimed',
+    updates:[{ ...valid.updates[0], pinId:'pin-2' }],
+  }), /CENTRE_BOARD_PIN_NOT_CLAIMED:pin-2/);
+  assert.throws(() => returnCentreBoard(entered, {
+    ...valid, receiptId:'archived',
+    updates:[{ ...valid.updates[0], status:'ARCHIVED' }],
+  }), /CENTRE_BOARD_RETURN_STATUS_INVALID/);
+  assert.throws(() => returnCentreBoard(entered, {
+    ...valid, receiptId:'bad-evidence',
+    updates:[{ ...valid.updates[0], evidence:{} }],
+  }), /CENTRE_BOARD_EVIDENCE_INVALID/);
+  assert.equal(JSON.stringify(entered), raw);
+});
+
+test('return receipt replay is idempotent and conflicting receipt reuse is rejected', async () => {
+  const { enterCentreBoard, returnCentreBoard } = await import(sessionUrl);
+  const board = await fixture();
+  const entered = enterCentreBoard(board, {
+    receiptId:'read-return', workId:'WORK-1', employeeId:'GO-1',
+    pinIds:['pin-1'], expectedRevision:1, at,
+  }).board;
+  const request = {
+    receiptId:'return-1', workId:'WORK-1', employeeId:'GO-1',
+    expectedRevision:2, at,
+    updates:[{
+      pinId:'pin-1', status:'VERIFY', result:'Finished',
+      nextAction:'Archive after verification', evidence:[],
+    }],
+  };
+  const first = returnCentreBoard(entered, request);
+  const replay = returnCentreBoard(first.board, request);
+  assert.deepEqual(replay, first);
+  assert.throws(() => returnCentreBoard(first.board, {
+    ...request,
+    updates:[{ ...request.updates[0], result:'Different' }],
+  }), /CENTRE_BOARD_RECEIPT_ID_CONFLICT:return-1/);
+});
