@@ -177,6 +177,17 @@ export function createLighthouseHubControlPortTransport({
           } catch {}
           return;
         }
+        if (message.type === 'BOARD_UPDATED') {
+          try {
+            onSignal(Object.freeze({
+              type:'BOARD_UPDATED',
+              workId:message.workId || null,
+              boardRevision:Number.isSafeInteger(Number(message.boardRevision)) ? Number(message.boardRevision) : null,
+              status:message.status || null,
+            }));
+          } catch {}
+          return;
+        }
         if (message.type === 'ERROR') {
           status({ status:'ERROR', reason:String(message.code || 'LIVE_ERROR') });
         }
@@ -239,6 +250,13 @@ export function createLighthouseHubControlPortTransport({
     return Array.isArray(body?.commands) ? body.commands : [];
   }
 
+  async function pullBoard() {
+    const body = await post('/board');
+    return body?.board && typeof body.board === 'object' && !Array.isArray(body.board)
+      ? Object.freeze(structuredClone(body.board))
+      : null;
+  }
+
   async function pushOutbox(receipts) {
     const values = Array.isArray(receipts) ? receipts : [];
     return post('/receipts', { receipts:values });
@@ -267,6 +285,7 @@ export function createLighthouseHubControlPortTransport({
     pair,
     status,
     pullInbox,
+    pullBoard,
     pushOutbox,
     pushState,
     openLive,

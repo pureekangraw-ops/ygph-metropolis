@@ -181,7 +181,7 @@ async function ensureGoHubRealtime({ force = false } = {}) {
     const controller = await hubControlPortTransport.openLive({
       isActive:() => runtimeGate.isUnlocked(),
       onSignal:signal => {
-        if (signal?.type === 'READY' || signal?.type === 'COMMAND_AVAILABLE') {
+        if (signal?.type === 'READY' || signal?.type === 'COMMAND_AVAILABLE' || signal?.type === 'BOARD_UPDATED') {
           void syncGoHubControlPort({ force:true });
         }
       },
@@ -221,6 +221,15 @@ async function syncGoHubControlPort({ force = false } = {}) {
       pushOutbox:receipts => hubControlPortTransport.pushOutbox(receipts),
       pushState:packet => hubControlPortTransport.pushState(packet),
     });
+    if (typeof hubControlPortTransport.pullBoard === 'function') {
+      try {
+        const board = await hubControlPortTransport.pullBoard();
+        if (board) {
+          latestCentreBoard = board;
+          globalThis.dispatchEvent?.(new CustomEvent('lighthouse:centre-board', { detail:board }));
+        }
+      } catch {}
+    }
     dispatchHubStatus({ pairing, report });
     return report;
   } catch (error) {
@@ -291,9 +300,9 @@ function renderGoBoardPins(view) {
     const empty = document.createElement('div');
     empty.className = 'go-empty-state';
     const title = document.createElement('strong');
-    title.textContent = 'ยังไม่มี Centre Board ใน local working memory';
+    title.textContent = 'ยังไม่มี Centre Board จาก GO Hub';
     const copy = document.createElement('span');
-    copy.textContent = 'หน้านี้จะไม่สร้างหมุดหรือสถานะแทนข้อมูลจริง';
+    copy.textContent = 'LIGHTHOUSE แสดงผลเท่านั้น และจะไม่สร้างสถานะแทน GO Hub';
     empty.append(title, copy);
     goBoardList.append(empty);
     return;

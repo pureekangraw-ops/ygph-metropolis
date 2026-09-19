@@ -36,6 +36,7 @@ test('GO Hub transport pulls commands and pushes receipts/state with paired cred
     if (url.endsWith('/pull')) return new Response(JSON.stringify({ commands:[{ requestId:'hub-1', capabilityId:'system.appState', payload:{} }] }), { status:200, headers:{'content-type':'application/json'} });
     if (url.endsWith('/receipts')) return new Response(JSON.stringify({ accepted:1 }), { status:200, headers:{'content-type':'application/json'} });
     if (url.endsWith('/state')) return new Response(JSON.stringify({ ok:true }), { status:200, headers:{'content-type':'application/json'} });
+    if (url.endsWith('/board')) return new Response(JSON.stringify({ board:{ schemaVersion:1, boardId:'BOARD-LIGHTHOUSE-CENTRE', workId:'WORK-GO-HUB-CENTRE-BOARD', revision:9, updatedAt:'2026-09-19T16:00:00.000Z', pins:[], audit:[] } }), { status:200, headers:{'content-type':'application/json'} });
     if (url.endsWith('/session/stop')) return new Response(JSON.stringify({ ok:true }), { status:200, headers:{'content-type':'application/json'} });
     return new Response('{}', { status:404 });
   };
@@ -49,6 +50,9 @@ test('GO Hub transport pulls commands and pushes receipts/state with paired cred
   assert.equal(commands[0].requestId, 'hub-1');
   await transport.pushOutbox([{ requestId:'hub-1', capabilityId:'system.appState', status:'DONE' }]);
   await transport.pushState({ work:{ nextAction:'WAITING_COMMAND' }, snapshot:{ freshness:'LIVE' } });
+  const board = await transport.pullBoard();
+  assert.equal(board.boardId, 'BOARD-LIGHTHOUSE-CENTRE');
+  assert.equal(board.revision, 9);
 
   for (const request of requests) {
     assert.equal(request.init.headers['x-lighthouse-session-id'], 'lh-session-1');
@@ -157,8 +161,10 @@ test('realtime transport authenticates after connect, keeps credentials out of U
 
   sockets[0].emit('message', { data:JSON.stringify({ type:'READY', sessionId:'lh-session-1' }) });
   sockets[0].emit('message', { data:JSON.stringify({ type:'COMMAND_AVAILABLE', requestId:'r1', capabilityId:'finance.expense.create' }) });
+  sockets[0].emit('message', { data:JSON.stringify({ type:'BOARD_UPDATED', workId:'WORK-LIVE-1', boardRevision:8, status:'DOING' }) });
   sockets[0].emit('message', { data:JSON.stringify({ type:'STATE_UPDATED' }) });
-  assert.deepEqual(signals.map(value => value.type), ['READY','COMMAND_AVAILABLE']);
+  assert.deepEqual(signals.map(value => value.type), ['READY','COMMAND_AVAILABLE','BOARD_UPDATED']);
+  assert.equal(signals[2].boardRevision, 8);
   assert.equal(statuses.some(value => value.status === 'LIVE'), true);
 
   sockets[0].emit('close', { reason:'network' });
@@ -201,7 +207,8 @@ test('LIGHTHOUSE app uses live notification as primary trigger while retaining 3
   const fs = require('node:fs');
   const appSource = fs.readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
   assert.match(appSource, /hubControlPortTransport\.openLive\(/);
-  assert.match(appSource, /signal\?\.type === 'READY' \|\| signal\?\.type === 'COMMAND_AVAILABLE'/);
+  assert.match(appSource, /signal\?\.type === 'READY' \|\| signal\?\.type === 'COMMAND_AVAILABLE' \|\| signal\?\.type === 'BOARD_UPDATED'/);
+  assert.match(appSource, /hubControlPortTransport\.pullBoard\(\)/);
   assert.match(appSource, /syncGoHubControlPort\(\{ force:true \}\)/);
   assert.match(appSource, /window\.setInterval\(\(\) => \{ void syncGoHubControlPort\(\); \}, 30_000\)/);
   assert.match(appSource, /installControlPortBackgroundSync\(\{/);
