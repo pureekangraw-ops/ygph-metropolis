@@ -349,8 +349,8 @@ test('app routes Centre Board Control Port mutations through LIGHTHOUSE circulat
   const stage = fs.readFileSync(path.resolve(__dirname, '../scripts/stage-lighthouse-next-bundle.mjs'), 'utf8');
 
   assert.match(app, /createLighthouseWorkCirculation/);
-  assert.match(app, /boardBridge:workCirculation/);
-  assert.match(app, /const circulationState = workCirculation\.state\(\)/);
+  assert.match(app, /createLighthouseControlPort\(\{[\s\S]*boardBridge\s*:\s*workCirculation[\s\S]*\}\)/);
+  assert.match(app, /workCirculation\.state\(\)/);
   assert.match(app, /lighthouse:work-circulation/);
   assert.match(stage, /'work-circulation\.mjs'/);
   assert.doesNotMatch(circulation, /google drive|files__|archive/i);
