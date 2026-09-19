@@ -5,7 +5,7 @@ export const CONTROL_PORT_STATE_SCHEMA = 1;
 export const CONTROL_PORT_SNAPSHOT_CONTRACT_VERSION = 1;
 
 const TERMINAL = new Set(['COMPLETE','ERROR','CANCELLED']);
-const SECRET_KEY = /(pin|password|recovery|vault|secret|token|passphrase)/i;
+const SECRET_KEY = /^(?:(?:device|owner|security)?pin(?:hash|code|value)?|.*password|.*passphrase|recovery(?:code|key|phrase|token|secret)|vault(?:key|password|secret|token)|.*secret|.*token)$/i;
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -50,7 +50,7 @@ function containsSecret(value, seen = new Set()) {
   if (seen.has(value)) return false;
   seen.add(value);
   for (const [key, nested] of Object.entries(value)) {
-    if (SECRET_KEY.test(key)) return true;
+    if (SECRET_KEY.test(String(key).replace(/[^A-Za-z0-9]/g, ''))) return true;
     if (containsSecret(nested, seen)) return true;
   }
   return false;
@@ -383,7 +383,7 @@ export function createLighthouseControlPortRuntime({
       return clone(receipt);
     } catch (error) {
       const code = String(error?.message || error || 'CONTROL_PORT_PROCESS_FAILED');
-      const verify = /READBACK|OWNER_NOT_VERIFIED|REVISION/.test(code);
+      const verify = /READBACK|OWNER_NOT_VERIFIED|REVISION|RECOVERY_CONFLICT/.test(code);
       const blocked = code === 'RUNTIME_SESSION_LOCKED';
       const receiptStatus = verify ? 'VERIFY' : blocked ? 'BLOCKED' : 'FAILED';
       const inboxStatus = blocked ? 'BLOCKED' : 'ERROR';
@@ -477,6 +477,7 @@ export function createLighthouseControlPortRuntime({
       'calendar.records',
       'store.products',
       'ride.summary',
+      'centreBoard.read',
       'system.appState',
     ];
     const values = {};

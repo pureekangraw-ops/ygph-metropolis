@@ -84,7 +84,7 @@ function fakePort(clock) {
 
 test('LIGHTHOUSE app activates Control Port only after owner unlock and reads staged build identity', () => {
   const appSource = readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
-  assert.match(appSource, /createLighthouseControlPort\(\{ ledgerBridge, storeBridge \}\)/);
+  assert.match(appSource, /createLighthouseControlPort\(\{[\s\S]*boardBridge:centreBoardBridge[\s\S]*\}\)/);
   assert.match(appSource, /createLighthouseControlPortRuntime\(/);
   assert.match(appSource, /fetch\('\.\/build-identity\.json', \{ cache:'no-store' \}\)/);
   assert.match(appSource, /buildState:\{\s*status:identity \? 'STAGED' : 'UNKNOWN'/);
@@ -225,6 +225,29 @@ test('Cancelling one confirmation keeps the next confirmation active', async () 
   assert.equal(runtime.workState().nextAction, 'AWAIT_CONFIRMATION');
 });
 
+test('Centre Board pin identifiers are not treated as device PIN secrets', async () => {
+  const { createLighthouseControlPortRuntime, createMemoryControlPortStorage } = await import(runtimeUrl);
+  const clock = { value:'2026-09-18T07:29:00.000Z' };
+  const runtime = createLighthouseControlPortRuntime({
+    port:fakePort(clock),
+    storage:createMemoryControlPortStorage(),
+    now:() => clock.value,
+  });
+  const received = runtime.receive({
+    requestId:'board-pin-safe',
+    capabilityId:'centreBoard.claim',
+    payload:{
+      workId:'WORK-1',
+      employeeId:'GO-1',
+      pinIds:['pin-1'],
+      expectedRevision:1,
+      status:'PENDING_RECOVERY',
+    },
+  });
+  assert.equal(received.payloadRedacted, false);
+  assert.deepEqual(received.payload.pinIds, ['pin-1']);
+});
+
 test('Forbidden/secret commands are blocked without persisting secret payload', async () => {
   const { createLighthouseControlPortRuntime, createMemoryControlPortStorage, CONTROL_PORT_STORAGE_KEY } = await import(runtimeUrl);
   const clock = { value:'2026-09-18T07:30:00.000Z' };
@@ -319,6 +342,7 @@ test('Snapshot contract carries source metadata and latest owner readback withou
   assert.equal(snapshot.source.repository, 'pureekangraw-ops/ygph-metropolis');
   assert.equal(snapshot.owner.system, 'METROPOLIS');
   assert.equal(snapshot.readbackSummary.requestId, 'goal-contract-1');
+  assert.equal(snapshot.snapshot.values['centreBoard.read'].id, 'centreBoard.read');
 
   const unknownRuntime = createLighthouseControlPortRuntime({
     port,

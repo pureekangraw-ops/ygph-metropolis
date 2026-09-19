@@ -73,6 +73,7 @@ export function createLighthouseControlPort(deps = {}) {
   const withSession = deps.withSession ?? withRuntimeSession;
   const ledger = deps.ledgerBridge ?? createLighthouseLedgerBridge({ withSession });
   const store = deps.storeBridge ?? createLighthouseStoreBridge({ withSession });
+  const board = deps.boardBridge ?? null;
   const now = deps.now ?? (() => new Date().toISOString());
 
   async function meta() {
@@ -166,6 +167,10 @@ export function createLighthouseControlPort(deps = {}) {
     if (['calendar.records','calendar.status','finance.obligation.dueDate'].includes(id)) return ledger.readCalendarTruth();
     if (id === 'store.products') return store.readStoreTruth();
     if (id === 'ride.summary') return ledger.readRideTruth();
+    if (id === 'centreBoard.read') {
+      if (!board || typeof board.readBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+      return board.readBoard();
+    }
     throw new Error(`LIGHTHOUSE_CONTROL_PORT_QUERY_UNSUPPORTED:${id}`);
   }
 
@@ -334,6 +339,33 @@ export function createLighthouseControlPort(deps = {}) {
           title:payload.title || 'Hub stock adjustment',
           quantity:payload.quantity,
         });
+      case 'centreBoard.claim':
+        if (!board || typeof board.claimPins !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.claimPins({
+          receiptId:payload.receiptId || `CP-BOARD-READ-${safeId(id)}`,
+          workId:payload.workId,
+          employeeId:payload.employeeId,
+          pinIds:payload.pinIds,
+          expectedRevision:payload.expectedRevision,
+          at:payload.at || now(),
+        });
+      case 'centreBoard.return':
+        if (!board || typeof board.returnPins !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.returnPins({
+          receiptId:payload.receiptId || `CP-BOARD-RETURN-${safeId(id)}`,
+          workId:payload.workId,
+          employeeId:payload.employeeId,
+          expectedRevision:payload.expectedRevision,
+          updates:payload.updates,
+          at:payload.at || now(),
+        });
+      case 'centreBoard.recover':
+        if (!board || typeof board.recoverEmergency !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.recoverEmergency({
+          capsule:payload.capsule,
+          receiptId:payload.receiptId || `CP-BOARD-RECOVERY-${safeId(id)}`,
+          at:payload.at || now(),
+        });
       default:
         throw new Error(`LIGHTHOUSE_CONTROL_PORT_MUTATION_UNSUPPORTED:${proposal.capabilityId}`);
     }
@@ -347,6 +379,10 @@ export function createLighthouseControlPort(deps = {}) {
     if (capId === 'finance.receivable.payment') return ledger.readIncomeTruth();
     if (['finance.obligation.dueDate','calendar.status'].includes(capId)) return ledger.readCalendarTruth();
     if (['store.product.create','store.stock.add'].includes(capId)) return store.readStoreTruth();
+    if (['centreBoard.claim','centreBoard.return','centreBoard.recover'].includes(capId)) {
+      if (!board || typeof board.readBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+      return board.readBoard();
+    }
     throw new Error(`LIGHTHOUSE_CONTROL_PORT_READBACK_UNSUPPORTED:${capId}`);
   }
 
@@ -386,6 +422,7 @@ export function createLighthouseControlPort(deps = {}) {
           revision:result.revision ?? null,
           updatedAt:result.updatedAt ?? null,
           readbackAt:result.readbackAt ?? null,
+          evidence:clone(result.evidence),
         }));
       } catch (error) {
         const reason = String(error?.message || error || 'COMMAND_PACK_ITEM_FAILED');
