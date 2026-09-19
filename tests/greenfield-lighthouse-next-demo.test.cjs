@@ -24,7 +24,7 @@ test('LIGHTHOUSE next demo ships its isolated static source files', () => {
   assert.equal(fs.existsSync(incomeParserPath), true, 'missing lighthouse-next/general-income.mjs');
 });
 
-test('user surface is LIGHTHOUSE with Today dashboard inside MANUAL and exactly three root nav labels', () => {
+test('user surface is LIGHTHOUSE with Today dashboard inside MANUAL and exactly four root nav labels', () => {
   const html = read(htmlPath);
   assert.match(html, /LIGHTHOUSE/);
   for (const label of ['เงินจริง', 'เงินเข้า', 'เงินออก', 'สุทธิ', 'ภาระใกล้ที่สุด', 'ยังขาด', 'เป้าวันนี้']) {
@@ -36,7 +36,7 @@ test('user surface is LIGHTHOUSE with Today dashboard inside MANUAL and exactly 
 
   const nav = html.match(/<nav id="bottom-nav"[\s\S]*?<\/nav>/)?.[0];
   assert.ok(nav, 'bottom root navigation must exist');
-  for (const label of ['แชต', 'MANUAL', 'ตั้งค่า']) {
+  for (const label of ['แชต', 'MANUAL', 'GO', 'ตั้งค่า']) {
     const matches = nav.match(new RegExp(`>${label}<`, 'g')) || [];
     assert.equal(matches.length, 1, `${label} must appear exactly once in bottom root navigation`);
   }
