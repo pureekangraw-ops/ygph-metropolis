@@ -17,6 +17,7 @@ test('LIGHTHOUSE V2 keeps PIN outside a three-root live shell', () => {
   assert.ok(html.indexOf('id="auth-screen"') < html.indexOf('id="app-shell"'));
   assert.equal(count(html, 'data-root-target="chat"'), 1);
   assert.equal(count(html, 'data-root-target="manual"'), 1);
+  assert.equal(count(html, 'data-root-target="go"'), 1);
   assert.equal(count(html, 'data-root-target="settings"'), 1);
   assert.equal(count(html, 'data-root-target="home"'), 0);
 });
