@@ -64,3 +64,12 @@ test('checks Employee ID uniqueness only against current live pins', async () =>
   assert.equal(assertEmployeeIdAvailable(board, 'GO-8'), 'GO-8');
   assert.equal(assertEmployeeIdAvailable(board, 'GO-9'), 'GO-9');
 });
+
+
+test('deploy syntax gate covers every Centre Board V1 module', () => {
+  const packageJson = require('../package.json');
+  const syntax = packageJson.scripts['check:syntax'];
+  assert.match(syntax, /lighthouse-next\/centre-board\/board-contract\.mjs/);
+  assert.match(syntax, /lighthouse-next\/centre-board\/board-session\.mjs/);
+  assert.match(syntax, /lighthouse-next\/centre-board\/emergency-capsule\.mjs/);
+});
