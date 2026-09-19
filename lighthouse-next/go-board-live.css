@@ -39,5 +39,4 @@
 .go-pending-item>div{min-width:0;display:grid;gap:3px}.go-pending-item strong{font-size:12px;overflow-wrap:anywhere}.go-pending-item small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
 .go-pending-item>span{flex:0 0 auto;font-size:10px;color:var(--gold);border:1px solid rgba(255,216,138,.24);border-radius:999px;padding:4px 7px}
 .go-readback-line{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
-.bottom-nav{grid-template-columns:repeat(4,1fr)}
 @media(max-width:380px){.go-live-card{padding:14px}.go-route-rail{gap:5px}.go-route-rail span{font-size:10px}.go-stat-grid,.go-work-grid,.go-board-meta{grid-template-columns:1fr}.go-board-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.go-work-foot{grid-template-columns:1fr}.go-work-foot strong{text-align:left}.bottom-nav{padding-left:6px;padding-right:6px}.nav-item{min-width:0}.nav-item small{font-size:10px}}
