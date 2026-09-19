@@ -1,5 +1,6 @@
 import { enterCentreBoard, returnCentreBoard } from './board-session.mjs';
 import { recoverEmergencyCapsule } from './emergency-capsule.mjs';
+import { initializeCentreBoard, createPinOnCentreBoard } from './board-bootstrap.mjs';
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -44,6 +45,56 @@ export function createLighthouseCentreBoardBridge({
       receipt:clone(receipt),
       ...extra,
     });
+  }
+
+  function initializeBoard({
+    receiptId,
+    boardId,
+    workId,
+    at = now(),
+  } = {}) {
+    const current = readBoard();
+    if (current) {
+      const previous = Array.isArray(current.audit)
+        ? current.audit.find(event => event?.receiptId === String(receiptId ?? '').trim())
+        : null;
+      if (
+        previous?.type === 'BOARD_INITIALIZE'
+        && previous.boardId === String(boardId ?? '').trim()
+        && previous.workId === String(workId ?? '').trim()
+      ) {
+        return verified(current, previous.receipt, { initialized:false, replay:true });
+      }
+      throw new Error('CENTRE_BOARD_ALREADY_INITIALIZED');
+    }
+    const output = initializeCentreBoard({ receiptId, boardId, workId, at });
+    const saved = store.write(output.board, { expectedRevision:0 });
+    if (saved.revision !== output.receipt.readbackRevision) throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
+    return verified(saved, output.receipt, { initialized:true, replay:false });
+  }
+
+  function createPin({
+    receiptId,
+    workId,
+    expectedRevision,
+    pin,
+    at = now(),
+  } = {}) {
+    const current = readBoard();
+    if (!current) throw new Error('CENTRE_BOARD_NOT_INITIALIZED');
+    const output = createPinOnCentreBoard(current, {
+      receiptId,
+      workId,
+      expectedRevision,
+      pin,
+      at,
+    });
+    if (output.board === current) {
+      return verified(current, output.receipt, { created:false, replay:true });
+    }
+    const saved = store.write(output.board, { expectedRevision:current.revision });
+    if (saved.revision !== output.receipt.readbackRevision) throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
+    return verified(saved, output.receipt, { created:true, replay:false });
   }
 
   function claimPins({
@@ -144,6 +195,8 @@ export function createLighthouseCentreBoardBridge({
     readBoard,
     readEmergencyCapsules,
     stageEmergency,
+    initializeBoard,
+    createPin,
     claimPins,
     returnPins,
     recoverEmergency,
