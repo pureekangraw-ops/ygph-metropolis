@@ -68,3 +68,13 @@ test('LIGHTHOUSE renders the Centre Board from GO Hub instead of treating local 
   assert.match(app, /latestCentreBoard = board/);
   assert.match(app, /LIGHTHOUSE แสดงผลเท่านั้น/);
 });
+
+
+test('LIGHTHOUSE Board projector never falls back to local Centre Board memory', () => {
+  const app = read('lighthouse-next/app.mjs');
+  const readBoard = /function readCentreBoard\(\)[\s\S]*?\n}/.exec(app)?.[0] || '';
+  assert.match(readBoard, /return latestCentreBoard/);
+  assert.doesNotMatch(readBoard, /centreBoardStore\.read/);
+  assert.doesNotMatch(app, /latestCentreBoard\s*=\s*detail/);
+  assert.doesNotMatch(app, /event\.key === centreBoardStore\.storageKey\) latestCentreBoard = null/);
+});
