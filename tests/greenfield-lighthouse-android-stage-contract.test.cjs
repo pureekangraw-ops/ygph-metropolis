@@ -37,6 +37,7 @@ const runtimeFiles = [
   'centre-board/board-session.mjs',
   'centre-board/emergency-capsule.mjs',
   'centre-board/board-store.mjs',
+  'centre-board/board-bridge.mjs',
   'go-board-live.mjs',
   'send-control.mjs',
   'general-income.mjs',
