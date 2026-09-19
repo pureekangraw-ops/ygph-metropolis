@@ -7,6 +7,8 @@ const { readFileSync } = require('node:fs');
 const boardUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/centre-board/board-contract.mjs')).href;
 const sessionUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/centre-board/board-session.mjs')).href;
 const storeUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/centre-board/board-store.mjs')).href;
+const bridgeUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/centre-board/board-bridge.mjs')).href;
+const emergencyUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/centre-board/emergency-capsule.mjs')).href;
 const viewUrl = pathToFileURL(path.resolve(__dirname, '../lighthouse-next/go-board-live.mjs')).href;
 
 class MemoryStorage {
@@ -53,6 +55,90 @@ test('Centre Board local store persists only contract-valid snapshots with revis
   assert.equal(saved.pins[0].ownerEmployeeId, 'GO-EMP-1');
 
   assert.throws(() => store.write(entered, { expectedRevision:1 }), /CENTRE_BOARD_REVISION_CONFLICT/);
+});
+
+test('Centre Board bridge claims, returns, and recovers through revision-checked local truth', async () => {
+  const { createCentreBoard, createCentrePin } = await import(boardUrl);
+  const { createLighthouseCentreBoardStore } = await import(storeUrl);
+  const { createLighthouseCentreBoardBridge } = await import(bridgeUrl);
+  const { createEmergencyCapsule } = await import(emergencyUrl);
+  const storage = new MemoryStorage();
+  const store = createLighthouseCentreBoardStore({ storage, eventTarget:null });
+  const bridge = createLighthouseCentreBoardBridge({
+    store,
+    now:() => '2026-09-19T04:10:00.000Z',
+  });
+
+  const board = createCentreBoard({
+    boardId:'board-bridge-1',
+    workId:'WORK-BRIDGE-1',
+    at:'2026-09-19T04:00:00.000Z',
+    pins:[createCentrePin({
+      pinId:'pin-bridge-1',
+      workId:'WORK-BRIDGE-1',
+      title:'Bridge',
+      status:'OPEN',
+      at:'2026-09-19T04:00:00.000Z',
+    })],
+  });
+  store.write(board, { expectedRevision:0 });
+
+  const claimed = bridge.claimPins({
+    receiptId:'claim-1',
+    workId:'WORK-BRIDGE-1',
+    employeeId:'GO-BRIDGE-1',
+    pinIds:['pin-bridge-1'],
+    expectedRevision:1,
+  });
+  assert.equal(claimed.status, 'VERIFIED');
+  assert.equal(claimed.boardRevision, 2);
+  assert.equal(claimed.receipt.type, 'BOARD_READ');
+  assert.equal(bridge.readBoard().pins[0].ownerEmployeeId, 'GO-BRIDGE-1');
+
+  const returned = bridge.returnPins({
+    receiptId:'return-1',
+    workId:'WORK-BRIDGE-1',
+    employeeId:'GO-BRIDGE-1',
+    expectedRevision:2,
+    updates:[{
+      pinId:'pin-bridge-1',
+      status:'VERIFY',
+      result:'Done',
+      nextAction:'Verify',
+      evidence:[{ type:'commit', ref:'abc' }],
+    }],
+  });
+  assert.equal(returned.status, 'VERIFIED');
+  assert.equal(returned.boardRevision, 3);
+  assert.equal(returned.receipt.type, 'BOARD_RETURN');
+
+  const capsule = createEmergencyCapsule({
+    capsuleId:'capsule-bridge-1',
+    workId:'WORK-BRIDGE-1',
+    employeeId:'GO-BRIDGE-1',
+    reason:'HUB_OFFLINE',
+    baseBoardRevision:3,
+    claimedPinIds:['pin-bridge-1'],
+    pendingChanges:[{
+      pinId:'pin-bridge-1',
+      status:'PENDING_RECOVERY',
+      result:'Paused for recovery',
+      nextAction:'Resume',
+      evidence:[],
+    }],
+    evidence:[],
+    at:'2026-09-19T04:11:00.000Z',
+  });
+  const recovered = bridge.recoverEmergency({
+    capsule,
+    receiptId:'recover-1',
+    at:'2026-09-19T04:12:00.000Z',
+  });
+  assert.equal(recovered.status, 'VERIFIED');
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.boardRevision, 4);
+  assert.equal(recovered.receipt.type, 'RECOVERY');
+  assert.equal(bridge.readBoard().pins[0].status, 'PENDING_RECOVERY');
 });
 
 test('GO live projection uses Centre Board V1 Work ID, Employee ID, pins and route truth', async () => {
