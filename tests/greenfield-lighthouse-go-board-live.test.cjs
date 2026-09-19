@@ -109,6 +109,7 @@ test('GO page is a fourth LIGHTHOUSE root and consumes live facts without creati
   assert.match(html, /id="go-board-list"/);
   assert.match(html, /id="go-route-mode"/);
   assert.match(app, /const allowed = \['chat','manual','go','settings'\]/);
+  assert.match(app, /activeRoot:\['chat','manual','go','settings'\]\.includes/);
   assert.match(app, /createGoBoardView\(/);
   assert.match(app, /lighthouse:centre-board/);
   assert.match(app, /controlPortRuntime\.snapshotStatus\(\)/);
