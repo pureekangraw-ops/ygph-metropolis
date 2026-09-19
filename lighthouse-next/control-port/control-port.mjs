@@ -1,6 +1,7 @@
 import { withRuntimeSession } from '../../greenfield/runtime-session.mjs';
 import { createLighthouseLedgerBridge } from '../runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from '../runtime-store.mjs';
+import { createCentreBoardStore } from '../centre-board/board-store.mjs';
 import {
   getLighthouseCapability,
   listLighthouseCapabilities,
@@ -74,6 +75,14 @@ export function createLighthouseControlPort(deps = {}) {
   const ledger = deps.ledgerBridge ?? createLighthouseLedgerBridge({ withSession });
   const store = deps.storeBridge ?? createLighthouseStoreBridge({ withSession });
   const now = deps.now ?? (() => new Date().toISOString());
+  const boardStore = deps.boardStore ?? (globalThis.localStorage
+    ? createCentreBoardStore({ storage:globalThis.localStorage, now })
+    : null);
+
+  function requireBoardStore() {
+    if (!boardStore) throw new Error('CENTRE_BOARD_STORAGE_UNAVAILABLE');
+    return boardStore;
+  }
 
   async function meta() {
     return withSession(async runtime => {
@@ -194,6 +203,16 @@ export function createLighthouseControlPort(deps = {}) {
     if (id === 'system.appState') {
       const current = await meta();
       return wrap(current, { status:'OK', capabilityId:id, value:clone(current.summary) });
+    }
+    if (id === 'board.read') {
+      const board = requireBoardStore().read();
+      return Object.freeze({
+        status:board ? 'OK' : 'EMPTY',
+        capabilityId:id,
+        value:clone(board),
+        revision:board?.revision ?? null,
+        updatedAt:board?.updatedAt ?? null,
+      });
     }
 
     const [projection, current] = await Promise.all([readProjection(id), meta()]);
@@ -365,6 +384,47 @@ export function createLighthouseControlPort(deps = {}) {
     });
   }
 
+  async function commitBoardMutation({ id, capId, payload, guard }) {
+    const owner = requireBoardStore();
+    let result;
+    if (capId === 'board.claim') {
+      result = owner.claim(payload);
+    } else if (capId === 'board.return') {
+      result = owner.returnWork(payload);
+    } else if (capId === 'board.recover') {
+      result = owner.recover(payload);
+      if (result.status === 'CONFLICT') {
+        throw new Error(result.reason || 'CENTRE_BOARD_RECOVERY_CONFLICT');
+      }
+    } else {
+      throw new Error(`LIGHTHOUSE_CONTROL_PORT_MUTATION_UNSUPPORTED:${capId}`);
+    }
+    if (!result || result.status !== 'VERIFIED') {
+      throw new Error(`LIGHTHOUSE_CONTROL_PORT_OWNER_NOT_VERIFIED:${capId}`);
+    }
+    const board = result.board ?? owner.read();
+    if (!board) throw new Error('CENTRE_BOARD_READBACK_MISMATCH');
+    return Object.freeze({
+      status:'VERIFIED',
+      requestId:id,
+      capabilityId:capId,
+      guard,
+      ownerStatus:result.status,
+      revision:board.revision,
+      updatedAt:board.updatedAt,
+      readbackAt:now(),
+      beforeRevision:result.receipt?.beforeRevision ?? null,
+      afterRevision:result.receipt?.afterRevision ?? board.revision,
+      evidence:Object.freeze({
+        kind:'CENTRE_BOARD',
+        boardId:board.boardId,
+        workId:board.workId,
+        receipt:clone(result.receipt ?? null),
+        capsule:clone(result.capsule ?? null),
+      }),
+    });
+  }
+
   async function commitCommandPack({ id, payload, guard }) {
     const children = commandPackProposals(payload);
     const before = await meta();
@@ -439,6 +499,14 @@ export function createLighthouseControlPort(deps = {}) {
     if (capId === 'system.commandPack') {
       return commitCommandPack({
         id,
+        payload:clone(proposal.payload) || {},
+        guard,
+      });
+    }
+    if (capId === 'board.claim' || capId === 'board.return' || capId === 'board.recover') {
+      return commitBoardMutation({
+        id,
+        capId,
         payload:clone(proposal.payload) || {},
         guard,
       });
