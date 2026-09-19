@@ -140,6 +140,7 @@ test('GO is a fourth LIGHTHOUSE root wired to Centre Board local working memory 
   const html = readFileSync(path.resolve(__dirname, '../lighthouse-next/index.html'), 'utf8');
   const app = readFileSync(path.resolve(__dirname, '../lighthouse-next/app.mjs'), 'utf8');
   const css = readFileSync(path.resolve(__dirname, '../lighthouse-next/go-board-live.css'), 'utf8');
+  const stage = readFileSync(path.resolve(__dirname, '../scripts/stage-lighthouse-next-bundle.mjs'), 'utf8');
   const packageJson = require('../package.json');
 
   assert.match(html, /id="page-go"[^>]+data-root="go"/);
@@ -154,4 +155,11 @@ test('GO is a fourth LIGHTHOUSE root wired to Centre Board local working memory 
   assert.match(css, /grid-template-columns:repeat\(4,1fr\)/);
   assert.match(packageJson.scripts['check:syntax'], /lighthouse-next\/centre-board\/board-store\.mjs/);
   assert.match(packageJson.scripts['check:syntax'], /lighthouse-next\/go-board-live\.mjs/);
+  assert.match(stage, /'go-board-live\.css'/);
+  assert.match(stage, /'centre-board\/board-contract\.mjs'/);
+  assert.match(stage, /'centre-board\/board-session\.mjs'/);
+  assert.match(stage, /'centre-board\/emergency-capsule\.mjs'/);
+  assert.match(stage, /'centre-board\/board-store\.mjs'/);
+  assert.match(stage, /'go-board-live\.mjs'/);
+  assert.match(stage, /roots:\['CHAT','MANUAL','GO','SETTINGS'\]/);
 });
