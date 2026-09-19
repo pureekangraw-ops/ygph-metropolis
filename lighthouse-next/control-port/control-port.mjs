@@ -339,6 +339,12 @@ export function createLighthouseControlPort(deps = {}) {
           title:payload.title || 'Hub stock adjustment',
           quantity:payload.quantity,
         });
+      case 'centreBoard.initialize':
+        if (!board || typeof board.initializeBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
+        return board.initializeBoard({
+          board:payload.board,
+          expectedRevision:payload.expectedRevision ?? 0,
+        });
       case 'centreBoard.claim':
         if (!board || typeof board.claimPins !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
         return board.claimPins({
@@ -379,7 +385,7 @@ export function createLighthouseControlPort(deps = {}) {
     if (capId === 'finance.receivable.payment') return ledger.readIncomeTruth();
     if (['finance.obligation.dueDate','calendar.status'].includes(capId)) return ledger.readCalendarTruth();
     if (['store.product.create','store.stock.add'].includes(capId)) return store.readStoreTruth();
-    if (['centreBoard.claim','centreBoard.return','centreBoard.recover'].includes(capId)) {
+    if (['centreBoard.initialize','centreBoard.claim','centreBoard.return','centreBoard.recover'].includes(capId)) {
       if (!board || typeof board.readBoard !== 'function') throw new Error('LIGHTHOUSE_CONTROL_PORT_CENTRE_BOARD_UNAVAILABLE');
       return board.readBoard();
     }
