@@ -285,3 +285,28 @@ test('Command Pack preserves per-item readback evidence', async () => {
   assert.equal(result.evidence.items[0].evidence.revision, 2);
   assert.equal(result.evidence.items[0].evidence.pins[0].ownerEmployeeId, 'GO-BOARD-2');
 });
+
+
+test('board.* Control Port aliases read and claim the same authoritative Centre Board', async () => {
+  const { createLighthouseControlPort, CONTROL_PORT_GUARD } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+
+  const canonical = await port.query({ capabilityId:'centreBoard.read' });
+  const alias = await port.query({ capabilityId:'board.read' });
+  assert.deepEqual(alias.value, canonical.value);
+
+  const result = await port.commit(port.propose({
+    requestId:'board-alias-claim-1',
+    capabilityId:'board.claim',
+    payload:{
+      workId:'WORK-CONTROL-PORT',
+      employeeId:'GO-BOARD-ALIAS-1',
+      pinIds:['pin-control-port'],
+      expectedRevision:1,
+    },
+  }));
+  assert.equal(result.guard, CONTROL_PORT_GUARD.DIRECT);
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.evidence.revision, 2);
+  assert.equal(result.evidence.pins[0].ownerEmployeeId, 'GO-BOARD-ALIAS-1');
+});
