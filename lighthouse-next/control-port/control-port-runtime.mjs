@@ -491,6 +491,14 @@ export function createLighthouseControlPortRuntime({
     }
     if (revisions.size > 1) throw new Error('LIGHTHOUSE_CONTROL_PORT_SNAPSHOT_REVISION_DRIFT');
 
+    try {
+      const board = await port.query({ capabilityId:'board.read' });
+      values['board.read'] = clone(board.value);
+    } catch (error) {
+      values['board.read'] = null;
+      values['board.read:error'] = String(error?.message || error || 'CENTRE_BOARD_READ_FAILED');
+    }
+
     const health = await port.health();
     if (Number.isSafeInteger(Number(health.revision))) revisions.add(Number(health.revision));
     if (revisions.size > 1) throw new Error('LIGHTHOUSE_CONTROL_PORT_SNAPSHOT_REVISION_DRIFT');
