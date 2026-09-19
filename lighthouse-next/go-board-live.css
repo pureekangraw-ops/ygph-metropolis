@@ -1,6 +1,6 @@
 #page-go .page-title-block{position:relative;padding-bottom:22px}
 #page-go .page-title-block::after{content:"";display:block;width:76px;height:3px;margin-top:12px;border-radius:999px;background:linear-gradient(90deg,var(--gold),rgba(102,228,255,.72),transparent);box-shadow:0 0 15px rgba(255,209,92,.14)}
-.go-page{display:grid;gap:12px;padding-bottom:12px}
+.go-page{display:grid;gap:12px;width:100%;max-width:100%;min-width:0;padding-bottom:12px;overflow-x:clip;overscroll-behavior-x:none;touch-action:pan-y}
 .go-page-title{display:grid;gap:6px}.go-page-title .muted{margin:0;line-height:1.45;font-size:13px}
 .go-title-row,.go-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
 .go-mode-pill{flex:0 0 auto;min-height:30px;display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid rgba(92,127,160,.46);font-size:11px;font-weight:850;letter-spacing:.08em;color:var(--muted);background:rgba(255,255,255,.025)}
@@ -8,9 +8,9 @@
 .go-mode-pill[data-mode="FALLBACK"]{color:var(--cyan);border-color:rgba(102,228,255,.42);background:rgba(102,228,255,.07)}
 .go-mode-pill[data-mode="RECOVERY"]{color:var(--gold);border-color:rgba(255,216,138,.44);background:rgba(255,216,138,.08)}
 .go-mode-pill[data-mode="EMERGENCY"],.go-mode-pill[data-mode="OFFLINE"]{color:var(--danger);border-color:rgba(255,157,157,.42);background:rgba(255,102,102,.08)}
-.go-live-card{min-width:0;border:1px solid rgba(71,97,129,.58);border-radius:22px;padding:16px;background:linear-gradient(145deg,rgba(13,31,49,.97),rgba(6,16,27,.95));box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+.go-live-card{width:100%;max-width:100%;min-width:0;overflow-x:clip;border:1px solid rgba(71,97,129,.58);border-radius:22px;padding:16px;background:linear-gradient(145deg,rgba(13,31,49,.97),rgba(6,16,27,.95));box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
 .go-section-head{align-items:flex-start;margin-bottom:14px}.go-section-head h2{font-size:19px}.go-section-head .eyebrow{margin-bottom:4px}
-.go-route-rail{display:grid;grid-template-columns:auto minmax(18px,1fr) auto minmax(18px,1fr) auto;align-items:center;gap:8px;padding:13px 0 16px;font-size:12px;color:var(--muted)}
+.go-route-rail{width:100%;max-width:100%;min-width:0;overflow:hidden;display:grid;grid-template-columns:auto minmax(18px,1fr) auto minmax(18px,1fr) auto;align-items:center;gap:8px;padding:13px 0 16px;font-size:12px;color:var(--muted)}
 .go-route-rail i{height:1px;background:linear-gradient(90deg,rgba(102,228,255,.24),rgba(255,216,138,.56),rgba(102,228,255,.24));position:relative}
 .go-route-rail i::after{content:"";position:absolute;right:-1px;top:50%;width:5px;height:5px;border-radius:50%;background:var(--cyan);transform:translateY(-50%);box-shadow:0 0 10px rgba(102,228,255,.5)}
 .go-route-rail strong{font-size:11px;color:var(--text);text-align:center;overflow-wrap:anywhere}
@@ -25,7 +25,7 @@
 .go-board-list,.go-pending-list{display:grid;gap:8px}
 .go-empty-state{min-height:86px;display:grid;place-content:center;gap:5px;text-align:center;padding:14px;border:1px dashed rgba(92,127,160,.34);border-radius:16px;color:var(--muted)}
 .go-empty-state strong{color:var(--text);font-size:14px}.go-empty-state span{font-size:12px;line-height:1.4}
-.go-board-card{border:1px solid rgba(92,127,160,.32);border-radius:16px;padding:13px;background:rgba(255,255,255,.018);display:grid;gap:9px}
+.go-board-card{width:100%;max-width:100%;min-width:0;overflow:hidden;border:1px solid rgba(92,127,160,.32);border-radius:16px;padding:13px;background:rgba(255,255,255,.018);display:grid;gap:9px}
 .go-board-card-head{display:flex;justify-content:space-between;gap:10px;align-items:start}.go-board-card-head>div{min-width:0;display:grid;gap:3px}
 .go-board-card-head strong{font-size:14px;min-width:0;overflow-wrap:anywhere}.go-board-card-head small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
 .go-board-status{flex:0 0 auto;font-size:10px;font-weight:850;padding:5px 8px;border-radius:999px;border:1px solid rgba(102,228,255,.28);color:var(--cyan);background:rgba(102,228,255,.06)}
@@ -35,14 +35,14 @@
 .go-board-meta span{font-size:10px;color:var(--muted)}.go-board-meta strong{font-size:12px;overflow-wrap:anywhere}
 .go-board-next{margin:0;padding-top:8px;border-top:1px solid var(--line);font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
 .go-queue-metrics{margin-bottom:10px}
-.go-pending-item{display:flex;justify-content:space-between;gap:10px;align-items:start;border-top:1px solid var(--line);padding:10px 0}.go-pending-item:first-child{border-top:0}
+.go-pending-item{width:100%;max-width:100%;min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:start;border-top:1px solid var(--line);padding:10px 0}.go-pending-item:first-child{border-top:0}
 .go-pending-item>div{min-width:0;display:grid;gap:3px}.go-pending-item strong{font-size:12px;overflow-wrap:anywhere}.go-pending-item small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
 .go-pending-item>span{flex:0 0 auto;font-size:10px;color:var(--gold);border:1px solid rgba(255,216,138,.24);border-radius:999px;padding:4px 7px}
 .go-readback-line{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
 @media(max-width:380px){.go-live-card{padding:14px}.go-route-rail{gap:5px}.go-route-rail span{font-size:10px}.go-stat-grid,.go-work-grid,.go-board-meta{grid-template-columns:1fr}.go-board-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.go-work-foot{grid-template-columns:1fr}.go-work-foot strong{text-align:left}.bottom-nav{padding-left:6px;padding-right:6px}.nav-item{min-width:0}.nav-item small{font-size:10px}}
 
 .go-project-list{display:grid;gap:8px;margin-top:12px}
-.go-project-source-card{border:1px solid rgba(92,127,160,.32);border-left-width:3px;border-radius:16px;padding:12px;background:rgba(255,255,255,.018);display:grid;gap:9px}
+.go-project-source-card{width:100%;max-width:100%;min-width:0;overflow:hidden;border:1px solid rgba(92,127,160,.32);border-left-width:3px;border-radius:16px;padding:12px;background:rgba(255,255,255,.018);display:grid;gap:9px}
 .go-project-source-card[data-source="github"]{border-left-color:#63e6a7}
 .go-project-source-card[data-source="board"]{border-left-color:#ffad59}
 .go-project-source-card[data-source="factory"]{border-left-color:#a877ff}
