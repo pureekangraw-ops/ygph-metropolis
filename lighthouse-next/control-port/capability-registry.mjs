@@ -3,6 +3,11 @@ const RAW_CAPABILITIES = [
   { id:'system.appState', readable:true, editable:false, owner:'CONTROL_PORT', action:null, confirmationRequired:false, readback:'query.appState', derived:true },
   { id:'system.commandPack', readable:false, editable:true, owner:'CONTROL_PORT', action:'commitCommandPack', confirmationRequired:true, readback:'perItemReadback', derived:false },
 
+  { id:'centreBoard.read', readable:true, editable:false, owner:'LIGHTHOUSE:CENTRE_BOARD', action:null, confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'centreBoard.claim', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'claimPins', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'centreBoard.return', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'returnPins', confirmationRequired:false, readback:'readBoard', derived:false },
+  { id:'centreBoard.recover', readable:false, editable:true, owner:'LIGHTHOUSE:CENTRE_BOARD', action:'recoverEmergency', confirmationRequired:false, readback:'readBoard', derived:false },
+
   { id:'finance.balance', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.balanceSatang', derived:true },
   { id:'finance.todayIn', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.todayInSatang', derived:true },
   { id:'finance.todayOut', readable:true, editable:false, owner:'GREENFIELD:LEDGER', action:null, confirmationRequired:false, readback:'readLedgerTruth.todayOutSatang', derived:true },
