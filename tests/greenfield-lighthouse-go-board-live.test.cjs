@@ -81,7 +81,12 @@ test('Centre Board bridge claims, returns, and recovers through revision-checked
       at:'2026-09-19T04:00:00.000Z',
     })],
   });
-  store.write(board, { expectedRevision:0 });
+  const initialized = bridge.initializeBoard({ board, expectedRevision:0 });
+  assert.equal(initialized.status, 'VERIFIED');
+  assert.equal(initialized.initialized, true);
+  assert.equal(initialized.boardRevision, 1);
+  assert.equal(bridge.readBoard().boardId, 'board-bridge-1');
+  assert.throws(() => bridge.initializeBoard({ board, expectedRevision:0 }), /CENTRE_BOARD_ALREADY_INITIALIZED/);
 
   const claimed = bridge.claimPins({
     receiptId:'claim-1',
