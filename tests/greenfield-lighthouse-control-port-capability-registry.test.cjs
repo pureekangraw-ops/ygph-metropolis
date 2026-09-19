@@ -54,3 +54,25 @@ test('LIGHTHOUSE Hub first mutation set maps only to existing owner-safe bridge 
     assert.equal(capability.action, action, id);
   }
 });
+
+
+test('Centre Board capabilities are exposed without device confirmation and remain owner-scoped', async () => {
+  const registry = await import(moduleUrl);
+  const read = registry.getLighthouseCapability('centreBoard.read');
+  assert.equal(read.readable, true);
+  assert.equal(read.editable, false);
+  assert.equal(read.owner, 'LIGHTHOUSE:CENTRE_BOARD');
+
+  for (const [id, action] of [
+    ['centreBoard.claim','claimPins'],
+    ['centreBoard.return','returnPins'],
+    ['centreBoard.recover','recoverEmergency'],
+  ]) {
+    const capability = registry.getLighthouseCapability(id);
+    assert.equal(capability.editable, true, id);
+    assert.equal(capability.owner, 'LIGHTHOUSE:CENTRE_BOARD', id);
+    assert.equal(capability.action, action, id);
+    assert.equal(capability.confirmationRequired, false, id);
+    assert.equal(capability.readback, 'readBoard', id);
+  }
+});
