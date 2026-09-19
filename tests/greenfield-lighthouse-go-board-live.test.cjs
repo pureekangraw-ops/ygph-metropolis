@@ -139,6 +139,85 @@ test('Centre Board bridge claims, returns, and recovers through revision-checked
   assert.equal(recovered.boardRevision, 4);
   assert.equal(recovered.receipt.type, 'RECOVERY');
   assert.equal(bridge.readBoard().pins[0].status, 'PENDING_RECOVERY');
+  assert.equal(store.readEmergencyCapsules().length, 0, 'verified recovery removes the durable capsule');
+});
+
+test('Emergency Capsule survives revision conflict and remains available for later recovery', async () => {
+  const { createCentreBoard, createCentrePin } = await import(boardUrl);
+  const { createLighthouseCentreBoardStore } = await import(storeUrl);
+  const { createLighthouseCentreBoardBridge } = await import(bridgeUrl);
+  const { createEmergencyCapsule } = await import(emergencyUrl);
+  const storage = new MemoryStorage();
+  const store = createLighthouseCentreBoardStore({ storage, eventTarget:null });
+  const bridge = createLighthouseCentreBoardBridge({ store, now:() => '2026-09-19T04:20:00.000Z' });
+
+  store.write(createCentreBoard({
+    boardId:'board-emergency-1',
+    workId:'WORK-EMERGENCY-1',
+    at:'2026-09-19T04:20:00.000Z',
+    pins:[createCentrePin({
+      pinId:'pin-emergency-1',
+      workId:'WORK-EMERGENCY-1',
+      title:'Emergency',
+      status:'OPEN',
+      at:'2026-09-19T04:20:00.000Z',
+    })],
+  }), { expectedRevision:0 });
+
+  bridge.claimPins({
+    receiptId:'claim-emergency-1',
+    workId:'WORK-EMERGENCY-1',
+    employeeId:'GO-EMERGENCY-1',
+    pinIds:['pin-emergency-1'],
+    expectedRevision:1,
+    at:'2026-09-19T04:21:00.000Z',
+  });
+
+  const capsule = createEmergencyCapsule({
+    capsuleId:'capsule-conflict-1',
+    workId:'WORK-EMERGENCY-1',
+    employeeId:'GO-EMERGENCY-1',
+    reason:'HUB_OFFLINE',
+    baseBoardRevision:2,
+    claimedPinIds:['pin-emergency-1'],
+    pendingChanges:[{
+      pinId:'pin-emergency-1',
+      status:'VERIFY',
+      result:'offline result',
+      nextAction:'recover',
+      evidence:[],
+    }],
+    evidence:[],
+    at:'2026-09-19T04:22:00.000Z',
+  });
+  bridge.stageEmergency(capsule);
+  assert.equal(store.readEmergencyCapsules().length, 1);
+
+  bridge.returnPins({
+    receiptId:'return-before-recovery',
+    workId:'WORK-EMERGENCY-1',
+    employeeId:'GO-EMERGENCY-1',
+    expectedRevision:2,
+    updates:[{
+      pinId:'pin-emergency-1',
+      status:'DOING',
+      result:'newer live change',
+      nextAction:'continue',
+      evidence:[],
+    }],
+    at:'2026-09-19T04:23:00.000Z',
+  });
+  const before = JSON.stringify(bridge.readBoard());
+
+  assert.throws(() => bridge.recoverEmergency({
+    capsuleId:'capsule-conflict-1',
+    receiptId:'recover-conflict-1',
+    at:'2026-09-19T04:24:00.000Z',
+  }), /CENTRE_BOARD_RECOVERY_CONFLICT/);
+
+  assert.equal(JSON.stringify(bridge.readBoard()), before, 'conflict must not mutate live board');
+  assert.equal(store.readEmergencyCapsules().length, 1, 'conflicted capsule remains durable');
+  assert.equal(store.readEmergencyCapsules()[0].capsuleId, 'capsule-conflict-1');
 });
 
 test('GO live projection uses Centre Board V1 Work ID, Employee ID, pins and route truth', async () => {
@@ -199,6 +278,32 @@ test('GO live projection uses Centre Board V1 Work ID, Employee ID, pins and rou
   assert.equal(view.board.revision, 9);
   assert.equal(view.board.recovery, 1);
   assert.equal(view.queue.confirmations, 1);
+  assert.equal(view.emergency.count, 0);
+});
+
+test('GO live view surfaces durable Emergency Capsules ahead of an otherwise live route', async () => {
+  const { createGoBoardView } = await import(viewUrl);
+  const view = createGoBoardView({
+    hubStatus:{
+      pairing:{ status:'PAIRED' },
+      realtime:{ status:'LIVE' },
+      report:{ transport:'ONLINE' },
+    },
+    runtimeState:{ work:{ nextAction:'WAITING_COMMAND' }, inbox:{}, outbox:{} },
+    snapshotStatus:{ freshness:'LIVE', revision:25 },
+    emergencyCapsules:[{
+      capsuleId:'capsule-ui-1',
+      workId:'WORK-UI-1',
+      employeeId:'GO-UI-1',
+      reason:'READBACK_UNAVAILABLE',
+      baseBoardRevision:8,
+      status:'PENDING_RECOVERY',
+      at:'2026-09-19T04:25:00.000Z',
+    }],
+  });
+  assert.equal(view.route.mode, 'EMERGENCY');
+  assert.equal(view.emergency.count, 1);
+  assert.equal(view.emergency.items[0].capsuleId, 'capsule-ui-1');
 });
 
 test('GO live view derives fallback, emergency and recovery without inventing successful state', async () => {
@@ -239,6 +344,9 @@ test('GO is a fourth LIGHTHOUSE root wired to Centre Board local working memory 
   assert.match(app, /activeRoot:\['chat','manual','go','settings'\]\.includes/);
   assert.match(app, /controlPortRuntime\.snapshotStatus\(\)/);
   assert.match(app, /lighthouse:centre-board/);
+  assert.match(app, /lighthouse:centre-board-emergency/);
+  assert.match(app, /readEmergencyCapsules\(\)/);
+  assert.match(html, /id="go-emergency-list"/);
   assert.match(shellCss, /grid-template-columns:repeat\(4,1fr\)/);
   assert.match(packageJson.scripts['check:syntax'], /lighthouse-next\/centre-board\/board-store\.mjs/);
   assert.match(packageJson.scripts['check:syntax'], /lighthouse-next\/go-board-live\.mjs/);
