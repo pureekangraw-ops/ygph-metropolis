@@ -57,3 +57,14 @@ test('GO Hub transport credential stays outside localStorage and Runtime truth',
   assert.match(credential, /LIGHTHOUSE_HUB_BOOTSTRAP_UNEXPECTED_FIELD/);
   assert.doesNotMatch(transport, /ownerPasscode|x-go-owner-passcode/);
 });
+
+
+test('LIGHTHOUSE renders the Centre Board from GO Hub instead of treating local Board memory as authority', () => {
+  const app = read('lighthouse-next/app.mjs');
+  const transport = read('lighthouse-next/control-port/control-port-transport.mjs');
+  assert.match(transport, /async function pullBoard\(\)/);
+  assert.match(transport, /post\('\/board'\)/);
+  assert.match(app, /const board = await hubControlPortTransport\.pullBoard\(\)/);
+  assert.match(app, /latestCentreBoard = board/);
+  assert.match(app, /LIGHTHOUSE แสดงผลเท่านั้น/);
+});
