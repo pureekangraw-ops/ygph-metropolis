@@ -37,7 +37,47 @@ function fixture() {
     createProductWithStock:async () => ({ status:'VERIFIED' }),
     addProductStock:async () => ({ status:'VERIFIED' }),
   };
-  return { withSession, ledgerBridge, storeBridge };
+  let boardRevision = 1;
+  let boardState = {
+    schemaVersion:1,
+    boardId:'board-control-port',
+    workId:'WORK-CONTROL-PORT',
+    revision:boardRevision,
+    updatedAt:'2026-09-18T07:00:00.000Z',
+    audit:[],
+    pins:[{
+      pinId:'pin-control-port',
+      workId:'WORK-CONTROL-PORT',
+      title:'Control Port',
+      detail:'',
+      status:'OPEN',
+      ownerEmployeeId:null,
+      touchedBy:[],
+      result:null,
+      nextAction:null,
+      evidence:[],
+      links:[],
+      revision:1,
+      createdAt:'2026-09-18T07:00:00.000Z',
+      updatedAt:'2026-09-18T07:00:00.000Z',
+    }],
+  };
+  const boardBridge = {
+    readBoard:async () => structuredClone(boardState),
+    claimPins:async ({ employeeId }) => {
+      boardRevision += 1;
+      boardState = {
+        ...boardState,
+        revision:boardRevision,
+        updatedAt:'2026-09-18T07:04:00.000Z',
+        pins:[{ ...boardState.pins[0], status:'DOING', ownerEmployeeId:employeeId, touchedBy:[employeeId], revision:2 }],
+      };
+      return { status:'VERIFIED', boardRevision, receipt:{ type:'BOARD_READ', readbackRevision:boardRevision } };
+    },
+    returnPins:async () => ({ status:'VERIFIED', boardRevision }),
+    recoverEmergency:async () => ({ status:'VERIFIED', boardRevision, recovered:true }),
+  };
+  return { withSession, ledgerBridge, storeBridge, boardBridge };
 }
 
 test('Control Port read surfaces carry owner revision and updatedAt', async () => {
@@ -188,4 +228,60 @@ test('Control Port derived balance cannot be committed', async () => {
   const port = createLighthouseControlPort(fixture());
   const proposal = port.propose({ requestId:'balance-1', capabilityId:'finance.balance' });
   await assert.rejects(() => port.commit(proposal), /MUTATION_FORBIDDEN/);
+});
+
+
+test('Control Port exposes Centre Board read and direct claim with board readback evidence', async () => {
+  const { createLighthouseControlPort, CONTROL_PORT_GUARD } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+
+  const read = await port.query({ capabilityId:'centreBoard.read' });
+  assert.equal(read.status, 'OK');
+  assert.equal(read.value.boardId, 'board-control-port');
+  assert.equal(read.value.revision, 1);
+
+  const proposal = port.propose({
+    requestId:'board-claim-1',
+    capabilityId:'centreBoard.claim',
+    payload:{
+      workId:'WORK-CONTROL-PORT',
+      employeeId:'GO-BOARD-1',
+      pinIds:['pin-control-port'],
+      expectedRevision:1,
+    },
+  });
+  assert.equal(proposal.guard, CONTROL_PORT_GUARD.DIRECT);
+  assert.equal(proposal.owner, 'LIGHTHOUSE:CENTRE_BOARD');
+
+  const result = await port.commit(proposal);
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.evidence.revision, 2);
+  assert.equal(result.evidence.pins[0].ownerEmployeeId, 'GO-BOARD-1');
+  assert.equal(result.beforeRevision, 7, 'runtime owner revision remains independent from board revision');
+  assert.equal(result.afterRevision, 7);
+});
+
+test('Command Pack preserves per-item readback evidence', async () => {
+  const { createLighthouseControlPort } = await import(moduleUrl);
+  const port = createLighthouseControlPort(fixture());
+  const result = await port.commit(port.propose({
+    requestId:'pack-evidence',
+    capabilityId:'system.commandPack',
+    payload:{
+      commands:[{
+        requestId:'pack-evidence-board',
+        capabilityId:'centreBoard.claim',
+        payload:{
+          workId:'WORK-CONTROL-PORT',
+          employeeId:'GO-BOARD-2',
+          pinIds:['pin-control-port'],
+          expectedRevision:1,
+        },
+      }],
+    },
+  }), { confirmed:true });
+
+  assert.equal(result.status, 'VERIFIED');
+  assert.equal(result.evidence.items[0].evidence.revision, 2);
+  assert.equal(result.evidence.items[0].evidence.pins[0].ownerEmployeeId, 'GO-BOARD-2');
 });
