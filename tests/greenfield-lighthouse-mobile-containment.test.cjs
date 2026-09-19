@@ -35,3 +35,33 @@ test('LIGHTHOUSE mobile chat keeps header bubbles actions and composer inside th
   assert.match(composer, /width\s*:\s*100%/, 'composer must remain inside the viewport');
   assert.match(message, /overflow-wrap\s*:\s*anywhere/, 'long human text must wrap instead of clipping the bubble');
 });
+
+
+test('LIGHTHOUSE GO report stays bounded to the Android viewport without horizontal pan', () => {
+  const goCssPath = path.join(root, 'lighthouse-next/go-board-live.css');
+  const css = read(goCssPath);
+  const page = ruleBody(css, '.go-page');
+  const card = ruleBody(css, '.go-live-card');
+  const rail = ruleBody(css, '.go-route-rail');
+  const boardCard = ruleBody(css, '.go-board-card');
+  const pending = ruleBody(css, '.go-pending-item');
+  const projectCard = ruleBody(css, '.go-project-source-card');
+
+  assert.match(page, /width\s*:\s*100%/, 'GO page must own only the available viewport width');
+  assert.match(page, /max-width\s*:\s*100%/, 'GO page must not grow beyond the viewport');
+  assert.match(page, /min-width\s*:\s*0/, 'GO page grid must be allowed to shrink on Android');
+  assert.match(page, /overflow-x\s*:\s*clip/, 'GO page must clip accidental horizontal overflow');
+  assert.match(page, /overscroll-behavior-x\s*:\s*none/, 'GO page must not rubber-band sideways');
+  assert.match(page, /touch-action\s*:\s*pan-y/, 'GO report must keep vertical touch scrolling while rejecting horizontal pan');
+
+  for (const [name, body] of [
+    ['live card', card],
+    ['route rail', rail],
+    ['board card', boardCard],
+    ['pending row', pending],
+    ['project source card', projectCard],
+  ]) {
+    assert.match(body, /max-width\s*:\s*100%/, `${name} must stay inside the GO report width`);
+    assert.match(body, /min-width\s*:\s*0/, `${name} must be shrinkable on narrow Android viewports`);
+  }
+});
