@@ -1,3 +1,9 @@
+import {
+  createCommandInputFile,
+  createCommandOutputFile,
+  createBoardProjectionFromOutput,
+} from './command-file.mjs';
+
 export function createLighthouseControlPortSync({ runtime, now = () => new Date().toISOString() } = {}) {
   if (!runtime || typeof runtime.receive !== 'function' || typeof runtime.outbox !== 'function') {
     throw new Error('LIGHTHOUSE_CONTROL_PORT_SYNC_RUNTIME_REQUIRED');
@@ -5,7 +11,10 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
 
   async function reconcile({
     pullInbox,
+    pullInputFile,
     pushOutbox,
+    pushOutputFile,
+    pushBoardProjection,
     pushState,
   } = {}) {
     const report = {
@@ -14,11 +23,27 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
       received:0,
       processed:0,
       pushedReceipts:0,
+      inputFileId:null,
+      outputFileId:null,
+      boardProjection:false,
       snapshotFreshness:null,
       errors:[],
     };
+    let inputFile = null;
 
-    if (typeof pullInbox === 'function') {
+    if (typeof pullInputFile === 'function') {
+      try {
+        inputFile = createCommandInputFile(await pullInputFile());
+        report.inputFileId = inputFile.fileId;
+        for (const command of inputFile.commands) {
+          runtime.receive(command);
+          report.received += 1;
+        }
+      } catch (error) {
+        report.transport = 'OFFLINE';
+        report.errors.push(String(error?.message || error || 'PULL_INPUT_FILE_FAILED'));
+      }
+    } else if (typeof pullInbox === 'function') {
       try {
         const remote = await pullInbox();
         const commands = Array.isArray(remote) ? remote : [];
@@ -62,12 +87,35 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
       }
     }
 
+    if (inputFile) {
+      try {
+        const outputFile = createCommandOutputFile({
+          fileId:'LH-OUT-' + inputFile.fileId,
+          inputFileId:inputFile.fileId,
+          packageId:inputFile.packageId,
+          workId:inputFile.workId,
+          results:receipts,
+          createdAt:now(),
+        });
+        report.outputFileId = outputFile.fileId;
+        if (typeof pushOutputFile === 'function') await pushOutputFile(outputFile);
+        if (typeof pushBoardProjection === 'function') {
+          await pushBoardProjection(createBoardProjectionFromOutput(outputFile));
+          report.boardProjection = true;
+        }
+      } catch (error) {
+        report.errors.push(String(error?.message || error || 'PUSH_OUTPUT_FILE_FAILED'));
+      }
+    }
+
     if (typeof pushState === 'function') {
       try {
         await pushState({
           work:runtime.workState(),
           snapshot,
           syncedAt:now(),
+          outputFileId:report.outputFileId,
+          boardProjection:report.boardProjection,
         });
       } catch (error) {
         report.transport = 'OFFLINE';
