@@ -77,6 +77,8 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
     }
 
     const receipts = runtime.outbox();
+    let outputFile = null;
+    let boardProjection = null;
     if (typeof pushOutbox === 'function') {
       try {
         await pushOutbox(receipts);
@@ -89,7 +91,7 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
 
     if (inputFile) {
       try {
-        const outputFile = createCommandOutputFile({
+        outputFile = createCommandOutputFile({
           fileId:'LH-OUT-' + inputFile.fileId,
           inputFileId:inputFile.fileId,
           packageId:inputFile.packageId,
@@ -100,7 +102,8 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
         report.outputFileId = outputFile.fileId;
         if (typeof pushOutputFile === 'function') await pushOutputFile(outputFile);
         if (typeof pushBoardProjection === 'function') {
-          await pushBoardProjection(createBoardProjectionFromOutput(outputFile));
+          boardProjection = createBoardProjectionFromOutput(outputFile);
+          await pushBoardProjection(boardProjection);
           report.boardProjection = true;
         }
       } catch (error) {
@@ -116,6 +119,8 @@ export function createLighthouseControlPortSync({ runtime, now = () => new Date(
           syncedAt:now(),
           outputFileId:report.outputFileId,
           boardProjection:report.boardProjection,
+          outputFile,
+          boardProjection,
         });
       } catch (error) {
         report.transport = 'OFFLINE';
