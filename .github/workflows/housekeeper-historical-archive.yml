@@ -1,0 +1,56 @@
+name: Housekeeper Historical Archive
+
+on:
+  push:
+    branches:
+      - 'housekeeping/archive-historical-docs-20260920-lighthouse'
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build historical archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf 'housekeeper-lighthouse-historical-docs-20260920.tar.gz' \
+      'docs/superpowers/handoffs/2026-09-14-lighthouse-unified-logic-recovery-handoff.md' \
+      'docs/superpowers/plans/2026-09-06-lighthouse-user-first-demo.md' \
+      'docs/superpowers/plans/2026-09-07-lighthouse-android-release.md' \
+      'docs/superpowers/plans/2026-09-07-lighthouse-store-truth-demo.md' \
+      'docs/superpowers/plans/2026-09-09-go-client-fastwork.md' \
+      'docs/superpowers/plans/2026-09-09-lighthouse-chat-real-income-ledger.md' \
+      'docs/superpowers/plans/2026-09-09-lighthouse-runtime-gate-recovery.md' \
+      'docs/superpowers/plans/2026-09-10-lighthouse-real-store-product-ledger.md' \
+      'docs/superpowers/plans/2026-09-11-lighthouse-live-adoption-continuation.md' \
+      'docs/superpowers/plans/2026-09-13-go-patchmaster-owner-logic-seal.md' \
+      'docs/superpowers/plans/2026-09-14-lighthouse-unified-behavior-recovery.md' \
+      'docs/superpowers/plans/2026-09-14-lighthouse-unified-logic-recovery.md' \
+      'docs/superpowers/reviews/2026-09-09-runtime-gate-checkpoint-1.md' \
+      'docs/superpowers/specs/2026-09-06-lighthouse-user-first-demo-design.md' \
+      'docs/superpowers/specs/2026-09-07-lighthouse-android-release-architecture-design.md' \
+      'docs/superpowers/specs/2026-09-07-lighthouse-store-truth-demo.md' \
+      'docs/superpowers/specs/2026-09-09-go-client-fastwork-design.md' \
+      'docs/superpowers/specs/2026-09-09-lighthouse-chat-real-income-ledger-design.md' \
+      'docs/superpowers/specs/2026-09-09-lighthouse-runtime-gate-recovery-design.md' \
+      'docs/superpowers/specs/2026-09-10-lighthouse-real-store-product-ledger-design.md' \
+      'docs/superpowers/specs/2026-09-11-lighthouse-figma-live-adoption-design.md' \
+      'docs/superpowers/specs/2026-09-13-go-patchmaster-owner-logic-seal-design.md' \
+      'docs/superpowers/specs/2026-09-14-lighthouse-unified-behavior-recovery-design.md' \
+      'docs/superpowers/specs/2026-09-14-lighthouse-unified-logic-recovery-design.md'
+          sha256sum 'housekeeper-lighthouse-historical-docs-20260920.tar.gz' > 'housekeeper-lighthouse-historical-docs-20260920.tar.gz.sha256'
+          printf 'repository=%s\nbranch=%s\ncommit=%s\n' 'pureekangraw-ops/ygph-metropolis' 'housekeeping/archive-historical-docs-20260920-lighthouse' "$GITHUB_SHA" > ARCHIVE-METADATA.txt
+      - name: Upload historical archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'housekeeper-lighthouse-historical-docs-20260920'
+          path: |
+            housekeeper-lighthouse-historical-docs-20260920.tar.gz
+            housekeeper-lighthouse-historical-docs-20260920.tar.gz.sha256
+            ARCHIVE-METADATA.txt
+          if-no-files-found: error
+          retention-days: 30
