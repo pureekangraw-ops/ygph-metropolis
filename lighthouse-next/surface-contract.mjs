@@ -2,6 +2,7 @@ import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
 import { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
+import { importRideMapPackage, openRideMap, readRideMapNativeStatus } from './ride-map-native.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
@@ -482,7 +483,10 @@ async function renderRide() {
   list.className = 'detail-list';
   manualDetailContent.append(list);
   try {
-    const truth = await ledgerBridge.readRideTruth();
+    const [truth, mapTruth] = await Promise.all([
+      ledgerBridge.readRideTruth(),
+      ledgerBridge.readRideMapTruth(),
+    ]);
     const stateLabel = truth.todayRoundState === 'ACTIVE' ? 'กำลังวิ่ง' : truth.todayRoundState === 'COMPLETED' ? 'จบรอบแล้ว' : 'ยังไม่เริ่มรอบ';
     list.append(
       makeRow('รอบวันนี้', stateLabel),
@@ -492,6 +496,82 @@ async function renderRide() {
       makeRow('ค่าใช้จ่าย', formatSatang(truth.expenseSatang)),
       makeRow('เครดิตค้างรับ', formatSatang(truth.pendingCreditSatang)),
     );
+
+    list.append(makeSectionHeading('แผนที่งาน', 'อ่านจุดรับ–ส่งจาก RIDE owner เท่านั้น'));
+    const mapCard = document.createElement('div');
+    mapCard.className = 'auth-form manual-direct-form manual-ride-map';
+    const job = mapTruth.currentJob;
+    if (!job) {
+      mapCard.append(makeRow('งานล่าสุด', 'ยังไม่มีงานในรอบ'));
+    } else {
+      mapCard.append(makeRow('งานล่าสุด', job.recordId || '—'));
+      const locationText = location => location ? (location.label || location.address || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`) : 'ยังไม่มีพิกัด';
+      mapCard.append(
+        makeRow('จุดรับ', locationText(job.pickup)),
+        makeRow('จุดส่ง', locationText(job.dropoff)),
+      );
+    }
+
+    const mapStatus = makeStatus();
+    const actions = document.createElement('div');
+    actions.className = 'action-row';
+    const openMapButton = document.createElement('button');
+    openMapButton.type = 'button';
+    openMapButton.className = 'primary-button';
+    openMapButton.textContent = 'เปิดแผนที่';
+    openMapButton.disabled = !job?.hasGeography;
+
+    const importButton = document.createElement('button');
+    importButton.type = 'button';
+    importButton.className = 'secondary-button';
+    importButton.textContent = 'ติดตั้งแผนที่ Local';
+
+    let nativeStatus;
+    try {
+      nativeStatus = await readRideMapNativeStatus();
+      if (!nativeStatus.available) {
+        mapStatus.textContent = 'แผนที่ Native ยังไม่พร้อมบนเครื่องนี้';
+      } else if (nativeStatus.packageState === 'ACTIVE') {
+        const packageLabel = [nativeStatus.region, nativeStatus.packageVersion].filter(Boolean).join(' · ');
+        mapStatus.textContent = packageLabel ? `Local map พร้อม · ${packageLabel}` : 'Local map พร้อม';
+      } else {
+        mapStatus.textContent = 'ยังไม่ได้ติดตั้ง Local map';
+      }
+    } catch {
+      mapStatus.textContent = 'ยังอ่านสถานะแผนที่ Native ไม่ได้';
+    }
+
+    openMapButton.addEventListener('click', async () => {
+      mapStatus.textContent = 'กำลังเปิดแผนที่…';
+      try {
+        await openRideMap({ job });
+        mapStatus.textContent = 'เปิดแผนที่แล้ว';
+      } catch (error) {
+        const code = String(error?.message || error || '');
+        mapStatus.textContent = code.includes('LOCAL_MAP_NOT_INSTALLED')
+          ? 'ยังไม่มี Local map · ติดตั้งแผนที่ก่อน'
+          : code.includes('GEOGRAPHY_REQUIRED')
+            ? 'งานล่าสุดยังไม่มีพิกัด'
+            : 'ยังเปิดแผนที่ไม่ได้';
+      }
+    });
+
+    importButton.addEventListener('click', async () => {
+      mapStatus.textContent = 'กำลังเลือกไฟล์ PMTiles…';
+      try {
+        const result = await importRideMapPackage();
+        const label = [result?.region, result?.packageVersion].filter(Boolean).join(' · ');
+        mapStatus.textContent = label ? `ติดตั้ง Local map แล้ว · ${label}` : 'ติดตั้ง Local map แล้ว';
+      } catch (error) {
+        const code = String(error?.message || error || '');
+        mapStatus.textContent = code.includes('CANCELLED') ? 'ยกเลิกการเลือกแผนที่' : 'ยังติดตั้ง Local map ไม่สำเร็จ';
+      }
+    });
+
+    if (!nativeStatus?.available) importButton.disabled = true;
+    actions.append(openMapButton, importButton);
+    mapCard.append(actions, mapStatus);
+    list.append(mapCard);
   } catch {
     list.append(makeRow('สถานะ', 'ยังอ่าน Ride Owner ไม่ได้'));
   }
