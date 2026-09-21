@@ -10,6 +10,23 @@ function positiveSatang(value, code = 'INVALID_RIDE_AMOUNT') {
   return amount;
 }
 
+function optionalRideLocation(value, kind) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`INVALID_RIDE_${kind}_LOCATION`);
+
+  const lat = Number(value.lat);
+  const lng = Number(value.lng);
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new Error(`INVALID_RIDE_${kind}_LAT`);
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) throw new Error(`INVALID_RIDE_${kind}_LNG`);
+
+  const location = { lat, lng };
+  const label = String(value.label ?? '').trim();
+  const address = String(value.address ?? '').trim();
+  if (label) location.label = label;
+  if (address) location.address = address;
+  return location;
+}
+
 function provenance(command, at) {
   return { origin:'LIVE_COMMAND', commandId:command.commandId, idempotencyKey:command.idempotencyKey, domain:'RIDE', at };
 }
@@ -166,10 +183,15 @@ export function registerRideDomainCommands(runtime, { now = () => new Date().toI
     activeRound(domainState, roundId);
     const paymentMode = text(payload.paymentMode, 'INVALID_RIDE_PAYMENT_MODE');
     if (paymentMode !== 'CASH' && paymentMode !== 'CREDIT') throw new Error(`INVALID_RIDE_PAYMENT_MODE:${paymentMode}`);
+    const pickup = optionalRideLocation(payload.pickup, 'PICKUP');
+    const dropoff = optionalRideLocation(payload.dropoff, 'DROPOFF');
     const at = now();
     createEntry(domainState, {
       recordId:text(payload.jobId, 'INVALID_RIDE_JOB_ID'), source:'RIDE', type:'JOB', roundId,
-      amountSatang:positiveSatang(payload.amountSatang), paymentMode, note:String(payload.note || ''), status:'COMPLETED', createdAt:at, updatedAt:at,
+      amountSatang:positiveSatang(payload.amountSatang), paymentMode, note:String(payload.note || ''),
+      ...(pickup ? { pickup } : {}),
+      ...(dropoff ? { dropoff } : {}),
+      status:'COMPLETED', createdAt:at, updatedAt:at,
     }, command, at);
   });
 
