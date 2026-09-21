@@ -52,13 +52,10 @@ test('release manifest strips unused MapLibre permissions and contains no proof 
   assert.match(patched, /android:name=".RideMapActivity"/);
   assert.match(patched, /RideMapActivity"[\s\S]*android:exported="false"/);
   assert.doesNotMatch(patched, /android\.permission\.ACCESS_NETWORK_STATE[^>]+tools:node="remove"/);
-  for (const permission of [
-    'ACCESS_WIFI_STATE',
-    'ACCESS_COARSE_LOCATION',
-    'ACCESS_FINE_LOCATION',
-  ]) {
-    assert.match(patched, new RegExp(`android\\.permission\\.${permission}[^>]+tools:node="remove"`));
-  }
+  assert.match(patched, /android:name="android.permission.ACCESS_COARSE_LOCATION"/);
+  assert.match(patched, /android:name="android.permission.ACCESS_FINE_LOCATION"/);
+  assert.doesNotMatch(patched, /android.permission.ACCESS_BACKGROUND_LOCATION/);
+  assert.match(patched, /android\.permission\.ACCESS_WIFI_STATE[^>]+tools:node="remove"/);
 });
 
 test('generated MainActivity registers LighthouseRideMap native plugin once', () => {
@@ -102,6 +99,11 @@ test('overlay materializes debug-only proof surface without mutating Ride truth'
   assert.match(debugManifest, /android:exported="true"/);
   assert.match(rideActivity, /VectorSource\("basemap", "pmtiles:\/\/file:\/\//);
   assert.match(rideActivity, /GeoJsonSource/);
+  assert.match(rideActivity, /ACCESS_COARSE_LOCATION/);
+  assert.match(rideActivity, /ACCESS_FINE_LOCATION/);
+  assert.match(rideActivity, /removeUpdates\(locationListener\)/);
+  assert.match(rideActivity, /ตำแหน่งฉัน/);
+  assert.doesNotMatch(rideActivity, /ACCESS_BACKGROUND_LOCATION/);
   assert.match(ridePlugin, /@CapacitorPlugin\(name = "LighthouseRideMap"\)/);
   assert.match(ridePlugin, /ACTION_OPEN_DOCUMENT/);
   assert.match(ridePlugin, /LOCAL_MAP_PM_TILES_VECTOR_REQUIRED/);
