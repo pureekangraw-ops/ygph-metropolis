@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -63,7 +63,51 @@ export function patchManifestForLocalMapProof(input) {
     const at = manifestOpen.index + manifestOpen[0].length;
     manifest = manifest.slice(0, at) + `\n${removals}` + manifest.slice(at);
   }
+
+  if (!manifest.includes('android:name=".RideMapActivity"')) {
+    const end = manifest.indexOf('</application>');
+    if (end < 0) throw new Error('LOCAL_MAP_NATIVE_APPLICATION_CLOSE_MISSING');
+    const activity = [
+      '    <activity',
+      '      android:name=".RideMapActivity"',
+      '      android:exported="false" />',
+      '',
+    ].join('\n');
+    manifest = manifest.slice(0, end) + activity + manifest.slice(end);
+  }
   return manifest;
+}
+
+export function patchMainActivityForRideMapPlugin(input) {
+  if (input.includes('registerPlugin(LighthouseRideMapPlugin.class)')) return input;
+  let source = input;
+  if (!source.includes('import android.os.Bundle;')) {
+    const packageEnd = source.indexOf(';');
+    if (packageEnd < 0) throw new Error('LOCAL_MAP_NATIVE_MAIN_ACTIVITY_PACKAGE_MISSING');
+    source = source.slice(0, packageEnd + 1) + '\n\nimport android.os.Bundle;' + source.slice(packageEnd + 1);
+  }
+
+  const emptyClass = /public class MainActivity extends BridgeActivity\s*\{\s*\}/;
+  if (emptyClass.test(source)) {
+    return source.replace(emptyClass, `public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        registerPlugin(LighthouseRideMapPlugin.class);
+    }
+}`);
+  }
+
+  const close = source.lastIndexOf('}');
+  if (close < 0) throw new Error('LOCAL_MAP_NATIVE_MAIN_ACTIVITY_CLASS_MISSING');
+  const method = `
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        registerPlugin(LighthouseRideMapPlugin.class);
+    }
+`;
+  return source.slice(0, close) + method + source.slice(close);
 }
 
 export function debugProofManifest() {
@@ -201,7 +245,12 @@ export async function applyLocalMapNativeProof(androidRoot) {
   const gradlePath = join(androidRoot, 'app', 'build.gradle');
   const manifestPath = join(androidRoot, 'app', 'src', 'main', 'AndroidManifest.xml');
   const debugManifestPath = join(androidRoot, 'app', 'src', 'debug', 'AndroidManifest.xml');
-  const activityPath = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse', 'LocalPmtilesProofActivity.java');
+  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse');
+  const activityPath = join(javaRoot, 'LocalPmtilesProofActivity.java');
+  const rideMapActivityPath = join(javaRoot, 'RideMapActivity.java');
+  const rideMapPluginPath = join(javaRoot, 'LighthouseRideMapPlugin.java');
+  const mainActivityPath = join(javaRoot, 'MainActivity.java');
+  const templateRoot = join('native-local-map');
 
   const gradle = patchGradleForLocalMapProof(await readFile(gradlePath, 'utf8'));
   await writeFile(gradlePath, gradle, 'utf8');
@@ -215,12 +264,21 @@ export async function applyLocalMapNativeProof(androidRoot) {
   await mkdir(dirname(activityPath), { recursive: true });
   await writeFile(activityPath, localPmtilesProofActivitySource(), 'utf8');
 
+  await copyFile(join(templateRoot, 'RideMapActivity.java'), rideMapActivityPath);
+  await copyFile(join(templateRoot, 'LighthouseRideMapPlugin.java'), rideMapPluginPath);
+
+  const mainActivity = patchMainActivityForRideMapPlugin(await readFile(mainActivityPath, 'utf8'));
+  await writeFile(mainActivityPath, mainActivity, 'utf8');
+
   return {
     maplibreVersion: MAPLIBRE_ANDROID_VERSION,
     gradlePath,
     manifestPath,
     debugManifestPath,
     activityPath,
+    rideMapActivityPath,
+    rideMapPluginPath,
+    mainActivityPath,
     proofActivity: PROOF_ACTIVITY,
   };
 }
