@@ -11,7 +11,7 @@ function source(name) {
 
 test('Ride exposes overview jobs summary and history inspection surfaces', () => {
   const html = source('index.html');
-  for (const view of ['overview','jobs','summary','history']) assert.match(html, new RegExp(`data-ride-view="${view}"`));
+  for (const view of ['overview','jobs','summary','history','map']) assert.match(html, new RegExp(`data-ride-view="${view}"`));
   assert.match(html, /id="rideStartRegion"/);
   assert.match(html, /id="rideActiveActions"/);
   assert.match(html, /id="rideCreditActions"/);
@@ -70,4 +70,17 @@ test('Ride UI boundary is isolated behind its own module', () => {
   assert.doesNotMatch(app, /function renderRide/);
   assert.doesNotMatch(app, /rideJobForm/);
   assert.doesNotMatch(app, /rideExpenseForm/);
+});
+
+
+test('Ride Map stays inside Ride and consumes owner geography through the native bridge', () => {
+  const html = source('index.html');
+  const rideUi = source('ui/ride-ui.mjs');
+  assert.match(html, /data-ride-view="map"/);
+  assert.match(html, /id="rideMapOpenBtn"/);
+  assert.match(html, /id="rideMapImportBtn"/);
+  assert.match(rideUi, /openRideMap\(\{ job:mapJob\(\) \}\)/);
+  assert.match(rideUi, /openRideNavigation/);
+  assert.match(rideUi, /readRideMapNativeStatus/);
+  assert.doesNotMatch(html, /data-area-page="map"/);
 });
