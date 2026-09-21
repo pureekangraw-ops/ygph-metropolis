@@ -20,6 +20,11 @@ jobs:
         uses: actions/setup-node@v7.0.0
         with:
           node-version: 22
+      - name: Use Java 21 for native Android proof
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Install locked dependencies
         run: npm ci
       - name: Run Greenfield tests, syntax, and UTF-8 gates
@@ -59,6 +64,29 @@ jobs:
             }
           }
           NODE
+      - name: Generate and compile native local PMTiles proof
+        working-directory: android-shell
+        run: |
+          npx cap add android
+          npx cap sync android
+          npm run android:map:apply
+          npm run android:security:apply
+          npm run android:map:fixture -- release/gate1-proof.pmtiles
+          cd android
+          ./gradlew :app:assembleDebug :app:processReleaseMainManifest
+          cd ..
+          npm run android:security:verify
+      - name: Upload Gate 1 native proof APK and fixture
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-gate1-local-pmtiles-${{ github.sha }}
+          path: |
+            android-shell/android/app/build/outputs/apk/debug/app-debug.apk
+            android-shell/release/gate1-proof.pmtiles
+            android-shell/release/android-security-evidence.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Stage canonical LIGHTHOUSE production bundle
         run: node scripts/stage-lighthouse-next-bundle.mjs .lighthouse-production
       - name: Reject legacy production shell
