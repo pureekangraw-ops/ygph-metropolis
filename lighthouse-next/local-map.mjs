@@ -42,6 +42,10 @@ export function assertLocalMapUri(value) {
   return uri;
 }
 
+function localMapUriProtocol(value) {
+  return new URL(assertLocalMapUri(value)).protocol;
+}
+
 export function normalizeMapPackageMetadata(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('LOCAL_MAP_METADATA_REQUIRED');
   const format = text(input.format, 'LOCAL_MAP_FORMAT_REQUIRED').toUpperCase();
@@ -74,24 +78,37 @@ export function createLocalPmtilesSource({ uri, metadata }) {
   });
 }
 
-export function createLocalMapPackageRecord({ uri, metadata, state = 'STAGED', now = () => new Date().toISOString() }) {
+export function createLocalMapPackageRecord({ uri = null, metadata = null, state = 'STAGED', reason = null, now = () => new Date().toISOString() }) {
   if (!PACKAGE_STATES.has(state)) throw new Error(`LOCAL_MAP_PACKAGE_STATE_INVALID:${state}`);
-  const source = createLocalPmtilesSource({ uri, metadata });
   const timestamp = text(now(), 'LOCAL_MAP_TIMESTAMP_REQUIRED');
+  const isRecovery = state === 'RECOVERY_REQUIRED';
+  let source;
+  if (isRecovery) {
+    source = {
+      type: LOCAL_MAP_TYPE,
+      uri: uri == null ? null : assertLocalMapUri(uri),
+      metadata: metadata == null ? null : normalizeMapPackageMetadata(metadata),
+      offlineOnly: true,
+      networkAllowed: false,
+    };
+  } else {
+    source = createLocalPmtilesSource({ uri, metadata });
+    if (state === 'ACTIVE' && localMapUriProtocol(uri) !== 'file:') {
+      throw new Error('LOCAL_MAP_ACTIVE_URI_MUST_BE_STAGED_FILE');
+    }
+  }
   return Object.freeze({
     ...source,
     state,
-    stagedAt: timestamp,
+    stagedAt: isRecovery ? null : timestamp,
     activatedAt: state === 'ACTIVE' ? timestamp : null,
+    recoveryAt: isRecovery ? timestamp : null,
+    recoveryReason: isRecovery ? text(reason, 'LOCAL_MAP_RECOVERY_REASON_REQUIRED') : null,
   });
 }
 
-export function describeLocalMapRecovery(reason = 'แผนที่ออฟไลน์ใช้ไม่ได้ ต้องเลือกหรือนำเข้าแพ็กเกจใหม่') {
-  return Object.freeze({
-    state: 'RECOVERY_REQUIRED',
-    reason: text(reason, 'LOCAL_MAP_RECOVERY_REASON_REQUIRED'),
-    networkAllowed: false,
-  });
+export function describeLocalMapRecovery(reason, options = {}) {
+  return createLocalMapPackageRecord({ ...options, state: 'RECOVERY_REQUIRED', reason });
 }
 
 export const LOCAL_MAP_CONTRACT = Object.freeze({
@@ -99,6 +116,8 @@ export const LOCAL_MAP_CONTRACT = Object.freeze({
   type: LOCAL_MAP_TYPE,
   storageProtocols: Object.freeze([...LOCAL_STORAGE_PROTOCOLS]),
   packageStates: Object.freeze([...PACKAGE_STATES]),
+  contentUriRole: 'IMPORT_ONLY',
+  activeUriProtocol: 'file:',
   backgroundLocation: false,
   networkFallback: false,
 });
