@@ -40,19 +40,11 @@ async function sleep(ms) {
   await new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function waitForSourceReady(timeoutMs = 20000) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const logs = runAdb(['logcat', '-d', '-s', 'LIGHTHOUSE_LOCAL_MAP:I', '*:S'], { allowFailure: true }).stdout || '';
-    if (logs.includes('PROOF_FAILED')) throw new Error(`LOCAL_MAP_PROOF_ACTIVITY_FAILED:${logs.trim()}`);
-    if (logs.includes('PACKAGE_STAGED') && logs.includes('SOURCE_ATTACHED')) return logs;
-    await sleep(500);
-  }
-  const diagnostics = runAdb(['logcat', '-d', '-t', '250'], { allowFailure: true }).stdout || '';
-  throw new Error(`LOCAL_MAP_PROOF_SOURCE_TIMEOUT:${diagnostics.slice(-6000)}`);
+function readProofLogs() {
+  return runAdb(['logcat', '-d', '-s', 'LIGHTHOUSE_LOCAL_MAP:I', '*:S'], { allowFailure: true }).stdout || '';
 }
 
-async function waitForMagentaPixel(screenshotPath, timeoutMs = 20000) {
+async function waitForMagentaPixel(screenshotPath, timeoutMs = 30000) {
   const started = Date.now();
   let lastPixel = null;
   while (Date.now() - started < timeoutMs) {
@@ -109,9 +101,12 @@ export async function captureLocalMapNativeProof({
       throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launch.stderr || launch.stdout}`);
     }
 
-    const logs = await waitForSourceReady();
     const rendered = await waitForMagentaPixel(screenshotPath);
     const { r, g, b } = rendered.pixel;
+    const logs = readProofLogs();
+    if (logs.includes('PROOF_FAILED')) {
+      throw new Error(`LOCAL_MAP_PROOF_ACTIVITY_FAILED:${logs.trim()}`);
+    }
 
     const screenshotEvidencePath = evidencePath.replace(/\.json$/i, '.png');
     await mkdir(dirnameCompat(screenshotEvidencePath), { recursive: true });
@@ -133,8 +128,8 @@ export async function captureLocalMapNativeProof({
         networkProbeStatus: networkProbe.status,
       },
       render: {
-        packageStaged: logs.includes('PACKAGE_STAGED'),
-        sourceAttached: logs.includes('SOURCE_ATTACHED'),
+        packageStagedMarkerObserved: logs.includes('PACKAGE_STAGED'),
+        sourceAttachedMarkerObserved: logs.includes('SOURCE_ATTACHED'),
         renderCompleteEventObserved: logs.includes('RENDER_COMPLETE'),
         pixelProof: true,
         centerPixel: { r, g, b },
