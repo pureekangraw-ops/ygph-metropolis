@@ -312,7 +312,7 @@ export function installLighthouseTransferForm({
     }
   });
 
-  status.textContent = `พร้อม · ${catalog.length} capabilities · เขียนได้ ${writable.length}`;
+  status.textContent = `พร้อม · จุดข้อมูลทั้งหมด ${catalog.length} · ส่งเข้าได้ ${writable.length}`;
   return true;
 }
 
