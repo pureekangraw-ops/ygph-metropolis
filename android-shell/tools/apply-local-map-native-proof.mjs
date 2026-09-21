@@ -52,7 +52,6 @@ export function patchManifestForLocalMapProof(input) {
   let manifest = ensureToolsNamespace(input);
   const manifestOpen = /<manifest\b[^>]*>/s.exec(manifest);
   const removals = [
-    'android.permission.ACCESS_NETWORK_STATE',
     'android.permission.ACCESS_WIFI_STATE',
     'android.permission.ACCESS_COARSE_LOCATION',
     'android.permission.ACCESS_FINE_LOCATION',
