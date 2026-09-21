@@ -53,8 +53,6 @@ export function patchManifestForLocalMapProof(input) {
   const manifestOpen = /<manifest\b[^>]*>/s.exec(manifest);
   const removals = [
     'android.permission.ACCESS_WIFI_STATE',
-    'android.permission.ACCESS_COARSE_LOCATION',
-    'android.permission.ACCESS_FINE_LOCATION',
   ].filter(permission => !manifest.includes(`android:name="${permission}" tools:node="remove"`))
     .map(permission => `  <uses-permission android:name="${permission}" tools:node="remove" />`)
     .join('\n');
@@ -62,6 +60,18 @@ export function patchManifestForLocalMapProof(input) {
   if (removals) {
     const at = manifestOpen.index + manifestOpen[0].length;
     manifest = manifest.slice(0, at) + `\n${removals}` + manifest.slice(at);
+  }
+
+  const foregroundLocationPermissions = [
+    'android.permission.ACCESS_COARSE_LOCATION',
+    'android.permission.ACCESS_FINE_LOCATION',
+  ].filter(permission => !manifest.includes(`android:name="${permission}"`))
+    .map(permission => `  <uses-permission android:name="${permission}" />`)
+    .join('\n');
+  if (foregroundLocationPermissions) {
+    const open = /<manifest\b[^>]*>/s.exec(manifest);
+    const at = open.index + open[0].length;
+    manifest = manifest.slice(0, at) + `\n${foregroundLocationPermissions}` + manifest.slice(at);
   }
 
   if (!manifest.includes('android:name=".RideMapActivity"')) {
