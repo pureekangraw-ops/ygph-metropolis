@@ -19,8 +19,12 @@ function runAdb(args, { allowFailure = false, binary = false } = {}) {
   return result;
 }
 
-function shell(...args) {
-  return runAdb(['shell', ...args]);
+function shell(...items) {
+  let options = {};
+  if (items.length && typeof items[items.length - 1] === 'object' && !Array.isArray(items[items.length - 1])) {
+    options = items.pop();
+  }
+  return runAdb(['shell', ...items], options);
 }
 
 function readSetting(namespace, key) {
