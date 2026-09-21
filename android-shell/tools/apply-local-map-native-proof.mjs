@@ -64,20 +64,19 @@ export function patchManifestForLocalMapProof(input) {
     const at = manifestOpen.index + manifestOpen[0].length;
     manifest = manifest.slice(0, at) + `\n${removals}` + manifest.slice(at);
   }
-
-  if (!manifest.includes('android:name=".LocalPmtilesProofActivity"')) {
-    const end = manifest.indexOf('</application>');
-    if (end < 0) throw new Error('LOCAL_MAP_NATIVE_APPLICATION_CLOSE_MISSING');
-    const activity = [
-      '    <activity',
-      '      android:name=".LocalPmtilesProofActivity"',
-      '      android:exported="false"',
-      '      android:theme="@style/AppTheme.NoActionBarLaunch" />',
-      '',
-    ].join('\n');
-    manifest = manifest.slice(0, end) + activity + manifest.slice(end);
-  }
   return manifest;
+}
+
+export function debugProofManifest() {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <activity
+      android:name="com.yggdrasil.lighthouse.LocalPmtilesProofActivity"
+      android:exported="true" />
+  </application>
+</manifest>
+`;
 }
 
 export function localPmtilesProofActivitySource() {
@@ -89,7 +88,9 @@ import android.util.Log;
 import android.view.ViewGroup;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 import org.maplibre.android.MapLibre;
 import org.maplibre.android.camera.CameraPosition;
@@ -101,8 +102,30 @@ import org.maplibre.android.style.sources.RasterSource;
 
 public final class LocalPmtilesProofActivity extends Activity {
   private static final String TAG = "LIGHTHOUSE_LOCAL_MAP";
+  private static final String PROOF_ASSET = "local-map-proof/gate1-proof.pmtiles";
   private MapView mapView;
   private boolean renderReported = false;
+
+  private boolean stageProofPackage(File mapsRoot, File packageFile) {
+    if (!mapsRoot.isDirectory() && !mapsRoot.mkdirs()) {
+      Log.e(TAG, "PROOF_FAILED reason=managed_root_create");
+      return false;
+    }
+    if (packageFile.isFile()) return true;
+
+    try (InputStream input = getAssets().open(PROOF_ASSET);
+         FileOutputStream output = new FileOutputStream(packageFile, false)) {
+      byte[] buffer = new byte[8192];
+      int read;
+      while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+      output.flush();
+      Log.i(TAG, "PACKAGE_STAGED source=debug_asset managed=true");
+      return true;
+    } catch (IOException error) {
+      Log.e(TAG, "PROOF_FAILED reason=asset_stage", error);
+      return false;
+    }
+  }
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -111,6 +134,11 @@ public final class LocalPmtilesProofActivity extends Activity {
 
     File mapsRoot = new File(getFilesDir(), "maps");
     File packageFile = new File(mapsRoot, "gate1-proof.pmtiles");
+    if (!stageProofPackage(mapsRoot, packageFile)) {
+      finish();
+      return;
+    }
+
     try {
       String root = mapsRoot.getCanonicalPath() + File.separator;
       String candidate = packageFile.getCanonicalPath();
@@ -156,15 +184,15 @@ public final class LocalPmtilesProofActivity extends Activity {
     });
   }
 
-  @Override protected void onStart() { super.onStart(); mapView.onStart(); }
-  @Override protected void onResume() { super.onResume(); mapView.onResume(); }
-  @Override protected void onPause() { mapView.onPause(); super.onPause(); }
-  @Override protected void onStop() { mapView.onStop(); super.onStop(); }
-  @Override public void onLowMemory() { super.onLowMemory(); mapView.onLowMemory(); }
-  @Override protected void onDestroy() { mapView.onDestroy(); super.onDestroy(); }
+  @Override protected void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
+  @Override protected void onResume() { super.onResume(); if (mapView != null) mapView.onResume(); }
+  @Override protected void onPause() { if (mapView != null) mapView.onPause(); super.onPause(); }
+  @Override protected void onStop() { if (mapView != null) mapView.onStop(); super.onStop(); }
+  @Override public void onLowMemory() { super.onLowMemory(); if (mapView != null) mapView.onLowMemory(); }
+  @Override protected void onDestroy() { if (mapView != null) mapView.onDestroy(); super.onDestroy(); }
   @Override protected void onSaveInstanceState(Bundle outState) {
     super.onSaveInstanceState(outState);
-    mapView.onSaveInstanceState(outState);
+    if (mapView != null) mapView.onSaveInstanceState(outState);
   }
 }
 `;
@@ -173,6 +201,7 @@ public final class LocalPmtilesProofActivity extends Activity {
 export async function applyLocalMapNativeProof(androidRoot) {
   const gradlePath = join(androidRoot, 'app', 'build.gradle');
   const manifestPath = join(androidRoot, 'app', 'src', 'main', 'AndroidManifest.xml');
+  const debugManifestPath = join(androidRoot, 'app', 'src', 'debug', 'AndroidManifest.xml');
   const activityPath = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse', 'LocalPmtilesProofActivity.java');
 
   const gradle = patchGradleForLocalMapProof(await readFile(gradlePath, 'utf8'));
@@ -181,6 +210,9 @@ export async function applyLocalMapNativeProof(androidRoot) {
   const manifest = patchManifestForLocalMapProof(await readFile(manifestPath, 'utf8'));
   await writeFile(manifestPath, manifest, 'utf8');
 
+  await mkdir(dirname(debugManifestPath), { recursive: true });
+  await writeFile(debugManifestPath, debugProofManifest(), 'utf8');
+
   await mkdir(dirname(activityPath), { recursive: true });
   await writeFile(activityPath, localPmtilesProofActivitySource(), 'utf8');
 
@@ -188,6 +220,7 @@ export async function applyLocalMapNativeProof(androidRoot) {
     maplibreVersion: MAPLIBRE_ANDROID_VERSION,
     gradlePath,
     manifestPath,
+    debugManifestPath,
     activityPath,
     proofActivity: PROOF_ACTIVITY,
   };
