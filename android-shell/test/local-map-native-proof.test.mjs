@@ -108,6 +108,9 @@ test('overlay materializes debug-only proof surface without mutating Ride truth'
   assert.match(ridePlugin, /ACTION_OPEN_DOCUMENT/);
   assert.match(ridePlugin, /LOCAL_MAP_PM_TILES_VECTOR_REQUIRED/);
   assert.match(ridePlugin, /getFilesDir\(\), "maps"/);
+  assert.match(ridePlugin, /ACTIVE_FILE_SIZE_MISMATCH/);
+  assert.match(ridePlugin, /ACTIVE_HEADER_INVALID/);
+  assert.match(ridePlugin, /RECOVERY_REQUIRED/);
   assert.match(mainActivity, /registerPlugin\(LighthouseRideMapPlugin\.class\)/);
 });
 
