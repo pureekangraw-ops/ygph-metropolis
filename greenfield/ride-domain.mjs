@@ -10,14 +10,20 @@ function positiveSatang(value, code = 'INVALID_RIDE_AMOUNT') {
   return amount;
 }
 
+function rideCoordinate(value, min, max, code) {
+  if (value == null || typeof value === 'boolean') throw new Error(code);
+  if (typeof value === 'string' && !value.trim()) throw new Error(code);
+  const coordinate = Number(value);
+  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) throw new Error(code);
+  return coordinate;
+}
+
 function optionalRideLocation(value, kind) {
   if (value == null) return null;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`INVALID_RIDE_${kind}_LOCATION`);
 
-  const lat = Number(value.lat);
-  const lng = Number(value.lng);
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new Error(`INVALID_RIDE_${kind}_LAT`);
-  if (!Number.isFinite(lng) || lng < -180 || lng > 180) throw new Error(`INVALID_RIDE_${kind}_LNG`);
+  const lat = rideCoordinate(value.lat, -90, 90, `INVALID_RIDE_${kind}_LAT`);
+  const lng = rideCoordinate(value.lng, -180, 180, `INVALID_RIDE_${kind}_LNG`);
 
   const location = { lat, lng };
   const label = String(value.label ?? '').trim();
