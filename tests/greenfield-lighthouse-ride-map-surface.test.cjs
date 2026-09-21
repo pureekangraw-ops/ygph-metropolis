@@ -12,6 +12,8 @@ test('Lighthouse Ride surface exposes map as a Ride sub-surface without creating
   assert.match(surface, /ledgerBridge\.readRideMapTruth\(\)/);
   assert.match(surface, /openRideMap\(\{ job \}\)/);
   assert.match(surface, /importRideMapPackage\(\)/);
+  assert.match(surface, /openRideNavigation\(\{ destination:job\?\.pickup \}\)/);
+  assert.match(surface, /openRideNavigation\(\{ destination:job\?\.dropoff \}\)/);
   assert.match(surface, /แผนที่งาน/);
   assert.match(surface, /อ่านจุดรับ–ส่งจาก RIDE owner เท่านั้น/);
   assert.doesNotMatch(surface, /data-task=["']map["']/);
