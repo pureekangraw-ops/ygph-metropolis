@@ -60,3 +60,12 @@ export async function importRideMapPackage({ capacitor = globalThis.Capacitor } 
   if (!plugin || typeof plugin.importPackage !== 'function') throw new Error('LIGHTHOUSE_RIDE_MAP_NATIVE_UNAVAILABLE');
   return plugin.importPackage();
 }
+
+
+export async function openRideNavigation({ destination, capacitor = globalThis.Capacitor } = {}) {
+  const plugin = resolveRideMapPlugin(capacitor);
+  if (!plugin || typeof plugin.navigate !== 'function') throw new Error('LIGHTHOUSE_RIDE_MAP_NATIVE_UNAVAILABLE');
+  const pointValue = point(destination);
+  if (!pointValue) throw new Error('LIGHTHOUSE_RIDE_MAP_GEOGRAPHY_REQUIRED');
+  return plugin.navigate({ destination:pointValue });
+}
