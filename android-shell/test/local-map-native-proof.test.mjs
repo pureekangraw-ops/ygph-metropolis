@@ -7,6 +7,7 @@ import {
   MAPLIBRE_ANDROID_DEPENDENCY,
   MAPLIBRE_ANDROID_VERSION,
   applyLocalMapNativeProof,
+  debugProofManifest,
   patchGradleForLocalMapProof,
   patchManifestForLocalMapProof,
 } from '../tools/apply-local-map-native-proof.mjs';
@@ -36,11 +37,10 @@ test('native proof pins MapLibre Android with PMTiles-capable version', () => {
   assert.equal(patchGradleForLocalMapProof(patched), patched);
 });
 
-test('native proof manifest keeps proof activity private and strips unused MapLibre permissions', () => {
+test('release manifest strips unused MapLibre permissions and contains no proof activity', () => {
   const patched = patchManifestForLocalMapProof(MANIFEST);
   assert.match(patched, /xmlns:tools="http:\/\/schemas\.android\.com\/tools"/);
-  assert.match(patched, /LocalPmtilesProofActivity/);
-  assert.match(patched, /LocalPmtilesProofActivity"[\s\S]*android:exported="false"/);
+  assert.doesNotMatch(patched, /LocalPmtilesProofActivity/);
   for (const permission of [
     'ACCESS_NETWORK_STATE',
     'ACCESS_WIFI_STATE',
@@ -51,7 +51,13 @@ test('native proof manifest keeps proof activity private and strips unused MapLi
   }
 });
 
-test('overlay materializes generated Android proof source without mutating Ride truth', async () => {
+test('proof activity is exported only from debug source set', () => {
+  const manifest = debugProofManifest();
+  assert.match(manifest, /LocalPmtilesProofActivity/);
+  assert.match(manifest, /android:exported="true"/);
+});
+
+test('overlay materializes debug-only proof surface without mutating Ride truth', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lighthouse-local-map-native-'));
   const android = join(root, 'android');
   const app = join(android, 'app');
@@ -61,10 +67,16 @@ test('overlay materializes generated Android proof source without mutating Ride 
 
   const result = await applyLocalMapNativeProof(android);
   const activity = await readFile(result.activityPath, 'utf8');
+  const releaseManifest = await readFile(result.manifestPath, 'utf8');
+  const debugManifest = await readFile(result.debugManifestPath, 'utf8');
   assert.match(activity, /pmtiles:\/\/file:\/\//);
+  assert.match(activity, /getAssets\(\)\.open\(PROOF_ASSET\)/);
+  assert.match(activity, /PACKAGE_STAGED source=debug_asset managed=true/);
   assert.match(activity, /RasterSource/);
   assert.match(activity, /RENDER_COMPLETE local=true networkFallback=false/);
   assert.doesNotMatch(activity, /ACCESS_(?:COARSE|FINE|BACKGROUND)_LOCATION/);
+  assert.doesNotMatch(releaseManifest, /LocalPmtilesProofActivity/);
+  assert.match(debugManifest, /android:exported="true"/);
 });
 
 test('proof fixture is a deterministic local PMTiles v3 archive with magenta raster tile', async () => {
