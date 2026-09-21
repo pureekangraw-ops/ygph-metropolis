@@ -87,7 +87,7 @@ public final class RideMapActivity extends Activity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     String packagePath = getIntent().getStringExtra("packagePath");
-    if (packagePath == null || packagePath.isBlank()) {
+    if (packagePath == null || packagePath.trim().isEmpty()) {
       finish();
       return;
     }
