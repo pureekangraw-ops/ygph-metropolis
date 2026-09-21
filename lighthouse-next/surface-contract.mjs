@@ -2,7 +2,7 @@ import { createLighthouseLedgerBridge } from './runtime-ledger.mjs';
 import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
 import { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
-import { importRideMapPackage, openRideMap, readRideMapNativeStatus } from './ride-map-native.mjs';
+import { importRideMapPackage, openRideMap, openRideNavigation, readRideMapNativeStatus } from './ride-map-native.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
@@ -569,7 +569,37 @@ async function renderRide() {
     });
 
     if (!nativeStatus?.available) importButton.disabled = true;
-    actions.append(openMapButton, importButton);
+    const pickupNavigation = document.createElement('button');
+    pickupNavigation.type = 'button';
+    pickupNavigation.className = 'secondary-button';
+    pickupNavigation.textContent = 'นำทางไปจุดรับ';
+    pickupNavigation.disabled = !job?.pickup;
+    pickupNavigation.addEventListener('click', async () => {
+      mapStatus.textContent = 'กำลังเปิดแอปนำทาง…';
+      try {
+        await openRideNavigation({ destination:job?.pickup });
+        mapStatus.textContent = 'ส่งจุดรับให้แอปนำทางแล้ว';
+      } catch {
+        mapStatus.textContent = 'ยังเปิดแอปนำทางไม่ได้';
+      }
+    });
+
+    const dropoffNavigation = document.createElement('button');
+    dropoffNavigation.type = 'button';
+    dropoffNavigation.className = 'secondary-button';
+    dropoffNavigation.textContent = 'นำทางไปจุดส่ง';
+    dropoffNavigation.disabled = !job?.dropoff;
+    dropoffNavigation.addEventListener('click', async () => {
+      mapStatus.textContent = 'กำลังเปิดแอปนำทาง…';
+      try {
+        await openRideNavigation({ destination:job?.dropoff });
+        mapStatus.textContent = 'ส่งจุดส่งให้แอปนำทางแล้ว';
+      } catch {
+        mapStatus.textContent = 'ยังเปิดแอปนำทางไม่ได้';
+      }
+    });
+
+    actions.append(openMapButton, importButton, pickupNavigation, dropoffNavigation);
     mapCard.append(actions, mapStatus);
     list.append(mapCard);
   } catch {
