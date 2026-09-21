@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -62,6 +62,7 @@ export async function captureLocalMapNativeProof({
 
   const wifiBefore = readSetting('global', 'wifi_on');
   const dataBefore = readSetting('global', 'mobile_data');
+  const airplaneBefore = readSetting('global', 'airplane_mode_on');
   let proof;
 
   try {
@@ -75,6 +76,7 @@ export async function captureLocalMapNativeProof({
 
     shell('svc', 'wifi', 'disable');
     shell('svc', 'data', 'disable');
+    const airplaneCommand = shell('cmd', 'connectivity', 'airplane-mode', 'enable', { allowFailure: true });
     await sleep(1500);
 
     const networkProbe = shell('ping', '-c', '1', '-W', '1', '1.1.1.1', { allowFailure: true });
@@ -100,6 +102,11 @@ export async function captureLocalMapNativeProof({
     const magenta = r >= 220 && g <= 40 && b >= 220;
     if (!magenta) throw new Error(`LOCAL_MAP_PROOF_PIXEL_MISMATCH:${r},${g},${b}`);
 
+    const screenshotEvidencePath = evidencePath.replace(/\.json$/i, '.png');
+    await mkdir(dirnameCompat(screenshotEvidencePath), { recursive: true });
+    await copyFile(screenshotPath, screenshotEvidencePath);
+    const screenshotBytes = await readFile(screenshotEvidencePath);
+
     proof = {
       status: 'PASS',
       applicationId,
@@ -111,16 +118,20 @@ export async function captureLocalMapNativeProof({
       offline: {
         wifiDisabled: true,
         mobileDataDisabled: true,
+        airplaneModeCommandStatus: airplaneCommand.status,
         networkProbeStatus: networkProbe.status,
       },
       render: {
         sourceAttached: logs.includes('SOURCE_ATTACHED'),
         renderComplete: logs.includes('RENDER_COMPLETE'),
         centerPixel: { r, g, b },
+        screenshotPath: screenshotEvidencePath,
+        screenshotSha256: createHash('sha256').update(screenshotBytes).digest('hex'),
       },
       capturedAt: new Date().toISOString(),
     };
   } finally {
+    shell('cmd', 'connectivity', 'airplane-mode', airplaneBefore === '1' ? 'enable' : 'disable', { allowFailure: true });
     restoreToggle('wifi', wifiBefore);
     restoreToggle('data', dataBefore);
     shell('rm', '-f', '/data/local/tmp/lighthouse-gate1-proof.pmtiles', { allowFailure: true });
