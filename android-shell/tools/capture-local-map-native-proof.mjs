@@ -44,6 +44,22 @@ function readProofLogs() {
   return runAdb(['logcat', '-d', '-s', 'LIGHTHOUSE_LOCAL_MAP:I', '*:S'], { allowFailure: true }).stdout || '';
 }
 
+function readRelevantDiagnostics() {
+  const all = runAdb(['logcat', '-d'], { allowFailure: true }).stdout || '';
+  return all
+    .split('\n')
+    .filter(line => /LIGHTHOUSE_LOCAL_MAP|com\.yggdrasil\.lighthouse|AndroidRuntime|MapLibre|libmaplibre|FATAL EXCEPTION|UnsatisfiedLinkError/i.test(line))
+    .slice(-160)
+    .join('\n');
+}
+
+function assertProofActivityResumed() {
+  const activities = shell('dumpsys', 'activity', 'activities', { allowFailure: true }).stdout || '';
+  if (!activities.includes('LocalPmtilesProofActivity')) {
+    throw new Error(`LOCAL_MAP_PROOF_ACTIVITY_NOT_RESUMED:${readRelevantDiagnostics()}`);
+  }
+}
+
 async function waitForMagentaPixel(screenshotPath, timeoutMs = 30000) {
   const started = Date.now();
   let lastPixel = null;
@@ -66,8 +82,8 @@ async function waitForMagentaPixel(screenshotPath, timeoutMs = 30000) {
     }
     await sleep(500);
   }
-  const diagnostics = runAdb(['logcat', '-d', '-t', '250'], { allowFailure: true }).stdout || '';
-  throw new Error(`LOCAL_MAP_PROOF_PIXEL_TIMEOUT:last=${JSON.stringify(lastPixel)} logs=${diagnostics.slice(-6000)}`);
+  const diagnostics = readRelevantDiagnostics();
+  throw new Error(`LOCAL_MAP_PROOF_PIXEL_TIMEOUT:last=${JSON.stringify(lastPixel)} logs=${diagnostics.slice(-12000)}`);
 }
 
 export async function captureLocalMapNativeProof({
@@ -97,9 +113,13 @@ export async function captureLocalMapNativeProof({
     runAdb(['logcat', '-c']);
     const component = `${applicationId}/com.yggdrasil.lighthouse.LocalPmtilesProofActivity`;
     const launch = shell('am', 'start', '-W', '-n', component, { allowFailure: true });
-    if (launch.status !== 0 || /Error:|Exception|Permission Denial/i.test(`${launch.stdout}\n${launch.stderr}`)) {
-      throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launch.stderr || launch.stdout}`);
+    const launchOutput = `${launch.stdout || ''}\n${launch.stderr || ''}`.trim();
+    console.log(`LOCAL_MAP_PROOF_LAUNCH ${launchOutput.replaceAll('\n', ' | ')}`);
+    if (launch.status !== 0 || /Error(?:\s+type\s+\d+)?:|Exception|Permission Denial/i.test(launchOutput)) {
+      throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launchOutput}`);
     }
+    await sleep(1000);
+    assertProofActivityResumed();
 
     const rendered = await waitForMagentaPixel(screenshotPath);
     const { r, g, b } = rendered.pixel;
