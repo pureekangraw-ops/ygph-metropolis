@@ -306,7 +306,7 @@ export function installLighthouseTransferForm({
     if (receipt?.status === 'COMPLETE') {
       status.textContent = `ยืนยันและอ่านกลับแล้ว · ${detail.capabilityId || capabilitySelect.value}`;
       request.value = nextRequestId();
-    } else if (receipt?.status === 'CANCELLED') {
+    } else if (receipt?.status === 'CANCELLED' || receipt?.reason === 'CANCELLED') {
       status.textContent = 'ยกเลิกรายการแล้ว';
       request.value = nextRequestId();
     }
