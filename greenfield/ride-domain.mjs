@@ -10,6 +10,29 @@ function positiveSatang(value, code = 'INVALID_RIDE_AMOUNT') {
   return amount;
 }
 
+function rideCoordinate(value, min, max, code) {
+  if (value == null || typeof value === 'boolean') throw new Error(code);
+  if (typeof value === 'string' && !value.trim()) throw new Error(code);
+  const coordinate = Number(value);
+  if (!Number.isFinite(coordinate) || coordinate < min || coordinate > max) throw new Error(code);
+  return coordinate;
+}
+
+function optionalRideLocation(value, kind) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`INVALID_RIDE_${kind}_LOCATION`);
+
+  const lat = rideCoordinate(value.lat, -90, 90, `INVALID_RIDE_${kind}_LAT`);
+  const lng = rideCoordinate(value.lng, -180, 180, `INVALID_RIDE_${kind}_LNG`);
+
+  const location = { lat, lng };
+  const label = String(value.label ?? '').trim();
+  const address = String(value.address ?? '').trim();
+  if (label) location.label = label;
+  if (address) location.address = address;
+  return location;
+}
+
 function provenance(command, at) {
   return { origin:'LIVE_COMMAND', commandId:command.commandId, idempotencyKey:command.idempotencyKey, domain:'RIDE', at };
 }
@@ -166,10 +189,15 @@ export function registerRideDomainCommands(runtime, { now = () => new Date().toI
     activeRound(domainState, roundId);
     const paymentMode = text(payload.paymentMode, 'INVALID_RIDE_PAYMENT_MODE');
     if (paymentMode !== 'CASH' && paymentMode !== 'CREDIT') throw new Error(`INVALID_RIDE_PAYMENT_MODE:${paymentMode}`);
+    const pickup = optionalRideLocation(payload.pickup, 'PICKUP');
+    const dropoff = optionalRideLocation(payload.dropoff, 'DROPOFF');
     const at = now();
     createEntry(domainState, {
       recordId:text(payload.jobId, 'INVALID_RIDE_JOB_ID'), source:'RIDE', type:'JOB', roundId,
-      amountSatang:positiveSatang(payload.amountSatang), paymentMode, note:String(payload.note || ''), status:'COMPLETED', createdAt:at, updatedAt:at,
+      amountSatang:positiveSatang(payload.amountSatang), paymentMode, note:String(payload.note || ''),
+      ...(pickup ? { pickup } : {}),
+      ...(dropoff ? { dropoff } : {}),
+      status:'COMPLETED', createdAt:at, updatedAt:at,
     }, command, at);
   });
 

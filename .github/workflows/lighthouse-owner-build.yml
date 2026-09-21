@@ -66,6 +66,9 @@ jobs:
       - name: Materialize approved Android launcher icons
         run: npm run android:icons
 
+      - name: Apply Ride Map native overlay
+        run: npm run android:map:apply
+
       - name: Apply generated Android security baseline
         run: npm run android:security:apply
 

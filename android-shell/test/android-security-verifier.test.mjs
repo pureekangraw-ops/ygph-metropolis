@@ -13,6 +13,9 @@ const PROFILE_ACTION = 'androidx.profileinstaller.action.INSTALL_PROFILE';
 const SAFE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.yggdrasil.lighthouse">
   <permission android:name="${DYNAMIC_PERMISSION}" android:protectionLevel="signature" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="${DYNAMIC_PERMISSION}" />
   <application android:allowBackup="false" android:usesCleartextTraffic="false" android:label="LIGHTHOUSE">
@@ -41,7 +44,7 @@ const config = { appId: 'com.yggdrasil.lighthouse', plugins: {} };
 test('security inspector accepts the minimal LIGHTHOUSE native surface', () => {
   const evidence = inspectAndroidSecurity({ manifestText: SAFE_MANIFEST, capacitorConfig: config, manifestPath: 'fixture/AndroidManifest.xml' });
   assert.equal(evidence.applicationId, 'com.yggdrasil.lighthouse');
-  assert.deepEqual(evidence.requestedPermissions, ['android.permission.INTERNET', DYNAMIC_PERMISSION]);
+  assert.deepEqual(evidence.requestedPermissions, ['android.permission.ACCESS_COARSE_LOCATION', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_NETWORK_STATE', 'android.permission.INTERNET', DYNAMIC_PERMISSION]);
   assert.deepEqual(evidence.declaredPermissions, [{ name: DYNAMIC_PERMISSION, protectionLevel: 'signature' }]);
   assert.equal(evidence.backupPolicy.allowBackup, false);
   assert.equal(evidence.networkPolicy.usesCleartextTraffic, false);

@@ -255,6 +255,55 @@ function buildRideTruth(runtime, state) {
   return Object.freeze({ revision:state.revision ?? null, recordCount:records.length, todayRoundState, generatedSatang:validNonNegativeSatang(projection.generatedSatang, 'LIGHTHOUSE_RIDE_PROJECTION_INVALID'), cashJobSatang:validNonNegativeSatang(projection.cashJobSatang, 'LIGHTHOUSE_RIDE_PROJECTION_INVALID'), creditJobSatang:validNonNegativeSatang(projection.creditJobSatang, 'LIGHTHOUSE_RIDE_PROJECTION_INVALID'), expenseSatang:validNonNegativeSatang(projection.expenseSatang, 'LIGHTHOUSE_RIDE_PROJECTION_INVALID'), pendingCreditSatang:validNonNegativeSatang(projection.pendingCreditSatang, 'LIGHTHOUSE_RIDE_PROJECTION_INVALID') });
 }
 
+function rideRecordTimestamp(record) {
+  return String(record?.updatedAt || record?.createdAt || record?.endedAt || record?.startedAt || '');
+}
+
+function cloneRideMapLocation(value) {
+  if (!value || typeof value !== 'object') return null;
+  const lat = Number(value.lat);
+  const lng = Number(value.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const location = { lat, lng };
+  const label = String(value.label || '').trim();
+  const address = String(value.address || '').trim();
+  if (label) location.label = label;
+  if (address) location.address = address;
+  return Object.freeze(location);
+}
+
+function buildRideMapTruth(runtime, state) {
+  const summary = buildRideTruth(runtime, state);
+  const records = Object.values(state?.domains?.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
+  const rounds = records
+    .filter(record => record.type === 'ROUND')
+    .sort((a, b) => rideRecordTimestamp(b).localeCompare(rideRecordTimestamp(a)));
+  const round = rounds.find(record => record.status === 'ACTIVE') || rounds[0] || null;
+  const jobs = round ? records
+    .filter(record => record.type === 'JOB' && record.roundId === round.recordId && record.status !== 'CANCELLED')
+    .sort((a, b) => rideRecordTimestamp(b).localeCompare(rideRecordTimestamp(a))) : [];
+  const current = jobs[0] || null;
+  const pickup = cloneRideMapLocation(current?.pickup);
+  const dropoff = cloneRideMapLocation(current?.dropoff);
+  const currentJob = current ? Object.freeze({
+    recordId:String(current.recordId || ''),
+    roundId:String(current.roundId || ''),
+    status:String(current.status || ''),
+    createdAt:current.createdAt || null,
+    updatedAt:current.updatedAt || null,
+    pickup,
+    dropoff,
+    hasGeography:Boolean(pickup || dropoff),
+  }) : null;
+  return Object.freeze({
+    revision:summary.revision,
+    roundId:round?.recordId || null,
+    roundStatus:round?.status || null,
+    jobCount:jobs.length,
+    currentJob,
+  });
+}
+
 function buildCalendarTruth(runtime, state) {
   if (!state) throw new Error('LIGHTHOUSE_CALENDAR_STATE_REQUIRED');
   const projection = runtime.project()?.calendar;
@@ -282,6 +331,7 @@ export function createLighthouseLedgerBridge(deps = {}) {
   async function readLedgerTruth() { return withSession(async runtime => buildTruth(runtime, await runtime.readState(), projectFinancial, now)); }
   async function readIncomeTruth() { return withSession(async runtime => buildIncomeTruth(runtime, await runtime.readState(), projectFinancial, now)); }
   async function readRideTruth() { return withSession(async runtime => buildRideTruth(runtime, await runtime.readState())); }
+  async function readRideMapTruth() { return withSession(async runtime => buildRideMapTruth(runtime, await runtime.readState())); }
   async function readCalendarTruth() { return withSession(async runtime => buildCalendarTruth(runtime, await runtime.readState())); }
 
   async function readPlanningTruth() {
@@ -483,5 +533,5 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
-  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, readPlanningTruth, setDailyGoal, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
+  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readRideMapTruth, readCalendarTruth, readPlanningTruth, setDailyGoal, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
 }
