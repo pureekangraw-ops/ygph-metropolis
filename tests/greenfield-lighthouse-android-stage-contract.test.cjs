@@ -35,6 +35,7 @@ const runtimeFiles = [
   'control-port/control-port-transport.mjs',
   'control-port/control-port-confirmation.mjs',
   'control-port/control-port-background-sync.mjs',
+  'control-port/transfer-form.mjs',
   'centre-board/board-contract.mjs',
   'centre-board/board-bootstrap.mjs',
   'centre-board/board-session.mjs',
