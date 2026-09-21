@@ -41,8 +41,8 @@ test('release manifest strips unused MapLibre permissions and contains no proof 
   const patched = patchManifestForLocalMapProof(MANIFEST);
   assert.match(patched, /xmlns:tools="http:\/\/schemas\.android\.com\/tools"/);
   assert.doesNotMatch(patched, /LocalPmtilesProofActivity/);
+  assert.doesNotMatch(patched, /android\.permission\.ACCESS_NETWORK_STATE[^>]+tools:node="remove"/);
   for (const permission of [
-    'ACCESS_NETWORK_STATE',
     'ACCESS_WIFI_STATE',
     'ACCESS_COARSE_LOCATION',
     'ACCESS_FINE_LOCATION',
