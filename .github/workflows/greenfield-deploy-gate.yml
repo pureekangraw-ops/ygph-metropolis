@@ -71,7 +71,9 @@ jobs:
           npx cap sync android
           npm run android:map:apply
           npm run android:security:apply
-          npm run android:map:fixture -- release/gate1-proof.pmtiles
+          mkdir -p android/app/src/debug/assets/local-map-proof release
+          npm run android:map:fixture -- android/app/src/debug/assets/local-map-proof/gate1-proof.pmtiles
+          cp android/app/src/debug/assets/local-map-proof/gate1-proof.pmtiles release/gate1-proof.pmtiles
           cd android
           ./gradlew :app:assembleDebug :app:processReleaseMainManifest
           cd ..
