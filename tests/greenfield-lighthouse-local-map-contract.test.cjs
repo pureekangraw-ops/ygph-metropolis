@@ -13,7 +13,9 @@ const METADATA = {
   attribution: '© OpenStreetMap contributors © Protomaps',
 };
 
-const FILE_URI = 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/bangkok-metro.pmtiles';
+const MANAGED_ROOT_URI = 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/';
+const FILE_URI = `${MANAGED_ROOT_URI}bangkok-metro.pmtiles`;
+const OUTSIDE_FILE_URI = 'file:///sdcard/Download/bangkok-metro.pmtiles';
 const CONTENT_URI = 'content://com.android.providers.downloads.documents/document/42';
 
 test('local PMTiles contract accepts app-managed device storage only', async () => {
@@ -43,7 +45,7 @@ test('content URIs are accepted only as import input, never as active package st
   assert.equal(source.uri.startsWith('content://'), true);
   assert.equal(source.networkAllowed, false);
   assert.throws(
-    () => createLocalMapPackageRecord({ uri: CONTENT_URI, metadata: METADATA, state: 'ACTIVE' }),
+    () => createLocalMapPackageRecord({ uri: CONTENT_URI, metadata: METADATA, state: 'ACTIVE', managedRootUri: MANAGED_ROOT_URI }),
     /LOCAL_MAP_ACTIVE_URI_MUST_BE_STAGED_FILE/,
   );
   assert.equal(createLocalMapPackageRecord({ uri: CONTENT_URI, metadata: METADATA, state: 'STAGED' }).state, 'STAGED');
@@ -94,12 +96,28 @@ test('recovery uses the same package record shape with explicit reason', async (
   assert.equal(recovery.recoveryReason, 'ไฟล์แผนที่เสียหาย');
 });
 
-test('active package points to staged file storage and exposes one stable shape', async () => {
+test('active package requires Lighthouse-managed staged file storage', async () => {
   const { createLocalMapPackageRecord } = await import('../lighthouse-next/local-map.mjs');
+
+  assert.throws(
+    () => createLocalMapPackageRecord({ uri: FILE_URI, metadata: METADATA, state: 'ACTIVE' }),
+    /LOCAL_MAP_MANAGED_ROOT_URI_REQUIRED/,
+  );
+  assert.throws(
+    () => createLocalMapPackageRecord({
+      uri: OUTSIDE_FILE_URI,
+      metadata: METADATA,
+      state: 'ACTIVE',
+      managedRootUri: MANAGED_ROOT_URI,
+    }),
+    /LOCAL_MAP_ACTIVE_URI_OUTSIDE_MANAGED_ROOT/,
+  );
+
   const active = createLocalMapPackageRecord({
     uri: FILE_URI,
     metadata: METADATA,
     state: 'ACTIVE',
+    managedRootUri: MANAGED_ROOT_URI,
     now: () => '2026-09-21T06:00:00.000Z',
   });
   assert.equal(active.state, 'ACTIVE');
