@@ -26,14 +26,18 @@ export function buildRideEndRoundWorkflow({ workflowId, roundId }) {
   return { workflowId, commands:[command(workflowId, 1, 'RIDE', 'RIDE_END_ROUND', { roundId }, `RIDE:${roundId}:END`)] };
 }
 
-export function buildRideJobWorkflow({ workflowId, roundId, jobId, ledgerTransactionId, amountSatang, paymentMode, note = '' }) {
+export function buildRideJobWorkflow({ workflowId, roundId, jobId, ledgerTransactionId, amountSatang, paymentMode, note = '', pickup = null, dropoff = null }) {
   workflowId = text(workflowId, 'INVALID_WORKFLOW_ID');
   roundId = text(roundId, 'INVALID_RIDE_ROUND_ID');
   jobId = text(jobId, 'INVALID_RIDE_JOB_ID');
   const amount = satang(amountSatang);
   paymentMode = text(paymentMode, 'INVALID_RIDE_PAYMENT_MODE');
   if (paymentMode !== 'CASH' && paymentMode !== 'CREDIT') throw new Error(`INVALID_RIDE_PAYMENT_MODE:${paymentMode}`);
-  const commands = [command(workflowId, 1, 'RIDE', 'RIDE_CREATE_JOB', { roundId, jobId, amountSatang:amount, paymentMode, note:String(note || '') }, `RIDE:${jobId}`)];
+  const geography = {
+    ...(pickup == null ? {} : { pickup:structuredClone(pickup) }),
+    ...(dropoff == null ? {} : { dropoff:structuredClone(dropoff) }),
+  };
+  const commands = [command(workflowId, 1, 'RIDE', 'RIDE_CREATE_JOB', { roundId, jobId, amountSatang:amount, paymentMode, note:String(note || ''), ...geography }, `RIDE:${jobId}`)];
   if (paymentMode === 'CASH') {
     ledgerTransactionId = text(ledgerTransactionId, 'LEDGER_TRANSACTION_ID_REQUIRED');
     commands.push(command(workflowId, 2, 'LEDGER', 'LEDGER_CREATE_TRANSACTION', {
