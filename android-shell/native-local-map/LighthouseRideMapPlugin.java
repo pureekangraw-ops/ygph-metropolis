@@ -261,28 +261,46 @@ public class LighthouseRideMapPlugin extends Plugin {
     return metadata;
   }
 
+  private JSObject recoveryStatus(String reason) {
+    JSObject out = new JSObject();
+    out.put("packageState", "RECOVERY_REQUIRED");
+    out.put("recoveryReason", reason);
+    return out;
+  }
+
+  private boolean activeHeaderLooksValid(File active) {
+    if (!active.isFile() || active.length() < PMTILES_HEADER_SIZE) return false;
+    try (RandomAccessFile input = new RandomAccessFile(active, "r")) {
+      byte[] prefix = new byte[8];
+      input.readFully(prefix);
+      byte[] magic = "PMTiles".getBytes(StandardCharsets.US_ASCII);
+      for (int i = 0; i < magic.length; i++) if (prefix[i] != magic[i]) return false;
+      return (prefix[7] & 0xff) == 3;
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
   private JSObject status() {
     File active = activeFile();
     SharedPreferences store = prefs();
     String state = clean(store.getString("state", ""));
 
     if (!active.isFile()) {
+      if ("ACTIVE".equals(state)) return recoveryStatus("ACTIVE_FILE_MISSING");
       JSObject out = new JSObject();
-      if ("ACTIVE".equals(state)) {
-        out.put("packageState", "RECOVERY_REQUIRED");
-        out.put("recoveryReason", "ACTIVE_FILE_MISSING");
-      } else {
-        out.put("packageState", "MISSING");
-      }
+      out.put("packageState", "MISSING");
       return out;
     }
 
-    if (!"ACTIVE".equals(state) || clean(store.getString("sha256", "")).isEmpty()) {
-      JSObject out = new JSObject();
-      out.put("packageState", "RECOVERY_REQUIRED");
-      out.put("recoveryReason", "ACTIVE_METADATA_MISSING");
-      return out;
+    String sha256 = clean(store.getString("sha256", ""));
+    String attribution = clean(store.getString("attribution", ""));
+    long expectedBytes = store.getLong("byteLength", -1L);
+    if (!"ACTIVE".equals(state) || sha256.isEmpty() || attribution.isEmpty() || expectedBytes <= 0L) {
+      return recoveryStatus("ACTIVE_METADATA_MISSING");
     }
+    if (active.length() != expectedBytes) return recoveryStatus("ACTIVE_FILE_SIZE_MISMATCH");
+    if (!activeHeaderLooksValid(active)) return recoveryStatus("ACTIVE_HEADER_INVALID");
 
     JSObject out = new JSObject();
     out.put("packageState", "ACTIVE");
