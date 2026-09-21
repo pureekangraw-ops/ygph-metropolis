@@ -13,6 +13,9 @@ const METADATA = {
   attribution: '© OpenStreetMap contributors © Protomaps',
 };
 
+const FILE_URI = 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/bangkok-metro.pmtiles';
+const CONTENT_URI = 'content://com.android.providers.downloads.documents/document/42';
+
 test('local PMTiles contract accepts app-managed device storage only', async () => {
   const {
     LOCAL_MAP_CONTRACT,
@@ -21,9 +24,11 @@ test('local PMTiles contract accepts app-managed device storage only', async () 
   } = await import('../lighthouse-next/local-map.mjs');
 
   const metadata = normalizeMapPackageMetadata(METADATA);
-  const source = createLocalPmtilesSource({ uri: 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/bangkok-metro.pmtiles', metadata });
+  const source = createLocalPmtilesSource({ uri: FILE_URI, metadata });
 
   assert.equal(LOCAL_MAP_CONTRACT.format, 'PMTILES');
+  assert.equal(LOCAL_MAP_CONTRACT.contentUriRole, 'IMPORT_ONLY');
+  assert.equal(LOCAL_MAP_CONTRACT.activeUriProtocol, 'file:');
   assert.equal(LOCAL_MAP_CONTRACT.networkFallback, false);
   assert.equal(LOCAL_MAP_CONTRACT.backgroundLocation, false);
   assert.equal(source.type, 'LOCAL_PMTILES_VECTOR_BASEMAP');
@@ -32,11 +37,16 @@ test('local PMTiles contract accepts app-managed device storage only', async () 
   assert.equal(source.metadata.fileName, 'bangkok-metro.pmtiles');
 });
 
-test('content URIs are accepted for Android document-provider imports', async () => {
-  const { createLocalPmtilesSource } = await import('../lighthouse-next/local-map.mjs');
-  const source = createLocalPmtilesSource({ uri: 'content://com.android.providers.downloads.documents/document/42', metadata: METADATA });
+test('content URIs are accepted only as import input, never as active package storage', async () => {
+  const { createLocalPmtilesSource, createLocalMapPackageRecord } = await import('../lighthouse-next/local-map.mjs');
+  const source = createLocalPmtilesSource({ uri: CONTENT_URI, metadata: METADATA });
   assert.equal(source.uri.startsWith('content://'), true);
   assert.equal(source.networkAllowed, false);
+  assert.throws(
+    () => createLocalMapPackageRecord({ uri: CONTENT_URI, metadata: METADATA, state: 'ACTIVE' }),
+    /LOCAL_MAP_ACTIVE_URI_MUST_BE_STAGED_FILE/,
+  );
+  assert.equal(createLocalMapPackageRecord({ uri: CONTENT_URI, metadata: METADATA, state: 'STAGED' }).state, 'STAGED');
 });
 
 test('network URLs fail closed instead of becoming a map source', async () => {
@@ -60,19 +70,40 @@ test('map package metadata fails closed for unsafe or incomplete packages', asyn
   assert.throws(() => normalizeMapPackageMetadata({ ...METADATA, format: 'mbtiles' }), /LOCAL_MAP_FORMAT_UNSUPPORTED:MBTILES/);
 });
 
-test('active and recovery states remain explicit', async () => {
+test('recovery uses the same package record shape with explicit reason', async () => {
   const { createLocalMapPackageRecord, describeLocalMapRecovery } = await import('../lighthouse-next/local-map.mjs');
+  const recovery = createLocalMapPackageRecord({
+    state: 'RECOVERY_REQUIRED',
+    reason: 'ไฟล์แผนที่เสียหาย',
+    now: () => '2026-09-21T06:00:00.000Z',
+  });
+  const helperRecovery = describeLocalMapRecovery('เลือกแพ็กเกจใหม่');
+
+  for (const record of [recovery, helperRecovery]) {
+    assert.equal(record.type, 'LOCAL_PMTILES_VECTOR_BASEMAP');
+    assert.equal(record.state, 'RECOVERY_REQUIRED');
+    assert.equal(record.uri, null);
+    assert.equal(record.metadata, null);
+    assert.equal(record.stagedAt, null);
+    assert.equal(record.activatedAt, null);
+    assert.equal(record.networkAllowed, false);
+    assert.equal(record.offlineOnly, true);
+    assert.equal(typeof record.recoveryAt, 'string');
+    assert.equal(typeof record.recoveryReason, 'string');
+  }
+  assert.equal(recovery.recoveryReason, 'ไฟล์แผนที่เสียหาย');
+});
+
+test('active package points to staged file storage and exposes one stable shape', async () => {
+  const { createLocalMapPackageRecord } = await import('../lighthouse-next/local-map.mjs');
   const active = createLocalMapPackageRecord({
-    uri: 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/bangkok-metro.pmtiles',
+    uri: FILE_URI,
     metadata: METADATA,
     state: 'ACTIVE',
     now: () => '2026-09-21T06:00:00.000Z',
   });
   assert.equal(active.state, 'ACTIVE');
+  assert.equal(active.uri, FILE_URI);
   assert.equal(active.activatedAt, '2026-09-21T06:00:00.000Z');
-
-  const recovery = describeLocalMapRecovery('ไฟล์แผนที่เสียหาย');
-  assert.equal(recovery.state, 'RECOVERY_REQUIRED');
-  assert.equal(recovery.networkAllowed, false);
-  assert.equal(recovery.reason, 'ไฟล์แผนที่เสียหาย');
+  assert.equal(active.recoveryReason, null);
 });
