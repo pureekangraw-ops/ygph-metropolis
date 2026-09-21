@@ -131,6 +131,7 @@
               <button type="button" data-ride-open="jobs"><strong>งานรอบนี้</strong><small>งานของรอบปัจจุบันหรือรอบล่าสุด</small></button>
               <button type="button" data-ride-open="summary"><strong>สรุปรอบ</strong><small>แยกสร้างได้ เงินสด เครดิต และค่าใช้จ่าย</small></button>
               <button type="button" data-ride-open="history"><strong>ประวัติรอบ</strong><small>ดูรอบวิ่งย้อนหลัง</small></button>
+              <button type="button" data-ride-open="map"><strong>แผนที่งาน</strong><small>จุดรับ–ส่งจาก Ride Owner · Local map</small></button>
             </div>
           </div>
           <section data-ride-view="jobs" class="hidden">
@@ -147,6 +148,21 @@
           <section data-ride-view="history" class="hidden">
             <div class="city-subview-head"><button type="button" class="secondary" data-ride-open="overview">‹ กลับ</button><div><small>RIDE</small><h2>ประวัติรอบ</h2></div></div>
             <div id="rideRoundHistory" class="list"></div>
+          </section>
+          <section data-ride-view="map" class="hidden">
+            <div class="city-subview-head"><button type="button" class="secondary" data-ride-open="overview">‹ กลับ</button><div><small>RIDE</small><h2>แผนที่งาน</h2></div></div>
+            <p id="rideMapMeta" class="muted">อ่านจุดรับ–ส่งจาก Ride Owner เท่านั้น</p>
+            <div class="card city-flow-card">
+              <div class="detail-row"><span>จุดรับ</span><strong id="rideMapPickup">ยังไม่มีพิกัด</strong></div>
+              <div class="detail-row"><span>จุดส่ง</span><strong id="rideMapDropoff">ยังไม่มีพิกัด</strong></div>
+              <div class="action-row">
+                <button id="rideMapOpenBtn" type="button" class="primary-action" disabled>เปิดแผนที่</button>
+                <button id="rideMapImportBtn" type="button">ติดตั้ง Local map</button>
+                <button id="rideMapPickupNavBtn" type="button" disabled>นำทางจุดรับ</button>
+                <button id="rideMapDropoffNavBtn" type="button" disabled>นำทางจุดส่ง</button>
+              </div>
+              <p id="rideMapStatus" class="muted" aria-live="polite"></p>
+            </div>
           </section>
         </section>
 
