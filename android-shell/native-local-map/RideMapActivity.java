@@ -1,15 +1,24 @@
 package com.yggdrasil.lighthouse;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.maplibre.android.MapLibre;
 import org.maplibre.android.camera.CameraPosition;
 import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.maps.MapLibreMap;
 import org.maplibre.android.maps.MapView;
 import org.maplibre.android.maps.Style;
 import org.maplibre.android.style.layers.CircleLayer;
@@ -28,7 +37,27 @@ import static org.maplibre.android.style.layers.PropertyFactory.lineColor;
 import static org.maplibre.android.style.layers.PropertyFactory.lineWidth;
 
 public final class RideMapActivity extends Activity {
+  private static final int LOCATION_PERMISSION_REQUEST = 2201;
+  private static final String CURRENT_SOURCE = "current-location-source";
+  private static final String CURRENT_LAYER = "current-location-layer";
+
   private MapView mapView;
+  private MapLibreMap map;
+  private Style mapStyle;
+  private LocationManager locationManager;
+  private LatLng pickup;
+  private LatLng dropoff;
+  private LatLng currentLocation;
+  private boolean locationRequested = false;
+
+  private final LocationListener locationListener = new LocationListener() {
+    @Override public void onLocationChanged(Location location) {
+      showCurrentLocation(location);
+    }
+    @Override public void onProviderEnabled(String provider) {}
+    @Override public void onProviderDisabled(String provider) {}
+    @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
+  };
 
   private boolean hasPoint(String prefix) {
     return getIntent().hasExtra(prefix + "Lat") && getIntent().hasExtra(prefix + "Lng");
@@ -70,17 +99,111 @@ public final class RideMapActivity extends Activity {
     style.addLayer(layer);
   }
 
-  private void fitJob(org.maplibre.android.maps.MapLibreMap map, LatLng pickup, LatLng dropoff) {
+  private void fitJob() {
+    if (map == null) return;
     if (pickup != null && dropoff != null) {
       double lat = (pickup.getLatitude() + dropoff.getLatitude()) / 2d;
       double lng = (pickup.getLongitude() + dropoff.getLongitude()) / 2d;
       double span = Math.max(Math.abs(pickup.getLatitude() - dropoff.getLatitude()), Math.abs(pickup.getLongitude() - dropoff.getLongitude()));
       double zoom = span < 0.01d ? 14d : span < 0.03d ? 12.5d : span < 0.10d ? 10.5d : 9d;
       map.setCameraPosition(new CameraPosition.Builder().target(new LatLng(lat, lng)).zoom(zoom).build());
-    } else {
-      LatLng target = pickup != null ? pickup : dropoff;
-      if (target != null) map.setCameraPosition(new CameraPosition.Builder().target(target).zoom(14d).build());
+      return;
     }
+    LatLng target = pickup != null ? pickup : dropoff;
+    if (target != null) map.setCameraPosition(new CameraPosition.Builder().target(target).zoom(14d).build());
+  }
+
+  private boolean hasCoarseLocation() {
+    return checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+  }
+
+  private boolean hasFineLocation() {
+    return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+  }
+
+  private void requestForegroundLocation() {
+    locationRequested = true;
+    if (!hasCoarseLocation()) {
+      requestPermissions(new String[]{
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION
+      }, LOCATION_PERMISSION_REQUEST);
+      return;
+    }
+    startLocationUpdates();
+  }
+
+  private String chooseLocationProvider() {
+    if (locationManager == null) return null;
+    if (hasFineLocation() && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+      return LocationManager.GPS_PROVIDER;
+    }
+    if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+      return LocationManager.NETWORK_PROVIDER;
+    }
+    if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
+      return LocationManager.PASSIVE_PROVIDER;
+    }
+    return null;
+  }
+
+  private void startLocationUpdates() {
+    if (!hasCoarseLocation()) return;
+    locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    String provider = chooseLocationProvider();
+    if (provider == null) return;
+    try {
+      Location last = locationManager.getLastKnownLocation(provider);
+      if (last != null) showCurrentLocation(last);
+      locationManager.requestLocationUpdates(provider, 1000L, 5f, locationListener);
+    } catch (SecurityException ignored) {
+      stopLocationUpdates();
+    }
+  }
+
+  private void stopLocationUpdates() {
+    if (locationManager == null) return;
+    try {
+      locationManager.removeUpdates(locationListener);
+    } catch (SecurityException ignored) {}
+  }
+
+  private void showCurrentLocation(Location location) {
+    if (location == null) return;
+    currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+    if (mapStyle == null) return;
+
+    GeoJsonSource source = mapStyle.getSourceAs(CURRENT_SOURCE);
+    Point point = Point.fromLngLat(currentLocation.getLongitude(), currentLocation.getLatitude());
+    if (source == null) {
+      source = new GeoJsonSource(CURRENT_SOURCE, point);
+      mapStyle.addSource(source);
+      CircleLayer layer = new CircleLayer(CURRENT_LAYER, CURRENT_SOURCE);
+      layer.setProperties(
+        circleColor(Color.rgb(46, 125, 50)),
+        circleRadius(8f),
+        circleStrokeColor(Color.WHITE),
+        circleStrokeWidth(3f)
+      );
+      mapStyle.addLayer(layer);
+    } else {
+      source.setGeoJson(point);
+    }
+  }
+
+  private void centerOnCurrentLocation() {
+    if (currentLocation != null && map != null) {
+      map.setCameraPosition(new CameraPosition.Builder().target(currentLocation).zoom(15d).build());
+      return;
+    }
+    requestForegroundLocation();
+  }
+
+  private Button actionButton(String label) {
+    Button button = new Button(this);
+    button.setText(label);
+    button.setAllCaps(false);
+    return button;
   }
 
   @Override
@@ -100,6 +223,20 @@ public final class RideMapActivity extends Activity {
       ViewGroup.LayoutParams.MATCH_PARENT
     ));
 
+    LinearLayout controls = new LinearLayout(this);
+    controls.setOrientation(LinearLayout.HORIZONTAL);
+    controls.setPadding(12, 12, 12, 12);
+    Button fitButton = actionButton("ดูจุดงาน");
+    Button currentButton = actionButton("ตำแหน่งฉัน");
+    controls.addView(fitButton);
+    controls.addView(currentButton);
+    FrameLayout.LayoutParams controlsLayout = new FrameLayout.LayoutParams(
+      ViewGroup.LayoutParams.WRAP_CONTENT,
+      ViewGroup.LayoutParams.WRAP_CONTENT
+    );
+    controlsLayout.gravity = Gravity.TOP | Gravity.END;
+    root.addView(controls, controlsLayout);
+
     TextView attribution = new TextView(this);
     attribution.setText(getIntent().getStringExtra("attribution"));
     attribution.setTextSize(11f);
@@ -110,18 +247,22 @@ public final class RideMapActivity extends Activity {
       ViewGroup.LayoutParams.WRAP_CONTENT,
       ViewGroup.LayoutParams.WRAP_CONTENT
     );
-    attributionLayout.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.START;
+    attributionLayout.gravity = Gravity.BOTTOM | Gravity.START;
     root.addView(attribution, attributionLayout);
 
     setContentView(root);
     mapView.onCreate(savedInstanceState);
 
-    final LatLng pickup = point("pickup");
-    final LatLng dropoff = point("dropoff");
+    pickup = point("pickup");
+    dropoff = point("dropoff");
+    fitButton.setOnClickListener(view -> fitJob());
+    currentButton.setOnClickListener(view -> centerOnCurrentLocation());
 
-    mapView.getMapAsync(map -> {
+    mapView.getMapAsync(mapLibreMap -> {
+      map = mapLibreMap;
       String base = "{\"version\":8,\"sources\":{},\"layers\":[{\"id\":\"background\",\"type\":\"background\",\"paint\":{\"background-color\":\"#f4f1ea\"}}]}";
       map.setStyle(new Style.Builder().fromJson(base), style -> {
+        mapStyle = style;
         style.addSource(new VectorSource("basemap", "pmtiles://file://" + packagePath));
         addFill(style, "earth", "earth", Color.rgb(244, 241, 234));
         addFill(style, "landuse", "landuse", Color.rgb(228, 235, 218));
@@ -130,17 +271,32 @@ public final class RideMapActivity extends Activity {
         addRoads(style);
         addPoint(style, "pickup", pickup, Color.rgb(30, 136, 229));
         addPoint(style, "dropoff", dropoff, Color.rgb(229, 57, 53));
-        fitJob(map, pickup, dropoff);
+        fitJob();
+        if (locationRequested && hasCoarseLocation()) startLocationUpdates();
       });
     });
   }
 
+  @Override
+  public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == LOCATION_PERMISSION_REQUEST && hasCoarseLocation()) startLocationUpdates();
+  }
+
   @Override protected void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
-  @Override protected void onResume() { super.onResume(); if (mapView != null) mapView.onResume(); }
-  @Override protected void onPause() { if (mapView != null) mapView.onPause(); super.onPause(); }
+  @Override protected void onResume() {
+    super.onResume();
+    if (mapView != null) mapView.onResume();
+    if (locationRequested && hasCoarseLocation()) startLocationUpdates();
+  }
+  @Override protected void onPause() {
+    stopLocationUpdates();
+    if (mapView != null) mapView.onPause();
+    super.onPause();
+  }
   @Override protected void onStop() { if (mapView != null) mapView.onStop(); super.onStop(); }
   @Override public void onLowMemory() { super.onLowMemory(); if (mapView != null) mapView.onLowMemory(); }
-  @Override protected void onDestroy() { if (mapView != null) mapView.onDestroy(); super.onDestroy(); }
+  @Override protected void onDestroy() { stopLocationUpdates(); if (mapView != null) mapView.onDestroy(); super.onDestroy(); }
   @Override protected void onSaveInstanceState(Bundle outState) {
     super.onSaveInstanceState(outState);
     if (mapView != null) mapView.onSaveInstanceState(outState);
