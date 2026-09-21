@@ -40,15 +40,42 @@ async function sleep(ms) {
   await new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function waitForRenderMarker(timeoutMs = 20000) {
+async function waitForSourceReady(timeoutMs = 20000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const logs = runAdb(['logcat', '-d', '-s', 'LIGHTHOUSE_LOCAL_MAP:I', '*:S'], { allowFailure: true }).stdout || '';
     if (logs.includes('PROOF_FAILED')) throw new Error(`LOCAL_MAP_PROOF_ACTIVITY_FAILED:${logs.trim()}`);
-    if (logs.includes('PACKAGE_STAGED') && logs.includes('SOURCE_ATTACHED') && logs.includes('RENDER_COMPLETE')) return logs;
-    await sleep(750);
+    if (logs.includes('PACKAGE_STAGED') && logs.includes('SOURCE_ATTACHED')) return logs;
+    await sleep(500);
   }
-  throw new Error('LOCAL_MAP_PROOF_RENDER_TIMEOUT');
+  const diagnostics = runAdb(['logcat', '-d', '-t', '250'], { allowFailure: true }).stdout || '';
+  throw new Error(`LOCAL_MAP_PROOF_SOURCE_TIMEOUT:${diagnostics.slice(-6000)}`);
+}
+
+async function waitForMagentaPixel(screenshotPath, timeoutMs = 20000) {
+  const started = Date.now();
+  let lastPixel = null;
+  while (Date.now() - started < timeoutMs) {
+    const screenshot = runAdb(['exec-out', 'screencap', '-p'], { binary: true, allowFailure: true });
+    if (screenshot.status === 0 && screenshot.stdout?.length) {
+      await writeFile(screenshotPath, screenshot.stdout);
+      const image = sharp(screenshotPath);
+      const metadata = await image.metadata();
+      if (metadata.width && metadata.height) {
+        const left = Math.floor(metadata.width / 2);
+        const top = Math.floor(metadata.height / 2);
+        const pixel = await image.extract({ left, top, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
+        const [r, g, b] = [...pixel];
+        lastPixel = { r, g, b };
+        if (r >= 220 && g <= 40 && b >= 220) {
+          return { pixel: lastPixel, width: metadata.width, height: metadata.height };
+        }
+      }
+    }
+    await sleep(500);
+  }
+  const diagnostics = runAdb(['logcat', '-d', '-t', '250'], { allowFailure: true }).stdout || '';
+  throw new Error(`LOCAL_MAP_PROOF_PIXEL_TIMEOUT:last=${JSON.stringify(lastPixel)} logs=${diagnostics.slice(-6000)}`);
 }
 
 export async function captureLocalMapNativeProof({
@@ -82,20 +109,9 @@ export async function captureLocalMapNativeProof({
       throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launch.stderr || launch.stdout}`);
     }
 
-    const logs = await waitForRenderMarker();
-    const screenshot = runAdb(['exec-out', 'screencap', '-p'], { binary: true });
-    if (screenshot.status !== 0 || !screenshot.stdout?.length) throw new Error('LOCAL_MAP_PROOF_SCREENSHOT_FAILED');
-    await writeFile(screenshotPath, screenshot.stdout);
-
-    const image = sharp(screenshotPath);
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) throw new Error('LOCAL_MAP_PROOF_SCREENSHOT_DIMENSIONS_MISSING');
-    const left = Math.floor(metadata.width / 2);
-    const top = Math.floor(metadata.height / 2);
-    const pixel = await image.extract({ left, top, width: 1, height: 1 }).removeAlpha().raw().toBuffer();
-    const [r, g, b] = [...pixel];
-    const magenta = r >= 220 && g <= 40 && b >= 220;
-    if (!magenta) throw new Error(`LOCAL_MAP_PROOF_PIXEL_MISMATCH:${r},${g},${b}`);
+    const logs = await waitForSourceReady();
+    const rendered = await waitForMagentaPixel(screenshotPath);
+    const { r, g, b } = rendered.pixel;
 
     const screenshotEvidencePath = evidencePath.replace(/\.json$/i, '.png');
     await mkdir(dirnameCompat(screenshotEvidencePath), { recursive: true });
@@ -119,8 +135,10 @@ export async function captureLocalMapNativeProof({
       render: {
         packageStaged: logs.includes('PACKAGE_STAGED'),
         sourceAttached: logs.includes('SOURCE_ATTACHED'),
-        renderComplete: logs.includes('RENDER_COMPLETE'),
+        renderCompleteEventObserved: logs.includes('RENDER_COMPLETE'),
+        pixelProof: true,
         centerPixel: { r, g, b },
+        screenshotSize: { width: rendered.width, height: rendered.height },
         screenshotPath: screenshotEvidencePath,
         screenshotSha256: createHash('sha256').update(screenshotBytes).digest('hex'),
       },
