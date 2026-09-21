@@ -16,6 +16,8 @@ const METADATA = {
 const MANAGED_ROOT_URI = 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/';
 const FILE_URI = `${MANAGED_ROOT_URI}bangkok-metro.pmtiles`;
 const OUTSIDE_FILE_URI = 'file:///sdcard/Download/bangkok-metro.pmtiles';
+const FAKE_MANAGED_ROOT_URI = 'file:///sdcard/Lighthouse/maps/';
+const FAKE_MANAGED_FILE_URI = `${FAKE_MANAGED_ROOT_URI}bangkok-metro.pmtiles`;
 const CONTENT_URI = 'content://com.android.providers.downloads.documents/document/42';
 
 test('local PMTiles contract accepts app-managed device storage only', async () => {
@@ -31,6 +33,7 @@ test('local PMTiles contract accepts app-managed device storage only', async () 
   assert.equal(LOCAL_MAP_CONTRACT.format, 'PMTILES');
   assert.equal(LOCAL_MAP_CONTRACT.contentUriRole, 'IMPORT_ONLY');
   assert.equal(LOCAL_MAP_CONTRACT.activeUriProtocol, 'file:');
+  assert.equal(LOCAL_MAP_CONTRACT.androidApplicationId, 'com.yggdrasil.lighthouse');
   assert.equal(LOCAL_MAP_CONTRACT.networkFallback, false);
   assert.equal(LOCAL_MAP_CONTRACT.backgroundLocation, false);
   assert.equal(source.type, 'LOCAL_PMTILES_VECTOR_BASEMAP');
@@ -111,6 +114,15 @@ test('active package requires Lighthouse-managed staged file storage', async () 
       managedRootUri: MANAGED_ROOT_URI,
     }),
     /LOCAL_MAP_ACTIVE_URI_OUTSIDE_MANAGED_ROOT/,
+  );
+  assert.throws(
+    () => createLocalMapPackageRecord({
+      uri: FAKE_MANAGED_FILE_URI,
+      metadata: METADATA,
+      state: 'ACTIVE',
+      managedRootUri: FAKE_MANAGED_ROOT_URI,
+    }),
+    /LOCAL_MAP_MANAGED_ROOT_URI_NOT_LIGHTHOUSE_STORAGE/,
   );
 
   const active = createLocalMapPackageRecord({
