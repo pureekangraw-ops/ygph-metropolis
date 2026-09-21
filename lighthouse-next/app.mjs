@@ -16,6 +16,7 @@ import { createLighthouseControlPortSync } from './control-port/control-port-syn
 import { createLighthouseHubControlPortTransport } from './control-port/control-port-transport.mjs';
 import { installGoHubCommandConfirmation } from './control-port/control-port-confirmation.mjs';
 import { installControlPortBackgroundSync } from './control-port/control-port-background-sync.mjs';
+import { installLighthouseTransferForm } from './control-port/transfer-form.mjs';
 import { getNativeCapacitorApp } from './capacitor-app.mjs';
 import { createLighthouseCentreBoardStore } from './centre-board/board-store.mjs';
 import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.mjs';
@@ -713,6 +714,7 @@ window.addEventListener('pagehide', () => {
   runtimeGate.lock();
 });
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
+installLighthouseTransferForm({ root, runtime:controlPortRuntime });
 window.addEventListener('lighthouse:centre-board', () => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
