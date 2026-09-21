@@ -1,7 +1,8 @@
 import { parseBahtToSatang, makeId } from './ui-model.mjs';
 import { projectRideState, projectRideRound } from './product-model.mjs';
+import { importRideMapPackage, openRideMap, openRideNavigation, readRideMapNativeStatus } from '../lighthouse-next/ride-map-native.mjs';
 
-const RIDE_VIEWS = new Set(['overview','jobs','summary','history']);
+const RIDE_VIEWS = new Set(['overview','jobs','summary','history','map']);
 
 function rideDateTimeLabel(value) {
   if (!value) return '';
@@ -98,6 +99,31 @@ export function createRideUi({ getRuntime, getState, run, status, bindForm, baht
       history.append(button);
     }
     if (!rounds.length) history.textContent = 'ยังไม่มีประวัติรอบ';
+
+    const mapJob = jobs[0] || null;
+    const locationText = location => location
+      ? (location.label || location.address || `${Number(location.lat).toFixed(5)}, ${Number(location.lng).toFixed(5)}`)
+      : 'ยังไม่มีพิกัด';
+    $('rideMapPickup').textContent = locationText(mapJob?.pickup);
+    $('rideMapDropoff').textContent = locationText(mapJob?.dropoff);
+    $('rideMapOpenBtn').disabled = !(mapJob?.pickup || mapJob?.dropoff);
+    $('rideMapPickupNavBtn').disabled = !mapJob?.pickup;
+    $('rideMapDropoffNavBtn').disabled = !mapJob?.dropoff;
+    $('rideMapMeta').textContent = mapJob
+      ? `${mapJob.recordId} · อ่านจาก Ride Owner`
+      : 'ยังไม่มีงานในรอบที่เลือก';
+
+    void readRideMapNativeStatus().then(native => {
+      $('rideMapImportBtn').disabled = !native.available;
+      $('rideMapStatus').textContent = !native.available
+        ? 'Native map ยังไม่พร้อมบนเครื่องนี้'
+        : native.packageState === 'ACTIVE'
+          ? `Local map พร้อม${native.region ? ` · ${native.region}` : ''}`
+          : 'ยังไม่ได้ติดตั้ง Local map';
+    }).catch(() => {
+      $('rideMapStatus').textContent = 'ยังอ่านสถานะ Local map ไม่ได้';
+    });
+
     setRideView(activeRideView);
   }
 
@@ -139,6 +165,31 @@ export function createRideUi({ getRuntime, getState, run, status, bindForm, baht
       workflowId:makeId('WF-RIDE-WD'), withdrawalId:makeId('RIDE-WD'), ledgerTransactionId:makeId('TX'),
       amountSatang:parseBahtToSatang(data.get('amount')),
     }, 'บันทึกการเบิกเครดิตแล้ว'));
+
+    const mapJob = () => {
+      const records = Object.values(getState()?.domains?.RIDE?.records || {}).map(entry => entry?.record).filter(Boolean);
+      const roundId = selectedRideRoundId || activeRideRound()?.recordId || null;
+      return records
+        .filter(record => record.type === 'JOB' && (!roundId || record.roundId === roundId) && record.status !== 'CANCELLED')
+        .sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))[0] || null;
+    };
+
+    $('rideMapOpenBtn').addEventListener('click', async () => {
+      try { await openRideMap({ job:mapJob() }); status('เปิดแผนที่งานแล้ว'); }
+      catch (error) { status(String(error?.message || error || 'ยังเปิดแผนที่ไม่ได้'), true); }
+    });
+    $('rideMapImportBtn').addEventListener('click', async () => {
+      try { await importRideMapPackage(); status('ติดตั้ง Local map แล้ว'); }
+      catch (error) { status(String(error?.message || error || 'ยังติดตั้ง Local map ไม่สำเร็จ'), true); }
+    });
+    $('rideMapPickupNavBtn').addEventListener('click', async () => {
+      try { await openRideNavigation({ destination:mapJob()?.pickup }); }
+      catch (error) { status(String(error?.message || error || 'ยังเปิดแอปนำทางไม่ได้'), true); }
+    });
+    $('rideMapDropoffNavBtn').addEventListener('click', async () => {
+      try { await openRideNavigation({ destination:mapJob()?.dropoff }); }
+      catch (error) { status(String(error?.message || error || 'ยังเปิดแอปนำทางไม่ได้'), true); }
+    });
   }
 
   return Object.freeze({ setRideView, renderRide, bindRide });
