@@ -124,6 +124,24 @@ test('ride job geography fails closed on incomplete or out-of-range coordinates'
     /INVALID_RIDE_DROPOFF_LNG/,
   );
 
+  await assert.rejects(
+    apply(state, buildRideJobWorkflow({
+      workflowId:'WF-GEO-BLANK', roundId:'ROUND-GEO-INVALID', jobId:'JOB-BLANK',
+      amountSatang:10000, paymentMode:'CREDIT', pickup:{ lat:'', lng:'100.5' },
+    }).commands),
+    /INVALID_RIDE_PICKUP_LAT/,
+  );
+
+  await assert.rejects(
+    apply(state, buildRideJobWorkflow({
+      workflowId:'WF-GEO-NULL', roundId:'ROUND-GEO-INVALID', jobId:'JOB-NULL',
+      amountSatang:10000, paymentMode:'CREDIT', pickup:{ lat:null, lng:100.5 },
+    }).commands),
+    /INVALID_RIDE_PICKUP_LAT/,
+  );
+
   assert.equal('JOB-BAD-LAT' in state.domains.RIDE.records, false);
   assert.equal('JOB-MISSING-LNG' in state.domains.RIDE.records, false);
+  assert.equal('JOB-BLANK' in state.domains.RIDE.records, false);
+  assert.equal('JOB-NULL' in state.domains.RIDE.records, false);
 });
