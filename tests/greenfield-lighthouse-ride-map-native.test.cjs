@@ -47,3 +47,17 @@ test('Ride map bridge fails closed when owner job has no geography', async () =>
   };
   await assert.rejects(openRideMap({ capacitor, job:{recordId:'OLD'} }), /LIGHTHOUSE_RIDE_MAP_GEOGRAPHY_REQUIRED/);
 });
+
+
+test('Ride navigation handoff sends only validated owner coordinates to native intent bridge', async () => {
+  const { openRideNavigation } = await import(moduleUrl);
+  const calls = [];
+  const capacitor = {
+    isNativePlatform:()=>true,
+    isPluginAvailable:()=>true,
+    Plugins:{ LighthouseRideMap:{ async navigate(value){ calls.push(value); return {status:'OPENED'}; } } },
+  };
+  const result = await openRideNavigation({ capacitor, destination:{lat:'13.87',lng:'100.59',label:'รับ'} });
+  assert.equal(result.status, 'OPENED');
+  assert.deepEqual(calls, [{destination:{lat:13.87,lng:100.59,label:'รับ'}}]);
+});
