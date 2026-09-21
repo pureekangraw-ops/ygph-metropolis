@@ -18,7 +18,10 @@
     "acceptance:capture-launch": "node tools/capture-app-launch-evidence.mjs",
     "acceptance:persistence-probe": "node tools/create-install-over-persistence-probe.mjs",
     "acceptance:assemble": "node tools/create-install-over-device-evidence.mjs",
-    "acceptance:evaluate": "node tools/evaluate-install-over-acceptance.mjs"
+    "acceptance:evaluate": "node tools/evaluate-install-over-acceptance.mjs",
+    "android:map:apply": "node tools/apply-local-map-native-proof.mjs android",
+    "android:map:fixture": "node tools/create-local-map-proof-fixture.mjs",
+    "android:map:proof": "node tools/capture-local-map-native-proof.mjs"
   },
   "dependencies": {
     "@capacitor/core": "8.5.0",
