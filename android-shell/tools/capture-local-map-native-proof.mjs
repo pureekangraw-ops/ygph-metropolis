@@ -33,7 +33,7 @@ function readSetting(namespace, key) {
 
 function restoreToggle(kind, value) {
   const enabled = value === '1' || value === 'enabled';
-  shell('svc', kind, enabled ? 'enable' : 'disable');
+  shell('svc', kind, enabled ? 'enable' : 'disable', { allowFailure: true });
 }
 
 async function sleep(ms) {
@@ -45,7 +45,7 @@ async function waitForRenderMarker(timeoutMs = 20000) {
   while (Date.now() - started < timeoutMs) {
     const logs = runAdb(['logcat', '-d', '-s', 'LIGHTHOUSE_LOCAL_MAP:I', '*:S'], { allowFailure: true }).stdout || '';
     if (logs.includes('PROOF_FAILED')) throw new Error(`LOCAL_MAP_PROOF_ACTIVITY_FAILED:${logs.trim()}`);
-    if (logs.includes('SOURCE_ATTACHED') && logs.includes('RENDER_COMPLETE')) return logs;
+    if (logs.includes('PACKAGE_STAGED') && logs.includes('SOURCE_ATTACHED') && logs.includes('RENDER_COMPLETE')) return logs;
     await sleep(750);
   }
   throw new Error('LOCAL_MAP_PROOF_RENDER_TIMEOUT');
@@ -67,13 +67,6 @@ export async function captureLocalMapNativeProof({
 
   try {
     runAdb(['get-state']);
-    runAdb(['push', fixturePath, '/data/local/tmp/lighthouse-gate1-proof.pmtiles']);
-
-    const runAs = shell('run-as', applicationId, 'sh', '-c', 'mkdir -p files/maps && cp /data/local/tmp/lighthouse-gate1-proof.pmtiles files/maps/gate1-proof.pmtiles', { allowFailure: true });
-    if (runAs.status !== 0) {
-      throw new Error('LOCAL_MAP_PROOF_REQUIRES_DEBUGGABLE_APP');
-    }
-
     shell('svc', 'wifi', 'disable');
     shell('svc', 'data', 'disable');
     const airplaneCommand = shell('cmd', 'connectivity', 'airplane-mode', 'enable', { allowFailure: true });
@@ -84,8 +77,10 @@ export async function captureLocalMapNativeProof({
 
     runAdb(['logcat', '-c']);
     const component = `${applicationId}/com.yggdrasil.lighthouse.LocalPmtilesProofActivity`;
-    const launch = shell('run-as', applicationId, 'am', 'start', '-n', component, { allowFailure: true });
-    if (launch.status !== 0) throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launch.stderr || launch.stdout}`);
+    const launch = shell('am', 'start', '-W', '-n', component, { allowFailure: true });
+    if (launch.status !== 0 || /Error:|Exception|Permission Denial/i.test(`${launch.stdout}\n${launch.stderr}`)) {
+      throw new Error(`LOCAL_MAP_PROOF_LAUNCH_FAILED:${launch.stderr || launch.stdout}`);
+    }
 
     const logs = await waitForRenderMarker();
     const screenshot = runAdb(['exec-out', 'screencap', '-p'], { binary: true });
@@ -122,6 +117,7 @@ export async function captureLocalMapNativeProof({
         networkProbeStatus: networkProbe.status,
       },
       render: {
+        packageStaged: logs.includes('PACKAGE_STAGED'),
         sourceAttached: logs.includes('SOURCE_ATTACHED'),
         renderComplete: logs.includes('RENDER_COMPLETE'),
         centerPixel: { r, g, b },
@@ -134,7 +130,6 @@ export async function captureLocalMapNativeProof({
     shell('cmd', 'connectivity', 'airplane-mode', airplaneBefore === '1' ? 'enable' : 'disable', { allowFailure: true });
     restoreToggle('wifi', wifiBefore);
     restoreToggle('data', dataBefore);
-    shell('rm', '-f', '/data/local/tmp/lighthouse-gate1-proof.pmtiles', { allowFailure: true });
   }
 
   await mkdir(dirnameCompat(evidencePath), { recursive: true });
@@ -144,7 +139,7 @@ export async function captureLocalMapNativeProof({
 }
 
 function dirnameCompat(path) {
-  const normalized = path.replaceAll('\\\\', '/');
+  const normalized = path.replaceAll('\\', '/');
   const index = normalized.lastIndexOf('/');
   return index > 0 ? normalized.slice(0, index) : '.';
 }
