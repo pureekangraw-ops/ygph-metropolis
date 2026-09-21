@@ -9,6 +9,7 @@ import {
   applyLocalMapNativeProof,
   debugProofManifest,
   patchGradleForLocalMapProof,
+  patchMainActivityForRideMapPlugin,
   patchManifestForLocalMapProof,
 } from '../tools/apply-local-map-native-proof.mjs';
 import { createLocalMapProofFixture } from '../tools/create-local-map-proof-fixture.mjs';
@@ -19,6 +20,13 @@ const GRADLE = `android {
 dependencies {
   implementation project(':capacitor-android')
 }
+`;
+
+const MAIN_ACTIVITY = `package com.yggdrasil.lighthouse;
+
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {}
 `;
 
 const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
@@ -41,6 +49,8 @@ test('release manifest strips unused MapLibre permissions and contains no proof 
   const patched = patchManifestForLocalMapProof(MANIFEST);
   assert.match(patched, /xmlns:tools="http:\/\/schemas\.android\.com\/tools"/);
   assert.doesNotMatch(patched, /LocalPmtilesProofActivity/);
+  assert.match(patched, /android:name=".RideMapActivity"/);
+  assert.match(patched, /RideMapActivity"[\s\S]*android:exported="false"/);
   assert.doesNotMatch(patched, /android\.permission\.ACCESS_NETWORK_STATE[^>]+tools:node="remove"/);
   for (const permission of [
     'ACCESS_WIFI_STATE',
@@ -49,6 +59,14 @@ test('release manifest strips unused MapLibre permissions and contains no proof 
   ]) {
     assert.match(patched, new RegExp(`android\\.permission\\.${permission}[^>]+tools:node="remove"`));
   }
+});
+
+test('generated MainActivity registers LighthouseRideMap native plugin once', () => {
+  const patched = patchMainActivityForRideMapPlugin(MAIN_ACTIVITY);
+  assert.match(patched, /import android\.os\.Bundle/);
+  assert.match(patched, /registerPlugin\(LighthouseRideMapPlugin\.class\)/);
+  assert.equal(patched.split('registerPlugin(LighthouseRideMapPlugin.class)').length - 1, 1);
+  assert.equal(patchMainActivityForRideMapPlugin(patched), patched);
 });
 
 test('proof activity is exported only from debug source set', () => {
@@ -61,14 +79,18 @@ test('overlay materializes debug-only proof surface without mutating Ride truth'
   const root = await mkdtemp(join(tmpdir(), 'lighthouse-local-map-native-'));
   const android = join(root, 'android');
   const app = join(android, 'app');
-  await mkdir(join(app, 'src', 'main'), { recursive: true });
+  await mkdir(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse'), { recursive: true });
   await writeFile(join(app, 'build.gradle'), GRADLE);
   await writeFile(join(app, 'src', 'main', 'AndroidManifest.xml'), MANIFEST);
+  await writeFile(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse', 'MainActivity.java'), MAIN_ACTIVITY);
 
   const result = await applyLocalMapNativeProof(android);
   const activity = await readFile(result.activityPath, 'utf8');
   const releaseManifest = await readFile(result.manifestPath, 'utf8');
   const debugManifest = await readFile(result.debugManifestPath, 'utf8');
+  const rideActivity = await readFile(result.rideMapActivityPath, 'utf8');
+  const ridePlugin = await readFile(result.rideMapPluginPath, 'utf8');
+  const mainActivity = await readFile(result.mainActivityPath, 'utf8');
   assert.match(activity, /pmtiles:\/\/file:\/\//);
   assert.match(activity, /getAssets\(\)\.open\(PROOF_ASSET\)/);
   assert.match(activity, /PACKAGE_STAGED source=debug_asset managed=true/);
@@ -76,7 +98,15 @@ test('overlay materializes debug-only proof surface without mutating Ride truth'
   assert.match(activity, /RENDER_COMPLETE local=true networkFallback=false/);
   assert.doesNotMatch(activity, /ACCESS_(?:COARSE|FINE|BACKGROUND)_LOCATION/);
   assert.doesNotMatch(releaseManifest, /LocalPmtilesProofActivity/);
+  assert.match(releaseManifest, /RideMapActivity/);
   assert.match(debugManifest, /android:exported="true"/);
+  assert.match(rideActivity, /VectorSource\("basemap", "pmtiles:\/\/file:\/\//);
+  assert.match(rideActivity, /GeoJsonSource/);
+  assert.match(ridePlugin, /@CapacitorPlugin\(name = "LighthouseRideMap"\)/);
+  assert.match(ridePlugin, /ACTION_OPEN_DOCUMENT/);
+  assert.match(ridePlugin, /LOCAL_MAP_PM_TILES_VECTOR_REQUIRED/);
+  assert.match(ridePlugin, /getFilesDir\(\), "maps"/);
+  assert.match(mainActivity, /registerPlugin\(LighthouseRideMapPlugin\.class\)/);
 });
 
 test('proof fixture is a deterministic local PMTiles v3 archive with magenta raster tile', async () => {
