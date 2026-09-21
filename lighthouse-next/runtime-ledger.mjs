@@ -533,5 +533,5 @@ export function createLighthouseLedgerBridge(deps = {}) {
     });
   }
 
-  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readCalendarTruth, readPlanningTruth, setDailyGoal, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
+  return Object.freeze({ readLedgerTruth, readIncomeTruth, readRideTruth, readRideMapTruth, readCalendarTruth, readPlanningTruth, setDailyGoal, recordOtherIncome, receiveReceivablePayment, recordExpense, reverseLedgerTransaction, createObligation, payObligation, rescheduleCalendar, setCalendarStatus });
 }
