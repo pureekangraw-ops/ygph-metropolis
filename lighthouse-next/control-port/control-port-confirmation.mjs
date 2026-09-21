@@ -65,9 +65,13 @@ export function installGoHubCommandConfirmation({
     confirmButton.disabled = true;
     rejectButton.disabled = true;
     try {
-      await runtime.confirm(requestId);
+      const receipt = await runtime.confirm(requestId);
       try { await runtime.refreshSnapshot?.(); } catch {}
       render();
+      const EventCtor = globalThis.CustomEvent;
+      if (typeof EventCtor === 'function') {
+        dispatch(new EventCtor('lighthouse:control-port-updated', { detail:{ requestId, receipt } }));
+      }
       await syncAgain();
     } finally {
       confirmButton.disabled = false;
@@ -81,8 +85,12 @@ export function installGoHubCommandConfirmation({
     confirmButton.disabled = true;
     rejectButton.disabled = true;
     try {
-      runtime.cancel(requestId);
+      const receipt = runtime.cancel(requestId);
       render();
+      const EventCtor = globalThis.CustomEvent;
+      if (typeof EventCtor === 'function') {
+        dispatch(new EventCtor('lighthouse:control-port-updated', { detail:{ requestId, receipt } }));
+      }
       await syncAgain();
     } finally {
       confirmButton.disabled = false;
@@ -91,6 +99,7 @@ export function installGoHubCommandConfirmation({
   });
 
   globalThis.addEventListener?.('lighthouse:hub-status', render);
+  globalThis.addEventListener?.('lighthouse:control-port-updated', render);
   render();
   return true;
 }
