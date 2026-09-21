@@ -42,8 +42,42 @@ export function assertLocalMapUri(value) {
   return uri;
 }
 
-function localMapUriProtocol(value) {
-  return new URL(assertLocalMapUri(value)).protocol;
+function parseLocalMapUri(value) {
+  return new URL(assertLocalMapUri(value));
+}
+
+function decodedPathname(parsed, code) {
+  try {
+    return decodeURIComponent(parsed.pathname);
+  } catch {
+    throw new Error(code);
+  }
+}
+
+export function assertManagedLocalMapFileUri(uri, managedRootUri) {
+  const source = parseLocalMapUri(uri);
+  if (source.protocol !== 'file:') throw new Error('LOCAL_MAP_ACTIVE_URI_MUST_BE_STAGED_FILE');
+
+  const rootValue = text(managedRootUri, 'LOCAL_MAP_MANAGED_ROOT_URI_REQUIRED');
+  let root;
+  try {
+    root = new URL(rootValue);
+  } catch {
+    throw new Error('LOCAL_MAP_MANAGED_ROOT_URI_INVALID');
+  }
+  if (root.protocol !== 'file:') throw new Error('LOCAL_MAP_MANAGED_ROOT_URI_MUST_BE_FILE');
+  if (source.host || root.host || source.search || source.hash || root.search || root.hash) {
+    throw new Error('LOCAL_MAP_MANAGED_FILE_URI_INVALID');
+  }
+
+  const sourcePath = decodedPathname(source, 'LOCAL_MAP_ACTIVE_URI_PATH_INVALID');
+  const rootPathRaw = decodedPathname(root, 'LOCAL_MAP_MANAGED_ROOT_URI_PATH_INVALID');
+  const rootPath = rootPathRaw.endsWith('/') ? rootPathRaw : `${rootPathRaw}/`;
+
+  if (!sourcePath.startsWith(rootPath) || sourcePath === rootPath) {
+    throw new Error('LOCAL_MAP_ACTIVE_URI_OUTSIDE_MANAGED_ROOT');
+  }
+  return uri;
 }
 
 export function normalizeMapPackageMetadata(input) {
@@ -78,7 +112,7 @@ export function createLocalPmtilesSource({ uri, metadata }) {
   });
 }
 
-export function createLocalMapPackageRecord({ uri = null, metadata = null, state = 'STAGED', reason = null, now = () => new Date().toISOString() }) {
+export function createLocalMapPackageRecord({ uri = null, metadata = null, state = 'STAGED', reason = null, managedRootUri = null, now = () => new Date().toISOString() }) {
   if (!PACKAGE_STATES.has(state)) throw new Error(`LOCAL_MAP_PACKAGE_STATE_INVALID:${state}`);
   const timestamp = text(now(), 'LOCAL_MAP_TIMESTAMP_REQUIRED');
   const isRecovery = state === 'RECOVERY_REQUIRED';
@@ -93,9 +127,7 @@ export function createLocalMapPackageRecord({ uri = null, metadata = null, state
     };
   } else {
     source = createLocalPmtilesSource({ uri, metadata });
-    if (state === 'ACTIVE' && localMapUriProtocol(uri) !== 'file:') {
-      throw new Error('LOCAL_MAP_ACTIVE_URI_MUST_BE_STAGED_FILE');
-    }
+    if (state === 'ACTIVE') assertManagedLocalMapFileUri(uri, managedRootUri);
   }
   return Object.freeze({
     ...source,
