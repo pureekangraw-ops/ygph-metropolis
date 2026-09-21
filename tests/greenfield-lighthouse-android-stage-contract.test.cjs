@@ -25,6 +25,7 @@ const runtimeFiles = [
   'view-model.mjs',
   'runtime-gate.mjs',
   'runtime-ledger.mjs',
+  'ride-map-native.mjs',
   'runtime-store.mjs',
   'control-port/capability-registry.mjs',
   'control-port/control-port.mjs',
