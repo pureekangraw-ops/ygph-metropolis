@@ -62,6 +62,10 @@ test('generated MainActivity registers LighthouseRideMap native plugin once', ()
   const patched = patchMainActivityForRideMapPlugin(MAIN_ACTIVITY);
   assert.match(patched, /import android\.os\.Bundle/);
   assert.match(patched, /registerPlugin\(LighthouseRideMapPlugin\.class\)/);
+  assert.ok(
+    patched.indexOf('registerPlugin(LighthouseRideMapPlugin.class)') < patched.indexOf('super.onCreate(savedInstanceState)'),
+    'custom plugin must be registered before BridgeActivity creates the Capacitor bridge',
+  );
   assert.equal(patched.split('registerPlugin(LighthouseRideMapPlugin.class)').length - 1, 1);
   assert.equal(patchMainActivityForRideMapPlugin(patched), patched);
 });
