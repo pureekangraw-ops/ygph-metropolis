@@ -17,6 +17,7 @@ test('LIGHTHOUSE internal root state matches the four visible roots and has no g
 
 
 test('Android bottom nav owns touch activation above page overlays', () => {
+  const app = fs.readFileSync(appPath, 'utf8');
   assert.match(app, /bottomNav\?\.addEventListener\(['"]pointerup['"],\s*activateRootTarget\)/);
   assert.match(app, /bottomNav\?\.addEventListener\(['"]click['"],\s*activateRootTarget\)/);
   assert.match(app, /closest\(['"]\[data-root-target\]['"]\)/);
