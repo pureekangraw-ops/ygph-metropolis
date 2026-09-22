@@ -14,3 +14,11 @@ test('LIGHTHOUSE internal root state matches the four visible roots and has no g
   assert.doesNotMatch(app, /selectRoot\(['"]home['"]\)/);
   assert.doesNotMatch(app, /\[['"]home['"],['"]chat['"],['"]manual['"],['"]go['"],['"]settings['"]\]/);
 });
+
+
+test('Android bottom nav owns touch activation above page overlays', () => {
+  assert.match(app, /bottomNav\?\.addEventListener\(['"]pointerup['"],\s*activateRootTarget\)/);
+  assert.match(app, /bottomNav\?\.addEventListener\(['"]click['"],\s*activateRootTarget\)/);
+  assert.match(app, /closest\(['"]\[data-root-target\]['"]\)/);
+  assert.match(app, /root\.classList\.remove\(['"]keyboard-open['"]\)/);
+});
