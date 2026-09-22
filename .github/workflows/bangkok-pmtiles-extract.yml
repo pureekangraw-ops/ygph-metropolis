@@ -1,0 +1,56 @@
+name: One-off Bangkok PMTiles extract
+
+on:
+  push:
+    branches:
+      - ops/bangkok-pmtiles-extract-20260922
+    paths:
+      - .github/workflows/bangkok-pmtiles-extract.yml
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download verified PMTiles CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 \
+            -o go-pmtiles.tar.gz \
+            https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz
+          echo "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f  go-pmtiles.tar.gz" | sha256sum -c -
+          tar -xzf go-pmtiles.tar.gz pmtiles
+          chmod +x pmtiles
+          ./pmtiles version || ./pmtiles --version || true
+
+      - name: Extract Bangkok metro vector basemap
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./pmtiles extract \
+            https://build.protomaps.com/20260921.pmtiles \
+            bangkok-metro-20260921.pmtiles \
+            --bbox=100.20,13.35,101.05,14.35 \
+            --maxzoom=15
+          ./pmtiles verify bangkok-metro-20260921.pmtiles
+          ./pmtiles show bangkok-metro-20260921.pmtiles --header-json > bangkok-metro-header.json
+          ./pmtiles show bangkok-metro-20260921.pmtiles --metadata > bangkok-metro-metadata.json
+          sha256sum bangkok-metro-20260921.pmtiles > bangkok-metro-20260921.sha256
+          ls -lh bangkok-metro-20260921.pmtiles
+
+      - name: Upload Bangkok metro PMTiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: bangkok-metro-20260921-pmtiles
+          path: |
+            bangkok-metro-20260921.pmtiles
+            bangkok-metro-20260921.sha256
+            bangkok-metro-header.json
+            bangkok-metro-metadata.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
