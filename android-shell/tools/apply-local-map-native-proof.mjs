@@ -102,8 +102,8 @@ export function patchMainActivityForRideMapPlugin(input) {
     return source.replace(emptyClass, `public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         registerPlugin(LighthouseRideMapPlugin.class);
+        super.onCreate(savedInstanceState);
     }
 }`);
   }
