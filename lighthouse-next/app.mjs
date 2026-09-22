@@ -737,7 +737,18 @@ void installControlPortBackgroundSync({
 });
 window.setInterval(() => { void syncGoHubControlPort(); }, 30_000);
 void bootRuntimeGate();
-root.querySelectorAll('[data-root-target]').forEach((button)=>button.addEventListener('click',()=>selectRoot(button.dataset.rootTarget)));
+function activateRootTarget(event) {
+  const button = event.target instanceof Element ? event.target.closest('[data-root-target]') : null;
+  if (!button || !root.contains(button)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  root.classList.remove('keyboard-open');
+  selectRoot(button.dataset.rootTarget);
+}
+const bottomNav = root.querySelector('#bottom-nav');
+bottomNav?.addEventListener('pointerup', activateRootTarget);
+bottomNav?.addEventListener('click', activateRootTarget);
 root.querySelector('#manual-back').addEventListener('click',showManualHub);
 chatForm.addEventListener('submit', async event => { event.preventDefault(); const value = chatInput.value; chatInput.value = ''; if (chatSend) chatSend.disabled = true; await submitChatText(value); chatInput.focus({ preventScroll:true }); });
 chatInput.addEventListener('input',()=>{ chatInput.style.height='auto'; chatInput.style.height=`${Math.min(chatInput.scrollHeight,118)}px`; if (chatSend) chatSend.disabled=!chatInput.value.trim(); });
