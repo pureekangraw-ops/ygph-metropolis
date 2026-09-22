@@ -48,7 +48,7 @@ test('Ride map bridge opens local map without job geography so rider can use cur
   };
   const result = await openRideMap({ capacitor, job:{recordId:'OLD'} });
   assert.equal(result.status, 'OPENED');
-  assert.deepEqual(calls, [{jobId:'OLD'}]);
+  assert.deepEqual(calls, [{jobId:'OLD',pickup:null,dropoff:null}]);
 });
 
 
