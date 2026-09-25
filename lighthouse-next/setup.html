@@ -51,6 +51,10 @@
         <input id="setup-recovery-code" type="password" minlength="12" autocomplete="off" required>
         <p class="hint">อย่างน้อย 12 ตัวอักษร และควรต่างจาก PIN</p>
 
+        <label for="setup-confirm-recovery-code">ยืนยัน Recovery Code</label>
+        <input id="setup-confirm-recovery-code" type="password" minlength="12" autocomplete="off" required>
+        <p class="hint">กรอกซ้ำให้ตรงกัน เพื่อยืนยันว่าบันทึก Recovery Code ถูกชุด</p>
+
         <div class="recovery-note"><strong>เก็บ Recovery Code ไว้นอกเครื่องนี้</strong><br>LIGHTHOUSE จะไม่บันทึก Recovery Code แบบอ่านข้อความได้ และหากลืมทั้ง PIN กับ Recovery Code จะไม่สามารถกู้ข้อมูลที่เข้ารหัสได้</div>
 
         <button id="setup-submit" class="primary-button" type="submit">ตั้งค่า LIGHTHOUSE</button>
