@@ -514,7 +514,8 @@ async function renderRide() {
 
     const mapStatus = makeStatus();
     const actions = document.createElement('div');
-    actions.className = 'action-row';
+    actions.className = 'action-row manual-map-actions';
+    actions.setAttribute('aria-label', 'การทำงานแผนที่');
     const openMapButton = document.createElement('button');
     openMapButton.type = 'button';
     openMapButton.className = 'primary-button';
