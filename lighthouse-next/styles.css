@@ -18,15 +18,15 @@
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 *{box-sizing:border-box}
-html{background:var(--bg-deep);min-width:320px}
-body{margin:0;background:radial-gradient(circle at 50% -10%,#14243a 0,#07111d 36%,#030810 100%);color:var(--text);min-height:100dvh;overflow-x:hidden}
+html{background:var(--bg-deep);min-width:320px;height:100%;overflow:hidden}
+body{margin:0;background:radial-gradient(circle at 50% -10%,#14243a 0,#07111d 36%,#030810 100%);color:var(--text);min-height:100dvh;height:100%;overflow:hidden;overscroll-behavior:none}
 button,textarea{font:inherit}
 button{color:inherit}
 button:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 button{-webkit-tap-highlight-color:transparent}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 [hidden]{display:none!important}
-#demo-root{min-height:100dvh}
+#demo-root{min-height:100dvh;height:100dvh;overflow:hidden}
 .eyebrow{margin:0 0 6px;text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:800;color:var(--gold)}
 .muted{color:var(--muted)}
 
@@ -267,4 +267,67 @@ button{-webkit-tap-highlight-color:transparent}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
   .beacon-beam{filter:none}
+}
+
+/* ---------- Android WebView mobile-safe shell ---------- */
+.app-shell{
+  height:100dvh;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scroll-padding-top:calc(16px + env(safe-area-inset-top));
+  scroll-padding-bottom:calc(var(--nav-height) + 28px + env(safe-area-inset-bottom));
+}
+
+#manual-hub,
+#manual-detail{
+  min-width:0;
+  padding-bottom:calc(var(--nav-height) + 28px + env(safe-area-inset-bottom));
+}
+
+.manual-detail{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+.action-row{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  min-width:0;
+  margin-top:10px;
+}
+
+.action-row > button{
+  width:100%;
+  min-width:0;
+  min-height:46px;
+  touch-action:manipulation;
+}
+
+.bottom-nav{
+  pointer-events:auto;
+  touch-action:none;
+  padding-bottom:calc(8px + env(safe-area-inset-bottom));
+}
+
+.nav-item{
+  min-width:44px;
+  min-height:44px;
+  pointer-events:auto;
+  touch-action:manipulation;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.nav-item:active{
+  transform:translateY(1px) scale(.98);
+  background:rgba(255,216,138,.13);
+}
+
+@media(max-width:380px){
+  .action-row{grid-template-columns:1fr 1fr}
 }
