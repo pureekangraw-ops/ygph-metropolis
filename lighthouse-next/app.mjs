@@ -23,6 +23,7 @@ import { createLighthouseCentreBoardBridge } from './centre-board/board-bridge.m
 import { createLighthouseWorkCirculation } from './work-circulation.mjs';
 import { createGoBoardView } from './go-board-live.mjs';
 import { createProjectStatusProjection } from './project-status-envelope.mjs';
+import { createLighthouseWebViewEvidence } from './webview-observability.mjs';
 import { READ_STATE, projectFinanceView } from './view-model.mjs';
 
 function registerProductionServiceWorker() {
@@ -148,6 +149,24 @@ let hubSyncRequested = false;
 let hubLiveController = null;
 let hubLiveStarting = false;
 let latestHubStatus = {};
+let latestMapEvidence = null;
+
+function emitWebViewEvidence() {
+  try {
+    const evidence = createLighthouseWebViewEvidence({
+      root,
+      appShell,
+      bottomNav:root.querySelector('.bottom-nav'),
+      activeRoot:state.activeRoot,
+      keyboardOpen:root.classList.contains('keyboard-open'),
+      focusedControl:document.activeElement,
+      mapEvidence:latestMapEvidence,
+      nativeBridgeState:latestMapEvidence?.evidence?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : latestMapEvidence ? 'AVAILABLE' : 'UNKNOWN',
+    });
+    globalThis.__LIGHTHOUSE_WEBVIEW_EVIDENCE__ = evidence;
+    window.dispatchEvent(new CustomEvent('lighthouse:webview-evidence', { detail:evidence }));
+  } catch {}
+}
 let latestCentreBoard = null;
 
 function dispatchHubStatus(detail) {
@@ -642,17 +661,48 @@ function renderHomeTruth() { const snapshot = financeSnapshot(); const ready = s
 function resetLocalState() { state = cloneDefaults(); try { localStorage.removeItem(STORAGE_KEY); chatLifecycle.clear(); clearStableMutationAttempts({ storage:localStorage }); } catch {} renderHomeTruth(); manualDetail.hidden = true; manualHub.hidden = false; selectRoot('manual'); }
 
 function setAuthBusy(busy) { loginSubmit.disabled = busy; devicePassword.disabled = busy; showRecoveryButton.disabled = busy; }
-function showLoginGate(message = 'พร้อมเข้าสู่ LIGHTHOUSE') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = false; recoveryForm.hidden = true; setupRequired.hidden = true; authStatus.textContent = message; setAuthBusy(false); }
-function showRecoveryGate(message = 'ใช้ Recovery Code เพื่อตั้งรหัสใหม่') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = true; recoveryForm.hidden = false; setupRequired.hidden = true; authStatus.textContent = message; }
-function showSetupRequired(reason) { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = true; recoveryForm.hidden = true; setupRequired.hidden = false; authStatus.textContent = reason === 'UNENROLLED' ? 'อุปกรณ์นี้ยังไม่ได้ตั้งค่ารหัส' : 'ข้อมูลรหัสอุปกรณ์ยังไม่สมบูรณ์'; }
-function showApp() { authScreen.hidden = true; appShell.hidden = false; renderHomeTruth(); selectRoot(state.activeRoot || 'manual'); restorePending(); }
+function revealControl(control) {
+  if (!control || typeof control.focus !== 'function') return;
+  try { control.focus({ preventScroll:true }); } catch { control.focus(); }
+  window.requestAnimationFrame(() => {
+    try { control.scrollIntoView({ block:'nearest', inline:'nearest' }); } catch {}
+  });
+}
+function showLoginGate(message = 'พร้อมเข้าสู่ LIGHTHOUSE') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = false; recoveryForm.hidden = true; setupRequired.hidden = true; authStatus.textContent = message; setAuthBusy(false); emitWebViewEvidence(); }
+function showRecoveryGate(message = 'ใช้ Recovery Code เพื่อตั้งรหัสใหม่') { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = true; recoveryForm.hidden = false; setupRequired.hidden = true; authStatus.textContent = message; emitWebViewEvidence(); window.requestAnimationFrame(() => revealControl(recoveryCodeInput)); }
+function showSetupRequired(reason) { authScreen.hidden = false; appShell.hidden = true; loginForm.hidden = true; recoveryForm.hidden = true; setupRequired.hidden = false; authStatus.textContent = reason === 'UNENROLLED' ? 'อุปกรณ์นี้ยังไม่ได้ตั้งค่ารหัส' : 'ข้อมูลรหัสอุปกรณ์ยังไม่สมบูรณ์'; emitWebViewEvidence(); }
+function showApp() { authScreen.hidden = true; appShell.hidden = false; appShell.scrollTop = 0; renderHomeTruth(); selectRoot(state.activeRoot || 'manual'); restorePending(); emitWebViewEvidence(); }
 function clearRecoveryFields() { recoveryCodeInput.value = ''; newPasswordInput.value = ''; confirmPasswordInput.value = ''; }
 async function bootRuntimeGate() { authStatus.textContent = 'กำลังตรวจสถานะอุปกรณ์…'; try { const result = await runtimeGate.inspect(); if (result.status === 'LOGIN') showLoginGate(); else showSetupRequired(result.reason); } catch (error) { showSetupRequired(); authStatus.textContent = authMessage(error); } }
 async function submitLogin(event) { event.preventDefault(); setAuthBusy(true); authStatus.textContent = 'กำลังตรวจรหัส…'; let unlocked = false; try { const result = await runtimeGate.login(devicePassword.value); if (result.status === 'UNLOCKED') { unlocked = true; ledgerTruth = await ledgerBridge.readLedgerTruth(); storeTruth = await storeBridge.readStoreTruth(); try { await controlPortRuntime.refreshSnapshot(); } catch {} state.activeRoot = 'manual'; saveState(); showApp(); void syncGoHubControlPort({ force:true }); } } catch (error) { if (unlocked) runtimeGate.lock(); ledgerTruth = null; storeTruth = null; const code = String(error?.message || error || ''); showLoginGate(code.startsWith('LIGHTHOUSE_LEDGER_') || code.startsWith('LIGHTHOUSE_STORE_') || code === 'RUNTIME_SESSION_LOCKED' ? 'ยังอ่านข้อมูลเงินจริงไม่ได้ กรุณาลองใหม่' : authMessage(error)); } finally { devicePassword.value = ''; setAuthBusy(false); } }
 async function submitRecovery(event) { event.preventDefault(); try { await runtimeGate.resetPassword({ recoveryCode: recoveryCodeInput.value, nextPassword: newPasswordInput.value, confirmPassword: confirmPasswordInput.value }); clearRecoveryFields(); showLoginGate('ตั้งรหัสใหม่แล้ว กรุณาเข้าสู่ระบบ'); } catch (error) { clearRecoveryFields(); showRecoveryGate(authMessage(error)); } }
 function lockApp() { stopGoHubRealtime('APP_LOCKED'); runtimeGate.lock(); ledgerTruth = null; storeTruth = null; devicePassword.value = ''; clearRecoveryFields(); showLoginGate('LIGHTHOUSE ถูกล็อกแล้ว'); }
 
-function selectRoot(rootId) { const allowed = ['chat','manual','go','settings']; const next = allowed.includes(rootId) ? rootId : 'manual'; state.activeRoot = next; saveState(); root.querySelectorAll('.app-page').forEach((page) => { const active = page.dataset.root === next; page.hidden = !active; page.classList.toggle('active', active); }); root.querySelectorAll('.nav-item').forEach((button) => { const active = button.dataset.rootTarget === next; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }); pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : next === 'go' ? 'สถานะสด' : 'ดูแลแอป'; if (next === 'chat') { ensureChatWelcome(); renderChat(); requestAnimationFrame(() => chatInput.focus({ preventScroll:true })); } if (next === 'manual') showManualHub(); if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); } }
+function selectRoot(rootId) {
+  const allowed = ['chat','manual','go','settings'];
+  const next = allowed.includes(rootId) ? rootId : 'manual';
+  state.activeRoot = next;
+  saveState();
+  root.querySelectorAll('.app-page').forEach((page) => {
+    const active = page.dataset.root === next;
+    page.hidden = !active;
+    page.classList.toggle('active', active);
+  });
+  root.querySelectorAll('.nav-item').forEach((button) => {
+    const active = button.dataset.rootTarget === next;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-current', active ? 'page' : 'false');
+  });
+  pageKicker.textContent = next === 'chat' ? 'ภาษาคน' : next === 'manual' ? 'ทำงานตรง' : next === 'go' ? 'สถานะสด' : 'ดูแลแอป';
+  if (next === 'chat') {
+    ensureChatWelcome();
+    renderChat();
+    requestAnimationFrame(() => chatInput.focus({ preventScroll:true }));
+  }
+  if (next === 'manual') showManualHub();
+  if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); }
+  emitWebViewEvidence();
+}
 function addMessage(role, text, kind = role) { const message={ id:`${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text, kind, createdAt:new Date().toISOString() }; state.chatHistory.push(message); state.chatHistory = state.chatHistory.slice(-80); saveState(); return message; }
 function ensureChatWelcome() { if (state.chatHistory.length) return; addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายจ่ายตรงใช้ “รายการ + จำนวน” เช่น “ข้าว 65”\nรายรับทั่วไปใช้ “จำนวนเงิน + ที่มา” เช่น “ทิป 59”\nเพิ่มสต็อกใช้ “เพิ่ม + สินค้า + จำนวน” เช่น “เพิ่มน้ำ 6 ขวด”\nสินค้าที่รู้จักใช้ “สินค้า + ราคา + จำนวน” เช่น “ขายมือถือ 566 2”\nหรือถาม “วันนี้วันที่เท่าไร”'); }
 function renderChat() { ensureChatWelcome(); chatThread.replaceChildren(); for (const message of state.chatHistory) { const bubble = document.createElement('div'); bubble.className = `message ${message.kind === 'note' ? 'note' : message.role === 'user' ? 'user' : 'app'}`; bubble.textContent = message.text; chatThread.append(bubble); } renderChatActions(); if (chatSend) chatSend.disabled = !chatInput.value.trim(); requestAnimationFrame(() => { chatThread.scrollTop = chatThread.scrollHeight; }); }
@@ -715,6 +765,10 @@ window.addEventListener('pagehide', () => {
 });
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
 installLighthouseTransferForm({ root, runtime:controlPortRuntime });
+window.addEventListener('lighthouse:map-evidence', event => {
+  latestMapEvidence = event.detail && typeof event.detail === 'object' ? event.detail : null;
+  emitWebViewEvidence();
+});
 window.addEventListener('lighthouse:centre-board', () => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
@@ -751,6 +805,30 @@ restoreManualView();
 
 const visualViewport = window.visualViewport;
 let keyboardBaselineHeight = visualViewport?.height || window.innerHeight;
-function syncKeyboardViewport() { const viewportHeight=visualViewport?.height||window.innerHeight; const inputFocused=document.activeElement===chatInput; if (!inputFocused) { keyboardBaselineHeight=viewportHeight; root.classList.toggle('keyboard-open',false); return; } const keyboardOpen=keyboardBaselineHeight-viewportHeight>120; root.classList.toggle('keyboard-open',keyboardOpen); }
+let focusedControl = null;
+function syncKeyboardViewport() {
+  const viewportHeight = visualViewport?.height || window.innerHeight;
+  const active = document.activeElement;
+  const inputFocused = Boolean(active && root.contains(active) && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName));
+  focusedControl = inputFocused ? active : null;
+  if (!inputFocused) {
+    keyboardBaselineHeight = viewportHeight;
+    root.classList.toggle('keyboard-open', false);
+    emitWebViewEvidence();
+    return;
+  }
+  const keyboardOpen = keyboardBaselineHeight - viewportHeight > 120;
+  root.classList.toggle('keyboard-open', keyboardOpen);
+  window.requestAnimationFrame(() => {
+    try { active.scrollIntoView({ block:'nearest', inline:'nearest' }); } catch {}
+  });
+  emitWebViewEvidence();
+}
+root.addEventListener('focusin', event => {
+  focusedControl = event.target;
+  window.setTimeout(syncKeyboardViewport, 50);
+});
+root.addEventListener('focusout', () => window.setTimeout(syncKeyboardViewport, 50));
 if (visualViewport) { visualViewport.addEventListener('resize',syncKeyboardViewport); visualViewport.addEventListener('scroll',syncKeyboardViewport); }
 window.addEventListener('resize',syncKeyboardViewport);
+syncKeyboardViewport();
