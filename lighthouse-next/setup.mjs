@@ -4,6 +4,7 @@ const setupForm = document.querySelector('#setup-form');
 const setupPasswordInput = document.querySelector('#setup-password');
 const setupConfirmPasswordInput = document.querySelector('#setup-confirm-password');
 const setupRecoveryCodeInput = document.querySelector('#setup-recovery-code');
+const setupConfirmRecoveryCodeInput = document.querySelector('#setup-confirm-recovery-code');
 const setupSubmit = document.querySelector('#setup-submit');
 const setupStatus = document.querySelector('#setup-status');
 const runtimeGate = createLighthouseRuntimeGate();
@@ -12,6 +13,7 @@ function setBusy(busy) {
   setupPasswordInput.disabled = busy;
   setupConfirmPasswordInput.disabled = busy;
   setupRecoveryCodeInput.disabled = busy;
+  setupConfirmRecoveryCodeInput.disabled = busy;
   setupSubmit.disabled = busy;
 }
 
@@ -24,6 +26,7 @@ function clearSetupSecrets() {
   setupPasswordInput.value = '';
   setupConfirmPasswordInput.value = '';
   setupRecoveryCodeInput.value = '';
+  setupConfirmRecoveryCodeInput.value = '';
 }
 
 async function submitFirstRun(event) {
@@ -34,6 +37,7 @@ async function submitFirstRun(event) {
   try {
     const result = await runtimeGate.setupFirstRun({
       recoveryCode: setupRecoveryCodeInput.value,
+      confirmRecoveryCode: setupConfirmRecoveryCodeInput.value,
       password: setupPasswordInput.value,
       confirmPassword: setupConfirmPasswordInput.value,
     });

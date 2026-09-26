@@ -13,6 +13,7 @@ export function authMessage(error) {
     DEVICE_PIN_INVALID: 'PIN ไม่ถูกต้อง',
     DEVICE_PIN_TOO_SHORT: `PIN ต้องมีอย่างน้อย ${DEVICE_PIN_MIN_LENGTH} ตัวอักษร`,
     DEVICE_PIN_CONFIRM_MISMATCH: 'PIN ใหม่ทั้งสองช่องไม่ตรงกัน',
+    RECOVERY_CODE_CONFIRM_MISMATCH: 'Recovery Code ทั้งสองช่องไม่ตรงกัน',
     DEVICE_UNLOCK_NOT_ENROLLED: 'อุปกรณ์นี้ยังไม่ได้ตั้งค่า PIN',
     DEVICE_UNLOCK_INCOMPLETE: 'ข้อมูล PIN บนอุปกรณ์ยังไม่สมบูรณ์ ต้องซ่อมการตั้งค่าก่อน',
     PASSPHRASE_TOO_SHORT: 'Recovery Code ต้องมีอย่างน้อย 12 ตัวอักษร',
@@ -65,12 +66,16 @@ export function createLighthouseRuntimeGate(deps = {}) {
     }
   }
 
-  async function setupFirstRun({ recoveryCode, password, confirmPassword } = {}) {
+  async function setupFirstRun({ recoveryCode, confirmRecoveryCode, password, confirmPassword } = {}) {
+    const recovery = String(recoveryCode ?? '');
     const next = String(password ?? '');
     if (next.length < minPasswordLength) throw new Error('DEVICE_PIN_TOO_SHORT');
     if (next !== String(confirmPassword ?? '')) throw new Error('DEVICE_PIN_CONFIRM_MISMATCH');
+    if (confirmRecoveryCode !== undefined && recovery !== String(confirmRecoveryCode ?? '')) {
+      throw new Error('RECOVERY_CODE_CONFIRM_MISMATCH');
+    }
     const result = await initialize({
-      recoveryCode: String(recoveryCode ?? ''),
+      recoveryCode: recovery,
       password: next,
     });
     return {
