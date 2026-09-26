@@ -310,7 +310,7 @@ button{-webkit-tap-highlight-color:transparent}
 
 .bottom-nav{
   pointer-events:auto;
-  touch-action:none;
+  touch-action:manipulation;
   padding-bottom:calc(8px + env(safe-area-inset-bottom));
 }
 
@@ -331,3 +331,29 @@ button{-webkit-tap-highlight-color:transparent}
 @media(max-width:380px){
   .action-row{grid-template-columns:1fr 1fr}
 }
+
+
+/* ---------- Android WebView auth, keyboard, and evidence contract ---------- */
+.auth-screen {
+  min-height:100dvh;
+  height:100dvh;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  align-content:start;
+  padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  box-sizing:border-box;
+}
+.auth-card { margin:0 auto; }
+.auth-form input,
+.auth-form button,
+.text-button { min-height:44px; }
+.auth-form input:focus-visible,
+.auth-form button:focus-visible,
+.text-button:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+.app-shell { overscroll-behavior-x:none; overscroll-behavior-y:contain; }
+#demo-root.keyboard-open .auth-screen { align-content:start; }
+#demo-root.keyboard-open .app-shell { scroll-padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+.bottom-nav { overscroll-behavior:contain; }
