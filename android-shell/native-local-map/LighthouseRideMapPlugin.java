@@ -377,10 +377,6 @@ public class LighthouseRideMapPlugin extends Plugin {
 
     JSObject pickup = call.getObject("pickup");
     JSObject dropoff = call.getObject("dropoff");
-    if (pickup == null && dropoff == null) {
-      call.reject("LIGHTHOUSE_RIDE_MAP_GEOGRAPHY_REQUIRED");
-      return;
-    }
 
     try {
       Intent intent = new Intent(getActivity(), RideMapActivity.class);

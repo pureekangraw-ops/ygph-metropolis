@@ -47,7 +47,6 @@ export async function openRideMap({ job, capacitor = globalThis.Capacitor } = {}
   if (!plugin || typeof plugin.openMap !== 'function') throw new Error('LIGHTHOUSE_RIDE_MAP_NATIVE_UNAVAILABLE');
   const pickup = point(job?.pickup);
   const dropoff = point(job?.dropoff);
-  if (!pickup && !dropoff) throw new Error('LIGHTHOUSE_RIDE_MAP_GEOGRAPHY_REQUIRED');
   return plugin.openMap({
     jobId:String(job?.recordId || ''),
     pickup,
