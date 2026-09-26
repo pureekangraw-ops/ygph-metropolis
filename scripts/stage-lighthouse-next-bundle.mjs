@@ -25,6 +25,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'control-port/control-port.mjs',
   'control-port/control-port-runtime.mjs',
   'control-port/control-port-sync.mjs',
+  'control-port/command-file.mjs',
   'control-port/control-port-credential.mjs',
   'control-port/control-port-transport.mjs',
   'control-port/control-port-confirmation.mjs',
