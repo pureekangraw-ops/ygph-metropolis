@@ -31,7 +31,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.TimeZone;
 import java.util.zip.GZIPInputStream;
 
 @CapacitorPlugin(name = "LighthouseRideMap")
@@ -39,6 +42,7 @@ public class LighthouseRideMapPlugin extends Plugin {
   private static final String PREFS = "lighthouse_ride_map";
   private static final String ACTIVE_FILE = "active.pmtiles";
   private static final int PMTILES_HEADER_SIZE = 127;
+  private static final String LAST_OPENED_AT = "lastOpenedAt";
 
   private File mapsRoot() {
     return new File(getContext().getFilesDir(), "maps");
@@ -54,6 +58,25 @@ public class LighthouseRideMapPlugin extends Plugin {
 
   private static String clean(String value) {
     return value == null ? "" : value.trim();
+  }
+
+  private static String nowIso() {
+    SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+    format.setTimeZone(TimeZone.getTimeZone("UTC"));
+    return format.format(new Date());
+  }
+
+  private static boolean sha256Matches(File file, String expected) {
+    if (file == null || !file.isFile() || clean(expected).isEmpty()) return false;
+    try (InputStream input = new FileInputStream(file)) {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] buffer = new byte[64 * 1024];
+      int read;
+      while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
+      return clean(expected).equals(hex(digest.digest()));
+    } catch (Exception ignored) {
+      return false;
+    }
   }
 
   private static String hex(byte[] value) {
@@ -250,7 +273,8 @@ public class LighthouseRideMapPlugin extends Plugin {
       .putString("minLon", Double.toString(metadata.minLon))
       .putString("minLat", Double.toString(metadata.minLat))
       .putString("maxLon", Double.toString(metadata.maxLon))
-      .putString("maxLat", Double.toString(metadata.maxLat));
+      .putString("maxLat", Double.toString(metadata.maxLat))
+      .putString(LAST_OPENED_AT, "");
 
     if (!editor.commit()) {
       active.delete();
@@ -301,6 +325,7 @@ public class LighthouseRideMapPlugin extends Plugin {
     }
     if (active.length() != expectedBytes) return recoveryStatus("ACTIVE_FILE_SIZE_MISMATCH");
     if (!activeHeaderLooksValid(active)) return recoveryStatus("ACTIVE_HEADER_INVALID");
+    if (!sha256Matches(active, sha256)) return recoveryStatus("ACTIVE_SHA256_MISMATCH");
 
     JSObject out = new JSObject();
     out.put("packageState", "ACTIVE");
@@ -312,6 +337,8 @@ public class LighthouseRideMapPlugin extends Plugin {
     out.put("attribution", store.getString("attribution", ""));
     out.put("minZoom", store.getInt("minZoom", 0));
     out.put("maxZoom", store.getInt("maxZoom", 0));
+    out.put(LAST_OPENED_AT, store.getString(LAST_OPENED_AT, ""));
+    out.put("recoveryReason", JSONObject.NULL);
     JSObject bounds = new JSObject();
     bounds.put("minLon", Double.parseDouble(store.getString("minLon", "0")));
     bounds.put("minLat", Double.parseDouble(store.getString("minLat", "0")));
@@ -390,8 +417,11 @@ public class LighthouseRideMapPlugin extends Plugin {
       putPoint(intent, "pickup", pickup);
       putPoint(intent, "dropoff", dropoff);
       getActivity().startActivity(intent);
+      String lastOpenedAt = nowIso();
+      prefs().edit().putString(LAST_OPENED_AT, lastOpenedAt).apply();
       JSObject out = new JSObject();
       out.put("status", "OPENED");
+      out.put(LAST_OPENED_AT, lastOpenedAt);
       call.resolve(out);
     } catch (Exception error) {
       call.reject(error.getMessage() == null ? "LIGHTHOUSE_RIDE_MAP_OPEN_FAILED" : error.getMessage());

@@ -3,12 +3,30 @@ import { createLighthouseStoreBridge } from './runtime-store.mjs';
 import { projectCalendarMonth, shiftCalendarMonth } from './calendar-month.mjs';
 import { MANUAL_MUTATION_ATTEMPT_PREFIX, createStableMutationAttempt, mutationErrorNeedsVerification } from './mutation-retry.mjs';
 import { importRideMapPackage, openRideMap, openRideNavigation, readRideMapNativeStatus } from './ride-map-native.mjs';
+import { createMapEvidenceBridge } from './monitor-evidence.mjs';
 
 const root = document.querySelector('#demo-root');
 const appShell = root?.querySelector('#app-shell');
 const manualNav = root?.querySelector('[data-root-target="manual"]');
 const manualHub = root?.querySelector('#manual-hub');
 const manualDetail = root?.querySelector('#manual-detail');
+const mapEvidenceBridge = createMapEvidenceBridge();
+function emitMapEvidence(job, mapStatus = {}) {
+  try {
+    const detail = mapEvidenceBridge.build({
+      job:job || {},
+      mapStatus:{
+        packageState:mapStatus.packageState || 'UNKNOWN',
+        packageVersion:mapStatus.packageVersion,
+        packageSha256:mapStatus.sha256,
+        packageByteLength:mapStatus.byteLength,
+        region:mapStatus.region,
+        lastOpenedAt:mapStatus.lastOpenedAt,
+      },
+    });
+    window.dispatchEvent(new CustomEvent('lighthouse:map-evidence', { detail }));
+  } catch {}
+}
 const manualDetailContent = root?.querySelector('#manual-detail-content');
 const ledgerBridge = createLighthouseLedgerBridge();
 const storeBridge = createLighthouseStoreBridge();
@@ -514,7 +532,8 @@ async function renderRide() {
 
     const mapStatus = makeStatus();
     const actions = document.createElement('div');
-    actions.className = 'action-row';
+    actions.className = 'action-row manual-map-actions';
+    actions.setAttribute('aria-label', 'การทำงานแผนที่');
     const openMapButton = document.createElement('button');
     openMapButton.type = 'button';
     openMapButton.className = 'primary-button';
@@ -538,14 +557,17 @@ async function renderRide() {
         mapStatus.textContent = 'ยังไม่ได้ติดตั้ง Local map';
       }
     } catch {
+      nativeStatus = { available:false, packageState:'UNAVAILABLE' };
       mapStatus.textContent = 'ยังอ่านสถานะแผนที่ Native ไม่ได้';
     }
+    emitMapEvidence(job, nativeStatus);
 
     openMapButton.addEventListener('click', async () => {
       mapStatus.textContent = 'กำลังเปิดแผนที่…';
       try {
         await openRideMap({ job });
         mapStatus.textContent = 'เปิดแผนที่แล้ว';
+        try { emitMapEvidence(job, await readRideMapNativeStatus()); } catch {}
       } catch (error) {
         const code = String(error?.message || error || '');
         mapStatus.textContent = code.includes('LOCAL_MAP_NOT_INSTALLED')
@@ -562,6 +584,7 @@ async function renderRide() {
         const result = await importRideMapPackage();
         const label = [result?.region, result?.packageVersion].filter(Boolean).join(' · ');
         mapStatus.textContent = label ? `ติดตั้ง Local map แล้ว · ${label}` : 'ติดตั้ง Local map แล้ว';
+        emitMapEvidence(job, result);
       } catch (error) {
         const code = String(error?.message || error || '');
         mapStatus.textContent = code.includes('CANCELLED') ? 'ยกเลิกการเลือกแผนที่' : 'ยังติดตั้ง Local map ไม่สำเร็จ';

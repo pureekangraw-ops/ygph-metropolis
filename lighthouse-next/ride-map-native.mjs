@@ -39,6 +39,14 @@ export async function readRideMapNativeStatus({ capacitor = globalThis.Capacitor
     packageVersion:result?.packageVersion ? String(result.packageVersion) : null,
     region:result?.region ? String(result.region) : null,
     fileName:result?.fileName ? String(result.fileName) : null,
+    sha256:result?.sha256 ? String(result.sha256) : null,
+    byteLength:Number.isSafeInteger(Number(result?.byteLength)) ? Number(result.byteLength) : null,
+    attribution:result?.attribution ? String(result.attribution) : null,
+    minZoom:Number.isFinite(Number(result?.minZoom)) ? Number(result.minZoom) : null,
+    maxZoom:Number.isFinite(Number(result?.maxZoom)) ? Number(result.maxZoom) : null,
+    bounds:result?.bounds && typeof result.bounds === 'object' ? result.bounds : null,
+    lastOpenedAt:result?.lastOpenedAt ? String(result.lastOpenedAt) : null,
+    recoveryReason:result?.recoveryReason ? String(result.recoveryReason) : null,
   });
 }
 
