@@ -55,3 +55,17 @@ export function resolveDispatchRoute(capabilities={},preferred=[]){
   return Object.freeze({route:'MANUAL',fallback:true});
 }
 export function decisionLabel(kind){const labels={MERGE_APPROVAL:'รออนุมัติ Merge',OWNER_DECISION:'ต้องตัดสินใจ',BLOCKER:'ติดปัญหา',VERIFY:'รอตรวจ'};return labels[String(kind||'').toUpperCase()]||'ต้องตรวจสอบ';}
+
+export function decideReplay({actionIdentity,receipt,evidence=[]}={}){
+  const identity=clean(actionIdentity);
+  if(!identity)return Object.freeze({decision:'WAIT_VERIFY',dispatch:false,reason:'ACTION_IDENTITY_UNKNOWN'});
+  const r=receipt&&typeof receipt==='object'?receipt:null;
+  const receiptIdentity=clean(r?.actionIdentity);
+  const status=clean(r?.status).toUpperCase();
+  const evidenceList=Array.isArray(evidence)?evidence.filter(Boolean):[];
+  const sameIdentity=receiptIdentity===identity;
+  const done=status==='DONE'&&sameIdentity&&evidenceList.length>0;
+  if(done)return Object.freeze({decision:'RETURN_EXISTING',dispatch:false,reason:'DONE_RECEIPT_VERIFIED',receipt:r});
+  if(r||evidenceList.length)return Object.freeze({decision:'WAIT_VERIFY',dispatch:false,reason:'RECEIPT_OR_EVIDENCE_UNCLEAR'});
+  return Object.freeze({decision:'DISPATCH',dispatch:true,reason:'NEW_ACTION'});
+}
