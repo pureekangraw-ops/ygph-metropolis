@@ -55,6 +55,19 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'manifest.webmanifest',
 ]);
 
+export const PRISM_RUNTIME_FILES = Object.freeze([
+  'index.html',
+  'styles.css',
+  'app.mjs',
+  'spectrum.mjs',
+  'manifest.webmanifest',
+]);
+
+export const PRISM_REQUIRED_ASSETS = Object.freeze([
+  'assets/prism-icon.svg',
+  'assets/prism-icon-maskable.svg',
+]);
+
 export const GREENFIELD_ENTRYPOINTS = Object.freeze([
   'runtime.mjs',
   'runtime-session.mjs',
@@ -109,7 +122,7 @@ export async function collectGreenfieldModuleClosure(greenfieldRoot, entrypoints
   return [...seen].sort();
 }
 
-const ROOT_ENTRY = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LIGHTHOUSE</title><meta http-equiv="refresh" content="0;url=./lighthouse-next/index.html"></head><body><p>LIGHTHOUSE</p><script>location.replace(\'./lighthouse-next/index.html\');</script></body></html>';
+const ROOT_ENTRY = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRISM</title><meta http-equiv="refresh" content="0;url=./prism/index.html"></head><body><p>PRISM</p><script>location.replace(\'./prism/index.html\');</script></body></html>';
 
 const CLIENT_ENTRY = `<!doctype html>
 <html lang="th">
@@ -160,11 +173,15 @@ self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;if(
 
 export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   const lighthouseRoot = join(repoRoot, 'lighthouse-next');
+  const prismRoot = join(repoRoot, 'prism');
   const greenfieldRoot = join(repoRoot, 'greenfield');
   const lighthousePathRoot = join(repoRoot, 'lighthouse');
 
   for (const relative of [...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS]) {
     if (!(await exists(join(lighthouseRoot, relative)))) throw new Error(`LIGHTHOUSE_NEXT_SOURCE_MISSING:${relative}`);
+  }
+  for (const relative of [...PRISM_RUNTIME_FILES, ...PRISM_REQUIRED_ASSETS]) {
+    if (!(await exists(join(prismRoot, relative)))) throw new Error(`PRISM_SOURCE_MISSING:${relative}`);
   }
   for (const relative of CLIENT_RUNTIME_FILES) {
     if (!(await exists(join(repoRoot, relative)))) throw new Error(`GO_CLIENT_SOURCE_MISSING:${relative}`);
@@ -175,6 +192,7 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
 
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(join(destinationRoot, 'lighthouse-next', 'assets'), { recursive: true });
+  await mkdir(join(destinationRoot, 'prism', 'assets'), { recursive: true });
   await mkdir(join(destinationRoot, 'greenfield'), { recursive: true });
   await mkdir(join(destinationRoot, 'lighthouse', 'capabilities'), { recursive: true });
   await mkdir(join(destinationRoot, 'client', 'assets', 'ui'), { recursive: true });
@@ -204,7 +222,18 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     sourceCommit:source.commit,
   };
   await writeFile(join(destinationRoot, 'lighthouse-next', 'build-identity.json'), `${JSON.stringify(buildIdentity, null, 2)}\n`, 'utf8');
+  await writeFile(join(destinationRoot, 'prism', 'build-identity.json'), `${JSON.stringify(buildIdentity, null, 2)}\n`, 'utf8');
 
+  for (const relative of PRISM_RUNTIME_FILES) {
+    const target = join(destinationRoot, 'prism', relative);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(join(prismRoot, relative), target, { force: true });
+  }
+  for (const relative of PRISM_REQUIRED_ASSETS) {
+    const target = join(destinationRoot, 'prism', relative);
+    await mkdir(dirname(target), { recursive: true });
+    await cp(join(prismRoot, relative), target, { force: true });
+  }
   for (const relative of LIGHTHOUSE_RUNTIME_FILES) {
     const target = join(destinationRoot, 'lighthouse-next', relative);
     await mkdir(dirname(target), { recursive: true });
@@ -234,6 +263,9 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   const applicationFiles = [
     'index.html',
     'client/index.html',
+    'prism/build-identity.json',
+    ...PRISM_RUNTIME_FILES.map(file => `prism/${file}`),
+    ...PRISM_REQUIRED_ASSETS.map(file => `prism/${file}`),
     'lighthouse-next/build-identity.json',
     ...LIGHTHOUSE_RUNTIME_FILES.map(file => `lighthouse-next/${file}`),
     ...REQUIRED_ASSETS.map(file => `lighthouse-next/${file}`),
@@ -243,16 +275,16 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   ];
   const assetRevision = await hashFiles(destinationRoot, applicationFiles);
   const releaseManifest = {
-    product:'LIGHTHOUSE',
-    architecture:'LIGHTHOUSE_NEXT',
+    product:'PRISM',
+    architecture:'PRISM_MOBILE_V1',
     authority:'scripts/stage-lighthouse-next-bundle.mjs',
     versionName:buildIdentity.versionName,
     versionCode:buildIdentity.versionCode,
     applicationId:buildIdentity.applicationId,
     source,
     assetRevision,
-    roots:['CHAT','MANUAL','GO','SETTINGS'],
-    legacyShell:'ROLLBACK_ONLY_NOT_DEPLOYED',
+    roots:['HOME','WORK','HANDOFF','MONITOR','LAB'],
+    legacyShell:'LIGHTHOUSE_COMPATIBILITY_ONLY_NOT_ENTRY',
     applicationFiles:[...applicationFiles].sort(),
   };
   await writeFile(join(destinationRoot, 'release-manifest.json'), `${JSON.stringify(releaseManifest, null, 2)}\n`, 'utf8');
@@ -265,6 +297,7 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   }), 'utf8');
 
   return {
+    prismFiles:[...PRISM_RUNTIME_FILES, ...PRISM_REQUIRED_ASSETS],
     lighthouseFiles:[...LIGHTHOUSE_RUNTIME_FILES, ...REQUIRED_ASSETS],
     greenfieldFiles,
     lighthousePathFiles,
@@ -283,5 +316,5 @@ if (invokedPath === modulePath) {
   const repoRoot = resolve(dirname(modulePath), '..');
   const destinationRoot = resolve(process.cwd(), destinationArg);
   const result = await stageLighthouseBundle({ repoRoot, destinationRoot });
-  console.log(`Staged canonical LIGHTHOUSE bundle (${result.applicationFiles.length} deploy files, ${result.greenfieldFiles.length} Greenfield modules)`);
+  console.log(`Staged canonical PRISM bundle (${result.applicationFiles.length} deploy files, ${result.greenfieldFiles.length} Greenfield modules)`);
 }
