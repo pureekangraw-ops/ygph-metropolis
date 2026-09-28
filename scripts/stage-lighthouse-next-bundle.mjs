@@ -283,7 +283,7 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     applicationId:buildIdentity.applicationId,
     source,
     assetRevision,
-    roots:['HOME','WORK','HANDOFF','MONITOR','LAB'],
+    roots:['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR'],
     legacyShell:'LIGHTHOUSE_COMPATIBILITY_ONLY_NOT_ENTRY',
     applicationFiles:[...applicationFiles].sort(),
   };
