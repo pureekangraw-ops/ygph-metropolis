@@ -5,7 +5,7 @@ const safe=(v,f='—')=>String(v??'').trim()||f;
 const pinPlugin=()=>globalThis.Capacitor?.Plugins?.PrismPin;
 async function pinStatus(){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');return p.status();}
 async function unlock(pin){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');const r=await p.verify({pin});if(r?.verified){document.body.classList.remove('locked');return true;}return false;}
-async function configurePin(pin,confirm){if(pin!==confirm)throw new Error('PIN_CONFIRM_MISMATCH');if(!/^\\d{4,12}$/.test(pin))throw new Error('PIN_INVALID');const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');await p.provision({pin});return unlock(pin);}
+async function configurePin(pin,confirm){if(pin!==confirm)throw new Error('PIN_CONFIRM_MISMATCH');if(!/^\d{4,12}$/.test(pin))throw new Error('PIN_INVALID');const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');await p.provision({pin});return unlock(pin);}
 const replayKey=id=>'prism:replay:'+id;
 function readReplay(id){try{return JSON.parse(localStorage.getItem(replayKey(id))||'null');}catch{return null;}}
 function writeReplay(id,value){try{localStorage.setItem(replayKey(id),JSON.stringify(value));}catch{}}
