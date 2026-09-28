@@ -53,6 +53,7 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
+  'component-release.json',
 ]);
 
 export const PRISM_RUNTIME_FILES = Object.freeze([
@@ -201,11 +202,29 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
   await writeFile(join(destinationRoot, 'client', 'index.html'), CLIENT_ENTRY, 'utf8');
   await cp(join(repoRoot, '_headers'), join(destinationRoot, '_headers'), { force: true });
 
-  const [androidVersion, androidIdentity] = await Promise.all([
+  const [androidVersion, androidIdentity, prismComponentRelease] = await Promise.all([
     readFile(join(repoRoot, 'android-shell', 'version.json'), 'utf8').then(JSON.parse),
     readFile(join(repoRoot, 'android-shell', 'apk-identity.json'), 'utf8').then(JSON.parse),
+    readFile(join(prismRoot, 'component-release.json'), 'utf8').then(JSON.parse),
   ]);
   if (androidVersion?.owner !== 'ANDROID_APK') throw new Error('LIGHTHOUSE_ANDROID_VERSION_OWNER_INVALID');
+  const canonicalVersionName = String(androidVersion?.versionName || '').trim();
+  const canonicalVersionCode = Number(androidVersion?.versionCode);
+  if (prismComponentRelease?.product !== 'PRISM' || prismComponentRelease?.policy !== 'LOCKSTEP_FAIL_CLOSED') {
+    throw new Error('PRISM_COMPONENT_RELEASE_CONTRACT_INVALID');
+  }
+  if (String(prismComponentRelease?.release?.versionName || '').trim() !== canonicalVersionName || Number(prismComponentRelease?.release?.versionCode) !== canonicalVersionCode) {
+    throw new Error('PRISM_COMPONENT_RELEASE_VERSION_MISMATCH');
+  }
+  const requiredComponentIds = ['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR','SPECTRUM','ANDROID_SHELL'];
+  const componentMap = new Map((Array.isArray(prismComponentRelease?.components) ? prismComponentRelease.components : []).map(item => [String(item?.id || '').trim().toUpperCase(), item]));
+  for (const id of requiredComponentIds) {
+    const component = componentMap.get(id);
+    if (!component) throw new Error(`PRISM_COMPONENT_RELEASE_MISSING:${id}`);
+    if (String(component.versionName || '').trim() !== canonicalVersionName || Number(component.versionCode) !== canonicalVersionCode) {
+      throw new Error(`PRISM_COMPONENT_VERSION_MISMATCH:${id}`);
+    }
+  }
   if (!androidIdentity?.applicationId || !Number.isInteger(Number(androidVersion?.versionCode)) || !String(androidVersion?.versionName || '').trim()) {
     throw new Error('LIGHTHOUSE_ANDROID_BUILD_IDENTITY_INVALID');
   }
@@ -281,6 +300,8 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     versionName:buildIdentity.versionName,
     versionCode:buildIdentity.versionCode,
     applicationId:buildIdentity.applicationId,
+    componentPolicy:prismComponentRelease.policy,
+    components:prismComponentRelease.components,
     source,
     assetRevision,
     roots:['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR'],
