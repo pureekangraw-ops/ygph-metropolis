@@ -53,7 +53,6 @@ export const LIGHTHOUSE_RUNTIME_FILES = Object.freeze([
   'mutation-retry.mjs',
   'bangkok-date.mjs',
   'manifest.webmanifest',
-  'component-release.json',
 ]);
 
 export const PRISM_RUNTIME_FILES = Object.freeze([
@@ -62,6 +61,7 @@ export const PRISM_RUNTIME_FILES = Object.freeze([
   'app.mjs',
   'spectrum.mjs',
   'manifest.webmanifest',
+  'component-release.json',
 ]);
 
 export const PRISM_REQUIRED_ASSETS = Object.freeze([
