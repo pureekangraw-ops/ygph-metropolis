@@ -24,7 +24,7 @@ test('production manifest names LIGHTHOUSE Next shell truth',()=>{
   assert.equal(manifest.authority.rule,'WEB_AND_ANDROID_MUST_USE_SAME_STAGED_BUNDLE');
 });
 
-test('canonical production bundle root routes only to LIGHTHOUSE Next',async()=>{
+test('canonical production bundle root routes to PRISM while LIGHTHOUSE Next stays compatibility-only',async()=>{
   const {mkdtemp,readFile,rm}=require('node:fs/promises');
   const mod=await import(path.join(root,'scripts/stage-lighthouse-next-bundle.mjs'));
   const dest=await mkdtemp(path.join(os.tmpdir(),'lh-shell-'));
