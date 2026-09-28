@@ -22,8 +22,8 @@ jobs:
         run: ERR=$(node --check prism/app.mjs 2>&1) || { printf 'SYNTAX_ERROR=%s\\n' "$(printf '%s' "$ERR" | tr '\\n' '|')"; exit 1; }
       - name: Syntax spectrum
         run: node --check prism/spectrum.mjs
-      - name: Syntax staging
-        run: node --check scripts/stage-prism-native.mjs
+      - name: Syntax staging and PIN tooling
+        run: node --check scripts/stage-prism-native.mjs && node --check android-shell/tools/apply-prism-pin.mjs
       - name: PRISM contract tests
         run: node --test tests/prism-native-cutover.test.cjs
       - name: Install Android dependencies
