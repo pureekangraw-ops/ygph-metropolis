@@ -25,8 +25,8 @@ test('visible release authority is generated from Android identity into the cano
     const runtimeManifest=JSON.parse(await readFile(path.join(dest,'release-manifest.json'),'utf8'));
     const identity=JSON.parse(await readFile(path.join(dest,'lighthouse-next','build-identity.json'),'utf8'));
     const version=JSON.parse(await readFile(path.join(root,'android-shell','version.json'),'utf8'));
-    assert.equal(runtimeManifest.product,'LIGHTHOUSE');
-    assert.equal(runtimeManifest.architecture,'LIGHTHOUSE_NEXT');
+    assert.equal(runtimeManifest.product,'PRISM');
+    assert.equal(runtimeManifest.architecture,'PRISM_MOBILE_V1');
     assert.equal(runtimeManifest.versionName,version.versionName);
     assert.equal(runtimeManifest.versionCode,version.versionCode);
     assert.equal(identity.versionName,version.versionName);

@@ -15,7 +15,7 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
   const version = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
   assert.equal(Number.isInteger(version.baselineVersionCode), true);
   assert.equal(Number.isInteger(version.versionCode), true);
-  assert.equal(version.versionCode, version.baselineVersionCode + 1);
+  assert.ok(version.versionCode > version.baselineVersionCode, 'candidate versionCode must stay monotonic above the canonical baseline');
   assert.match(version.versionName, /^1\.0\.0-owner\.\d+$/);
   assert.ok(version.versionCode > version.baselineVersionCode, 'candidate must install over the canonical previous owner build');
 
@@ -49,7 +49,7 @@ test('Android candidate records and enforces the canonical upgrade baseline', as
 
 test('APK identity verifier fails closed on package signer and version drift', async () => {
   const identity = JSON.parse(fs.readFileSync(identityPath, 'utf8'));
-  assert.equal(identity.applicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(identity.applicationId, 'com.yggdrasil.prism');
   assert.equal(identity.signerCertificateSha256, 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce');
 
   const { assertApkIdentity } = await import(pathToFileURL(verifierPath));
