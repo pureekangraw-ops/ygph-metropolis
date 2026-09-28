@@ -3,9 +3,9 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const APPROVED_ICON_SOURCE = 'lighthouse-next/assets/lighthouse-icon.svg';
-export const APPROVED_MASKABLE_ICON_SOURCE = 'lighthouse-next/assets/lighthouse-icon-maskable.svg';
-export const LAUNCHER_BACKGROUND = '#0B0E14';
+export const APPROVED_ICON_SOURCE = 'prism/assets/prism-icon.svg';
+export const APPROVED_MASKABLE_ICON_SOURCE = 'prism/assets/prism-icon-maskable.svg';
+export const LAUNCHER_BACKGROUND = '#F4F7FB';
 
 const DENSITIES = Object.freeze({
   mdpi: { flat: 48, foreground: 108 },
@@ -39,14 +39,14 @@ async function transparentMaskableSvg({ iconPath, maskablePath }) {
     readFile(maskablePath, 'utf8'),
   ]);
 
-  if (!maskableSvg.includes('href="./lighthouse-icon.svg"')) {
+  if (!maskableSvg.includes('href="./prism-icon.svg"')) {
     throw new Error('LIGHTHOUSE_MASKABLE_ICON_REFERENCE_INVALID');
   }
 
   const embeddedIcon = `data:image/svg+xml;base64,${Buffer.from(iconSvg, 'utf8').toString('base64')}`;
   const transparent = maskableSvg
     .replace(/\s*<rect\b[^>]*fill="#0B0E14"[^>]*\/>/i, '')
-    .replace('href="./lighthouse-icon.svg"', `href="${embeddedIcon}"`);
+    .replace('href="./prism-icon.svg"', `href="${embeddedIcon}"`);
 
   return Buffer.from(transparent, 'utf8');
 }
