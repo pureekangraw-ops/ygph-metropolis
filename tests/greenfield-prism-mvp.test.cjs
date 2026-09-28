@@ -132,3 +132,22 @@ test('SPECTRUM receipt-backed replay gate returns DONE effects, waits on ambigui
   assert.equal(unknown.decision,'WAIT_VERIFY');
   assert.equal(unknown.dispatch,false);
 });
+
+
+test('PRISM live handoff wires receipt-backed replay decisions before dispatch', async ()=>{
+  const mod=await import(pathToFileURL(path.join(process.cwd(),'prism','spectrum.mjs')).href);
+  const env=mod.buildHandoff({workId:'WORK-1',checkpointId:'CP-WORK-1',destination:'LIGHT',requestedResult:'review',message:'check this'});
+  const id=mod.buildActionIdentity(env);
+  assert.ok(id.includes('WORK-1'));
+  assert.equal(mod.buildActionIdentity({...env,message:'changed'}),id.replace(encodeURIComponent('check this'),encodeURIComponent('changed')));
+  assert.equal(mod.decideReplay({actionIdentity:id}).decision,'DISPATCH');
+  assert.equal(mod.decideReplay({actionIdentity:id,receipt:{actionIdentity:id,status:'UNKNOWN'}}).decision,'WAIT_VERIFY');
+  assert.equal(mod.decideReplay({actionIdentity:id,receipt:{actionIdentity:id,status:'DONE'},evidence:[{type:'READBACK',ref:'R-1'}]}).decision,'RETURN_EXISTING');
+  const app=fs.readFileSync(path.join(process.cwd(),'prism','app.mjs'),'utf8');
+  assert.match(app,/buildActionIdentity\(env\)/);
+  assert.match(app,/decideReplay\(\{actionIdentity,receipt:prior\?\.receipt,evidence:prior\?\.evidence\}\)/);
+  assert.match(app,/status:'UNKNOWN'/);
+  assert.match(app,/bridge\.dispatch\(\{\.\.\.env,route:route\.route,actionIdentity\}\)/);
+  assert.match(app,/WAIT_VERIFY/);
+  assert.match(app,/RETURN_EXISTING/);
+});
