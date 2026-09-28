@@ -58,3 +58,18 @@ test('PRISM normal surfaces hide system jargon until advanced drill-down', ()=>{
   for(const label of ['หน้าหลัก','งาน','ส่งต่อ','แลป']) assert.match(nav,new RegExp(label));
   assert.doesNotMatch(nav,/มอนิเตอร์/);
 });
+
+
+test('PRISM applies one mobile sizing contract across all surfaces', ()=>{
+  const css=fs.readFileSync(path.join(process.cwd(),'prism','styles.css'),'utf8');
+  for (const token of ['--page-pad:16px','--touch:48px','--header-h:60px','--composer-h:56px','--nav-h:68px']) {
+    assert.ok(css.includes(token), 'missing sizing token '+token);
+  }
+  assert.match(css,/\.app-shell\{width:100%/);
+  assert.match(css,/\.ask-box input\{[\s\S]*?height:var\(--composer-h\)/);
+  assert.match(css,/\.card-actions button\{[\s\S]*?min-height:var\(--touch\)/);
+  assert.match(css,/\.bottom-nav\{[\s\S]*?height:calc\(var\(--nav-h\)/);
+  assert.match(css,/@media\(min-width:600px\)/);
+  assert.match(css,/env\(safe-area-inset-bottom\)/);
+  assert.match(css,/\.decision-summary\{max-width:82%/);
+});
