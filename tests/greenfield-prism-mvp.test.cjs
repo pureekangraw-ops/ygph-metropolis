@@ -35,3 +35,16 @@ test('PRISM home surfaces only active work and explicit decisions', async ()=>{
   assert.equal(view.active.length,1);
   assert.equal(view.decisions[0].workId,'W1');
 });
+
+
+test('PRISM is the staged product entry and Android display identity', ()=>{
+  const stage=fs.readFileSync(path.join(process.cwd(),'scripts','stage-lighthouse-next-bundle.mjs'),'utf8');
+  const capacitor=JSON.parse(fs.readFileSync(path.join(process.cwd(),'android-shell','capacitor.config.json'),'utf8'));
+  assert.match(stage,/title>PRISM</);
+  assert.match(stage,/\.\/prism\/index\.html/);
+  assert.match(stage,/product:'PRISM'/);
+  assert.match(stage,/architecture:'PRISM_MOBILE_V1'/);
+  for (const root of ['HOME','WORK','HANDOFF','MONITOR','LAB']) assert.match(stage,new RegExp(`'${root}'`));
+  assert.equal(capacitor.appName,'PRISM');
+  assert.equal(capacitor.appId,'com.yggdrasil.lighthouse');
+});
