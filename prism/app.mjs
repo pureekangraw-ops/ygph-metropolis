@@ -29,7 +29,7 @@ function render(){
 async function loadSnapshot(){const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}render();updateRoute();}
 function updateRoute(){const r=resolveDispatchRoute(state.capabilities);$('#route-preview').textContent=r.route==='MANUAL'?'ยังไม่มีเส้นส่งสดที่พิสูจน์แล้ว — PRISM จะเตรียม handoff ให้':'พร้อมส่งและรอ readback จากปลายทาง';}
 async function submitIntent(text){const bridge=window.PRISM_BRIDGE;addCopilot(text,'user');if(!bridge?.submitIntent){addCopilot('ตอนนี้ยังเชื่อม Copilot runtime จริงไม่ได้ แต่คำสั่งนี้จะไม่ถูกแกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));await loadSnapshot();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
-$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
+$$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
 $$('[data-prompt]').forEach(b=>b.addEventListener('click',()=>submitIntent(b.dataset.prompt)));
 $('#refresh').addEventListener('click',loadSnapshot);
 $('#command-form').addEventListener('submit',e=>{e.preventDefault();const i=$('#command-input'),t=i.value.trim();if(!t)return;i.value='';submitIntent(t);});
