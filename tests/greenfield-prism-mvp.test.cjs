@@ -7,10 +7,10 @@ const {pathToFileURL}=require('node:url');
 test('PRISM MVP exposes owner decision, handoff, monitor, and lab surfaces', async ()=>{
   const root=path.join(process.cwd(),'prism');
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  for (const label of ['ต้องตัดสินใจ','งาน & การส่งต่อ','ส่งต่องาน','ดูความจริงเมื่อจำเป็น','ผลทดลอง']) {
+  for (const label of ['เรื่องที่ต้องตัดสินใจ','กำลังทำอะไรอยู่','อยากส่งอะไรให้ใคร','ตอนนี้ระบบเป็นยังไง','ของที่กลับมาจากแลป']) {
     assert.match(html,new RegExp(label));
   }
-  assert.match(html,/SPECTRUM inside/);
+  assert.match(html,/วันนี้มีอะไรให้จัดการ/);
   assert.doesNotMatch(html,/Ledger/);
 });
 
@@ -47,4 +47,14 @@ test('PRISM is the staged product entry and Android display identity', ()=>{
   for (const root of ['HOME','WORK','HANDOFF','MONITOR','LAB']) assert.match(stage,new RegExp(`'${root}'`));
   assert.equal(capacitor.appName,'PRISM');
   assert.equal(capacitor.appId,'com.yggdrasil.prism');
+});
+
+test('PRISM normal surfaces hide system jargon until advanced drill-down', ()=>{
+  const html=fs.readFileSync(path.join(process.cwd(),'prism','index.html'),'utf8');
+  const home=html.match(/<section class="page active" data-page="HOME">[\s\S]*?<\/section>\s*<section class="page" data-page="WORK">/)?.[0]||'';
+  assert.doesNotMatch(home,/Work ID|Checkpoint ID|Authority|Route|SPECTRUM|Provenance/);
+  assert.match(html,/รายละเอียดสำหรับตรวจระบบ/);
+  const nav=html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0]||'';
+  for(const label of ['หน้าหลัก','งาน','ส่งต่อ','แลป']) assert.match(nav,new RegExp(label));
+  assert.doesNotMatch(nav,/มอนิเตอร์/);
 });
