@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21' }
       - name: Syntax app
-        run: node --check prism/app.mjs 2>syntax.err || { cat syntax.err; echo '--- context ---'; nl -ba prism/app.mjs | tail -n 20; exit 1; }
+        run: ERR=$(node --check prism/app.mjs 2>&1) || { printf 'SYNTAX_ERROR=%s\\n' "$(printf '%s' "$ERR" | tr '\\n' '|')"; exit 1; }
       - name: Syntax spectrum
         run: node --check prism/spectrum.mjs
       - name: Syntax staging
