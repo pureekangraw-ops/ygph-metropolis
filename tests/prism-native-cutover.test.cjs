@@ -7,7 +7,7 @@ test('root surfaces stay bounded',()=>{const h=fs.readFileSync('prism/index.html
 
 test('PRISM PIN tooling registers native plugin even when MainActivity already has onCreate', async () => {
   const tool = fs.readFileSync('android-shell/tools/apply-prism-pin.mjs','utf8');
-  assert.match(tool, /void\\s\+onCreate/);
+  assert.match(tool, /void onCreate[(]Bundle/);
   assert.match(tool, /registerPlugin\(PrismPinPlugin\.class\)/);
   assert.match(tool, /PRISM_PIN_SUPER_ONCREATE_MISSING/);
 });
