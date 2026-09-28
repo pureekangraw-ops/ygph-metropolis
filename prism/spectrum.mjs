@@ -56,6 +56,18 @@ export function resolveDispatchRoute(capabilities={},preferred=[]){
 }
 export function decisionLabel(kind){const labels={MERGE_APPROVAL:'รออนุมัติ Merge',OWNER_DECISION:'ต้องตัดสินใจ',BLOCKER:'ติดปัญหา',VERIFY:'รอตรวจ'};return labels[String(kind||'').toUpperCase()]||'ต้องตรวจสอบ';}
 
+export function buildActionIdentity(action={}){
+  const a={
+    workId:clean(action.workId),
+    checkpointId:clean(action.checkpointId),
+    destination:clean(action.destination).toUpperCase(),
+    requestedResult:clean(action.requestedResult),
+    message:clean(action.message),
+  };
+  if(!a.workId||!a.checkpointId||!a.destination||!a.requestedResult)return '';
+  return [a.workId,a.checkpointId,a.destination,a.requestedResult,a.message].map(v=>encodeURIComponent(v)).join('|');
+}
+
 export function decideReplay({actionIdentity,receipt,evidence=[]}={}){
   const identity=clean(actionIdentity);
   if(!identity)return Object.freeze({decision:'WAIT_VERIFY',dispatch:false,reason:'ACTION_IDENTITY_UNKNOWN'});
