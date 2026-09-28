@@ -28,7 +28,7 @@ async function requireApprovedSources(repoRoot) {
   const iconPath = join(repoRoot, APPROVED_ICON_SOURCE);
   const maskablePath = join(repoRoot, APPROVED_MASKABLE_ICON_SOURCE);
   if (!(await exists(iconPath)) || !(await exists(maskablePath))) {
-    throw new Error('LIGHTHOUSE_APPROVED_ICON_MISSING');
+    throw new Error('PRISM_APPROVED_ICON_MISSING');
   }
   return { iconPath, maskablePath };
 }
@@ -39,14 +39,10 @@ async function transparentMaskableSvg({ iconPath, maskablePath }) {
     readFile(maskablePath, 'utf8'),
   ]);
 
-  if (!maskableSvg.includes('href="./prism-icon.svg"')) {
-    throw new Error('LIGHTHOUSE_MASKABLE_ICON_REFERENCE_INVALID');
-  }
-
+  const hasEmbeddedReference = maskableSvg.includes('href="./prism-icon.svg"');
   const embeddedIcon = `data:image/svg+xml;base64,${Buffer.from(iconSvg, 'utf8').toString('base64')}`;
-  const transparent = maskableSvg
-    .replace(/\s*<rect\b[^>]*fill="#0B0E14"[^>]*\/>/i, '')
-    .replace('href="./prism-icon.svg"', `href="${embeddedIcon}"`);
+  let transparent = maskableSvg.replace(/\s*<rect\b[^>]*width="512"[^>]*height="512"[^>]*\/>/i, '');
+  if (hasEmbeddedReference) transparent = transparent.replace('href="./prism-icon.svg"', `href="${embeddedIcon}"`);
 
   return Buffer.from(transparent, 'utf8');
 }
@@ -70,7 +66,7 @@ async function writeAdaptiveResources(resRoot) {
 }
 
 export async function materializeAndroidIcons({ repoRoot, androidRoot }) {
-  if (!repoRoot || !androidRoot) throw new Error('LIGHTHOUSE_ANDROID_ICON_PATH_REQUIRED');
+  if (!repoRoot || !androidRoot) throw new Error('PRISM_ANDROID_ICON_PATH_REQUIRED');
   const { iconPath, maskablePath } = await requireApprovedSources(repoRoot);
   const foregroundSvg = await transparentMaskableSvg({ iconPath, maskablePath });
   const resRoot = join(androidRoot, 'app', 'src', 'main', 'res');
