@@ -7,11 +7,11 @@ const {pathToFileURL}=require('node:url');
 test('PRISM MVP exposes owner decision, handoff, monitor, and lab surfaces', async ()=>{
   const root=path.join(process.cwd(),'prism');
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  for (const label of ['เรื่องที่ต้องตัดสินใจ','กำลังทำอะไรอยู่','อยากส่งอะไรให้ใคร','ตอนนี้ระบบเป็นยังไง','ของที่กลับมาจากแลป']) {
+  for (const label of ['เรื่องที่รอตัดสินใจ','โปรเจกต์ทั้งหมด','ส่งงานหรือเรียกคนมาช่วย','สถานะระบบ','การเงิน']) {
     assert.match(html,new RegExp(label));
   }
-  assert.match(html,/วันนี้มีอะไรให้จัดการ/);
-  assert.doesNotMatch(html,/Ledger/);
+  assert.match(html,/อยากให้ช่วยอะไร/);
+  assert.match(html,/Ledger/);
 });
 
 test('SPECTRUM handoff preserves Work identity and fails closed when route unavailable', async ()=>{
@@ -44,7 +44,7 @@ test('PRISM is the staged product entry and Android display identity', ()=>{
   assert.match(stage,/\.\/prism\/index\.html/);
   assert.match(stage,/product:'PRISM'/);
   assert.match(stage,/architecture:'PRISM_MOBILE_V1'/);
-  for (const root of ['HOME','WORK','HANDOFF','MONITOR','LAB']) assert.match(stage,new RegExp(`'${root}'`));
+  for (const root of ['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR']) assert.match(stage,new RegExp(`'${root}'`));
   assert.equal(capacitor.appName,'PRISM');
   assert.equal(capacitor.appId,'com.yggdrasil.prism');
 });
@@ -55,7 +55,7 @@ test('PRISM normal surfaces hide system jargon until advanced drill-down', ()=>{
   assert.doesNotMatch(home,/Work ID|Checkpoint ID|Authority|Route|SPECTRUM|Provenance/);
   assert.match(html,/รายละเอียดสำหรับตรวจระบบ/);
   const nav=html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0]||'';
-  for(const label of ['หน้าหลัก','งาน','ส่งต่อ','แลป']) assert.match(nav,new RegExp(label));
+  for(const label of ['Copilot','โปรเจกต์','Map','Ledger']) assert.match(nav,new RegExp(label));
   assert.doesNotMatch(nav,/มอนิเตอร์/);
 });
 
@@ -72,4 +72,19 @@ test('PRISM applies one mobile sizing contract across all surfaces', ()=>{
   assert.match(css,/@media\(min-width:600px\)/);
   assert.match(css,/env\(safe-area-inset-bottom\)/);
   assert.match(css,/\.decision-summary\{max-width:82%/);
+});
+
+
+test('PRISM central Copilot owns navigation while Ledger, Map and shared-Work conference stay explicit', async ()=>{
+  const html=fs.readFileSync(path.join(process.cwd(),'prism','index.html'),'utf8');
+  assert.match(html,/COPILOT/);
+  assert.match(html,/Ledger เป็นเจ้าของข้อมูลการเงินทั้งหมด/);
+  assert.match(html,/Ride เป็นโหมดเสริม/);
+  assert.doesNotMatch(html,/Calendar|ปฏิทินนัดหมาย/);
+  assert.match(html,/เรียก GO \+ LIGHT/);
+  const mod=await import(pathToFileURL(path.join(process.cwd(),'prism','spectrum.mjs')).href);
+  const call=mod.buildConferenceCall({workId:'WORK-1',checkpointId:'CP-WORK-1',participants:['GO','LIGHT']});
+  assert.equal(call.ready,true);
+  assert.equal(call.contextMode,'SHARED_WORK');
+  assert.deepEqual([...call.participants],['GO','LIGHT']);
 });
