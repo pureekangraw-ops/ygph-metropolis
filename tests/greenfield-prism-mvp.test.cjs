@@ -88,3 +88,22 @@ test('PRISM central Copilot owns navigation while Ledger, Map and shared-Work co
   assert.equal(call.contextMode,'SHARED_WORK');
   assert.deepEqual([...call.participants],['GO','LIGHT']);
 });
+
+
+test('PRISM components are lockstep-stamped to the canonical Android release', ()=>{
+  const release=JSON.parse(fs.readFileSync(path.join(process.cwd(),'prism','component-release.json'),'utf8'));
+  const android=JSON.parse(fs.readFileSync(path.join(process.cwd(),'android-shell','version.json'),'utf8'));
+  assert.equal(release.policy,'LOCKSTEP_FAIL_CLOSED');
+  assert.equal(release.release.versionName,android.versionName);
+  assert.equal(release.release.versionCode,android.versionCode);
+  const required=['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR','SPECTRUM','ANDROID_SHELL'];
+  for(const id of required){
+    const component=release.components.find(x=>x.id===id);
+    assert.ok(component,'missing component '+id);
+    assert.equal(component.versionName,android.versionName);
+    assert.equal(component.versionCode,android.versionCode);
+  }
+  const stage=fs.readFileSync(path.join(process.cwd(),'scripts','stage-lighthouse-next-bundle.mjs'),'utf8');
+  assert.match(stage,/PRISM_COMPONENT_RELEASE_VERSION_MISMATCH/);
+  assert.match(stage,/PRISM_COMPONENT_VERSION_MISMATCH/);
+});
