@@ -51,7 +51,7 @@ test('generated offline shell follows runtime manifest plus generated release ma
 test('runtime manifest is sourced from one builder and carries one asset revision',async()=>{
   const x=await staged();
   try{
-    assert.equal(x.manifest.product,'LIGHTHOUSE');
+    assert.equal(x.manifest.product,'PRISM');
     assert.equal(x.manifest.authority,'scripts/stage-lighthouse-next-bundle.mjs');
     assert.match(x.manifest.assetRevision,/^sha256-[a-f0-9]{16}$/);
     assert.equal(x.sw.includes(x.manifest.assetRevision),true);
