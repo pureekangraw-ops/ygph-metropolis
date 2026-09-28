@@ -2,6 +2,8 @@ import {buildPrismHome,summarizeProjects,buildHandoff,buildConferenceCall,resolv
 const state={snapshot:{works:[],live:false,monitorStatus:'UNKNOWN',monitor:{},capabilities:[]},capabilities:{COUNTER:false,DIRECT_API:false,DEVICE_BRIDGE:false}};
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const safe=(v,f='—')=>String(v??'').trim()||f;
+const pinPlugin=()=>globalThis.Capacitor?.Plugins?.PrismPin;
+async function provisionAndUnlock(pin){const plugin=pinPlugin();if(!plugin)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');const bootstrap=String(globalThis.__PRISM_BOOTSTRAP_PIN__||'').trim();if(bootstrap)await plugin.provision({pin:bootstrap});const result=await plugin.verify({pin});if(result?.verified){document.body.classList.remove('locked');return true;}return false;}
 const replayKey=id=>'prism:replay:'+id;
 function readReplay(id){try{return JSON.parse(localStorage.getItem(replayKey(id))||'null');}catch{return null;}}
 function writeReplay(id,value){try{localStorage.setItem(replayKey(id),JSON.stringify(value));}catch{}}
@@ -24,7 +26,8 @@ function render(){
 }
 async function loadSnapshot(){const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}render();updateRoute();}
 function updateRoute(){const r=resolveDispatchRoute(state.capabilities);$('#route-preview').textContent=r.route==='MANUAL'?'ยังไม่มีเส้นส่งสดที่พิสูจน์แล้ว — PRISM จะเตรียม handoff ให้':'พร้อมส่งและรอ readback จากปลายทาง';}
-async function submitIntent(text){const bridge=window.PRISM_BRIDGE;addCopilot(text,'user');if(!bridge?.submitIntent){addCopilot('ตอนนี้ยังเชื่อม Copilot runtime จริงไม่ได้ แต่คำสั่งนี้จะไม่ถูกแกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));await loadSnapshot();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
+async function submitIntent(text){const bridge=window.PRISM_BRIDGE;addCopilot(text,'user');if(!bridge?.submitIntent){addCopilot('ตอนนี้ยังเชื่อม Copilot runtime จริงไม่ได้ แต่คำสั่งนี้จะไม่ถูกแกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));await $('#pin-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('#pin-input'),status=$('#pin-status');try{status.textContent='กำลังตรวจ…';if(await provisionAndUnlock(input.value)){input.value='';status.textContent='';await loadSnapshot();}else{input.value='';status.textContent='PIN ไม่ถูกต้อง';input.focus();}}catch(err){status.textContent='ยังเปิด PRISM ไม่ได้: '+safe(err?.message,'UNKNOWN');}});
+$('#pin-input').focus();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
 $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
 $$('[data-prompt]').forEach(b=>b.addEventListener('click',()=>submitIntent(b.dataset.prompt)));
 $('#refresh').addEventListener('click',loadSnapshot);
