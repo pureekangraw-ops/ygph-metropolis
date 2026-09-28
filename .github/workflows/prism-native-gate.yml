@@ -18,8 +18,14 @@ jobs:
         with: { node-version: 22 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21' }
-      - name: Verify PRISM source syntax
-        run: node --check prism/app.mjs && node --check prism/spectrum.mjs && node --check scripts/stage-prism-native.mjs && node --test tests/prism-native-cutover.test.cjs
+      - name: Syntax app
+        run: node --check prism/app.mjs
+      - name: Syntax spectrum
+        run: node --check prism/spectrum.mjs
+      - name: Syntax staging
+        run: node --check scripts/stage-prism-native.mjs
+      - name: PRISM contract tests
+        run: node --test tests/prism-native-cutover.test.cjs
       - name: Install Android dependencies
         working-directory: android-shell
         run: npm install --no-audit --no-fund
