@@ -107,3 +107,28 @@ test('PRISM components are lockstep-stamped to the canonical Android release', (
   assert.match(stage,/PRISM_COMPONENT_RELEASE_VERSION_MISMATCH/);
   assert.match(stage,/PRISM_COMPONENT_VERSION_MISMATCH/);
 });
+
+
+test('SPECTRUM receipt-backed replay gate returns DONE effects, waits on ambiguity, and dispatches only new actions', async ()=>{
+  const mod=await import(pathToFileURL(path.join(process.cwd(),'prism','spectrum.mjs')).href);
+  const receipt={actionIdentity:'WORK-1:LIGHT:review-v1',status:'DONE',summary:'already completed'};
+  const done=mod.decideReplay({actionIdentity:'WORK-1:LIGHT:review-v1',receipt,evidence:[{type:'READBACK',ref:'R-1'}]});
+  assert.equal(done.decision,'RETURN_EXISTING');
+  assert.equal(done.dispatch,false);
+
+  const unclear=mod.decideReplay({actionIdentity:'WORK-1:LIGHT:review-v1',receipt:{...receipt,status:'UNKNOWN'},evidence:[{type:'RECEIPT',ref:'R-1'}]});
+  assert.equal(unclear.decision,'WAIT_VERIFY');
+  assert.equal(unclear.dispatch,false);
+
+  const mismatch=mod.decideReplay({actionIdentity:'WORK-1:LIGHT:review-v2',receipt,evidence:[{type:'READBACK',ref:'R-1'}]});
+  assert.equal(mismatch.decision,'WAIT_VERIFY');
+  assert.equal(mismatch.dispatch,false);
+
+  const fresh=mod.decideReplay({actionIdentity:'WORK-1:LIGHT:review-v2'});
+  assert.equal(fresh.decision,'DISPATCH');
+  assert.equal(fresh.dispatch,true);
+
+  const unknown=mod.decideReplay({});
+  assert.equal(unknown.decision,'WAIT_VERIFY');
+  assert.equal(unknown.dispatch,false);
+});
