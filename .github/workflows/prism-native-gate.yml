@@ -50,6 +50,7 @@ jobs:
           npm run android:map:apply
           npm run android:pin:apply
           npm run android:security:apply
+          cd android && ./gradlew :app:processReleaseMainManifest && cd ..
           npm run android:security:verify
       - name: Build unsigned PRISM APK
         working-directory: android-shell
