@@ -42,6 +42,7 @@ jobs:
           node tools/set-android-version.mjs
           npm run android:icons
           npm run android:map:apply
+          npm run android:pin:apply
           npm run android:security:apply
           npm run android:security:verify
       - name: Build unsigned PRISM APK
