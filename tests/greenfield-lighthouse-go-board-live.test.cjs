@@ -356,5 +356,5 @@ test('GO is a fourth LIGHTHOUSE root wired to Centre Board local working memory 
   assert.match(stage, /'centre-board\/emergency-capsule\.mjs'/);
   assert.match(stage, /'centre-board\/board-store\.mjs'/);
   assert.match(stage, /'go-board-live\.mjs'/);
-  assert.match(stage, /roots:\['CHAT','MANUAL','GO','SETTINGS'\]/);
+  assert.match(stage, /roots:\['COPILOT','PROJECTS','HANDOFF','MAP','LEDGER','MONITOR'\]/);
 });
