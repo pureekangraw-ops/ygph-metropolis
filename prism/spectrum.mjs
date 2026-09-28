@@ -5,6 +5,7 @@ const clean = value => String(value ?? '').trim();
 export function normalizeWork(item = {}) {
   return Object.freeze({
     workId: clean(item.workId) || 'UNKNOWN',
+    checkpointId: clean(item.checkpointId) || '',
     title: clean(item.title) || 'งานไม่มีชื่อ',
     status: clean(item.status).toUpperCase() || 'UNKNOWN',
     holder: clean(item.holder) || null,
