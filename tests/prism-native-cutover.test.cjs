@@ -6,14 +6,14 @@ test('root surfaces stay bounded',()=>{const h=fs.readFileSync('prism/index.html
 
 
 test('PRISM PIN tooling registers native plugin even when MainActivity already has onCreate', async () => {
-  const tool = await readFile(join(root, 'android-shell/tools/apply-prism-pin.mjs'), 'utf8');
+  const tool = fs.readFileSync('android-shell/tools/apply-prism-pin.mjs','utf8');
   assert.match(tool, /void\\s\+onCreate/);
   assert.match(tool, /registerPlugin\(PrismPinPlugin\.class\)/);
   assert.match(tool, /PRISM_PIN_SUPER_ONCREATE_MISSING/);
 });
 
 test('PRISM PIN gate is balanced for tall and short mobile viewports', async () => {
-  const css = await readFile(join(root, 'prism/styles.css'), 'utf8');
+  const css = fs.readFileSync('prism/styles.css','utf8');
   assert.match(css, /\.pin-card\{[^}]*display:grid[^}]*justify-items:center[^}]*align-content:center/s);
   assert.match(css, /@media\(max-height:760px\)/);
 });
