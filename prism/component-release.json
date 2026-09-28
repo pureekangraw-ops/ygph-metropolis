@@ -1,50 +1,77 @@
 {
   "product": "PRISM",
-  "release": {
-    "versionName": "1.0.0-owner.19",
-    "versionCode": 1024
-  },
+  "assemblyId": "PRISM-ASSEMBLY-1025",
   "policy": "LOCKSTEP_FAIL_CLOSED",
+  "release": {
+    "versionName": "1.0.0-owner.20",
+    "versionCode": 1025,
+    "baselineVersionCode": 1024
+  },
+  "compatibility": {
+    "applicationId": "com.yggdrasil.prism",
+    "installOverRequired": true,
+    "signingLineageRequired": true
+  },
   "components": [
     {
       "id": "COPILOT",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "PROJECTS",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "HANDOFF",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "MAP",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "LEDGER",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "MONITOR",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "SPECTRUM",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     },
     {
       "id": "ANDROID_SHELL",
-      "versionName": "1.0.0-owner.19",
-      "versionCode": 1024
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "PIN_BRIDGE",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "ICON_SET",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
     }
   ]
 }
