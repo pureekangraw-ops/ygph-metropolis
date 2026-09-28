@@ -2,7 +2,7 @@ import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const EXPECTED_APPLICATION_ID = 'com.yggdrasil.lighthouse';
+const EXPECTED_APPLICATION_ID = 'com.yggdrasil.prism';
 const ALLOWED_PERMISSIONS = new Set([
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
