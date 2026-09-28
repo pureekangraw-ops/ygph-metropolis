@@ -46,5 +46,5 @@ test('PRISM is the staged product entry and Android display identity', ()=>{
   assert.match(stage,/architecture:'PRISM_MOBILE_V1'/);
   for (const root of ['HOME','WORK','HANDOFF','MONITOR','LAB']) assert.match(stage,new RegExp(`'${root}'`));
   assert.equal(capacitor.appName,'PRISM');
-  assert.equal(capacitor.appId,'com.yggdrasil.lighthouse');
+  assert.equal(capacitor.appId,'com.yggdrasil.prism');
 });
