@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b13">
+  <title>PRISM</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">△</div>
+      <div><strong>PRISM</strong><small>SPECTRUM inside</small></div>
+      <button id="refresh" class="icon-button" aria-label="รีเฟรช">↻</button>
+    </header>
+
+    <section id="page-home" class="page active" data-page="HOME">
+      <section class="command-card">
+        <p class="eyebrow">COMMAND</p>
+        <h1>อยากให้ช่วยอะไร?</h1>
+        <form id="command-form">
+          <input id="command-input" placeholder="เช็กงาน / ส่งต่อ / ดูสถานะ…" autocomplete="off">
+          <button type="submit">ส่ง</button>
+        </form>
+        <p id="command-status" class="muted">SPECTRUM จะใช้ Work / Route / Authority ที่มีจริง และไม่เดาเมื่อ UNKNOWN</p>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>ต้องตัดสินใจ</h2><span id="decision-count" class="pill">0</span></div>
+        <div id="decision-list" class="stack empty-card">ยังไม่มีรายการที่ต้องตัดสินใจ</div>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>งานที่ติดตาม</h2><button class="text-button" data-nav="WORK">ดูทั้งหมด</button></div>
+        <div id="active-list" class="stack empty-card">ยังไม่มี Work สด</div>
+      </section>
+
+      <button class="monitor-peek" data-nav="MONITOR">
+        <span>เปิด Monitor</span><small id="monitor-peek-status">UNKNOWN</small><b>›</b>
+      </button>
+    </section>
+
+    <section id="page-work" class="page" data-page="WORK">
+      <div class="page-title"><p class="eyebrow">WORK</p><h1>งาน & การส่งต่อ</h1><p class="muted">ดู Work เดิม ส่งต่อโดยคง Work ID / Checkpoint ID และรับผลกลับ</p></div>
+      <div id="work-list" class="stack empty-card">ยังไม่มี Work สด</div>
+      <button class="primary wide" data-nav="HANDOFF">+ สร้าง Handoff</button>
+    </section>
+
+    <section id="page-handoff" class="page" data-page="HANDOFF">
+      <div class="page-title"><p class="eyebrow">HANDOFF</p><h1>ส่งต่องาน</h1><p class="muted">Counter/API ก่อน; Device Bridge เป็น last mile เมื่อจำเป็น</p></div>
+      <form id="handoff-form" class="form-card">
+        <label>Work ID<input id="handoff-work" required></label>
+        <label>Checkpoint ID<input id="handoff-checkpoint" required></label>
+        <label>ปลายทาง<select id="handoff-destination"><option>LIGHT</option><option>PIXIE_LAB</option><option>GO_WORKS</option><option>COUNTER</option></select></label>
+        <label>ผลที่ต้องการ<textarea id="handoff-result" rows="3" required></textarea></label>
+        <label>ข้อความที่จะส่ง<textarea id="handoff-message" rows="5"></textarea></label>
+        <div id="route-preview" class="route-preview">Route: UNKNOWN</div>
+        <button class="primary" type="submit">เตรียมส่ง</button>
+      </form>
+      <div id="handoff-readback" class="readback" hidden></div>
+    </section>
+
+    <section id="page-monitor" class="page" data-page="MONITOR">
+      <div class="page-title"><p class="eyebrow">MONITOR</p><h1>ดูความจริงเมื่อจำเป็น</h1><p class="muted">Work · Route · CI · Deploy · Provenance — ไม่เดาจากเวลา</p></div>
+      <div id="monitor-grid" class="monitor-grid">
+        <article><span>Connection</span><strong id="m-live">UNKNOWN</strong></article>
+        <article><span>Work</span><strong id="m-work">—</strong></article>
+        <article><span>Route</span><strong id="m-route">—</strong></article>
+        <article><span>CI</span><strong id="m-ci">UNKNOWN</strong></article>
+        <article><span>Deploy</span><strong id="m-deploy">UNKNOWN</strong></article>
+        <article><span>Provenance</span><strong id="m-provenance">UNKNOWN</strong></article>
+      </div>
+      <pre id="monitor-raw" class="raw-card">ยังไม่มี snapshot</pre>
+    </section>
+
+    <section id="page-lab" class="page" data-page="LAB">
+      <div class="page-title"><p class="eyebrow">PIXIE LAB</p><h1>ผลทดลอง</h1><p class="muted">PRISM แสดงผลที่กลับมาจาก Lab; การเลือก candidate ไม่ใช่ approval</p></div>
+      <div id="lab-results" class="stack empty-card">ยังไม่มีผลจาก PIXIE</div>
+      <button class="primary wide" data-nav="HANDOFF">ส่งงานเข้า PIXIE</button>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="เมนูหลัก">
+    <button class="active" data-nav="HOME"><span>⌂</span><small>หน้าหลัก</small></button>
+    <button data-nav="WORK"><span>▤</span><small>งาน</small></button>
+    <button data-nav="HANDOFF"><span>➤</span><small>ส่งต่อ</small></button>
+    <button data-nav="MONITOR"><span>▥</span><small>มอนิเตอร์</small></button>
+    <button data-nav="LAB"><span>⚗</span><small>แลป</small></button>
+  </nav>
+
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>
