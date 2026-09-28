@@ -21,7 +21,8 @@
     "android:map:apply": "node tools/apply-local-map-native-proof.mjs android",
     "android:map:fixture": "node tools/create-local-map-proof-fixture.mjs",
     "android:map:proof": "node tools/capture-local-map-native-proof.mjs",
-    "app:stage-prism": "node ../scripts/stage-prism-native.mjs www"
+    "app:stage-prism": "node ../scripts/stage-prism-native.mjs www",
+    "android:pin:apply": "node tools/apply-prism-pin.mjs android"
   },
   "dependencies": {
     "@capacitor/core": "8.5.0",
