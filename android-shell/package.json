@@ -1,12 +1,11 @@
 {
-  "name": "lighthouse-android-shell",
+  "name": "prism-android-shell",
   "version": "1.0.0-owner-test",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "app:stage-next": "node tools/stage-lighthouse-next.mjs",
     "test": "node --test test/*.test.mjs",
     "android:add": "npx cap add android",
     "android:sync": "npx cap sync android",
@@ -21,7 +20,9 @@
     "acceptance:evaluate": "node tools/evaluate-install-over-acceptance.mjs",
     "android:map:apply": "node tools/apply-local-map-native-proof.mjs android",
     "android:map:fixture": "node tools/create-local-map-proof-fixture.mjs",
-    "android:map:proof": "node tools/capture-local-map-native-proof.mjs"
+    "android:map:proof": "node tools/capture-local-map-native-proof.mjs",
+    "app:stage-prism": "node ../scripts/stage-prism-native.mjs www",
+    "android:pin:apply": "node tools/apply-prism-pin.mjs android"
   },
   "dependencies": {
     "@capacitor/core": "8.5.0",

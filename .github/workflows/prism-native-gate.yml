@@ -1,0 +1,74 @@
+name: PRISM Native Gate
+on:
+  pull_request:
+    paths:
+      - 'prism/**'
+      - 'android-shell/**'
+      - 'scripts/stage-prism-native.mjs'
+      - '.github/workflows/prism-native-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Syntax app
+        run: ERR=$(node --check prism/app.mjs 2>&1) || { printf 'SYNTAX_ERROR=%s\\n' "$(printf '%s' "$ERR" | tr '\\n' '|')"; exit 1; }
+      - name: Syntax spectrum
+        run: node --check prism/spectrum.mjs
+      - name: Syntax staging and PIN tooling
+        run: node --check scripts/stage-prism-native.mjs && node --check android-shell/tools/apply-prism-pin.mjs
+      - name: PRISM contract tests
+        run: node --test tests/prism-native-cutover.test.cjs
+      - name: Install Android dependencies
+        working-directory: android-shell
+        run: npm install --no-audit --no-fund
+      - name: Stage PRISM-native payload
+        working-directory: android-shell
+        run: npm run app:stage-prism
+      - name: Prove legacy parent absent from payload
+        working-directory: android-shell
+        run: |
+          test ! -e www/lighthouse-next
+          test ! -e www/lighthouse
+          test -e www/prism/index.html
+          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null)process.exit(1)"
+      - name: Generate Android project
+        working-directory: android-shell
+        run: npx cap add android && npx cap sync android
+      - name: Apply PRISM Android version, icon, map and security
+        working-directory: android-shell
+        run: |
+          node tools/set-android-version.mjs
+          npm run android:icons
+          npm run android:map:apply
+          npm run android:pin:apply
+          npm run android:security:apply
+          cd android && ./gradlew :app:processReleaseMainManifest && cd ..
+          npm run android:security:verify
+      - name: Build unsigned PRISM APK
+        working-directory: android-shell
+        run: npm run android:release
+      - name: Build installable inspection APK
+        working-directory: android-shell
+        run: cd android && ./gradlew assembleDebug
+      - name: Upload PRISM inspection APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-native-installable-inspection
+          path: android-shell/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload PRISM candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-native-unsigned-candidate
+          path: android-shell/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14

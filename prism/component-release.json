@@ -1,0 +1,77 @@
+{
+  "product": "PRISM",
+  "assemblyId": "PRISM-ASSEMBLY-1025",
+  "policy": "LOCKSTEP_FAIL_CLOSED",
+  "release": {
+    "versionName": "1.0.0-owner.20",
+    "versionCode": 1025,
+    "baselineVersionCode": 1024
+  },
+  "compatibility": {
+    "applicationId": "com.yggdrasil.prism",
+    "installOverRequired": true,
+    "signingLineageRequired": true
+  },
+  "components": [
+    {
+      "id": "COPILOT",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "PROJECTS",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "HANDOFF",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "MAP",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "LEDGER",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "MONITOR",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "SPECTRUM",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "ANDROID_SHELL",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "PIN_BRIDGE",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    },
+    {
+      "id": "ICON_SET",
+      "assemblyId": "PRISM-ASSEMBLY-1025",
+      "versionName": "1.0.0-owner.20",
+      "versionCode": 1025
+    }
+  ]
+}

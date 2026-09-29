@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 export const MAPLIBRE_ANDROID_VERSION = '13.6.1';
 export const MAPLIBRE_ANDROID_DEPENDENCY = `implementation 'org.maplibre.gl:android-sdk:${MAPLIBRE_ANDROID_VERSION}'`;
-export const PROOF_ACTIVITY = 'com.yggdrasil.lighthouse.LocalPmtilesProofActivity';
+export const PROOF_ACTIVITY = 'com.yggdrasil.prism.LocalPmtilesProofActivity';
 
 function findBlock(text, name) {
   const match = new RegExp(`\\b${name}\\s*\\{`).exec(text);
@@ -125,7 +125,7 @@ export function debugProofManifest() {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <activity
-      android:name="com.yggdrasil.lighthouse.LocalPmtilesProofActivity"
+      android:name="com.yggdrasil.prism.LocalPmtilesProofActivity"
       android:exported="true" />
   </application>
 </manifest>
@@ -133,7 +133,7 @@ export function debugProofManifest() {
 }
 
 export function localPmtilesProofActivitySource() {
-  return `package com.yggdrasil.lighthouse;
+  return `package com.yggdrasil.prism;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -255,7 +255,7 @@ export async function applyLocalMapNativeProof(androidRoot) {
   const gradlePath = join(androidRoot, 'app', 'build.gradle');
   const manifestPath = join(androidRoot, 'app', 'src', 'main', 'AndroidManifest.xml');
   const debugManifestPath = join(androidRoot, 'app', 'src', 'debug', 'AndroidManifest.xml');
-  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse');
+  const javaRoot = join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'yggdrasil', 'prism');
   const activityPath = join(javaRoot, 'LocalPmtilesProofActivity.java');
   const rideMapActivityPath = join(javaRoot, 'RideMapActivity.java');
   const rideMapPluginPath = join(javaRoot, 'LighthouseRideMapPlugin.java');
