@@ -58,7 +58,7 @@ $('#handoff-form').addEventListener('submit',async e=>{
 $('#conference-go-light').addEventListener('click',async()=>{const box=$('#handoff-readback'),call=buildConferenceCall({workId:$('#handoff-work').value,checkpointId:$('#handoff-checkpoint').value,participants:['GO','LIGHT']});box.hidden=false;if(!call.ready){box.innerHTML='<strong>ยังเรียกไม่ได้</strong><span>เลือก Work ก่อน</span>';return;}const bridge=window.PRISM_BRIDGE;if(!bridge?.conference){box.innerHTML='<strong>เตรียมห้องคุยแล้ว</strong><span>live conference bridge ยังไม่ถูกพิสูจน์</span>';return;}try{const r=await bridge.conference(call);box.innerHTML='<strong>เรียกแล้ว</strong><span>'+safe(r?.summary,'GO และ LIGHT เข้ารอบ Work เดียวกัน')+'</span>';}catch(e){box.innerHTML='<strong>เรียกไม่สำเร็จ</strong><span>'+safe(e?.message,'ไม่ทราบสาเหตุ')+'</span>';}});
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
 $('[data-finance-prompt]').addEventListener('click',()=>{nav('COPILOT');$('#command-input').value='สรุปการเงินจาก Ledger ให้ผม';$('#command-input').focus();});
-$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
+$$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
 $('#open-browser')?.addEventListener('click',async()=>{const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));}});
 
 let pinMode='VERIFY';

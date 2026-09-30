@@ -51,3 +51,56 @@ test('browser installer patches the generated Capacitor root Gradle repository b
   assert.match(tool,/JavaVersion[.]VERSION_17/);
   assert.doesNotMatch(tool,/settingsPath=join\(androidRoot,'settings.gradle'\)/);
 });
+
+async function bootOwnerGate(configured) {
+  const vm = require('node:vm');
+  const nodes = new Map();
+  const node = selector => {
+    if (!nodes.has(selector)) nodes.set(selector, {
+      hidden: selector === '#pin-confirm', value: '', textContent: '', listeners: {},
+      addEventListener(event, listener) { this.listeners[event] = listener; },
+      focus() {}, dataset: { capability: 'PROJECTS' }
+    });
+    return nodes.get(selector);
+  };
+  let unlocked = false;
+  const calls = [];
+  const context = {
+    document: { querySelector: node, querySelectorAll: selector => selector === '[data-capability]' ? [node(selector)] : [],
+      body: { classList: { remove(value) { if (value === 'locked') unlocked = true; } } } },
+    window: {},
+    Capacitor: { Plugins: { PrismPin: {
+      async status() { return { configured }; },
+      async provision(input) { calls.push(['provision', input]); },
+      async verify(input) { calls.push(['verify', input]); return { verified: true }; }
+    } } },
+    buildPrismHome: () => ({ decisions: [], active: [], live: false }),
+    summarizeProjects: () => ({ active: 0, waiting: 0, decision: 0 }),
+    resolveDispatchRoute: () => ({ route: 'MANUAL' })
+  };
+  const app = fs.readFileSync('prism/app.mjs', 'utf8').replace(/^import[^\n]+\n/, '');
+  assert.doesNotThrow(() => vm.runInNewContext(app, context), 'application startup must reach the owner-password gate');
+  await new Promise(resolve => setImmediate(resolve));
+  return { node, calls, isUnlocked: () => unlocked };
+}
+
+test('first launch reaches password setup and provisions the owner password', async () => {
+  const gate = await bootOwnerGate(false);
+  assert.equal(gate.node('#pin-title').textContent, 'ตั้งรหัสผ่านของคุณ');
+  assert.equal(gate.node('#pin-confirm').hidden, false);
+  gate.node('#pin-input').value = 'test-owner-password';
+  gate.node('#pin-confirm').value = 'test-owner-password';
+  await gate.node('#pin-form').listeners.submit({ preventDefault() {} });
+  assert.deepEqual(gate.calls.map(call => call[0]), ['provision', 'verify']);
+  assert.equal(gate.isUnlocked(), true);
+});
+
+test('an existing owner verifier opens unlock without reprovisioning', async () => {
+  const gate = await bootOwnerGate(true);
+  assert.equal(gate.node('#pin-title').textContent, 'ยืนยันว่าเป็นคุณ');
+  assert.equal(gate.node('#pin-confirm').hidden, true);
+  gate.node('#pin-input').value = 'test-owner-password';
+  await gate.node('#pin-form').listeners.submit({ preventDefault() {} });
+  assert.deepEqual(gate.calls.map(call => call[0]), ['verify']);
+  assert.equal(gate.isUnlocked(), true);
+});
