@@ -13,7 +13,7 @@ const METADATA = {
   attribution: '© OpenStreetMap contributors © Protomaps',
 };
 
-const MANAGED_ROOT_URI = 'file:///data/user/0/com.yggdrasil.lighthouse/files/maps/';
+const MANAGED_ROOT_URI = 'file:///data/user/0/com.yggdrasil.prism/files/maps/';
 const FILE_URI = `${MANAGED_ROOT_URI}bangkok-metro.pmtiles`;
 const OUTSIDE_FILE_URI = 'file:///sdcard/Download/bangkok-metro.pmtiles';
 const FAKE_MANAGED_ROOT_URI = 'file:///sdcard/Lighthouse/maps/';
@@ -33,7 +33,7 @@ test('local PMTiles contract accepts app-managed device storage only', async () 
   assert.equal(LOCAL_MAP_CONTRACT.format, 'PMTILES');
   assert.equal(LOCAL_MAP_CONTRACT.contentUriRole, 'IMPORT_ONLY');
   assert.equal(LOCAL_MAP_CONTRACT.activeUriProtocol, 'file:');
-  assert.equal(LOCAL_MAP_CONTRACT.androidApplicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(LOCAL_MAP_CONTRACT.androidApplicationId, 'com.yggdrasil.prism');
   assert.equal(LOCAL_MAP_CONTRACT.networkFallback, false);
   assert.equal(LOCAL_MAP_CONTRACT.backgroundLocation, false);
   assert.equal(source.type, 'LOCAL_PMTILES_VECTOR_BASEMAP');
@@ -99,7 +99,7 @@ test('recovery uses the same package record shape with explicit reason', async (
   assert.equal(recovery.recoveryReason, 'ไฟล์แผนที่เสียหาย');
 });
 
-test('active package requires Lighthouse-managed staged file storage', async () => {
+test('active package requires PRISM-managed staged file storage', async () => {
   const { createLocalMapPackageRecord } = await import('../lighthouse-next/local-map.mjs');
 
   assert.throws(
