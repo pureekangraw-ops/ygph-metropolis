@@ -48,7 +48,7 @@ function readRelevantDiagnostics() {
   const all = runAdb(['logcat', '-d'], { allowFailure: true }).stdout || '';
   return all
     .split('\n')
-    .filter(line => /LIGHTHOUSE_LOCAL_MAP|com\.yggdrasil\.lighthouse|AndroidRuntime|MapLibre|libmaplibre|FATAL EXCEPTION|UnsatisfiedLinkError/i.test(line))
+    .filter(line => /LIGHTHOUSE_LOCAL_MAP|com\.yggdrasil\.(?:prism|lighthouse)|AndroidRuntime|MapLibre|libmaplibre|FATAL EXCEPTION|UnsatisfiedLinkError/i.test(line))
     .slice(-160)
     .join('\n');
 }
