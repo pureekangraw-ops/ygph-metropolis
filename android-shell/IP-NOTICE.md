@@ -10,9 +10,9 @@ Public visibility of source code or build artifacts does not by itself grant per
 
 The owner-authenticated Android application identity is anchored to both the package identity and the Android digital signature:
 
-- Application ID: `com.yggdrasil.lighthouse`
+- Application ID: `com.yggdrasil.prism`
 - Canonical signing certificate SHA-256: `aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce`
-- Signing key label: `lighthouse-apk-release`
+- Signing key label: `prism-apk-release`
 
 An APK is considered owner-authenticated only when its Android digital signature validates to the canonical signing certificate and the release verification gates confirm the expected package and version identity.
 
