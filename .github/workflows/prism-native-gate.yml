@@ -23,7 +23,7 @@ jobs:
       - name: Syntax spectrum
         run: node --check prism/spectrum.mjs
       - name: Syntax staging and PIN tooling
-        run: node --check scripts/stage-prism-native.mjs && node --check android-shell/tools/apply-prism-pin.mjs
+        run: node --check scripts/stage-prism-native.mjs && node --check android-shell/tools/apply-prism-pin.mjs && node --check android-shell/tools/apply-prism-browser.mjs
       - name: PRISM contract tests
         run: node --test tests/prism-native-cutover.test.cjs
       - name: Install Android dependencies
@@ -49,6 +49,7 @@ jobs:
           npm run android:icons
           npm run android:map:apply
           npm run android:pin:apply
+          npm run android:browser:apply
           npm run android:security:apply
           cd android && ./gradlew :app:processReleaseMainManifest && cd ..
           npm run android:security:verify
