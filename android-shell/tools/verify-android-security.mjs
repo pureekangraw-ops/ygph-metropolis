@@ -14,6 +14,7 @@ const ALLOWED_PERMISSIONS = new Set([
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.VIBRATE',
   'android.permission.WAKE_LOCK',
+  'android.permission.HIGH_SAMPLING_RATE_SENSORS',
 ]);
 const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
 const PROFILE_INSTALL_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
