@@ -1,0 +1,145 @@
+name: PRISM Owner Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - prism/browser-owner21-20260930
+    paths:
+      - android-shell/version.json
+
+permissions:
+  contents: read
+
+jobs:
+  build-owner-approved-ref:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-shell
+    steps:
+      - name: Checkout owner-approved PRISM ref
+        uses: actions/checkout@v4
+        with:
+          ref: prism/browser-owner21-20260930
+
+      - name: Show exact source commit
+        run: git rev-parse HEAD
+        working-directory: .
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install locked Android shell dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run Android shell contracts
+        run: node --test test/*.test.mjs
+
+      - name: Stage owner-approved PRISM
+        run: npm run app:stage-prism
+
+      - name: Prove PRISM payload
+        run: |
+          test -e www/prism/index.html
+          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.versionCode!==1026)process.exit(1)"
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Sync exact staged web assets
+        run: npx cap sync android
+
+      - name: Apply canonical Android version
+        run: node tools/set-android-version.mjs
+
+      - name: Materialize approved Android launcher icons
+        run: npm run android:icons
+
+      - name: Apply Ride Map native overlay
+        run: npm run android:map:apply
+
+      - name: Apply PRISM owner password and Browser
+        run: |
+          npm run android:pin:apply
+          npm run android:browser:apply
+
+      - name: Apply generated Android security baseline
+        run: npm run android:security:apply
+
+      - name: Materialize merged release manifest
+        run: cd android && ./gradlew :app:processReleaseMainManifest
+
+      - name: Verify generated Android security
+        run: npm run android:security:verify
+
+      - name: Build unsigned release APK
+        run: npm run android:release
+
+      - name: Materialize canonical APK signer
+        env:
+          PRISM_APK_KEYSTORE_BASE64: ${{ secrets.PRISM_APK_KEYSTORE_BASE64 }}
+          PRISM_APK_STORE_PASSWORD: ${{ secrets.PRISM_APK_STORE_PASSWORD }}
+          PRISM_APK_KEY_ALIAS: ${{ secrets.PRISM_APK_KEY_ALIAS }}
+          PRISM_APK_KEY_PASSWORD: ${{ secrets.PRISM_APK_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in PRISM_APK_KEYSTORE_BASE64 PRISM_APK_STORE_PASSWORD PRISM_APK_KEY_ALIAS PRISM_APK_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "$name is not configured"; exit 1; fi
+          done
+          umask 077
+          keystore="$RUNNER_TEMP/prism-apk-release.p12"
+          aligned_apk="$RUNNER_TEMP/prism-release-aligned.apk"
+          unsigned_apk="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          signed_apk="android/app/build/outputs/apk/release/prism-release.apk"
+          trap 'rm -f "$keystore" "$aligned_apk"' EXIT
+          printf '%s' "$PRISM_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          apksigner="$build_tools/apksigner"
+          aapt="$build_tools/aapt"
+          zipalign="$build_tools/zipalign"
+          test -x "$apksigner" && test -x "$aapt" && test -x "$zipalign"
+          "$zipalign" -f -p 4 "$unsigned_apk" "$aligned_apk"
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-pass "env:PRISM_APK_STORE_PASSWORD" \
+            --ks-key-alias "$PRISM_APK_KEY_ALIAS" \
+            --key-pass "env:PRISM_APK_KEY_PASSWORD" \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          "$apksigner" verify "$signed_apk"
+          echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
+          echo "AAPT=$aapt" >> "$GITHUB_ENV"
+
+      - name: Verify final APK identity and build provenance
+        env:
+          APK_SOURCE_REPOSITORY: ${{ github.repository }}
+          APK_SOURCE_REF: prism/browser-owner21-20260930
+          APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          APK_RELEASE_CHANNEL: owner-test
+        run: |
+          set -euo pipefail
+          export APK_SOURCE_COMMIT="$(git rev-parse HEAD)"
+          export APK_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/prism-release.apk release/apk-identity-evidence.json
+
+      - name: Upload owner-test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-1.0.0-owner.21
+          path: |
+            android-shell/android/app/build/outputs/apk/release/prism-release.apk
+            android-shell/release/apk-identity-evidence.json
+            android-shell/release/android-security-evidence.json
+            android-shell/IP-NOTICE.md
+          if-no-files-found: error
+          retention-days: 14
