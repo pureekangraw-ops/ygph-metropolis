@@ -28,10 +28,9 @@ export async function applyPrismBrowser(androidRoot){
   const rootGradlePath=join(androidRoot,'build.gradle');
   let rootGradle=await readFile(rootGradlePath,'utf8');
   if(!rootGradle.includes('maven.mozilla.org')){
-    const allProjects=/allprojects\\s*\\{[\\s\\S]*?repositories\\s*\\{/;
-    const match=rootGradle.match(allProjects);
-    if(!match)throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
-    rootGradle=rootGradle.replace(allProjects,match[0]+'\n        '+MOZILLA_REPO);
+    const marker='mavenCentral()';
+    if(!rootGradle.includes(marker))throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
+    rootGradle=rootGradle.replace(marker,marker+'\n        '+MOZILLA_REPO);
     await writeFile(rootGradlePath,rootGradle,'utf8');
   }
 
