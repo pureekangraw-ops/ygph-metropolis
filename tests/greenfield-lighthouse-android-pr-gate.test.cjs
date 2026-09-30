@@ -34,9 +34,9 @@ test('PR safety gate verifies PRISM branding and immutable runtime byte continui
   assert.match(workflow, /createHash\(['"]sha256['"]\)/);
   assert.match(workflow, /PRISM_STAGE_HASH_MISMATCH/);
   assert.match(workflow, /PRISM_STAGE_BRANDING_MISMATCH/);
-  assert.match(workflow, /prism-icon\\.svg/);
-  assert.match(workflow, /prism-icon-maskable\\.svg/);
-  assert.match(workflow, /com\\.yggdrasil\\.prism/);
+  assert.match(workflow, /prism-icon\.svg/);
+  assert.match(workflow, /prism-icon-maskable\.svg/);
+  assert.match(workflow, /com\.yggdrasil\.prism/);
 });
 
 test('canonical LIGHTHOUSE bundle is staged before Wrangler validation and PR staging deploy', () => {
