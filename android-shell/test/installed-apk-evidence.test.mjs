@@ -32,7 +32,7 @@ test('captures installed APK identity, signer, version and APK digest through in
     if (command === 'aapt') {
       return {
         status: 0,
-        stdout: "package: name='com.yggdrasil.lighthouse' versionCode='1008' versionName='1.0.0-owner.3'\n",
+        stdout: "package: name='com.yggdrasil.prism' versionCode='1008' versionName='1.0.0-prism.1'\n",
         stderr: '',
       };
     }
@@ -40,16 +40,16 @@ test('captures installed APK identity, signer, version and APK digest through in
   };
 
   const evidence = await captureInstalledApkEvidence({
-    applicationId: 'com.yggdrasil.lighthouse',
+    applicationId: 'com.yggdrasil.prism',
     runner,
     tempRoot,
     capturedAt: '2026-09-18T00:00:00.000Z',
   });
 
   assert.equal(evidence.source, 'ADB_INSTALLED_APK');
-  assert.equal(evidence.installedApplicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(evidence.installedApplicationId, 'com.yggdrasil.prism');
   assert.equal(evidence.versionCode, 1008);
-  assert.equal(evidence.versionName, '1.0.0-owner.3');
+  assert.equal(evidence.versionName, '1.0.0-prism.1');
   assert.equal(evidence.installedSignerCertificateSha256, 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce');
   assert.match(evidence.apkSha256, /^[0-9a-f]{64}$/);
   assert.equal(calls.some(call => call[0] === 'adb' && call[1] === 'pull'), true);
@@ -57,7 +57,7 @@ test('captures installed APK identity, signer, version and APK digest through in
 
 test('fails closed when adb cannot resolve the installed package', async () => {
   await assert.rejects(() => captureInstalledApkEvidence({
-    applicationId: 'com.yggdrasil.lighthouse',
+    applicationId: 'com.yggdrasil.prism',
     runner: async () => ({ status: 0, stdout: '', stderr: '' }),
   }), /ADB_PACKAGE_PATH_MISSING/);
 });
