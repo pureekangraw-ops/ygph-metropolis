@@ -36,7 +36,7 @@ public class PrismBrowserActivity extends Activity {
   private void addTab(String target){
     GeckoSession s=new GeckoSession(); s.setContentDelegate(new GeckoSession.ContentDelegate(){});
     s.setNavigationDelegate(new GeckoSession.NavigationDelegate(){
-      @Override public void onLocationChange(GeckoSession session,String location,List<GeckoSession.PermissionDelegate.ContentPermission> permissions,boolean gesture){
+      @Override public void onLocationChange(GeckoSession session,String location,List<GeckoSession.PermissionDelegate.ContentPermission> permissions,Boolean gesture){
         int i=tabs.indexOf(session); if(i>=0&&location!=null){urls.set(i,location);if(i==active)runOnUiThread(()->url.setText(location));}
       }
     });
