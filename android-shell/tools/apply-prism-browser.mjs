@@ -25,13 +25,14 @@ export async function applyPrismBrowser(androidRoot){
     await writeFile(gradlePath,gradle,'utf8');
   }
 
-  const settingsPath=join(androidRoot,'settings.gradle');
-  let settings=await readFile(settingsPath,'utf8');
-  if(!settings.includes('maven.mozilla.org')){
-    const marker='mavenCentral()';
-    if(!settings.includes(marker))throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
-    settings=settings.replace(marker,marker+'\n        '+MOZILLA_REPO);
-    await writeFile(settingsPath,settings,'utf8');
+  const rootGradlePath=join(androidRoot,'build.gradle');
+  let rootGradle=await readFile(rootGradlePath,'utf8');
+  if(!rootGradle.includes('maven.mozilla.org')){
+    const allProjects=/allprojects\\s*\\{[\\s\\S]*?repositories\\s*\\{/;
+    const match=rootGradle.match(allProjects);
+    if(!match)throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
+    rootGradle=rootGradle.replace(allProjects,match[0]+'\n        '+MOZILLA_REPO);
+    await writeFile(rootGradlePath,rootGradle,'utf8');
   }
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
