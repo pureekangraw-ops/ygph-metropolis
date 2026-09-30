@@ -2,8 +2,8 @@ const LOCAL_MAP_FORMAT = 'PMTILES';
 const LOCAL_MAP_TYPE = 'LOCAL_PMTILES_VECTOR_BASEMAP';
 const LOCAL_STORAGE_PROTOCOLS = new Set(['file:', 'content:']);
 const PACKAGE_STATES = new Set(['STAGED', 'ACTIVE', 'RECOVERY_REQUIRED']);
-const LIGHTHOUSE_ANDROID_APPLICATION_ID = 'com.yggdrasil.lighthouse';
-const LIGHTHOUSE_MANAGED_MAP_ROOT_PATTERN = /^\/data\/(?:user\/\d+|data)\/com\.yggdrasil\.lighthouse\/files\/maps\/$/;
+const PRISM_ANDROID_APPLICATION_ID = 'com.yggdrasil.prism';
+const PRISM_MANAGED_MAP_ROOT_PATTERN = /^\/data\/(?:user\/\d+|data)\/com\.yggdrasil\.prism\/files\/maps\/$/;
 
 function text(value, code) {
   const output = String(value ?? '').trim();
@@ -76,7 +76,7 @@ export function assertManagedLocalMapFileUri(uri, managedRootUri) {
   const rootPathRaw = decodedPathname(root, 'LOCAL_MAP_MANAGED_ROOT_URI_PATH_INVALID');
   const rootPath = rootPathRaw.endsWith('/') ? rootPathRaw : `${rootPathRaw}/`;
 
-  if (!LIGHTHOUSE_MANAGED_MAP_ROOT_PATTERN.test(rootPath)) {
+  if (!PRISM_MANAGED_MAP_ROOT_PATTERN.test(rootPath)) {
     throw new Error('LOCAL_MAP_MANAGED_ROOT_URI_NOT_LIGHTHOUSE_STORAGE');
   }
 
@@ -156,7 +156,7 @@ export const LOCAL_MAP_CONTRACT = Object.freeze({
   packageStates: Object.freeze([...PACKAGE_STATES]),
   contentUriRole: 'IMPORT_ONLY',
   activeUriProtocol: 'file:',
-  androidApplicationId: LIGHTHOUSE_ANDROID_APPLICATION_ID,
+  androidApplicationId: PRISM_ANDROID_APPLICATION_ID,
   backgroundLocation: false,
   networkFallback: false,
 });
