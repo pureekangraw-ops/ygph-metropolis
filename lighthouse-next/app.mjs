@@ -746,10 +746,6 @@ window.addEventListener('pagehide', () => {
 });
 installGoHubCommandConfirmation({ root, runtime:controlPortRuntime });
 installLighthouseTransferForm({ root, runtime:controlPortRuntime });
-window.addEventListener('lighthouse:map-evidence', event => {
-  latestMapEvidence = event.detail && typeof event.detail === 'object' ? event.detail : null;
- 
-});
 window.addEventListener('lighthouse:centre-board', () => {
   if (state.activeRoot === 'go') void renderGoPage();
 });
