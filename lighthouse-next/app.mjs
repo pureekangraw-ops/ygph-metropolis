@@ -682,7 +682,6 @@ function selectRoot(rootId) {
   }
   if (next === 'manual') showManualHub();
   if (next === 'go') { void ensureGoHubRealtime(); void renderGoPage(); void syncGoHubControlPort(); }
- 
 }
 function addMessage(role, text, kind = role) { const message={ id:`${Date.now()}-${Math.random().toString(16).slice(2)}`, role, text, kind, createdAt:new Date().toISOString() }; state.chatHistory.push(message); state.chatHistory = state.chatHistory.slice(-80); saveState(); return message; }
 function ensureChatWelcome() { if (state.chatHistory.length) return; addMessage('app', 'พิมพ์สิ่งที่ต้องการได้เลย\nรายจ่ายตรงใช้ “รายการ + จำนวน” เช่น “ข้าว 65”\nรายรับทั่วไปใช้ “จำนวนเงิน + ที่มา” เช่น “ทิป 59”\nเพิ่มสต็อกใช้ “เพิ่ม + สินค้า + จำนวน” เช่น “เพิ่มน้ำ 6 ขวด”\nสินค้าที่รู้จักใช้ “สินค้า + ราคา + จำนวน” เช่น “ขายมือถือ 566 2”\nหรือถาม “วันนี้วันที่เท่าไร”'); }
@@ -791,7 +790,6 @@ function syncKeyboardViewport() {
   if (!inputFocused) {
     keyboardBaselineHeight = viewportHeight;
     root.classList.toggle('keyboard-open', false);
-   
     return;
   }
   const keyboardOpen = keyboardBaselineHeight - viewportHeight > 120;
@@ -799,7 +797,6 @@ function syncKeyboardViewport() {
   window.requestAnimationFrame(() => {
     try { active.scrollIntoView({ block:'nearest', inline:'nearest' }); } catch {}
   });
- 
 }
 root.addEventListener('focusin', event => {
   focusedControl = event.target;
