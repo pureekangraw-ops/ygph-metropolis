@@ -80,10 +80,10 @@ test('overlay materializes debug-only proof surface without mutating Ride truth'
   const root = await mkdtemp(join(tmpdir(), 'prism-local-map-native-'));
   const android = join(root, 'android');
   const app = join(android, 'app');
-  await mkdir(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse'), { recursive: true });
+  await mkdir(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'prism'), { recursive: true });
   await writeFile(join(app, 'build.gradle'), GRADLE);
   await writeFile(join(app, 'src', 'main', 'AndroidManifest.xml'), MANIFEST);
-  await writeFile(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse', 'MainActivity.java'), MAIN_ACTIVITY);
+  await writeFile(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'prism', 'MainActivity.java'), MAIN_ACTIVITY);
 
   const result = await applyLocalMapNativeProof(android);
   const activity = await readFile(result.activityPath, 'utf8');
