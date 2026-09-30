@@ -9,10 +9,10 @@ async function readJson(url) {
   return JSON.parse(await readFile(url, 'utf8'));
 }
 
-test('APK identity contract pins LIGHTHOUSE package and canonical signer without secrets', async () => {
+test('APK identity contract pins PRISM package and canonical signer without secrets', async () => {
   const identity = await readJson(identityUrl);
 
-  assert.equal(identity.applicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(identity.applicationId, 'com.yggdrasil.prism');
   assert.equal(identity.signerCertificateSha256, 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce');
   assert.equal(identity.versionCodePolicy, 'monotonic-increasing-integer');
   assert.equal(identity.identitySchemaVersion, 1);
