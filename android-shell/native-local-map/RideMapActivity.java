@@ -1,4 +1,4 @@
-package com.yggdrasil.lighthouse;
+package com.yggdrasil.prism;
 
 import android.Manifest;
 import android.app.Activity;
