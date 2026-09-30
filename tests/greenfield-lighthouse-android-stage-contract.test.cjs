@@ -20,7 +20,6 @@ const runtimeFiles = [
   'capacitor-app.mjs',
   'surface-contract.mjs',
   'monitor-evidence.mjs',
-  'webview-observability.mjs',
   'calendar-month.mjs',
   'settings-operations.mjs',
   'setup.mjs',
