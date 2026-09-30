@@ -24,7 +24,7 @@ test('PRISM browser is a capability of the PRISM shell',()=>{
   const tool=fs.readFileSync('android-shell/tools/apply-prism-browser.mjs','utf8');
   assert.match(h,/id="open-browser"/);
   assert.match(a,/PrismBrowser/);
-  assert.match(tool,/geckoview-omni/);
+  assert.match(tool,/geckoview-nightly-omni/);
   assert.match(tool,/PrismBrowserActivity/);
   assert.match(tool,/factoryEye:'0.4.0'/);
 });
