@@ -8,6 +8,12 @@ const ALLOWED_PERMISSIONS = new Set([
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.ACCESS_NETWORK_STATE',
   'android.permission.INTERNET',
+  'android.permission.MODIFY_AUDIO_SETTINGS',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+  'android.permission.POST_NOTIFICATIONS',
+  'android.permission.VIBRATE',
+  'android.permission.WAKE_LOCK',
 ]);
 const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
 const PROFILE_INSTALL_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
