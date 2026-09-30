@@ -8,7 +8,7 @@ function snapshot(versionCode, overrides = {}) {
   return {
     source: 'ADB_INSTALLED_APK',
     capturedAt: versionCode === 1007 ? '2026-09-18T01:00:00.000Z' : '2026-09-18T01:30:00.000Z',
-    installedApplicationId: 'com.yggdrasil.lighthouse',
+    installedApplicationId: 'com.yggdrasil.prism',
     installedSignerCertificateSha256: signer,
     versionCode,
     versionName: versionCode === 1007 ? '1.0.0-owner.2' : '1.0.0-owner.3',
@@ -28,8 +28,8 @@ test('builds device acceptance evidence from before/after installed snapshots an
     },
     launchEvidence: {
       source:'ADB_AM_START_WAIT',
-      applicationId:'com.yggdrasil.lighthouse',
-      component:'com.yggdrasil.lighthouse/.MainActivity',
+      applicationId:'com.yggdrasil.prism',
+      component:'com.yggdrasil.prism/.MainActivity',
       launched:true,
       processId:'4242',
       capturedAt:'2026-09-18T01:20:00.000Z',
@@ -37,7 +37,7 @@ test('builds device acceptance evidence from before/after installed snapshots an
   });
 
   assert.equal(result.installMode, 'INSTALL_OVER');
-  assert.equal(result.installedApplicationId, 'com.yggdrasil.lighthouse');
+  assert.equal(result.installedApplicationId, 'com.yggdrasil.prism');
   assert.equal(result.installedApkSha256, 'c'.repeat(64));
   assert.equal(result.beforeVersionCode, 1007);
   assert.equal(result.afterVersionCode, 1008);
@@ -90,8 +90,8 @@ test('rejects non-vault persistence probes and launch receipts without capture t
     persistenceProbe: { key:'probe', before:'same', after:'same' },
     launchEvidence: {
       source:'ADB_AM_START_WAIT',
-      applicationId:'com.yggdrasil.lighthouse',
-      component:'com.yggdrasil.lighthouse/.MainActivity',
+      applicationId:'com.yggdrasil.prism',
+      component:'com.yggdrasil.prism/.MainActivity',
       launched:true,
       processId:'4242',
       capturedAt:'2026-09-18T01:20:00.000Z',
@@ -108,8 +108,8 @@ test('rejects non-vault persistence probes and launch receipts without capture t
     },
     launchEvidence: {
       source:'ADB_AM_START_WAIT',
-      applicationId:'com.yggdrasil.lighthouse',
-      component:'com.yggdrasil.lighthouse/.MainActivity',
+      applicationId:'com.yggdrasil.prism',
+      component:'com.yggdrasil.prism/.MainActivity',
       launched:true,
       processId:'4242',
     },
@@ -128,8 +128,8 @@ test('rejects installed snapshots without ADB provenance', () => {
     },
     launchEvidence: {
       source:'ADB_AM_START_WAIT',
-      applicationId:'com.yggdrasil.lighthouse',
-      component:'com.yggdrasil.lighthouse/.MainActivity',
+      applicationId:'com.yggdrasil.prism',
+      component:'com.yggdrasil.prism/.MainActivity',
       launched:true,
       processId:'4242',
       capturedAt:'2026-09-18T01:20:00.000Z',
