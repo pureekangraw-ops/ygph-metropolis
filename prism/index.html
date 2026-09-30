@@ -9,7 +9,7 @@
   <link rel="icon" href="./assets/prism-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body class="locked">\n<section id="pin-gate" class="pin-gate"><div class="pin-card"><img src="./assets/prism-icon.svg" alt=""><p class="kicker">PRISM</p><h1 id="pin-title">เปิด PRISM</h1><form id="pin-form"><input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" autocomplete="off" aria-label="PIN" placeholder="PIN"><input id="pin-confirm" type="password" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12" autocomplete="off" aria-label="ยืนยัน PIN" placeholder="ยืนยัน PIN" hidden><button id="pin-submit" type="submit">ต่อ</button></form><p id="pin-status" class="helper">กำลังตรวจการตั้งค่า…</p></div></section>
+<body class="locked">\n<section id="pin-gate" class="pin-gate"><div class="pin-card"><img src="./assets/prism-icon.svg" alt=""><p class="kicker">PRISM</p><h1 id="pin-title">เปิด PRISM</h1><form id="pin-form"><input id="pin-input" type="password" minlength="8" maxlength="64" autocomplete="current-password" aria-label="รหัสผ่าน" placeholder="รหัสผ่าน"><input id="pin-confirm" type="password" minlength="8" maxlength="64" autocomplete="new-password" aria-label="ยืนยันรหัสผ่าน" placeholder="ยืนยันรหัสผ่าน" hidden><button id="pin-submit" type="submit">ต่อ</button></form><p id="pin-status" class="helper">กำลังตรวจการตั้งค่า…</p></div></section>
 <main class="app-shell">
   <header class="topbar">
     <div class="brand"><img src="./assets/prism-icon.svg" class="brand-icon" alt=""><div><strong>PRISM</strong><small>ผู้ช่วยกลางของคุณ</small></div></div>
@@ -43,7 +43,7 @@
         <button data-capability="PROJECTS"><b>โปรเจกต์</b><small>ดูงานทั้งหมดและของที่ค้าง</small></button>
         <button data-capability="HANDOFF"><b>ส่งต่องาน</b><small>เรียก GO / LIGHT / PIXIE</small></button>
         <button data-nav="MAP"><b>Map</b><small>แผนที่ · Ride เป็นโหมดเสริม</small></button>
-        <button data-nav="LEDGER"><b>Ledger</b><small>ข้อมูลการเงินทั้งหมด</small></button>
+        <button data-nav="LEDGER"><b>Ledger</b><small>ข้อมูลการเงินทั้งหมด</small></button>\n        <button id="open-browser"><b>Browser</b><small>GeckoView + Factory Eye · GitHub / Cloudflare Watch</small></button>
       </div>
     </section>
   </section>
