@@ -15,14 +15,14 @@ import {
 import { createLocalMapProofFixture } from '../tools/create-local-map-proof-fixture.mjs';
 
 const GRADLE = `android {
-  namespace "com.yggdrasil.lighthouse"
+  namespace "com.yggdrasil.prism"
 }
 dependencies {
   implementation project(':capacitor-android')
 }
 `;
 
-const MAIN_ACTIVITY = `package com.yggdrasil.lighthouse;
+const MAIN_ACTIVITY = `package com.yggdrasil.prism;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -77,13 +77,13 @@ test('proof activity is exported only from debug source set', () => {
 });
 
 test('overlay materializes debug-only proof surface without mutating Ride truth', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'lighthouse-local-map-native-'));
+  const root = await mkdtemp(join(tmpdir(), 'prism-local-map-native-'));
   const android = join(root, 'android');
   const app = join(android, 'app');
-  await mkdir(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse'), { recursive: true });
+  await mkdir(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'prism'), { recursive: true });
   await writeFile(join(app, 'build.gradle'), GRADLE);
   await writeFile(join(app, 'src', 'main', 'AndroidManifest.xml'), MANIFEST);
-  await writeFile(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'lighthouse', 'MainActivity.java'), MAIN_ACTIVITY);
+  await writeFile(join(app, 'src', 'main', 'java', 'com', 'yggdrasil', 'prism', 'MainActivity.java'), MAIN_ACTIVITY);
 
   const result = await applyLocalMapNativeProof(android);
   const activity = await readFile(result.activityPath, 'utf8');

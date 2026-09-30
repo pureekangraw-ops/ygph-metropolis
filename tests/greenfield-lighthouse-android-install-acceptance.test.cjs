@@ -8,11 +8,11 @@ async function loadModule() {
 }
 
 const expected = Object.freeze({
-  applicationId: 'com.yggdrasil.lighthouse',
+  applicationId: 'com.yggdrasil.prism',
   signerCertificateSha256: 'aae608a7ddab0dbfccc1d35e817c5683b3c64b90ab581a4b74867db54e0351ce',
-  baselineVersionCode: 1007,
-  targetVersionCode: 1008,
-  targetVersionName: '1.0.0-owner.3',
+  baselineVersionCode: 1022,
+  targetVersionCode: 1023,
+  targetVersionName: '1.0.0-prism.1',
 });
 
 const staticEvidence = Object.freeze({
@@ -89,7 +89,7 @@ test('identity, installed APK, downgrade, readback and persistence contradiction
   const wrongReadback = evaluateAndroidInstallAcceptance({
     expected,
     staticEvidence,
-    deviceEvidence: deviceEvidence({ readbackVersionCode: 1007 }),
+    deviceEvidence: deviceEvidence({ readbackVersionCode: 1022 }),
   });
   assert.equal(wrongReadback.status, 'FAIL');
   assert.equal(wrongReadback.reasons.includes('DEVICE_VERSION_READBACK_MISMATCH'), true);

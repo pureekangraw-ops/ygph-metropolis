@@ -92,7 +92,7 @@ export async function captureAppLaunchEvidence({
 
 const modulePath = fileURLToPath(import.meta.url);
 if (process.argv[1] && resolve(process.argv[1]) === modulePath) {
-  const applicationId = process.argv[2] || 'com.yggdrasil.lighthouse';
+  const applicationId = process.argv[2] || 'com.yggdrasil.prism';
   const evidence = await captureAppLaunchEvidence({ applicationId });
   console.log(JSON.stringify(evidence, null, 2));
 }

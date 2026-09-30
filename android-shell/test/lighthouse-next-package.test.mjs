@@ -28,7 +28,7 @@ async function collectMjsFiles(root, current = root) {
   return files.sort();
 }
 
-test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically in the shared bundle shape', async () => {
+test('Android package stages PRISM and Greenfield runtime byte-identically in the shared bundle shape', async () => {
   await stageLighthouseNext({ repoRoot, shellRoot });
 
   const stagedLighthouse = join(shellRoot, 'www', 'lighthouse-next');
@@ -67,7 +67,7 @@ test('Android package stages LIGHTHOUSE and Greenfield runtime byte-identically 
   );
 });
 
-test('every staged LIGHTHOUSE relative ES-module dependency is present in the staged bundle', async () => {
+test('every staged PRISM relative ES-module dependency is present in the staged bundle', async () => {
   await stageLighthouseNext({ repoRoot, shellRoot });
   const stagedLighthouse = join(shellRoot, 'www', 'lighthouse-next');
   assert.equal(await exists(stagedLighthouse), true, 'shared bundle must contain lighthouse-next');

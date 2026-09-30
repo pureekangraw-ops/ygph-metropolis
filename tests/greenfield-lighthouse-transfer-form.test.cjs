@@ -109,8 +109,8 @@ test("Settings exposes in-app import/export UI and app binds it to the live Cont
   assert.match(confirmation, /lighthouse:control-port-updated/);
 });
 
-test("owner build increments for the in-app transfer surface", () => {
+test("PRISM build increments for the in-app transfer surface", () => {
   const version = JSON.parse(read("android-shell/version.json"));
   assert.equal(version.versionCode, 1023);
-  assert.equal(version.versionName, "1.0.0-owner.18");
+  assert.equal(version.versionName, "1.0.0-prism.1");
 });

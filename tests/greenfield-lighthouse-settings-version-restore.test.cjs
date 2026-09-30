@@ -36,9 +36,9 @@ test('Settings reads build identity without hard-coded version fallback', async 
         async json() {
           return {
             owner:'ANDROID_APK',
-            applicationId:'com.yggdrasil.lighthouse',
-            versionCode:1008,
-            versionName:'1.0.0-owner.3',
+            applicationId:'com.yggdrasil.prism',
+            versionCode:1023,
+            versionName:'1.0.0-prism.1',
             baselineVersionCode:1007,
           };
         },
@@ -46,8 +46,8 @@ test('Settings reads build identity without hard-coded version fallback', async 
     },
   });
 
-  assert.equal(result.versionCode, 1008);
-  assert.equal(result.versionName, '1.0.0-owner.3');
+  assert.equal(result.versionCode, 1023);
+  assert.equal(result.versionName, '1.0.0-prism.1');
 });
 
 test('Settings restore requires explicit confirmation and delegates verified overwrite to active Runtime', async () => {
@@ -100,7 +100,7 @@ test('Settings Version prefers installed native App identity when Capacitor App 
   let fetched = false;
   const App = {
     async getInfo() {
-      return { id:'com.yggdrasil.lighthouse', name:'LIGHTHOUSE', version:'1.0.0-owner.3', build:'1008' };
+      return { id:'com.yggdrasil.prism', name:'PRISM', version:'1.0.0-prism.1', build:'1023' };
     },
   };
   const capacitor = {
@@ -115,9 +115,9 @@ test('Settings Version prefers installed native App identity when Capacitor App 
   });
   assert.equal(fetched, false);
   assert.equal(result.owner, 'ANDROID_INSTALLED_APP');
-  assert.equal(result.applicationId, 'com.yggdrasil.lighthouse');
-  assert.equal(result.versionCode, 1008);
-  assert.equal(result.versionName, '1.0.0-owner.3');
+  assert.equal(result.applicationId, 'com.yggdrasil.prism');
+  assert.equal(result.versionCode, 1023);
+  assert.equal(result.versionName, '1.0.0-prism.1');
 });
 
 

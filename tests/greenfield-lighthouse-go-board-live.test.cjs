@@ -340,8 +340,8 @@ test('GO is a fourth LIGHTHOUSE root wired to Centre Board local working memory 
   assert.match(html, /id="go-board-list"/);
   assert.match(html, /Centre Board V1/);
   assert.match(app, /createLighthouseCentreBoardStore\(\)/);
-  assert.match(app, /const allowed = \['chat','manual','go','settings'\]/);
-  assert.match(app, /activeRoot:\['chat','manual','go','settings'\]\.includes/);
+  assert.match(app, /const allowed = \['chat','manual','go','prism','settings'\]/);
+  assert.match(app, /activeRoot:\['chat','manual','go','prism','settings'\]\.includes/);
   assert.match(app, /controlPortRuntime\.snapshotStatus\(\)/);
   assert.match(app, /lighthouse:centre-board/);
   assert.match(app, /lighthouse:centre-board-emergency/);

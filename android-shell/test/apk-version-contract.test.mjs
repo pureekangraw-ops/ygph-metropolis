@@ -14,7 +14,7 @@ test('Android APK version file is the monotonic owner-build source of truth', as
   assert.equal(Number.isInteger(version.baselineVersionCode), true);
   assert.equal(Number.isInteger(version.versionCode), true);
   assert.equal(version.versionCode, version.baselineVersionCode + 1);
-  assert.match(version.versionName, /^1\.0\.0-owner\.\d+$/);
+  assert.match(version.versionName, /^1\.0\.0-prism\.\d+$/);
   assert.equal(version.patchVersionDerived, false);
 });
 

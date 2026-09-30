@@ -48,7 +48,7 @@ function readRelevantDiagnostics() {
   const all = runAdb(['logcat', '-d'], { allowFailure: true }).stdout || '';
   return all
     .split('\n')
-    .filter(line => /LIGHTHOUSE_LOCAL_MAP|com\.yggdrasil\.lighthouse|AndroidRuntime|MapLibre|libmaplibre|FATAL EXCEPTION|UnsatisfiedLinkError/i.test(line))
+    .filter(line => /LIGHTHOUSE_LOCAL_MAP|com\.yggdrasil\.(?:prism|lighthouse)|AndroidRuntime|MapLibre|libmaplibre|FATAL EXCEPTION|UnsatisfiedLinkError/i.test(line))
     .slice(-160)
     .join('\n');
 }
@@ -87,7 +87,7 @@ async function waitForMagentaPixel(screenshotPath, timeoutMs = 30000) {
 }
 
 export async function captureLocalMapNativeProof({
-  applicationId = 'com.yggdrasil.lighthouse',
+  applicationId = 'com.yggdrasil.prism',
   evidencePath = 'release/local-map-native-proof.json',
 } = {}) {
   const work = await mkdtemp(join(tmpdir(), 'lighthouse-local-map-proof-'));
@@ -111,7 +111,7 @@ export async function captureLocalMapNativeProof({
     if (networkProbe.status === 0) throw new Error('LOCAL_MAP_PROOF_NETWORK_STILL_REACHABLE');
 
     runAdb(['logcat', '-c']);
-    const component = `${applicationId}/com.yggdrasil.lighthouse.LocalPmtilesProofActivity`;
+    const component = `${applicationId}/com.yggdrasil.prism.LocalPmtilesProofActivity`;
     const launch = shell('am', 'start', '-W', '-n', component, { allowFailure: true });
     const launchOutput = `${launch.stdout || ''}\n${launch.stderr || ''}`.trim();
     console.log(`LOCAL_MAP_PROOF_LAUNCH ${launchOutput.replaceAll('\n', ' | ')}`);
@@ -178,7 +178,7 @@ function dirnameCompat(path) {
 }
 
 async function main() {
-  const applicationId = process.argv[2] || 'com.yggdrasil.lighthouse';
+  const applicationId = process.argv[2] || 'com.yggdrasil.prism';
   const evidencePath = process.argv[3] || 'release/local-map-native-proof.json';
   console.log(JSON.stringify(await captureLocalMapNativeProof({ applicationId, evidencePath })));
 }

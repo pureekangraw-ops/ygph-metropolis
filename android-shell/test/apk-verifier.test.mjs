@@ -16,9 +16,9 @@ test('parses APK signer certificate SHA-256 and normalizes punctuation', () => {
 });
 
 test('parses package/version identity from aapt badging', () => {
-  const badging = "package: name='com.yggdrasil.lighthouse' versionCode='1006' versionName='1.0.0-owner.1' platformBuildVersionName='16'";
+  const badging = "package: name='com.yggdrasil.prism' versionCode='1006' versionName='1.0.0-owner.1' platformBuildVersionName='16'";
   assert.deepEqual(parseAaptBadging(badging), {
-    applicationId: 'com.yggdrasil.lighthouse',
+    applicationId: 'com.yggdrasil.prism',
     versionCode: 1006,
     versionName: '1.0.0-owner.1',
   });
@@ -26,7 +26,7 @@ test('parses package/version identity from aapt badging', () => {
 
 test('fails closed on package, signer, versionCode, or versionName mismatch', () => {
   const expected = {
-    applicationId: 'com.yggdrasil.lighthouse',
+    applicationId: 'com.yggdrasil.prism',
     signerCertificateSha256: SIGNER,
     versionCode: 1006,
     versionName: '1.0.0-owner.1',

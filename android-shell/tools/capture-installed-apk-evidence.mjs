@@ -64,7 +64,7 @@ export async function captureInstalledApkEvidence({
   );
   const remoteApkPath = parsePmPath(pathResult.stdout);
 
-  const workRoot = await mkdtemp(join(tempRoot, 'lighthouse-installed-apk-'));
+  const workRoot = await mkdtemp(join(tempRoot, 'prism-installed-apk-'));
   const localApkPath = join(workRoot, 'installed-base.apk');
 
   try {
@@ -97,7 +97,7 @@ export async function captureInstalledApkEvidence({
 
 const modulePath = fileURLToPath(import.meta.url);
 if (process.argv[1] && resolve(process.argv[1]) === modulePath) {
-  const applicationId = process.argv[2] || 'com.yggdrasil.lighthouse';
+  const applicationId = process.argv[2] || 'com.yggdrasil.prism';
   const evidence = await captureInstalledApkEvidence({ applicationId });
   console.log(JSON.stringify(evidence, null, 2));
 }

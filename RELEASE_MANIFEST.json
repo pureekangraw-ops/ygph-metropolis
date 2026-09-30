@@ -8,13 +8,14 @@
     "assetsDirectory": ".lighthouse-production",
     "webEntrypoint": "lighthouse-next/index.html",
     "rootEntrypoint": "index.html",
-    "androidBuilder": "android-shell/tools/stage-lighthouse-next.mjs",
+    "androidBuilder": "android-shell/tools/stage-prism.mjs",
     "rule": "WEB_AND_ANDROID_MUST_USE_SAME_STAGED_BUNDLE"
   },
   "surfaces": {
     "roots": [
       "CHAT",
       "MANUAL",
+      "PRISM",
       "GO",
       "SETTINGS"
     ],
