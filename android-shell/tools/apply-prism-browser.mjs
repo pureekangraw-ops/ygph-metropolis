@@ -2,7 +2,7 @@ import {cp,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
-const GECKO_VERSION='159.0.20260924164300';
+const GECKO_VERSION='157.0.20260910085851';
 const GECKO_DEP=`implementation 'org.mozilla.geckoview:geckoview-nightly-omni:${GECKO_VERSION}'`;
 const MOZILLA_REPO="maven { url 'https://maven.mozilla.org/maven2/' }";
 const ACTIVITY='com.yggdrasil.prism.PrismBrowserActivity';
