@@ -6,7 +6,10 @@ on:
     branches:
       - prism/browser-owner21-20260930
     paths:
-      - android-shell/version.json
+      - 'prism/**'
+      - 'android-shell/**'
+      - 'scripts/stage-prism-native.mjs'
+      - '.github/workflows/prism-owner-build.yml'
 
 permissions:
   contents: read
