@@ -24,14 +24,14 @@ cd android
 ./gradlew assembleDebug
 ```
 
-The repository currently does not contain `android/` or `gradlew`. The next
-owner-controlled step is to run `npx cap add android` once the Android SDK and
-Gradle Wrapper policy are available, then commit the generated Android project
-and wrapper so CI can build reproducibly.
+The repository intentionally does not commit the generated `android/` tree.
+The PR safety gate creates it with `npx cap add android`, syncs the PRISM web
+bundle, applies the native map/security overlays, and builds with the generated
+Gradle Wrapper. A physical-device acceptance pass is still required after CI.
 
 ## Identity
 
 - App name: PRISM
 - Application ID: `com.yggdrasil.prism`
-- Version: `1.0.0-prism.1` (version code 1024)
+- Version: `1.0.0-prism.1` (version code 1023)
 - Map mode: local-first; no background location is enabled by this lane
