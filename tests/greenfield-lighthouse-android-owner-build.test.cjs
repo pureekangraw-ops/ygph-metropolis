@@ -2,14 +2,14 @@ const fs = require('node:fs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const workflow = fs.readFileSync('.github/workflows/lighthouse-owner-build.yml', 'utf8');
+const workflow = fs.readFileSync('.github/workflows/prism-owner-build.yml', 'utf8');
 
-test('Owner Build packages current main LIGHTHOUSE and cannot publish production', () => {
-  assert.match(workflow, /ref:\s*main/);
+test('Owner Build packages the exact PRISM commit and cannot publish production', () => {
+  assert.match(workflow, /github\.event\.pull_request\.head\.sha \|\| github\.sha/);
   assert.doesNotMatch(workflow, /ref:\s*work\/metro-new-20260906/);
   assert.doesNotMatch(workflow, /\binputs:\s*\n|inputs\.target_ref/);
   assert.match(workflow, /node --test test\/\*\.test\.mjs/);
-  assert.match(workflow, /npm run app:stage-next/);
+  assert.match(workflow, /npm run app:stage-prism/);
   assert.match(workflow, /npm run android:icons/);
   assert.match(workflow, /npm run android:map:apply/);
   assert.match(workflow, /set-android-version\.mjs/);
@@ -24,15 +24,15 @@ test('Owner Build packages current main LIGHTHOUSE and cannot publish production
 
 test('Owner Build signs only after security verification and uploads only after final identity proof', () => {
   for (const name of [
-    'LIGHTHOUSE_APK_KEYSTORE_BASE64',
-    'LIGHTHOUSE_APK_STORE_PASSWORD',
-    'LIGHTHOUSE_APK_KEY_ALIAS',
-    'LIGHTHOUSE_APK_KEY_PASSWORD',
+    'PRISM_APK_KEYSTORE_BASE64',
+    'PRISM_APK_STORE_PASSWORD',
+    'PRISM_APK_KEY_ALIAS',
+    'PRISM_APK_KEY_PASSWORD',
   ]) {
     assert.match(workflow, new RegExp(name));
   }
 
-  const stage = workflow.indexOf('Stage owner-approved LIGHTHOUSE next');
+  const stage = workflow.indexOf('Stage owner-approved PRISM');
   const addAndroid = workflow.indexOf('Generate Android project');
   const syncAndroid = workflow.indexOf('Sync exact staged web assets');
   const version = workflow.indexOf('Apply canonical Android version');
@@ -51,6 +51,6 @@ test('Owner Build signs only after security verification and uploads only after 
   assert.ok(stage < addAndroid && addAndroid < syncAndroid && syncAndroid < version && version < icons);
   assert.ok(icons < rideMap && rideMap < securityApply && securityApply < securityVerify && securityVerify < build);
   assert.ok(build < sign && sign < identity && identity < upload);
-  assert.match(workflow, /APK_SOURCE_REF:\s*main/);
+  assert.match(workflow, /APK_SOURCE_REF:.*github\.head_ref/);
   assert.match(workflow, /APK_SOURCE_COMMIT="\$\(git rev-parse HEAD\)"/);
 });

@@ -8,8 +8,8 @@ import { materializeAndroidIcons, APPROVED_ICON_SOURCE } from '../tools/material
 
 const repoRoot = resolve(import.meta.dirname, '../..');
 
-test('launcher generation is anchored to the approved lighthouse artwork', async () => {
-  assert.equal(APPROVED_ICON_SOURCE, 'lighthouse-next/assets/lighthouse-icon.svg');
+test('launcher generation is anchored to the approved PRISM artwork', async () => {
+  assert.equal(APPROVED_ICON_SOURCE, 'prism/assets/prism-icon.svg');
   const root = await mkdtemp(join(tmpdir(), 'lh-icons-'));
   await materializeAndroidIcons({ repoRoot, androidRoot: root });
 
@@ -22,7 +22,7 @@ test('launcher generation is anchored to the approved lighthouse artwork', async
   assert.equal(foreground.height, 432);
 });
 
-test('adaptive launcher resources keep the approved graphite background and foreground mapping', async () => {
+test('adaptive launcher resources keep the approved PRISM background and foreground mapping', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lh-icons-'));
   await materializeAndroidIcons({ repoRoot, androidRoot: root });
 
@@ -34,5 +34,5 @@ test('adaptive launcher resources keep the approved graphite background and fore
     assert.match(xml, /@mipmap\/ic_launcher_foreground/);
     assert.match(xml, /@color\/ic_launcher_background/);
   }
-  assert.match(background, /#0B0E14/);
+  assert.match(background, /#F4F7FB/);
 });

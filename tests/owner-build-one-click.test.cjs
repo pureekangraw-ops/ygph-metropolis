@@ -2,13 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const workflowPath = '.github/workflows/lighthouse-owner-build.yml';
+const workflowPath = '.github/workflows/prism-owner-build.yml';
 
 function readWorkflow() {
   return fs.readFileSync(workflowPath, 'utf8');
 }
 
-test('LIGHTHOUSE Owner Build is one-click and hard-locks the approved release branch', () => {
+test('PRISM Owner Build is one-click and locks the exact event commit', () => {
   const workflow = readWorkflow();
 
   assert.match(workflow, /workflow_dispatch:\s*\n/);
@@ -17,8 +17,8 @@ test('LIGHTHOUSE Owner Build is one-click and hard-locks the approved release br
   assert.doesNotMatch(workflow, /feat\/lighthouse-1\.0\.0-rebuild/);
   assert.doesNotMatch(workflow, /app:stage-existing/);
 
-  assert.match(workflow, /ref:\s*work\/metro-new-20260906/);
-  assert.match(workflow, /APK_SOURCE_REF:\s*work\/metro-new-20260906/);
-  assert.match(workflow, /app:stage-next/);
-  assert.match(workflow, /name:\s*lighthouse-1\.0\.0-owner-test/);
+  assert.match(workflow, /github\.event\.pull_request\.head\.sha \|\| github\.sha/);
+  assert.match(workflow, /APK_SOURCE_REF:.*github\.head_ref/);
+  assert.match(workflow, /app:stage-prism/);
+  assert.match(workflow, /name:\s*prism-1\.0\.0-owner\.21/);
 });

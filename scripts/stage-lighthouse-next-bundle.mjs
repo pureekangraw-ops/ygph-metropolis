@@ -278,10 +278,5 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
 const modulePath = fileURLToPath(import.meta.url);
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (invokedPath === modulePath) {
-  const destinationArg = process.argv[2];
-  if (!destinationArg) throw new Error('LIGHTHOUSE_STAGE_DESTINATION_REQUIRED');
-  const repoRoot = resolve(dirname(modulePath), '..');
-  const destinationRoot = resolve(process.cwd(), destinationArg);
-  const result = await stageLighthouseBundle({ repoRoot, destinationRoot });
-  console.log(`Staged canonical LIGHTHOUSE bundle (${result.applicationFiles.length} deploy files, ${result.greenfieldFiles.length} Greenfield modules)`);
+  throw new Error('LIGHTHOUSE_RELEASE_ROUTE_RETIRED: use PRISM Owner Build');
 }

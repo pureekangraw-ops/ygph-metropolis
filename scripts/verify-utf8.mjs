@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { stageLighthouseBundle } from './stage-lighthouse-next-bundle.mjs';
+import { stagePrismNative } from './stage-prism-native.mjs';
 
 const root = process.cwd();
-const destination = await fs.mkdtemp(path.join(os.tmpdir(), 'lighthouse-utf8-'));
+const destination = await fs.mkdtemp(path.join(os.tmpdir(), 'prism-utf8-'));
 const textExtensions = new Set(['.html', '.css', '.js', '.mjs', '.json', '.webmanifest']);
 const mojibake = /(?:\u00c2|\u00c3|\u00e0\u00b8|\u00e0\u00b9)/;
 
@@ -20,7 +20,7 @@ async function collect(dir, prefix = '') {
 }
 
 try {
-  await stageLighthouseBundle({ repoRoot:root, destinationRoot:destination });
+  await stagePrismNative({ repoRoot:root, destinationRoot:destination });
   const files = (await collect(destination)).filter(file => textExtensions.has(path.extname(file)));
   const failures = [];
   for (const relative of files) {
@@ -32,7 +32,7 @@ try {
     console.error(failures.join('\n'));
     process.exitCode = 1;
   } else {
-    console.log(`UTF-8 gate PASS (${files.length} canonical LIGHTHOUSE bundle text files)`);
+    console.log(`UTF-8 gate PASS (${files.length} canonical PRISM bundle text files)`);
   }
 } finally {
   await fs.rm(destination, { recursive:true, force:true });

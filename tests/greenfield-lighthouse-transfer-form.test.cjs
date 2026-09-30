@@ -109,8 +109,8 @@ test("Settings exposes in-app import/export UI and app binds it to the live Cont
   assert.match(confirmation, /lighthouse:control-port-updated/);
 });
 
-test("owner build increments for the in-app transfer surface", () => {
+test("current Android candidate has a monotonic upgrade baseline", () => {
   const version = JSON.parse(read("android-shell/version.json"));
-  assert.equal(version.versionCode, 1023);
-  assert.equal(version.versionName, "1.0.0-owner.18");
+  assert.equal(version.versionCode, version.baselineVersionCode + 1);
+  assert.match(version.versionName, /^1\.0\.0-owner\.\d+$/);
 });

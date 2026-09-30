@@ -110,17 +110,10 @@ test('MANUAL exposes the four owner houses while Settings distinguishes durable 
   assert.doesNotMatch(html, /ข้อมูลทั้งหมดในหน้านี้อยู่บนเครื่องนี้เท่านั้น/);
 });
 
-test('Web production and Android share the same canonical LIGHTHOUSE bundle builder', () => {
-  const workflow = read(deployWorkflowPath);
-  const wrangler = read(path.join(root, 'wrangler.jsonc'));
-  const androidStage = read(path.join(root, 'android-shell/tools/stage-lighthouse-next.mjs'));
-
-  assert.match(wrangler, /"directory"\s*:\s*"\.\/\.lighthouse-production"/);
-  assert.match(workflow, /stage-lighthouse-next-bundle\.mjs \.lighthouse-production/);
-  assert.match(workflow, /Reject legacy production shell/);
-  assert.doesNotMatch(workflow, /Deploy isolated LIGHTHOUSE next demo staging/);
-  assert.match(androidStage, /stageLighthouseBundle/);
-  assert.match(workflow, /YGPH METROPOLIS\|MASTER INPUT/);
+test('legacy demo has no active deployment or Android packaging route', () => {
+  assert.equal(fs.existsSync(deployWorkflowPath), false);
+  assert.equal(fs.existsSync(path.join(root, '.github/workflows/lighthouse-owner-build.yml')), false);
+  assert.equal(fs.existsSync(path.join(root, 'android-shell/tools/stage-lighthouse-next.mjs')), false);
 });
 
 test('registered product sale parser locks product then value then quantity', async () => {
