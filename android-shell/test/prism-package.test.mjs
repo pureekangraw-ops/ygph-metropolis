@@ -6,6 +6,24 @@ import { join, resolve } from 'node:path';
 import { stagePrismNative, PRISM_RUNTIME_FILES, PRISM_ASSETS } from '../../scripts/stage-prism-native.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '../..');
+test('staged provenance uses the pinned PRISM head instead of the PR merge SHA', async () => {
+  const destinationRoot = await mkdtemp(join(tmpdir(), 'prism-provenance-'));
+  const oldHead = process.env.PRISM_SOURCE_COMMIT;
+  const oldGithub = process.env.GITHUB_SHA;
+  try {
+    process.env.PRISM_SOURCE_COMMIT = 'a'.repeat(40);
+    process.env.GITHUB_SHA = 'b'.repeat(40);
+    const manifest = await stagePrismNative({ repoRoot, destinationRoot });
+    assert.equal(manifest.sourceCommit, 'a'.repeat(40));
+    const staged = JSON.parse(await readFile(join(destinationRoot, 'release-manifest.json'), 'utf8'));
+    assert.equal(staged.sourceCommit, manifest.sourceCommit);
+  } finally {
+    if (oldHead === undefined) delete process.env.PRISM_SOURCE_COMMIT; else process.env.PRISM_SOURCE_COMMIT = oldHead;
+    if (oldGithub === undefined) delete process.env.GITHUB_SHA; else process.env.GITHUB_SHA = oldGithub;
+    await rm(destinationRoot, { recursive: true, force: true });
+  }
+});
+
 test('complete PRISM package preserves every runtime and asset byte and excludes legacy parents', async () => {
   const destinationRoot = await mkdtemp(join(tmpdir(), 'prism-package-'));
   try {

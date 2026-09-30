@@ -77,7 +77,7 @@ jobs:
 
       - name: Stage owner-approved PRISM
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PRISM_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run app:stage-prism
 
       - name: Prove PRISM payload

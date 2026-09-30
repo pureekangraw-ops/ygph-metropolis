@@ -16,7 +16,7 @@ export async function stagePrismNative({repoRoot,destinationRoot}){
   for(const f of [...PRISM_RUNTIME_FILES,...PRISM_ASSETS])await copy(repoRoot,destinationRoot,f);
   const root='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRISM</title><meta http-equiv="refresh" content="0;url=./prism/index.html"></head><body><script>location.replace("./prism/index.html")</script></body></html>';
   await writeFile(join(destinationRoot,'index.html'),root,'utf8');
-  const manifest={product:'PRISM',architecture:'PRISM_NATIVE_V1',legacyParent:null,applicationId:identity.applicationId,versionName:version.versionName,versionCode:version.versionCode,componentPolicy:components.policy,components:components.components,roots:['COPILOT','PROJECTS','MAP','LEDGER'],deep:['HANDOFF','MONITOR'],capabilities:{MAP:'NATIVE_OVERLAY',LEDGER:'OWNER_BOUNDARY',COPILOT:'SPECTRUM'},sourceCommit:process.env.GITHUB_SHA||null};
+  const manifest={product:'PRISM',architecture:'PRISM_NATIVE_V1',legacyParent:null,applicationId:identity.applicationId,versionName:version.versionName,versionCode:version.versionCode,componentPolicy:components.policy,components:components.components,roots:['COPILOT','PROJECTS','MAP','LEDGER'],deep:['HANDOFF','MONITOR'],capabilities:{MAP:'NATIVE_OVERLAY',LEDGER:'OWNER_BOUNDARY',COPILOT:'SPECTRUM'},sourceCommit:process.env.PRISM_SOURCE_COMMIT||process.env.GITHUB_SHA||null};
   await writeFile(join(destinationRoot,'release-manifest.json'),JSON.stringify(manifest,null,2)+'\n','utf8');
   return manifest;
 }
