@@ -2,7 +2,7 @@ import {cp,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 
-const GECKO_VERSION='157.0.20260924084938';
+const GECKO_VERSION='157.0.20260910085851';
 const GECKO_DEP=`implementation 'org.mozilla.geckoview:geckoview-omni:${GECKO_VERSION}'`;
 const MOZILLA_REPO="maven { url 'https://maven.mozilla.org/maven2/' }";
 const ACTIVITY='com.yggdrasil.prism.PrismBrowserActivity';
@@ -25,14 +25,16 @@ export async function applyPrismBrowser(androidRoot){
     await writeFile(gradlePath,gradle,'utf8');
   }
 
-  const rootGradlePath=join(androidRoot,'build.gradle');
-  let rootGradle=await readFile(rootGradlePath,'utf8');
-  if(!rootGradle.includes('maven.mozilla.org')){
-    const marker='mavenCentral()';
-    if(!rootGradle.includes(marker))throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
-    rootGradle=rootGradle.replace(marker,marker+'\n        '+MOZILLA_REPO);
-    await writeFile(rootGradlePath,rootGradle,'utf8');
+  if(!gradle.includes('maven.mozilla.org')){
+    const marker='android {';
+    if(!gradle.includes(marker))throw new Error('PRISM_BROWSER_REPOSITORY_BLOCK_MISSING');
+    gradle=gradle.replace(marker,"repositories {\n    "+MOZILLA_REPO+"\n}\n\n"+marker);
   }
+  if(!/sourceCompatibility\\s+JavaVersion[.]VERSION_17/.test(gradle)){
+    const marker='android {';
+    gradle=gradle.replace(marker,marker+"\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }");
+  }
+  await writeFile(gradlePath,gradle,'utf8');
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
