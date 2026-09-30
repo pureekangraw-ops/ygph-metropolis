@@ -26,7 +26,7 @@ test('PRISM browser is a capability of the PRISM shell',()=>{
   assert.match(a,/PrismBrowser/);
   assert.match(tool,/geckoview-omni/);
   assert.match(tool,/PrismBrowserActivity/);
-  assert.match(tool,/Factory Eye/);
+  assert.match(tool,/factoryEye:'0.4.0'/);
 });
 test('Factory Eye bundle is pinned to canonical Ergasterion v0.4.0 snapshot',()=>{
   const m=JSON.parse(fs.readFileSync('android-shell/native-prism-browser/factory-eye/manifest.json','utf8'));
