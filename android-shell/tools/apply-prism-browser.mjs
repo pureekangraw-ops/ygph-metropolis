@@ -22,7 +22,13 @@ export async function applyPrismBrowser(androidRoot){
   if(!gradle.includes(GECKO_DEP)){
     const marker='dependencies {'; if(!gradle.includes(marker))throw new Error('PRISM_BROWSER_DEPENDENCIES_MISSING');
     gradle=gradle.replace(marker,marker+'\n    '+GECKO_DEP);
-    await writeFile(gradlePath,gradle,'utf8');
+  }
+  if(/minSdkVersion\s+rootProject[.]ext[.]minSdkVersion/.test(gradle)){
+    gradle=gradle.replace(/minSdkVersion\s+rootProject[.]ext[.]minSdkVersion/,'minSdkVersion 26');
+  } else if(/minSdk\s+rootProject[.]ext[.]minSdkVersion/.test(gradle)){
+    gradle=gradle.replace(/minSdk\s+rootProject[.]ext[.]minSdkVersion/,'minSdk 26');
+  } else if(!/minSdk(?:Version)?\s+26/.test(gradle)){
+    throw new Error('PRISM_BROWSER_MIN_SDK_PATCH_TARGET_MISSING');
   }
 
   if(!gradle.includes('maven.mozilla.org')){
