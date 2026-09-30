@@ -120,11 +120,13 @@ jobs:
         run: npm run android:release
 
       - name: Materialize canonical APK signer
+        # Reuse the canonical signer proven by PRISM owner build #101.
+        # Secret labels predate PRISM; they do not enable a LIGHTHOUSE release route.
         env:
-          PRISM_APK_KEYSTORE_BASE64: ${{ secrets.PRISM_APK_KEYSTORE_BASE64 }}
-          PRISM_APK_STORE_PASSWORD: ${{ secrets.PRISM_APK_STORE_PASSWORD }}
-          PRISM_APK_KEY_ALIAS: ${{ secrets.PRISM_APK_KEY_ALIAS }}
-          PRISM_APK_KEY_PASSWORD: ${{ secrets.PRISM_APK_KEY_PASSWORD }}
+          PRISM_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
+          PRISM_APK_STORE_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_STORE_PASSWORD }}
+          PRISM_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
+          PRISM_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           for name in PRISM_APK_KEYSTORE_BASE64 PRISM_APK_STORE_PASSWORD PRISM_APK_KEY_ALIAS PRISM_APK_KEY_PASSWORD; do
