@@ -7,8 +7,8 @@ const workflow = fs.readFileSync('.github/workflows/greenfield-deploy-gate.yml',
 test('PR safety gate executes the Android shell suite before staging deploy', () => {
   const install = workflow.indexOf('Install Android shell dependencies');
   const tests = workflow.indexOf('Run Android shell tests');
-  const stage = workflow.indexOf('Stage LIGHTHOUSE Android payload');
-  const hashes = workflow.indexOf('Verify staged LIGHTHOUSE byte identity');
+  const stage = workflow.indexOf('Stage PRISM Android payload');
+  const hashes = workflow.indexOf('Verify staged PRISM identity and runtime byte continuity');
 
   for (const [label, index] of Object.entries({ install, tests, stage, hashes })) {
     assert.ok(index >= 0, `missing Android PR gate stage: ${label}`);
@@ -17,24 +17,26 @@ test('PR safety gate executes the Android shell suite before staging deploy', ()
   assert.match(workflow.slice(install, hashes), /working-directory:\s*android-shell/);
   assert.match(workflow.slice(install, hashes), /npm install --no-audit --no-fund/);
   assert.match(workflow.slice(tests, hashes), /npm test/);
-  assert.match(workflow.slice(stage, hashes), /npm run app:stage-next/);
+  assert.match(workflow.slice(stage, hashes), /npm run app:stage-prism/);
 });
 
-test('PR safety gate verifies nested LIGHTHOUSE bytes including the runtime gate', () => {
+test('PR safety gate verifies PRISM branding and immutable runtime byte continuity', () => {
   for (const file of [
-    'index.html',
     'app.mjs',
     'runtime-gate.mjs',
     'styles.css',
     'owner-polish.css',
-    'assets/lighthouse-icon.svg',
   ]) {
     const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(workflow, new RegExp(escaped));
   }
   assert.match(workflow, /join\(['"]android-shell['"],\s*['"]www['"],\s*['"]lighthouse-next['"],\s*file\)/);
   assert.match(workflow, /createHash\(['"]sha256['"]\)/);
-  assert.match(workflow, /LIGHTHOUSE_STAGE_HASH_MISMATCH/);
+  assert.match(workflow, /PRISM_STAGE_HASH_MISMATCH/);
+  assert.match(workflow, /PRISM_STAGE_BRANDING_MISMATCH/);
+  assert.match(workflow, /prism-icon\\.svg/);
+  assert.match(workflow, /prism-icon-maskable\\.svg/);
+  assert.match(workflow, /com\\.yggdrasil\\.prism/);
 });
 
 test('canonical LIGHTHOUSE bundle is staged before Wrangler validation and PR staging deploy', () => {
