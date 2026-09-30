@@ -46,7 +46,8 @@ test('owner password is not hardcoded and requires at least eight characters',()
 
 test('browser installer patches the generated Capacitor root Gradle repository block',()=>{
   const tool=fs.readFileSync('android-shell/tools/apply-prism-browser.mjs','utf8');
-  assert.match(tool,/rootGradlePath=join\(androidRoot,'build.gradle'\)/);
-  assert.match(tool,/mavenCentral/);
+  assert.match(tool,/maven.mozilla.org/);
+  assert.match(tool,/repositories/);
+  assert.match(tool,/JavaVersion[.]VERSION_17/);
   assert.doesNotMatch(tool,/settingsPath=join\(androidRoot,'settings.gradle'\)/);
 });
