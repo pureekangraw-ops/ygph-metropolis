@@ -1,12 +1,10 @@
-name: LIGHTHOUSE Owner Build
+name: PRISM Owner Build
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
-    paths:
-      - android-shell/version.json
+      - ops/prism-owner-build-20260930
 
 permissions:
   contents: read
@@ -18,10 +16,8 @@ jobs:
       run:
         working-directory: android-shell
     steps:
-      - name: Checkout owner-approved LIGHTHOUSE ref
+      - name: Checkout PRISM owner-build ref
         uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Show exact source commit
         run: git rev-parse HEAD
@@ -44,8 +40,8 @@ jobs:
       - name: Run Android shell contracts
         run: node --test test/*.test.mjs
 
-      - name: Stage owner-approved LIGHTHOUSE next
-        run: npm run app:stage-next
+      - name: Stage owner-approved PRISM
+        run: npm run app:stage-prism
 
       - name: Reject legacy shell from APK payload
         run: |
@@ -93,10 +89,10 @@ jobs:
             if [ -z "${!name:-}" ]; then echo "$name is not configured"; exit 1; fi
           done
           umask 077
-          keystore="$RUNNER_TEMP/lighthouse-apk-release.p12"
-          aligned_apk="$RUNNER_TEMP/lighthouse-release-aligned.apk"
+          keystore="$RUNNER_TEMP/prism-apk-release.p12"
+          aligned_apk="$RUNNER_TEMP/prism-release-aligned.apk"
           unsigned_apk="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          signed_apk="android/app/build/outputs/apk/release/lighthouse-release.apk"
+          signed_apk="android/app/build/outputs/apk/release/prism-release.apk"
           trap 'rm -f "$keystore" "$aligned_apk"' EXIT
           printf '%s' "$LIGHTHOUSE_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
           chmod 600 "$keystore"
@@ -120,21 +116,21 @@ jobs:
       - name: Verify final APK identity and build provenance
         env:
           APK_SOURCE_REPOSITORY: ${{ github.repository }}
-          APK_SOURCE_REF: main
+          APK_SOURCE_REF: ${{ github.ref_name }}
           APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
           APK_RELEASE_CHANNEL: owner-test
         run: |
           set -euo pipefail
           export APK_SOURCE_COMMIT="$(git rev-parse HEAD)"
           export APK_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/lighthouse-release.apk release/apk-identity-evidence.json
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/prism-release.apk release/apk-identity-evidence.json
 
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-1.0.0-owner-test
+          name: prism-1.0.0-prism.1
           path: |
-            android-shell/android/app/build/outputs/apk/release/lighthouse-release.apk
+            android-shell/android/app/build/outputs/apk/release/prism-release.apk
             android-shell/release/apk-identity-evidence.json
             android-shell/release/android-security-evidence.json
             android-shell/IP-NOTICE.md
