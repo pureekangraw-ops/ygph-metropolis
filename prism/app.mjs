@@ -4,14 +4,15 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const safe=(v,f='—')=>String(v??'').trim()||f;
 const state={snapshot:{works:[],live:false,monitor:{}},capabilities:{COUNTER:false,DIRECT_API:false,DEVICE_BRIDGE:false}};
-const pinPlugin=()=>globalThis.Capacitor?.Plugins?.PrismPin;\nconst browserPlugin=()=>globalThis.Capacitor?.Plugins?.PrismBrowser;
+const pinPlugin=()=>globalThis.Capacitor?.Plugins?.PrismPin;
+const browserPlugin=()=>globalThis.Capacitor?.Plugins?.PrismBrowser;
 const replayKey=id=>'prism:replay:'+id;
 const readReplay=id=>{try{return JSON.parse(localStorage.getItem(replayKey(id))||'null');}catch{return null;}};
 const writeReplay=(id,v)=>{try{localStorage.setItem(replayKey(id),JSON.stringify(v));}catch{}};
 
 async function pinStatus(){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');return p.status();}
 async function unlock(pin){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');const r=await p.verify({pin});if(r?.verified)document.body.classList.remove('locked');return Boolean(r?.verified);}
-async function configurePin(pin,confirmation){if(pin!==confirmation)throw new Error('PIN_CONFIRM_MISMATCH');if(!/^\d{4,12}$/.test(pin))throw new Error('PIN_INVALID');const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');await p.provision({pin});return unlock(pin);}
+async function configurePin(pin,confirmation){if(pin!==confirmation)throw new Error('PIN_CONFIRM_MISMATCH');if(pin.length<8||pin.length>64)throw new Error('PIN_INVALID');const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');await p.provision({pin});return unlock(pin);}
 
 function nav(page){$$('.page').forEach(n=>n.classList.toggle('active',n.dataset.page===page));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('active',n.dataset.nav===page));window.scrollTo({top:0});}
 function title(w){return safe(w?.title,'งานนี้');}
@@ -57,7 +58,8 @@ $('#handoff-form').addEventListener('submit',async e=>{
 $('#conference-go-light').addEventListener('click',async()=>{const box=$('#handoff-readback'),call=buildConferenceCall({workId:$('#handoff-work').value,checkpointId:$('#handoff-checkpoint').value,participants:['GO','LIGHT']});box.hidden=false;if(!call.ready){box.innerHTML='<strong>ยังเรียกไม่ได้</strong><span>เลือก Work ก่อน</span>';return;}const bridge=window.PRISM_BRIDGE;if(!bridge?.conference){box.innerHTML='<strong>เตรียมห้องคุยแล้ว</strong><span>live conference bridge ยังไม่ถูกพิสูจน์</span>';return;}try{const r=await bridge.conference(call);box.innerHTML='<strong>เรียกแล้ว</strong><span>'+safe(r?.summary,'GO และ LIGHT เข้ารอบ Work เดียวกัน')+'</span>';}catch(e){box.innerHTML='<strong>เรียกไม่สำเร็จ</strong><span>'+safe(e?.message,'ไม่ทราบสาเหตุ')+'</span>';}});
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
 $('[data-finance-prompt]').addEventListener('click',()=>{nav('COPILOT');$('#command-input').value='สรุปการเงินจาก Ledger ให้ผม';$('#command-input').focus();});
-$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));\n$('#open-browser')?.addEventListener('click',async()=>{const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));}});
+$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
+$('#open-browser')?.addEventListener('click',async()=>{const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));}});
 
 let pinMode='VERIFY';
 async function initPinGate(){const msg=$('#pin-status'),confirmation=$('#pin-confirm'),heading=$('#pin-title'),button=$('#pin-submit');try{const s=await pinStatus();pinMode=s?.configured?'VERIFY':'SETUP';confirmation.hidden=pinMode!=='SETUP';heading.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านของคุณ':'ยืนยันว่าเป็นคุณ';button.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านและเข้า PRISM':'เข้า PRISM';msg.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านอย่างน้อย 8 ตัว รหัสจะอยู่ในเครื่องนี้เท่านั้น':'ใส่รหัสผ่านเพื่อเปิด PRISM';}catch(e){msg.textContent='ยังตรวจระบบ PIN ไม่ได้: '+safe(e?.message,'UNKNOWN');}}
