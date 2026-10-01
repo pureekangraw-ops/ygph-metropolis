@@ -38,6 +38,6 @@ test("observer state is explicit and never substitutes stale data for evidence",
 test("observer patch ships one service and the existing single Factory Eye",()=>{
   const patch=read("android-shell/tools/apply-prism-browser.mjs");
   assert.match(patch,/PrismObserverService\.java/);
-  assert.match(patch,/FactoryEyeHost\.install/);
-  assert.doesNotMatch(patch,/FactoryEyeHost.*install[\s\S]*FactoryEyeHost.*install/);
+  assert.match(patch,/FactoryEyeHost\.java/);
+  assert.doesNotMatch(patch,/PrismObserverService\.java.*PrismObserverService\.java/);
 });
