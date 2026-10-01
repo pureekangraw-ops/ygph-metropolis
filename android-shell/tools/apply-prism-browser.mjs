@@ -7,6 +7,7 @@ const GECKO_DEP=`implementation 'org.mozilla.geckoview:geckoview-nightly-omni:${
 const MOZILLA_REPO="maven { url 'https://maven.mozilla.org/maven2/' }";
 const ACTIVITY='com.yggdrasil.prism.PrismBrowserActivity';
 const OBSERVER_SERVICE='com.yggdrasil.prism.PrismObserverService';
+const FOREGROUND_SERVICE_DATA_SYNC='android.permission.FOREGROUND_SERVICE_DATA_SYNC';
 
 function insertBeforeLast(text,needle,addition){
   const i=text.lastIndexOf(needle); if(i<0)throw new Error('PRISM_BROWSER_PATCH_TARGET_MISSING:'+needle);
@@ -57,6 +58,7 @@ export async function applyPrismBrowser(androidRoot){
   let manifest=await readFile(manifestPath,'utf8');
   if(!manifest.includes('android.permission.INTERNET'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.INTERNET" />');
   if(!manifest.includes('android.permission.FOREGROUND_SERVICE'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />');
+  if(!manifest.includes(FOREGROUND_SERVICE_DATA_SYNC))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="'+FOREGROUND_SERVICE_DATA_SYNC+'" />');
   if(!manifest.includes(ACTIVITY)){
     const activity='\n        <activity android:name=".PrismBrowserActivity" android:exported="false" android:windowSoftInputMode="stateUnspecified|adjustResize" />\n';
     manifest=manifest.replace('</application>',activity+'    </application>');
