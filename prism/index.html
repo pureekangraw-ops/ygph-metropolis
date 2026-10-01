@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070b13">
+  <title>PRISM</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/prism-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="locked">\n<section id="pin-gate" class="pin-gate"><div class="pin-card"><img src="./assets/prism-icon.svg" alt=""><p class="kicker">PRISM</p><h1 id="pin-title">เปิด PRISM</h1><form id="pin-form"><input id="pin-input" type="password" minlength="8" maxlength="64" autocomplete="current-password" aria-label="รหัสผ่าน" placeholder="รหัสผ่าน"><input id="pin-confirm" type="password" minlength="8" maxlength="64" autocomplete="new-password" aria-label="ยืนยันรหัสผ่าน" placeholder="ยืนยันรหัสผ่าน" hidden><button id="pin-submit" type="submit">ต่อ</button></form><p id="pin-status" class="helper">กำลังตรวจการตั้งค่า…</p></div></section>
+<main class="app-shell">
+  <header class="topbar">
+    <div class="brand"><img src="./assets/prism-icon.svg" class="brand-icon" alt=""><div><strong>PRISM</strong><small>ผู้ช่วยกลางของคุณ</small></div></div>
+    <button id="refresh" class="icon-button" aria-label="อัปเดตข้อมูล">↻</button>
+  </header>
+
+  <section class="page active" data-page="HOME">
+    <section class="practical-home">
+      <div class="home-welcome"><h1>PRISM</h1></div>
+      <div class="practical-grid" aria-label="พื้นที่หลัก">
+        <button data-nav="COPILOT"><span class="practical-icon">✦</span><b>Copilot</b><small>คุยกับ PRISM</small></button>
+        <button id="home-open-browser"><span class="practical-icon">◎</span><b>Browser</b><small>เปิดจาก Dashboard</small></button>
+        <button data-nav="MAP"><span class="practical-icon">⌖</span><b>Map</b><small>แผนที่และเส้นทาง</small></button>
+        <button data-nav="LEDGER"><span class="practical-icon">◫</span><b>Ledger</b><small>ข้อมูลการเงิน</small></button>
+      </div>
+      <section class="factory-eye-card">
+        <div><h2>Factory Eye</h2><p>Browser watch</p></div>
+        <span class="factory-state">WAIT_VERIFY</span>
+      </section>
+    </section>
+  </section>
+
+  <section class="page" data-page="COPILOT">
+    <section class="copilot-stage">
+      <div class="copilot-intro"><p class="kicker">COPILOT</p><h1>อยากให้ช่วยอะไร?</h1><p>ถามเรื่องทั่วไป วางแผนงาน หรือให้ PRISM ไปจัดการใน GO Hub ให้</p></div>
+      <div id="copilot-thread" class="copilot-thread" aria-live="polite"></div>
+      <form id="command-form" class="ask-box">
+        <input id="command-input" placeholder="พิมพ์สิ่งที่อยากให้ช่วย…" autocomplete="off">
+        <button type="submit" aria-label="ส่ง">➤</button>
+      </form>
+      <div class="quick-row">
+        <button data-prompt="สรุปโปรเจกต์ที่ค้างทั้งหมด">สรุปงานค้าง</button>
+        <button data-prompt="วันนี้มีอะไรที่ผมต้องตัดสินใจ">เรื่องที่รอผม</button>
+        <button data-prompt="ช่วยวางแผนงานวันนี้">วางแผนวันนี้</button>
+      </div>
+      <p id="command-status" class="helper">คุยกับ PRISM ได้เหมือนผู้ช่วยคนเดียว แล้ว PRISM ค่อยประสานระบบข้างหลัง</p>
+    </section>
+
+    <section>
+      <div class="section-head"><div><p class="kicker">ต้องใช้คุณ</p><h2>เรื่องที่รอตัดสินใจ</h2></div><span id="decision-count" class="count-badge">0</span></div>
+      <div id="decision-list" class="stack empty-card">ยังไม่มีเรื่องที่ต้องตัดสินใจ</div>
+    </section>
+
+    <section class="access-section">
+      <div class="section-head"><div><p class="kicker">GO HUB</p><h2>เข้าถึงทุกอย่างจากตรงนี้</h2></div></div>
+      <div id="capability-grid" class="capability-grid">
+        <button data-capability="PROJECTS"><b>โปรเจกต์</b><small>ดูงานทั้งหมดและของที่ค้าง</small></button>
+        <button data-capability="HANDOFF"><b>ส่งต่องาน</b><small>เรียก GO / LIGHT / PIXIE</small></button>
+        <button data-nav="MAP"><b>Map</b><small>แผนที่ · Ride เป็นโหมดเสริม</small></button>
+        <button data-nav="LEDGER"><b>Ledger</b><small>ข้อมูลการเงินทั้งหมด</small></button>\n        <button id="open-browser"><b>Browser</b><small>GeckoView + Factory Eye · GitHub / Cloudflare Watch</small></button>
+      </div>
+    </section>
+  </section>
+
+  <section class="page" data-page="PROJECTS">
+    <div class="page-title"><p class="kicker">PROJECTS</p><h1>โปรเจกต์ทั้งหมด</h1><p>PRISM สรุปสิ่งที่กำลังเดิน สิ่งที่ค้าง และสิ่งที่รอคุณจากทุกโปรเจกต์</p></div>
+    <div class="project-summary"><div><strong id="project-active-count">0</strong><span>กำลังทำ</span></div><div><strong id="project-wait-count">0</strong><span>กำลังรอ</span></div><div><strong id="project-decision-count">0</strong><span>รอคุณ</span></div></div>
+    <div id="work-list" class="stack empty-card">ยังไม่มีโปรเจกต์ที่กำลังทำ</div>
+  </section>
+
+  <section class="page" data-page="HANDOFF">
+    <button class="back-link" data-nav="COPILOT">‹ กลับ</button>
+    <div class="page-title"><p class="kicker">HANDOFF</p><h1>ส่งงานหรือเรียกคนมาช่วย</h1><p>เลือกงาน แล้ว PRISM ส่งแค่ Work ให้ผู้รับเปิดบริบทเองเมื่อเส้นทางรองรับ</p></div>
+    <form id="handoff-form" class="form-card">
+      <label>งาน<select id="handoff-work-select"><option value="">เลือกงาน</option></select></label>
+      <details class="advanced-fields"><summary>รายละเอียดระบบ</summary><label>Work ID<input id="handoff-work"></label><label>Checkpoint ID<input id="handoff-checkpoint"></label></details>
+      <label>เรียกใคร<select id="handoff-destination"><option value="GO">GO</option><option value="LIGHT">LIGHT</option><option value="PIXIE_LAB">PIXIE</option><option value="GO_WORKS">GO WORKS</option></select></label>
+      <label>อยากให้ได้อะไร<textarea id="handoff-result" rows="3" required placeholder="เช่น ตรวจงานนี้ แล้วกลับมาบอกเฉพาะสิ่งที่ผมต้องตัดสินใจ"></textarea></label>
+      <label>ข้อความเพิ่ม <span class="optional">(ถ้ามี)</span><textarea id="handoff-message" rows="3"></textarea></label>
+      <div class="conference-card">
+        <div><b>คุยพร้อมกัน</b><small>เรียก GO + LIGHT เข้ามารอบ Work เดียวกัน</small></div>
+        <button type="button" id="conference-go-light">เรียกทั้งคู่</button>
+      </div>
+      <div id="route-preview" class="send-readiness">กำลังตรวจเส้นทางส่ง…</div>
+      <button class="primary wide" type="submit">ส่งงาน</button>
+    </form>
+    <div id="handoff-readback" class="result-card" hidden></div>
+  </section>
+
+  <section class="page" data-page="MAP">
+    <div class="page-title"><p class="kicker">MAP</p><h1>แผนที่</h1><p>Map เป็นพื้นหลัก ส่วน Ride เปิดใช้เมื่อคุณต้องการงานวิ่งรถ</p></div>
+    <div class="surface-card"><b>Map</b><p>จุดหมาย เส้นทาง และข้อมูลแผนที่อยู่ตรงนี้</p><button id="open-ride-mode">เปิดโหมด Ride</button></div>
+    <div id="ride-mode" class="surface-card" hidden><b>Ride</b><p>ฟังก์ชันเสริมสำหรับงานวิ่งรถ ไม่ใช่ตัวตนหลักของหน้า Map</p></div>
+  </section>
+
+  <section class="page" data-page="LEDGER">
+    <div class="page-title"><p class="kicker">LEDGER</p><h1>การเงิน</h1><p>Ledger เป็นเจ้าของข้อมูลการเงินทั้งหมดของ PRISM</p></div>
+    <div id="ledger-summary" class="finance-grid"><div><span>เงินพร้อมใช้</span><strong>—</strong></div><div><span>เงินเข้า</span><strong>—</strong></div><div><span>เงินออก</span><strong>—</strong></div><div><span>ภาระใกล้สุด</span><strong>—</strong></div></div>
+    <div class="surface-card"><b>ถาม Copilot เรื่องการเงิน</b><p>PRISM จะอ่านผ่าน Ledger แทนการสร้าง truth การเงินซ้ำ</p><button data-nav="COPILOT" data-finance-prompt>ถาม Copilot</button></div>
+  </section>
+
+  <section class="page" data-page="MONITOR">
+    <button class="back-link" data-nav="PROJECTS">‹ กลับ</button>
+    <div class="page-title"><p class="kicker">ตรวจละเอียด</p><h1>สถานะระบบ</h1><p>เปิดเมื่ออยากตรวจ Work, route, CI, deploy และ provenance</p></div>
+    <div class="health-card"><div><span>การเชื่อมต่อ</span><strong id="m-live">ยังไม่ทราบ</strong></div><div><span>งาน</span><strong id="m-work">—</strong></div><div><span>เส้นทาง</span><strong id="m-route">—</strong></div><div><span>CI</span><strong id="m-ci">ยังไม่ทราบ</strong></div><div><span>Deploy</span><strong id="m-deploy">ยังไม่ทราบ</strong></div><div><span>Provenance</span><strong id="m-provenance">ยังไม่ทราบ</strong></div></div>
+    <details class="raw-details"><summary>รายละเอียดสำหรับตรวจระบบ</summary><pre id="monitor-raw">ยังไม่มีข้อมูล</pre></details>
+  </section>
+</main>
+
+<nav class="bottom-nav" aria-label="เมนูหลัก">
+  <button class="active" data-nav="HOME"><span>◇</span><small>Home</small></button>
+  <button data-nav="COPILOT"><span>✦</span><small>Copilot</small></button>
+  <button data-nav="MAP"><span>⌖</span><small>Map</small></button>
+  <button data-nav="LEDGER"><span>◫</span><small>Ledger</small></button>
+</nav>
+
+<script type="module" src="./app.mjs"></script>
+<script>if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("../sw.js",{scope:"../"}).catch(()=>{}));</script>
+</body>
+</html>

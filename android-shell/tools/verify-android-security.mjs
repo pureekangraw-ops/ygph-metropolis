@@ -2,12 +2,19 @@ import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const EXPECTED_APPLICATION_ID = 'com.yggdrasil.lighthouse';
+const EXPECTED_APPLICATION_ID = 'com.yggdrasil.prism';
 const ALLOWED_PERMISSIONS = new Set([
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.ACCESS_NETWORK_STATE',
   'android.permission.INTERNET',
+  'android.permission.MODIFY_AUDIO_SETTINGS',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+  'android.permission.POST_NOTIFICATIONS',
+  'android.permission.VIBRATE',
+  'android.permission.WAKE_LOCK',
+  'android.permission.HIGH_SAMPLING_RATE_SENSORS',
 ]);
 const DYNAMIC_RECEIVER_PERMISSION = `${EXPECTED_APPLICATION_ID}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`;
 const PROFILE_INSTALL_RECEIVER = 'androidx.profileinstaller.ProfileInstallReceiver';
@@ -112,6 +119,10 @@ function enabledPluginSurface(capacitorConfig) {
     .sort();
 }
 
+function isTrustedGeckoProvider(component) {
+  return component.type === 'provider' && component.name === 'org.mozilla.gecko.GeckoClipboardContentProvider' && component.exported === true;
+}
+
 function isTrustedExportedProfileReceiver(component) {
   if (component.type !== 'receiver' || component.name !== PROFILE_INSTALL_RECEIVER) return false;
   if (component.permission !== PROFILE_INSTALL_PERMISSION) return false;
@@ -181,6 +192,7 @@ export function verifyAndroidSecurity(input) {
   for (const component of evidence.exportedComponents) {
     if (component.type === 'activity' && component.launcher) continue;
     if (isTrustedExportedProfileReceiver(component)) continue;
+    if (isTrustedGeckoProvider(component)) continue;
     if (component.type === 'receiver' && component.name === PROFILE_INSTALL_RECEIVER) {
       if (component.permission !== PROFILE_INSTALL_PERMISSION) throw new Error(`ANDROID_SECURITY_PROFILE_RECEIVER_PERMISSION:${component.permission || 'UNKNOWN'}`);
       const unexpected = component.actions.filter(action => !PROFILE_INSTALL_ACTIONS.has(action));
@@ -193,7 +205,7 @@ export function verifyAndroidSecurity(input) {
     if (component.hasIntentFilter && component.exported === undefined) {
       throw new Error(`ANDROID_SECURITY_EXPORTED_POLICY_UNKNOWN:${component.type}/${component.name || 'UNKNOWN'}`);
     }
-    if (component.type === 'provider' && component.exported !== false) {
+    if (component.type === 'provider' && component.exported !== false && !isTrustedGeckoProvider(component)) {
       throw new Error(`ANDROID_SECURITY_PROVIDER_NOT_PRIVATE:${component.name || 'UNKNOWN'}`);
     }
   }

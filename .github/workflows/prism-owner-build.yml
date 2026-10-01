@@ -1,0 +1,182 @@
+name: PRISM Owner Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'prism/**'
+      - 'android-shell/**'
+      - 'scripts/stage-prism-native.mjs'
+      - 'tests/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'prism/**'
+      - 'android-shell/**'
+      - 'scripts/stage-prism-native.mjs'
+      - 'tests/**'
+      - '.github/workflows/**'
+
+concurrency:
+  group: prism-owner-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-owner-approved-ref:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    defaults:
+      run:
+        working-directory: android-shell
+    steps:
+      - name: Checkout owner-approved PRISM ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Show exact source commit
+        run: |
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_COMMIT"
+        working-directory: .
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: PRISM syntax
+        working-directory: .
+        run: node --check prism/app.mjs && node --check prism/spectrum.mjs && node --check scripts/stage-prism-native.mjs && node --check android-shell/tools/apply-prism-pin.mjs && node --check android-shell/tools/apply-prism-browser.mjs
+
+      - name: PRISM native contracts
+        working-directory: .
+        run: node --test tests/prism-native-cutover.test.cjs
+
+      - name: Repository contracts
+        working-directory: .
+        run: npm test && npm run check:syntax && npm run check:utf8
+
+      - name: Install Android shell dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run Android shell contracts
+        run: node --test test/*.test.mjs
+
+      - name: Stage owner-approved PRISM
+        env:
+          PRISM_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run app:stage-prism
+
+      - name: Prove PRISM payload
+        run: |
+          test -e www/prism/index.html
+          test ! -e www/lighthouse
+          test ! -e www/lighthouse-next
+          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null||m.sourceCommit!==process.env.EXPECTED_SOURCE_COMMIT||m.versionCode!==1026)process.exit(1)"
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Sync exact staged web assets
+        run: npx cap sync android
+
+      - name: Apply canonical Android version
+        run: node tools/set-android-version.mjs
+
+      - name: Materialize approved Android launcher icons
+        run: npm run android:icons
+
+      - name: Apply Ride Map native overlay
+        run: npm run android:map:apply
+
+      - name: Apply PRISM owner password and Browser
+        run: |
+          npm run android:pin:apply
+          npm run android:browser:apply
+
+      - name: Apply generated Android security baseline
+        run: npm run android:security:apply
+
+      - name: Materialize merged release manifest
+        run: cd android && ./gradlew :app:processReleaseMainManifest
+
+      - name: Verify generated Android security
+        run: npm run android:security:verify
+
+      - name: Build unsigned release APK
+        run: npm run android:release
+
+      - name: Materialize canonical APK signer
+        # Reuse the canonical signer proven by PRISM owner build #101.
+        # Secret labels predate PRISM; they do not enable a LIGHTHOUSE release route.
+        env:
+          PRISM_APK_KEYSTORE_BASE64: ${{ secrets.LIGHTHOUSE_APK_KEYSTORE_BASE64 }}
+          PRISM_APK_STORE_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_STORE_PASSWORD }}
+          PRISM_APK_KEY_ALIAS: ${{ secrets.LIGHTHOUSE_APK_KEY_ALIAS }}
+          PRISM_APK_KEY_PASSWORD: ${{ secrets.LIGHTHOUSE_APK_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in PRISM_APK_KEYSTORE_BASE64 PRISM_APK_STORE_PASSWORD PRISM_APK_KEY_ALIAS PRISM_APK_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "$name is not configured"; exit 1; fi
+          done
+          umask 077
+          keystore="$RUNNER_TEMP/prism-apk-release.p12"
+          aligned_apk="$RUNNER_TEMP/prism-release-aligned.apk"
+          unsigned_apk="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          signed_apk="android/app/build/outputs/apk/release/prism-release.apk"
+          trap 'rm -f "$keystore" "$aligned_apk"' EXIT
+          printf '%s' "$PRISM_APK_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          apksigner="$build_tools/apksigner"
+          aapt="$build_tools/aapt"
+          zipalign="$build_tools/zipalign"
+          test -x "$apksigner" && test -x "$aapt" && test -x "$zipalign"
+          "$zipalign" -f -p 4 "$unsigned_apk" "$aligned_apk"
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-pass "env:PRISM_APK_STORE_PASSWORD" \
+            --ks-key-alias "$PRISM_APK_KEY_ALIAS" \
+            --key-pass "env:PRISM_APK_KEY_PASSWORD" \
+            --out "$signed_apk" \
+            "$aligned_apk"
+          "$apksigner" verify "$signed_apk"
+          echo "APKSIGNER=$apksigner" >> "$GITHUB_ENV"
+          echo "AAPT=$aapt" >> "$GITHUB_ENV"
+
+      - name: Verify final APK identity and build provenance
+        env:
+          APK_SOURCE_REPOSITORY: ${{ github.repository }}
+          APK_SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+          APK_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          APK_RELEASE_CHANNEL: owner-test
+        run: |
+          set -euo pipefail
+          export APK_SOURCE_COMMIT="$(git rev-parse HEAD)"
+          export APK_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node tools/verify-apk-identity.mjs android/app/build/outputs/apk/release/prism-release.apk release/apk-identity-evidence.json
+
+      - name: Upload owner-test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-1.0.0-owner.21
+          path: |
+            android-shell/android/app/build/outputs/apk/release/prism-release.apk
+            android-shell/release/apk-identity-evidence.json
+            android-shell/release/android-security-evidence.json
+            android-shell/IP-NOTICE.md
+          if-no-files-found: error
+          retention-days: 14
