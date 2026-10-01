@@ -106,7 +106,7 @@ public class PrismBrowserActivity extends Activity {
       if(savedTabs!=null&&savedTabs.length()>0){
         for(int i=0;i<savedTabs.length();i++){
           String target=savedTabs.optString(i,"").trim();
-          if(!target.isEmpty())createTab(target,false);
+          if(!target.isEmpty())createTab(target,true);
         }
         int savedActive=envelope.optInt("activeTab",0);
         active=Math.max(0,Math.min(savedActive,tabs.size()-1));
