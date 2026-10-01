@@ -27,7 +27,7 @@ public class PrismBrowserActivity extends Activity {
   private static GeckoRuntime runtime;
   private static final List<GeckoSession> tabs=new ArrayList<>();
   private static final List<String> urls=new ArrayList<>();
-  private int active=-1;
+  private static int active=-1;
   private GeckoView view; private LinearLayout tabBar; private EditText url; private TextView eye;
   private SharedPreferences evidence; private SharedPreferences session;
 
@@ -83,6 +83,13 @@ public class PrismBrowserActivity extends Activity {
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
 
   private void restoreSession(){
+    if(!tabs.isEmpty()){
+      active=Math.max(0,Math.min(active,tabs.size()-1));
+      renderTabs(); attach();
+      recordEvidence("SESSION_REATTACHED",currentUrl());
+      eye.setText("Factory Eye · live session reattached · "+tabs.size()+" tabs");
+      return;
+    }
     String raw=session.getString("sessionEnvelope","");
     try{
       JSONObject envelope=new JSONObject(raw);
@@ -179,6 +186,8 @@ public class PrismBrowserActivity extends Activity {
       .putInt("tabCount",tabs.size())
       .putString("latestEnvelope",envelope.toString())
       .apply();
+    getSharedPreferences("prism_observer_state",MODE_PRIVATE).edit()
+      .putLong("lastEvidenceAt",capturedAt).apply();
   }
 
   private void select(int i){
