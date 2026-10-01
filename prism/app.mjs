@@ -35,7 +35,7 @@ function render(){
   $$('[data-call-work]').forEach(b=>b.onclick=()=>{prefill(home.active.find(w=>w.workId===b.dataset.callWork));nav('HANDOFF');});
 }
 
-async function loadSnapshot(){const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}render();updateRoute();}
+async function loadSnapshot(){const browserEvidence=await readBrowserEvidence();if(browserEvidence?.verified)state.snapshot.browserEvidence=browserEvidence;const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}render();updateRoute();}
 async function submitIntent(text){addCopilot(text,'user');const bridge=window.PRISM_BRIDGE;if(!bridge?.submitIntent){addCopilot('ยังไม่มี Copilot runtime ที่พิสูจน์แล้ว จึงไม่แกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));await loadSnapshot();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
 
 $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
@@ -59,7 +59,9 @@ $('#conference-go-light').addEventListener('click',async()=>{const box=$('#hando
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
 $('[data-finance-prompt]').addEventListener('click',()=>{nav('COPILOT');$('#command-input').value='สรุปการเงินจาก Ledger ให้ผม';$('#command-input').focus();});
 $$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
+async function readBrowserEvidence(){const p=browserPlugin();if(!p?.getEvidence)return null;try{return await p.getEvidence();}catch{return null;}}
 async function openBrowser(){const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');nav('COPILOT');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));nav('COPILOT');}}
+
 $('#open-browser')?.addEventListener('click',openBrowser);
 $('#home-open-browser')?.addEventListener('click',openBrowser);
 
