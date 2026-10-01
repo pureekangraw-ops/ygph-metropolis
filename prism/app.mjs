@@ -59,7 +59,9 @@ $('#conference-go-light').addEventListener('click',async()=>{const box=$('#hando
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
 $('[data-finance-prompt]').addEventListener('click',()=>{nav('COPILOT');$('#command-input').value='สรุปการเงินจาก Ledger ให้ผม';$('#command-input').focus();});
 $$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
-$('#open-browser')?.addEventListener('click',async()=>{const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));}});
+async function openBrowser(){const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');nav('COPILOT');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));nav('COPILOT');}}
+$('#open-browser')?.addEventListener('click',openBrowser);
+$('#home-open-browser')?.addEventListener('click',openBrowser);
 
 let pinMode='VERIFY';
 async function initPinGate(){const msg=$('#pin-status'),confirmation=$('#pin-confirm'),heading=$('#pin-title'),button=$('#pin-submit');try{const s=await pinStatus();pinMode=s?.configured?'VERIFY':'SETUP';confirmation.hidden=pinMode!=='SETUP';heading.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านของคุณ':'ยืนยันว่าเป็นคุณ';button.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านและเข้า PRISM':'เข้า PRISM';msg.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านอย่างน้อย 8 ตัว รหัสจะอยู่ในเครื่องนี้เท่านั้น':'ใส่รหัสผ่านเพื่อเปิด PRISM';}catch(e){msg.textContent='ยังตรวจระบบ PIN ไม่ได้: '+safe(e?.message,'UNKNOWN');}}
