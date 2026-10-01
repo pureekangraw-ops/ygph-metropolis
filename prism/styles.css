@@ -64,3 +64,13 @@ body.locked .app-shell,body.locked .bottom-nav{visibility:hidden}.pin-gate{posit
 .factory-eye-card{min-height:104px;border:1px solid rgba(255,181,71,.24);border-radius:22px;background:rgba(255,181,71,.045);padding:15px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .factory-eye-card h2{margin:2px 0;font-size:17px}.factory-eye-card p:last-child{margin:0;color:var(--muted);font-size:11px}.factory-state{flex:0 0 auto;border:1px solid rgba(255,181,71,.42);border-radius:999px;padding:7px 9px;color:var(--amber);font-size:9px;font-weight:800;letter-spacing:.04em}
 @media(max-width:359px){.practical-grid{gap:9px}.practical-grid button{min-height:118px;padding:13px}.home-welcome h1{font-size:27px}}
+
+/* Practical v9 locked mobile geometry */
+.home-welcome{height:58px;padding:8px 2px;display:flex;align-items:center}
+.home-welcome h1{margin:0;font-size:24px;letter-spacing:.08em}
+.practical-home{gap:12px}
+.practical-grid{grid-auto-rows:124px}
+.practical-grid button{height:124px;min-height:124px;max-height:124px;overflow:hidden}
+.factory-eye-card{height:88px;min-height:88px;max-height:88px;overflow:hidden}
+.page{width:100%;min-width:0}
+@media(max-width:359px){.practical-grid{grid-auto-rows:112px}.practical-grid button{height:112px;min-height:112px;max-height:112px}}
