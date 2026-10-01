@@ -21,7 +21,7 @@ test("PRISM keeps live Gecko sessions across Activity stop and restores after pr
   const activity=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(activity,/private static final List<GeckoSession> tabs/);
   assert.match(activity,/startObserverService\(\)/);
-  assert.match(activity,/markActivityBackground/);
+  assert.match(activity,/OBSERVER_BACKGROUND/);
   assert.match(activity,/hasLiveBrowserSessions/);
   assert.doesNotMatch(activity,/onDestroy\(\)\{persistSession\(\);for\(GeckoSession s:tabs\)s\.close/);
   assert.match(activity,/restoreSession\(\)/);
