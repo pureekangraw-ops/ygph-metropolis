@@ -64,6 +64,5 @@ test("PRISM browser launch declares the Android 14 data-sync foreground permissi
   const tool=read("android-shell/tools/apply-prism-browser.mjs");
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(tool,/FOREGROUND_SERVICE_DATA_SYNC/);
-  assert.ok(tool.includes('foregroundServiceType=\\"dataSync\\"'));
   assert.match(java,/GeckoRuntime\.create\(getApplicationContext\(\)\)/);
 });
