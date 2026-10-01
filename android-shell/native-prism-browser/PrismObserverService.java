@@ -42,7 +42,7 @@ public final class PrismObserverService extends Service {
   public static void markActivityBackground(Context context){
     activityForeground=false;
     Intent i=new Intent(context,PrismObserverService.class).setAction(ACTION_ACTIVITY_BACKGROUND);
-    context.startService(i);
+    if(Build.VERSION.SDK_INT>=26)context.startForegroundService(i);else context.startService(i);
   }
 
   @Override public void onCreate(){
