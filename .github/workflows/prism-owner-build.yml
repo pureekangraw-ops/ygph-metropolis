@@ -85,7 +85,7 @@ jobs:
           test -e www/prism/index.html
           test ! -e www/lighthouse
           test ! -e www/lighthouse-next
-          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null||m.sourceCommit!==process.env.EXPECTED_SOURCE_COMMIT||m.versionCode!==1026)process.exit(1)"
+          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null||m.sourceCommit!==process.env.EXPECTED_SOURCE_COMMIT||m.versionCode!==1027)process.exit(1)"
 
       - name: Generate Android project
         run: npx cap add android
@@ -172,7 +172,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: prism-1.0.0-owner.21
+          name: prism-1.0.0-owner.22
           path: |
             android-shell/android/app/build/outputs/apk/release/prism-release.apk
             android-shell/release/apk-identity-evidence.json

@@ -1,32 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/prism_browser_root"
   android:layout_width="match_parent" android:layout_height="match_parent"
   android:orientation="vertical" android:background="#070b13">
 
-  <LinearLayout android:layout_width="match_parent" android:layout_height="56dp"
-    android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp">
-    <EditText android:id="@+id/prism_url" android:layout_width="0dp" android:layout_height="48dp"
-      android:layout_weight="1" android:singleLine="true" android:inputType="textUri"
-      android:imeOptions="actionGo" android:hint="ค้นหาหรือใส่ที่อยู่"
+  <LinearLayout android:id="@+id/prism_browser_chrome" android:layout_width="match_parent" android:layout_height="52dp"
+    android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="8dp" android:paddingEnd="8dp">
+    <EditText android:id="@+id/prism_url" android:layout_width="0dp" android:layout_height="44dp"
+      android:layout_weight="1" android:minHeight="44dp" android:singleLine="true" android:inputType="textUri"
+      android:imeOptions="actionGo" android:hint="ค้นหาหรือใส่ที่อยู่" android:paddingStart="12dp" android:paddingEnd="12dp"
       android:textColor="#ffffff" android:textColorHint="#8b98aa"/>
-    <Button android:id="@+id/prism_go" android:layout_width="56dp" android:layout_height="48dp" android:text="ไป"/>
+    <Button android:id="@+id/prism_go" android:layout_width="52dp" android:layout_height="44dp" android:minWidth="48dp" android:text="ไป"/>
   </LinearLayout>
 
-  <LinearLayout android:layout_width="match_parent" android:layout_height="52dp"
-    android:orientation="horizontal" android:gravity="center" android:paddingHorizontal="6dp">
-    <Button android:id="@+id/prism_back" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="‹"/>
-    <Button android:id="@+id/prism_forward" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="›"/>
-    <Button android:id="@+id/prism_reload" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="↻"/>
-    <Button android:id="@+id/prism_watch" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="Watch"/>
+  <LinearLayout android:id="@+id/prism_browser_actions" android:layout_width="match_parent" android:layout_height="44dp"
+    android:orientation="horizontal" android:gravity="center_vertical" android:paddingStart="4dp" android:paddingEnd="4dp">
+    <Button android:id="@+id/prism_back" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="‹"/>
+    <Button android:id="@+id/prism_forward" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="›"/>
+    <Button android:id="@+id/prism_reload" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="↻"/>
+    <Button android:id="@+id/prism_watch" android:layout_width="60dp" android:layout_height="40dp" android:minWidth="56dp" android:minHeight="40dp" android:text="WATCH" android:textSize="11sp"/>
+    <Button android:id="@+id/prism_new_tab" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="+"/>
+    <Button android:id="@+id/prism_close_tab" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="×"/>
+    <TextView android:id="@+id/prism_eye_status" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1"
+      android:gravity="center_vertical" android:ellipsize="end" android:maxLines="1" android:paddingStart="6dp" android:paddingEnd="6dp"
+      android:text="Factory Eye" android:textSize="11sp" android:textColor="#9fc2ff"/>
   </LinearLayout>
 
-  <HorizontalScrollView android:layout_width="match_parent" android:layout_height="48dp" android:scrollbars="none">
-    <LinearLayout android:id="@+id/prism_tabs" android:layout_width="wrap_content" android:layout_height="48dp" android:orientation="horizontal"/>
+  <HorizontalScrollView android:id="@+id/prism_tab_strip" android:layout_width="match_parent" android:layout_height="40dp" android:scrollbars="none"
+    android:paddingStart="4dp" android:paddingEnd="4dp">
+    <LinearLayout android:id="@+id/prism_tabs" android:layout_width="wrap_content" android:layout_height="40dp" android:orientation="horizontal" android:gravity="center_vertical"/>
   </HorizontalScrollView>
-
-  <TextView android:id="@+id/prism_eye_status" android:layout_width="match_parent" android:layout_height="32dp"
-    android:gravity="center_vertical" android:paddingHorizontal="10dp" android:text="Factory Eye"
-    android:textSize="12sp" android:textColor="#9fc2ff"/>
 
   <org.mozilla.geckoview.GeckoView android:id="@+id/prism_gecko"
     android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
