@@ -69,7 +69,7 @@ public class PrismBrowserActivity extends Activity {
 
   private void startObserverService(){
     Intent intent=new Intent();
-    intent.setClassName(this,"com.yggdrasil.prism","PrismObserverService");
+    intent.setClassName("com.yggdrasil.prism","com.yggdrasil.prism.PrismObserverService");
     intent.setAction("com.yggdrasil.prism.OBSERVER_FOREGROUND");
     if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
   }
@@ -81,7 +81,7 @@ public class PrismBrowserActivity extends Activity {
 
   private void sendObserverCommand(String action){
     Intent intent=new Intent();
-    intent.setClassName(this,"com.yggdrasil.prism","PrismObserverService");
+    intent.setClassName("com.yggdrasil.prism","com.yggdrasil.prism.PrismObserverService");
     intent.setAction(action);
     if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
   }
