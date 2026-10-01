@@ -25,14 +25,15 @@ public class PrismBrowserActivity extends Activity {
   private static final String EVIDENCE_SCHEMA="prism-browser-evidence-v1";
   private static final String SESSION_SCHEMA="prism-browser-session-v1";
   private static GeckoRuntime runtime;
-  private final List<GeckoSession> tabs=new ArrayList<>();
-  private final List<String> urls=new ArrayList<>();
+  private static final List<GeckoSession> tabs=new ArrayList<>();
+  private static final List<String> urls=new ArrayList<>();
   private int active=-1;
   private GeckoView view; private LinearLayout tabBar; private EditText url; private TextView eye;
   private SharedPreferences evidence; private SharedPreferences session;
 
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
+    startObserverService();
     setContentView(R.layout.activity_prism_browser);
     applySystemBarInsets();
     view=findViewById(R.id.prism_gecko); tabBar=findViewById(R.id.prism_tabs); url=findViewById(R.id.prism_url); eye=findViewById(R.id.prism_eye_status);
@@ -64,6 +65,20 @@ public class PrismBrowserActivity extends Activity {
     });
     root.requestApplyInsets();
   }
+
+  private void startObserverService(){
+    Intent intent=new Intent(this,PrismObserverService.class);
+    intent.setAction(PrismObserverService.ACTION_ACTIVITY_FOREGROUND);
+    if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
+  }
+
+  public static boolean hasLiveBrowserSessions(){return runtime!=null&&!tabs.isEmpty();}
+  public static int liveTabCount(){return tabs.size();}
+  public static int liveActiveTab(){return active;}
+  public static String liveActiveUrl(){return active>=0&&active<urls.size()?urls.get(active):"";}
+
+  @Override protected void onStart(){super.onStart();PrismObserverService.markActivityForeground(this);}
+  @Override protected void onStop(){persistSession();PrismObserverService.markActivityBackground(this);super.onStop();}
 
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
 
@@ -213,6 +228,5 @@ public class PrismBrowserActivity extends Activity {
     }catch(Exception ignored){}
   }
 
-  @Override protected void onStop(){persistSession();super.onStop();}
-  @Override protected void onDestroy(){persistSession();for(GeckoSession s:tabs)s.close();tabs.clear();super.onDestroy();}
+  @Override protected void onDestroy(){persistSession();super.onDestroy();}
 }
