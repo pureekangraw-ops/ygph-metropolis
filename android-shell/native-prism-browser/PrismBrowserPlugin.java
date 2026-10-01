@@ -13,9 +13,13 @@ public class PrismBrowserPlugin extends Plugin {
   @PluginMethod public void getEvidence(PluginCall call) {
     SharedPreferences e=getContext().getSharedPreferences("prism_browser_evidence",android.content.Context.MODE_PRIVATE);
     JSObject out=new JSObject();
+    out.put("schemaVersion",e.getString("schemaVersion","UNKNOWN"));
+    out.put("source",e.getString("source","PRISM_BROWSER"));
     out.put("event",e.getString("event","UNKNOWN"));
     out.put("url",e.getString("url",""));
     out.put("capturedAt",e.getLong("capturedAt",0));
+    out.put("activeTab",e.getInt("activeTab",-1));
+    out.put("latestEnvelope",e.getString("latestEnvelope",""));
     out.put("verified",e.getLong("capturedAt",0)>0);
     call.resolve(out);
   }
