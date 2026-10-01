@@ -16,7 +16,23 @@
     <button id="refresh" class="icon-button" aria-label="อัปเดตข้อมูล">↻</button>
   </header>
 
-  <section class="page active" data-page="COPILOT">
+  <section class="page active" data-page="HOME">
+    <section class="practical-home">
+      <div class="home-welcome"><p class="kicker">PRISM WORKSPACE</p><h1>สวัสดี BIG</h1><p>เลือกพื้นที่ที่ต้องการ แล้ว PRISM จะพาไปทำงานตรงนั้นโดยไม่ยัดทุกอย่างไว้หน้าเดียว</p></div>
+      <div class="practical-grid" aria-label="พื้นที่หลัก">
+        <button data-nav="COPILOT"><span class="practical-icon">✦</span><b>Copilot</b><small>คุยกับ PRISM</small></button>
+        <button id="home-open-browser"><span class="practical-icon">◎</span><b>Browser</b><small>เปิดจาก Dashboard</small></button>
+        <button data-nav="MAP"><span class="practical-icon">⌖</span><b>Map</b><small>แผนที่และเส้นทาง</small></button>
+        <button data-nav="LEDGER"><span class="practical-icon">◫</span><b>Ledger</b><small>ข้อมูลการเงิน</small></button>
+      </div>
+      <section class="factory-eye-card">
+        <div><p class="kicker">SECURITY</p><h2>Factory Eye</h2><p>เฝ้าดู Browser และเส้นทางที่จับคู่ไว้</p></div>
+        <span class="factory-state">WAIT_VERIFY</span>
+      </section>
+    </section>
+  </section>
+
+  <section class="page" data-page="COPILOT">
     <section class="copilot-stage">
       <div class="copilot-intro"><p class="kicker">COPILOT</p><h1>อยากให้ช่วยอะไร?</h1><p>ถามเรื่องทั่วไป วางแผนงาน หรือให้ PRISM ไปจัดการใน GO Hub ให้</p></div>
       <div id="copilot-thread" class="copilot-thread" aria-live="polite"></div>
@@ -94,8 +110,8 @@
 </main>
 
 <nav class="bottom-nav" aria-label="เมนูหลัก">
-  <button class="active" data-nav="COPILOT"><span>✦</span><small>Copilot</small></button>
-  <button data-nav="PROJECTS"><span>▤</span><small>โปรเจกต์</small></button>
+  <button class="active" data-nav="HOME"><span>◇</span><small>Home</small></button>
+  <button data-nav="COPILOT"><span>✦</span><small>Copilot</small></button>
   <button data-nav="MAP"><span>⌖</span><small>Map</small></button>
   <button data-nav="LEDGER"><span>◫</span><small>Ledger</small></button>
 </nav>
