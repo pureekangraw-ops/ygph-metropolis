@@ -34,7 +34,7 @@ test("PRISM browser persists ordered tabs and restores the active tab",()=>{
   assert.match(java,/active=Math\.max\(0,Math\.min\(savedActive,tabs\.size\(\)-1\)\)/);
 });
 
-test("PRISM browser keeps active-tab evidence tied to the real URL after watch restore",()=>{
+test("PRISM browser reloads persisted URLs after process-death restore",()=>{\n  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");\n  assert.match(java,/if\\(!target\\.isEmpty\\(\\)\\)createTab\\(target,true\\)/);\n  assert.doesNotMatch(java,/if\\(!target\\.isEmpty\\(\\)\\)createTab\\(target,false\\)/);\n});\n\ntest("PRISM browser keeps active-tab evidence tied to the real URL after watch restore",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/int selected=active/);
   assert.match(java,/active=Math\.max\(0,Math\.min\(selected,tabs\.size\(\)-1\)\)/);
