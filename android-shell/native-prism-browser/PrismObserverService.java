@@ -60,10 +60,12 @@ public final class PrismObserverService extends Service {
     return START_STICKY;
   }
 
-  private final Runnable tick=()->{
-    if(!running.get())return;
-    updateState();
-    handler.postDelayed(tick,TICK_MS);
+  private final Runnable tick=new Runnable(){
+    @Override public void run(){
+      if(!running.get())return;
+      updateState();
+      handler.postDelayed(this,TICK_MS);
+    }
   };
 
   private boolean networkAvailable(){
