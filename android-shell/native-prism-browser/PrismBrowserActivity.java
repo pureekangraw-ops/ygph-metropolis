@@ -1,6 +1,7 @@
 package com.yggdrasil.prism;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -25,14 +26,15 @@ public class PrismBrowserActivity extends Activity {
   private static final String EVIDENCE_SCHEMA="prism-browser-evidence-v1";
   private static final String SESSION_SCHEMA="prism-browser-session-v1";
   private static GeckoRuntime runtime;
-  private final List<GeckoSession> tabs=new ArrayList<>();
-  private final List<String> urls=new ArrayList<>();
-  private int active=-1;
+  private static final List<GeckoSession> tabs=new ArrayList<>();
+  private static final List<String> urls=new ArrayList<>();
+  private static int active=-1;
   private GeckoView view; private LinearLayout tabBar; private EditText url; private TextView eye;
   private SharedPreferences evidence; private SharedPreferences session;
 
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
+    startObserverService();
     setContentView(R.layout.activity_prism_browser);
     applySystemBarInsets();
     view=findViewById(R.id.prism_gecko); tabBar=findViewById(R.id.prism_tabs); url=findViewById(R.id.prism_url); eye=findViewById(R.id.prism_eye_status);
@@ -65,9 +67,38 @@ public class PrismBrowserActivity extends Activity {
     root.requestApplyInsets();
   }
 
+  private void startObserverService(){
+    Intent intent=new Intent();
+    intent.setClassName("com.yggdrasil.prism","com.yggdrasil.prism.PrismObserverService");
+    intent.setAction("com.yggdrasil.prism.OBSERVER_FOREGROUND");
+    if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
+  }
+
+  public static boolean hasLiveBrowserSessions(){return runtime!=null&&!tabs.isEmpty();}
+  public static int liveTabCount(){return tabs.size();}
+  public static int liveActiveTab(){return active;}
+  public static String liveActiveUrl(){return active>=0&&active<urls.size()?urls.get(active):"";}
+
+  private void sendObserverCommand(String action){
+    Intent intent=new Intent();
+    intent.setClassName("com.yggdrasil.prism","com.yggdrasil.prism.PrismObserverService");
+    intent.setAction(action);
+    if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
+  }
+
+  @Override protected void onStart(){super.onStart();sendObserverCommand("com.yggdrasil.prism.OBSERVER_FOREGROUND");}
+  @Override protected void onStop(){persistSession();sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");super.onStop();}
+
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
 
   private void restoreSession(){
+    if(!tabs.isEmpty()){
+      active=Math.max(0,Math.min(active,tabs.size()-1));
+      renderTabs(); attach();
+      recordEvidence("SESSION_REATTACHED",currentUrl());
+      eye.setText("Factory Eye · live session reattached · "+tabs.size()+" tabs");
+      return;
+    }
     String raw=session.getString("sessionEnvelope","");
     try{
       JSONObject envelope=new JSONObject(raw);
@@ -164,6 +195,8 @@ public class PrismBrowserActivity extends Activity {
       .putInt("tabCount",tabs.size())
       .putString("latestEnvelope",envelope.toString())
       .apply();
+    getSharedPreferences("prism_observer_state",MODE_PRIVATE).edit()
+      .putLong("lastEvidenceAt",capturedAt).apply();
   }
 
   private void select(int i){
@@ -213,6 +246,5 @@ public class PrismBrowserActivity extends Activity {
     }catch(Exception ignored){}
   }
 
-  @Override protected void onStop(){persistSession();super.onStop();}
-  @Override protected void onDestroy(){persistSession();for(GeckoSession s:tabs)s.close();tabs.clear();super.onDestroy();}
+  @Override protected void onDestroy(){persistSession();super.onDestroy();}
 }

@@ -35,6 +35,43 @@ let adapterId = null;
 let registered = false;
 let commandPollBusy = false;
 let heartbeatBusy = false;
+const OBSERVER_STATE_KEY = 'ergasterionFactoryEyeObserverState';
+const OBSERVER_QUEUE_KEY = 'ergasterionFactoryEyePendingQueue';
+const STALE_AFTER_MS = 20000;
+let observerState = 'OFFLINE';
+let lastHubSuccessAt = 0;
+
+async function setObserverState(state, unknowns = []) {
+  observerState = state;
+  await browser.storage.local.set({
+    [OBSERVER_STATE_KEY]: {
+      state,
+      stateAt: new Date().toISOString(),
+      heartbeatAt: lastHubSuccessAt ? new Date(lastHubSuccessAt).toISOString() : null,
+      unknowns: Array.isArray(unknowns) ? unknowns.slice(0, 8) : [],
+      capturesInputValues: false,
+      createsAuthority: false,
+    },
+  });
+}
+
+async function queueObservationRetry(tabId, reason) {
+  const stored = await browser.storage.local.get(OBSERVER_QUEUE_KEY);
+  const queue = Array.isArray(stored[OBSERVER_QUEUE_KEY]) ? stored[OBSERVER_QUEUE_KEY] : [];
+  const item = { tabId, reason: String(reason || 'hub-retry'), queuedAt: new Date().toISOString() };
+  const next = [...queue.filter((entry) => entry.tabId !== tabId), item].slice(-16);
+  await browser.storage.local.set({ [OBSERVER_QUEUE_KEY]: next });
+}
+
+async function flushObservationQueue() {
+  const stored = await browser.storage.local.get(OBSERVER_QUEUE_KEY);
+  const queue = Array.isArray(stored[OBSERVER_QUEUE_KEY]) ? stored[OBSERVER_QUEUE_KEY] : [];
+  if (!queue.length) return;
+  await browser.storage.local.set({ [OBSERVER_QUEUE_KEY]: [] });
+  for (const item of queue) {
+    if (Number.isInteger(item.tabId)) await observeTab(item.tabId);
+  }
+}
 
 function isWebUrl(value) {
   try {
@@ -112,8 +149,11 @@ async function fetchHub(path, options = {}, { requiresSession = true } = {}) {
         await clearSession();
       }
     }
+    await setObserverState('OFFLINE', [code]);
     throw new Error(code);
   }
+  lastHubSuccessAt = Date.now();
+  if (observerState === 'OFFLINE' || observerState === 'STALE') await setObserverState('LIVE');
   return body;
 }
 
@@ -287,8 +327,11 @@ async function heartbeat() {
         tabs,
       }),
     });
-  } catch {
+    await setObserverState('LIVE');
+    await flushObservationQueue();
+  } catch (error) {
     registered = false;
+    await setObserverState('OFFLINE', [error?.message || 'HEARTBEAT_FAILED']);
   } finally {
     heartbeatBusy = false;
   }
@@ -462,8 +505,10 @@ async function observeTab(tabId) {
       }),
     });
     return result?.observation?.observationId || observationId;
-  } catch {
+  } catch (error) {
     registered = false;
+    await queueObservationRetry(tabId, error?.message || 'OBSERVATION_RETRY');
+    await setObserverState('STALE', [error?.message || 'OBSERVATION_RETRY']);
     return null;
   }
 }
@@ -529,6 +574,7 @@ async function boot() {
   await heartbeat();
   await observeActiveTabs();
   await observeDedicatedWatchTabs();
+  await setObserverState('LIVE');
   return true;
 }
 
@@ -536,8 +582,23 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === 'ERGASTERION_FACTORY_EYE_CONTENT_PULSE') {
     return observeFromContentPulse(message, sender);
   }
+  if (message?.type === 'ERGASTERION_FACTORY_EYE_SET_STATE') {
+    return (async () => {
+      const requested = ['LIVE', 'BACKGROUND', 'STALE', 'OFFLINE'].includes(message.state) ? message.state : 'STALE';
+      await setObserverState(requested, message.unknowns);
+      return { ok: true, observerState: (await browser.storage.local.get(OBSERVER_STATE_KEY))[OBSERVER_STATE_KEY] };
+    })();
+  }
   if (message?.type === 'ERGASTERION_FACTORY_EYE_STATUS') {
-    return status();
+    return (async () => {
+      const current = await browser.storage.local.get(OBSERVER_STATE_KEY);
+      let state = current[OBSERVER_STATE_KEY] || { state: observerState, unknowns: ['NO_STATE_READBACK'] };
+      if (state.state !== 'OFFLINE' && lastHubSuccessAt && Date.now() - lastHubSuccessAt > STALE_AFTER_MS) {
+        await setObserverState('STALE', ['HEARTBEAT_EXPIRED']);
+        state = (await browser.storage.local.get(OBSERVER_STATE_KEY))[OBSERVER_STATE_KEY];
+      }
+      return { ...(await status()), observerState: state };
+    })();
   }
   if (message?.type === 'ERGASTERION_FACTORY_EYE_PAIR') {
     return (async () => {
@@ -598,6 +659,9 @@ browser.action.onClicked.addListener(async (tab) => {
 });
 
 setInterval(() => { void heartbeat(); }, HEARTBEAT_MS);
+setInterval(() => {
+  if (lastHubSuccessAt && Date.now() - lastHubSuccessAt > STALE_AFTER_MS) void setObserverState('STALE', ['HEARTBEAT_EXPIRED']);
+}, HEARTBEAT_MS);
 setInterval(() => { void pollCommands(); }, COMMAND_POLL_MS);
 setInterval(() => { void observeDedicatedWatchTabs(); }, WATCH_POLL_MS);
 

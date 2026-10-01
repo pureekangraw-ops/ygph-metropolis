@@ -6,6 +6,7 @@ const GECKO_VERSION='153.0.20260615093007';
 const GECKO_DEP=`implementation 'org.mozilla.geckoview:geckoview-nightly-omni:${GECKO_VERSION}'`;
 const MOZILLA_REPO="maven { url 'https://maven.mozilla.org/maven2/' }";
 const ACTIVITY='com.yggdrasil.prism.PrismBrowserActivity';
+const OBSERVER_SERVICE='com.yggdrasil.prism.PrismObserverService';
 
 function insertBeforeLast(text,needle,addition){
   const i=text.lastIndexOf(needle); if(i<0)throw new Error('PRISM_BROWSER_PATCH_TARGET_MISSING:'+needle);
@@ -44,7 +45,7 @@ export async function applyPrismBrowser(androidRoot){
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
-  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
 
   const layoutRoot=join(app,'src','main','res','layout'); await mkdir(layoutRoot,{recursive:true});
   await cp(join(source,'activity_prism_browser.xml'),join(layoutRoot,'activity_prism_browser.xml'),{force:true});
@@ -54,10 +55,15 @@ export async function applyPrismBrowser(androidRoot){
 
   const manifestPath=join(app,'src','main','AndroidManifest.xml');
   let manifest=await readFile(manifestPath,'utf8');
-  if(!manifest.includes('android.permission.INTERNET'))manifest=manifest.replace('<manifest','<manifest').replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.INTERNET" />');
+  if(!manifest.includes('android.permission.INTERNET'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.INTERNET" />');
+  if(!manifest.includes('android.permission.FOREGROUND_SERVICE'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />');
   if(!manifest.includes(ACTIVITY)){
     const activity='\n        <activity android:name=".PrismBrowserActivity" android:exported="false" android:windowSoftInputMode="stateUnspecified|adjustResize" />\n';
     manifest=manifest.replace('</application>',activity+'    </application>');
+  }
+  if(!manifest.includes(OBSERVER_SERVICE)){
+    const service='        <service android:name=".PrismObserverService" android:exported="false" android:foregroundServiceType="dataSync" />\n';
+    manifest=manifest.replace('</application>',service+'    </application>');
   }
   await writeFile(manifestPath,manifest,'utf8');
 
