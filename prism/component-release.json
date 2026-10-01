@@ -1,10 +1,10 @@
 {
   "product": "PRISM",
-  "assemblyId": "PRISM-ASSEMBLY-1027",
+  "assemblyId": "PRISM-ASSEMBLY-1028",
   "policy": "LOCKSTEP_FAIL_CLOSED",
   "release": {
-    "versionName": "1.0.0-owner.22",
-    "versionCode": 1027,
+    "versionName": "1.0.0-owner.23",
+    "versionCode": 1028,
     "baselineVersionCode": 1026
   },
   "compatibility": {
@@ -13,18 +13,83 @@
     "signingLineageRequired": true
   },
   "components": [
-    {"id":"COPILOT","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"PROJECTS","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"HANDOFF","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"MAP","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"LEDGER","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"MONITOR","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"SPECTRUM","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"ANDROID_SHELL","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"PIN_BRIDGE","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"ICON_SET","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"BROWSER","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"FACTORY_EYE","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027},
-    {"id":"OWNER_PASSWORD","assemblyId":"PRISM-ASSEMBLY-1027","versionName":"1.0.0-owner.22","versionCode":1027}
+    {
+      "id": "COPILOT",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "PROJECTS",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "HANDOFF",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "MAP",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "LEDGER",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "MONITOR",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "SPECTRUM",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "ANDROID_SHELL",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "PIN_BRIDGE",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "ICON_SET",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "BROWSER",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "FACTORY_EYE",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    },
+    {
+      "id": "OWNER_PASSWORD",
+      "assemblyId": "PRISM-ASSEMBLY-1028",
+      "versionName": "1.0.0-owner.23",
+      "versionCode": 1028
+    }
   ]
 }
