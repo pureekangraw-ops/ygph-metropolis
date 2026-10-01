@@ -57,7 +57,6 @@ export async function applyPrismBrowser(androidRoot){
   let manifest=await readFile(manifestPath,'utf8');
   if(!manifest.includes('android.permission.INTERNET'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.INTERNET" />');
   if(!manifest.includes('android.permission.FOREGROUND_SERVICE'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />');
-  if(!manifest.includes('android.permission.FOREGROUND_SERVICE_DATA_SYNC'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />');
   if(!manifest.includes(ACTIVITY)){
     const activity='\n        <activity android:name=".PrismBrowserActivity" android:exported="false" android:windowSoftInputMode="stateUnspecified|adjustResize" />\n';
     manifest=manifest.replace('</application>',activity+'    </application>');
