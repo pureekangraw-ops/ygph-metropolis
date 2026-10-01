@@ -10,6 +10,7 @@ const ALLOWED_PERMISSIONS = new Set([
   'android.permission.INTERNET',
   'android.permission.MODIFY_AUDIO_SETTINGS',
   'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
   'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.VIBRATE',

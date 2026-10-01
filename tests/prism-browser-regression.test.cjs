@@ -59,3 +59,10 @@ test("native readback exposes restored session state",()=>{
     assert.match(plugin,new RegExp(token));
   }
 });
+
+test("PRISM browser launch declares the Android 14 data-sync foreground permission",()=>{
+  const tool=read("android-shell/tools/apply-prism-browser.mjs");
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  assert.match(tool,/FOREGROUND_SERVICE_DATA_SYNC/);
+  assert.match(java,/GeckoRuntime\.create\(getApplicationContext\(\)\)/);
+});
