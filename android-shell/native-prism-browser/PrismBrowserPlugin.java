@@ -13,6 +13,7 @@ public class PrismBrowserPlugin extends Plugin {
   @PluginMethod public void getEvidence(PluginCall call) {
     SharedPreferences e=getContext().getSharedPreferences("prism_browser_evidence",android.content.Context.MODE_PRIVATE);
     SharedPreferences s=getContext().getSharedPreferences("prism_browser_session",android.content.Context.MODE_PRIVATE);
+    SharedPreferences o=getContext().getSharedPreferences("prism_observer_state",android.content.Context.MODE_PRIVATE);
     JSObject out=new JSObject();
     out.put("schemaVersion",e.getString("schemaVersion","UNKNOWN"));
     out.put("source",e.getString("source","PRISM_BROWSER"));
@@ -26,7 +27,12 @@ public class PrismBrowserPlugin extends Plugin {
     out.put("sessionEnvelope",s.getString("sessionEnvelope",""));
     out.put("sessionActiveTab",s.getInt("activeTab",-1));
     out.put("sessionActiveUrl",s.getString("activeUrl",""));
-    out.put("verified",e.getLong("capturedAt",0)>0 && s.getString("sessionEnvelope","").length()>0);
+    out.put("observerState",o.getString("state","OFFLINE"));
+    out.put("observerStateAt",o.getLong("stateAt",0));
+    out.put("observerHeartbeatAt",o.getLong("heartbeatAt",0));
+    out.put("observerUnknowns",o.getString("unknowns","[]"));
+    out.put("observerNotification","PRISM • Factory Eye "+o.getString("state","OFFLINE"));
+    out.put("verified",e.getLong("capturedAt",0)>0 && s.getString("sessionEnvelope","").length()>0 && o.getLong("heartbeatAt",0)>0);
     call.resolve(out);
   }
 
