@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ERGASTERION Factory Eye",
-  "version": "0.4.0",
+  "version": "0.3.0",
   "description": "Owner-paired neutral tab-level Firefox observer for the ERGASTERION Runtime Workbench.",
   "permissions": [
     "tabs",
