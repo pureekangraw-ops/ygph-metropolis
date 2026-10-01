@@ -40,7 +40,7 @@ public class PrismBrowserActivity extends Activity {
     view=findViewById(R.id.prism_gecko); tabBar=findViewById(R.id.prism_tabs); url=findViewById(R.id.prism_url); eye=findViewById(R.id.prism_eye_status);
     evidence=getSharedPreferences(EVIDENCE_PREFS,MODE_PRIVATE);
     session=getSharedPreferences(SESSION_PREFS,MODE_PRIVATE);
-    if(runtime==null) runtime=GeckoRuntime.create(this);
+    if(runtime==null) runtime=GeckoRuntime.create(getApplicationContext());
     FactoryEyeHost.install(runtime, s->runOnUiThread(()->eye.setText(s)));
     findViewById(R.id.prism_go).setOnClickListener(v->navigate());
     findViewById(R.id.prism_back).setOnClickListener(v->{if(current()!=null)current().goBack();});
