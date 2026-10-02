@@ -27,14 +27,20 @@ test("PRISM browser persists ordered tabs and restores the active tab",()=>{
     'savedTabs',
     'envelope.optInt("activeTab",0)',
     'persistSession()',
-    'onStop()',
+    'onPause()',
     'putString("activeUrl",currentUrl())',
     '.commit()'
   ]) assert.ok(java.includes(token),"missing session persistence token: "+token);
   assert.match(java,/active=Math\.max\(0,Math\.min\(savedActive,tabs\.size\(\)-1\)\)/);
 });
 
-test("PRISM browser reloads persisted URLs after process-death restore",()=>{\n  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");\n  assert.match(java,/if\\(!target\\.isEmpty\\(\\)\\)createTab\\(target,true\\)/);\n  assert.doesNotMatch(java,/if\\(!target\\.isEmpty\\(\\)\\)createTab\\(target,false\\)/);\n});\n\ntest("PRISM browser keeps active-tab evidence tied to the real URL after watch restore",()=>{
+test("PRISM browser reloads persisted URLs after process-death restore",()=>{
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  assert.match(java,/if\(!target\.isEmpty\(\)\)createTab\(target,true\)/);
+  assert.doesNotMatch(java,/if\(!target\.isEmpty\(\)\)createTab\(target,false\)/);
+});
+
+test("PRISM browser keeps active-tab evidence tied to the real URL after watch restore",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/int selected=active/);
   assert.match(java,/active=Math\.max\(0,Math\.min\(selected,tabs\.size\(\)-1\)\)/);
@@ -46,7 +52,7 @@ test("PRISM browser reloads persisted URLs after process-death restore",()=>{\n 
 test("PRISM browser keeps controls compact while preserving touch targets",()=>{
   const xml=read("android-shell/native-prism-browser/activity_prism_browser.xml");
   for(const id of ["prism_back","prism_forward","prism_reload","prism_watch","prism_new_tab","prism_close_tab","prism_eye_status","prism_tab_strip"]){
-    assert.match(xml,new RegExp("@\+id/"+id));
+    assert.match(xml,new RegExp("@\\+id/"+id));
   }
   assert.match(xml,/android:minWidth="44dp"/);
   assert.match(xml,/android:layout_height="44dp"/);
