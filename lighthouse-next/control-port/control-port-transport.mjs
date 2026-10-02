@@ -290,5 +290,9 @@ export function createLighthouseHubControlPortTransport({
     pushState,
     openLive,
     disconnect,
+    request:(path,body) => {
+      if (!['/prism/ask','/prism/handoff','/prism/result'].includes(path)) throw new Error('PRISM_HUB_ROUTE_UNSUPPORTED');
+      return post(path,body);
+    },
   });
 }
