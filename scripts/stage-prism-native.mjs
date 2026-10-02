@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','manifest.webmanifest','component-release.json']);
+export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','hub-bridge.mjs','manifest.webmanifest','component-release.json']);
 export const PRISM_ASSETS=Object.freeze(['assets/prism-icon.svg','assets/prism-icon-maskable.svg']);
 async function copy(repoRoot,dest,relative){const target=join(dest,'prism',relative);await mkdir(dirname(target),{recursive:true});await cp(join(repoRoot,'prism',relative),target,{force:true});}
 export async function stagePrismNative({repoRoot,destinationRoot}){
@@ -14,6 +14,13 @@ export async function stagePrismNative({repoRoot,destinationRoot}){
   if(components.release.versionName!==version.versionName||Number(components.release.versionCode)!==Number(version.versionCode))throw new Error('PRISM_COMPONENT_RELEASE_VERSION_MISMATCH');
   await rm(destinationRoot,{recursive:true,force:true});await mkdir(join(destinationRoot,'prism','assets'),{recursive:true});
   for(const f of [...PRISM_RUNTIME_FILES,...PRISM_ASSETS])await copy(repoRoot,destinationRoot,f);
+  for(const f of ['control-port-transport.mjs','control-port-credential.mjs']){
+    const target=join(destinationRoot,'prism','control-port',f);
+    await mkdir(dirname(target),{recursive:true});
+    await cp(join(repoRoot,'lighthouse-next','control-port',f),target);
+  }
+  const bridgePath=join(destinationRoot,'prism','hub-bridge.mjs');
+  await writeFile(bridgePath,(await readFile(bridgePath,'utf8')).replace('../lighthouse-next/control-port/','./control-port/'),'utf8');
   const root='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRISM</title><meta http-equiv="refresh" content="0;url=./prism/index.html"></head><body><script>location.replace("./prism/index.html")</script></body></html>';
   await writeFile(join(destinationRoot,'index.html'),root,'utf8');
   const manifest={product:'PRISM',architecture:'PRISM_NATIVE_V1',legacyParent:null,applicationId:identity.applicationId,versionName:version.versionName,versionCode:version.versionCode,componentPolicy:components.policy,components:components.components,roots:['COPILOT','PROJECTS','MAP','LEDGER'],deep:['HANDOFF','MONITOR'],capabilities:{MAP:'NATIVE_OVERLAY',LEDGER:'OWNER_BOUNDARY',COPILOT:'SPECTRUM'},sourceCommit:process.env.PRISM_SOURCE_COMMIT||process.env.GITHUB_SHA||null};
