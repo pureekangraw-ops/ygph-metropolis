@@ -68,9 +68,29 @@ test("PRISM browser launch declares the Android 14 data-sync foreground permissi
 });
 
 
-test("PRISM browser releases the GeckoView display when leaving and reattaches the live GeckoSession on return",()=>{
+
+
+
+test("PRISM browser owns Gecko display and activity lifecycle explicitly",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
-  assert.match(java,/onStop\(\)[\s\S]*view\.releaseSession\(\)/);
-  assert.match(java,/onStart\(\)[\s\S]*view\.setSession\(current\(\)\)/);
-  assert.match(java,/private static final List<GeckoSession> tabs/);
+  assert.match(java,/onResume\(\)[\s\S]*attach\(\)[\s\S]*updateSessionVisibility\(true\)/);
+  assert.match(java,/onPause\(\)[\s\S]*updateSessionVisibility\(false\)[\s\S]*releaseViewSession\(\)/);
+  assert.match(java,/view\.getSession\(\)/);
+  assert.match(java,/if\(attached!=null\)view\.releaseSession\(\)/);
+  assert.match(java,/view\.setSession\(target\)/);
+});
+
+test("PRISM browser propagates real active tab state to Gecko and Factory Eye",()=>{
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  assert.match(java,/target\.setFocused\(selected\)/);
+  assert.match(java,/target\.setActive\(selected\)/);
+  assert.match(java,/getWebExtensionController\(\)\.setTabActive\(target,isActive\)/);
+  assert.match(java,/previous\.setActive\(false\)/);
+  assert.match(java,/setExtensionTabActive\(previous,false\)/);
+});
+
+test("PRISM browser releases the displayed GeckoSession before tab replacement",()=>{
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  assert.match(java,/GeckoSession attached=view\.getSession\(\)/);
+  assert.match(java,/if\(attached!=target\)[\s\S]*view\.releaseSession\(\)[\s\S]*view\.setSession\(target\)/);
 });
