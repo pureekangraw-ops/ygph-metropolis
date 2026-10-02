@@ -25,6 +25,7 @@ test("PRISM browser persists ordered tabs and restores the active tab",()=>{
     'restoreSession()',
     'sessionEnvelope',
     'savedTabs',
+    'createTab(target,true)',
     'envelope.optInt("activeTab",0)',
     'persistSession()',
     'onStop()',
