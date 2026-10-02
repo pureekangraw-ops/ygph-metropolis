@@ -22,6 +22,25 @@ function workCard(w){return '<article class="work-card"><div class="work-top"><d
 function prefill(w){if(!w)return;$('#handoff-work').value=safe(w.workId,'');$('#handoff-checkpoint').value=safe(w.checkpointId,'');}
 function updateRoute(){const r=resolveDispatchRoute(state.capabilities);$('#route-preview').textContent=r.route==='MANUAL'?'ยังไม่มีเส้นส่งสดที่พิสูจน์แล้ว — PRISM จะเตรียม handoff ให้':'พร้อมส่งและรอ readback จากปลายทาง';}
 
+function renderBrowserEye(evidence){
+  const stateNode=$('#factory-eye-state'),detailNode=$('#factory-eye-detail');
+  if(!stateNode||!detailNode)return;
+  const observer=String(evidence?.observerState||'OFFLINE').toUpperCase();
+  const verified=evidence?.verified===true;
+  const activeUrl=safe(evidence?.sessionActiveUrl||evidence?.url,'');
+  const heartbeat=Number(evidence?.observerHeartbeatAt||0);
+  const age=heartbeat>0?Math.max(0,Date.now()-heartbeat):null;
+  const fresh=age!==null&&age<=20000;
+  const visibleState=verified&&fresh&&['LIVE','BACKGROUND'].includes(observer)?observer:(observer==='OFFLINE'?'OFFLINE':'STALE');
+  stateNode.textContent=visibleState;
+  stateNode.dataset.state=visibleState;
+  detailNode.textContent=activeUrl
+    ? 'GO Hub Eye · '+activeUrl
+    : visibleState==='OFFLINE'
+      ? 'GO Hub Eye · รอ Browser / Factory Eye เชื่อมต่อ'
+      : 'GO Hub Eye · รอหลักฐานหน้าเว็บล่าสุด';
+}
+
 function render(){
   const home=buildPrismHome(state.snapshot),sum=summarizeProjects(state.snapshot);
   $('#decision-count').textContent=home.decisions.length;
@@ -35,7 +54,7 @@ function render(){
   $$('[data-call-work]').forEach(b=>b.onclick=()=>{prefill(home.active.find(w=>w.workId===b.dataset.callWork));nav('HANDOFF');});
 }
 
-async function loadSnapshot(){const browserEvidence=await readBrowserEvidence();const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}if(browserEvidence?.verified)state.snapshot={...state.snapshot,browserEvidence};render();updateRoute();}
+async function loadSnapshot(){const browserEvidence=await readBrowserEvidence();const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}if(browserEvidence?.verified)state.snapshot={...state.snapshot,browserEvidence};renderBrowserEye(browserEvidence);render();updateRoute();}
 async function submitIntent(text){addCopilot(text,'user');const bridge=window.PRISM_BRIDGE;if(!bridge?.submitIntent){addCopilot('ยังไม่มี Copilot runtime ที่พิสูจน์แล้ว จึงไม่แกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));await loadSnapshot();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
 
 $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
