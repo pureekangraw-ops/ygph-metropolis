@@ -86,23 +86,42 @@ public class PrismBrowserActivity extends Activity {
     if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
   }
 
-  @Override protected void onStart(){
-    super.onStart();
-    if(view!=null&&current()!=null){
-      try{view.setSession(current());}catch(Exception ignored){}
-    }
+  @Override protected void onResume(){
+    super.onResume();
+    attach();
+    updateSessionVisibility(true);
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_FOREGROUND");
   }
-  @Override protected void onStop(){
+
+  @Override protected void onPause(){
+    updateSessionVisibility(false);
     persistSession();
-    if(view!=null){
-      try{view.releaseSession();}catch(Exception ignored){}
-    }
+    releaseViewSession();
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");
-    super.onStop();
+    super.onPause();
   }
 
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
+
+  private void releaseViewSession(){
+    if(view==null)return;
+    try{if(view.getSession()!=null)view.releaseSession();}catch(Exception ignored){}
+  }
+
+  private void setExtensionTabActive(GeckoSession target,boolean isActive){
+    if(runtime==null||target==null)return;
+    try{runtime.getWebExtensionController().setTabActive(target,isActive);}catch(Exception ignored){}
+  }
+
+  private void updateSessionVisibility(boolean visible){
+    for(int i=0;i<tabs.size();i++){
+      GeckoSession target=tabs.get(i);
+      boolean selected=visible&&i==active;
+      try{target.setFocused(selected);}catch(Exception ignored){}
+      try{target.setActive(selected);}catch(Exception ignored){}
+      setExtensionTabActive(target,selected);
+    }
+  }
 
   private void restoreSession(){
     if(!tabs.isEmpty()){
@@ -139,6 +158,12 @@ public class PrismBrowserActivity extends Activity {
   }
 
   private void createTab(String target,boolean load){
+    GeckoSession previous=current();
+    if(previous!=null){
+      try{previous.setFocused(false);}catch(Exception ignored){}
+      try{previous.setActive(false);}catch(Exception ignored){}
+      setExtensionTabActive(previous,false);
+    }
     GeckoSession s=new GeckoSession();
     s.setContentDelegate(new GeckoSession.ContentDelegate(){});
     s.setNavigationDelegate(new GeckoSession.NavigationDelegate(){
@@ -157,11 +182,18 @@ public class PrismBrowserActivity extends Activity {
   }
 
   private void attach(){
-    if(current()!=null){
-      view.setSession(current());
-      url.setText(urls.get(active));
-      recordEvidence("ACTIVE_TAB",currentUrl());
-    }
+    GeckoSession target=current();
+    if(view==null||target==null)return;
+    try{
+      GeckoSession attached=view.getSession();
+      if(attached!=target){
+        if(attached!=null)view.releaseSession();
+        view.setSession(target);
+      }
+    }catch(Exception ignored){}
+    updateSessionVisibility(hasWindowFocus());
+    url.setText(urls.get(active));
+    recordEvidence("ACTIVE_TAB",currentUrl());
   }
 
   private void navigate(){
@@ -214,13 +246,32 @@ public class PrismBrowserActivity extends Activity {
 
   private void select(int i){
     if(i<0||i>=tabs.size())return;
-    active=i; renderTabs(); attach(); persistSession();
+    if(i==active){attach();return;}
+    GeckoSession previous=current();
+    if(previous!=null){
+      try{previous.setFocused(false);}catch(Exception ignored){}
+      try{previous.setActive(false);}catch(Exception ignored){}
+      setExtensionTabActive(previous,false);
+    }
+    active=i;
+    renderTabs();
+    attach();
+    persistSession();
   }
 
   private void close(int i){
     if(i<0||i>=tabs.size())return;
-    if(tabs.size()==1){persistSession();finish();return;}
-    tabs.get(i).close(); tabs.remove(i); urls.remove(i);
+    GeckoSession closing=tabs.get(i);
+    try{closing.setFocused(false);}catch(Exception ignored){}
+    try{closing.setActive(false);}catch(Exception ignored){}
+    setExtensionTabActive(closing,false);
+    if(view!=null&&view.getSession()==closing)releaseViewSession();
+    if(tabs.size()==1){
+      closing.close();
+      tabs.clear(); urls.clear(); active=-1;
+      persistSession(); finish(); return;
+    }
+    closing.close(); tabs.remove(i); urls.remove(i);
     if(i<active)active--;
     else if(i==active)active=Math.min(active,tabs.size()-1);
     renderTabs(); attach(); persistSession();
