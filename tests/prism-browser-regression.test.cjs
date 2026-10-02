@@ -34,9 +34,11 @@ test("PRISM browser persists ordered tabs and restores the active tab",()=>{
   assert.match(java,/active=Math\.max\(0,Math\.min\(savedActive,tabs\.size\(\)-1\)\)/);
 });
 
-test("PRISM browser reloads persisted URLs after process-death restore",()=>{
+test("PRISM browser restores private session state and falls back to legacy URLs",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
-  assert.match(java,/if\(!target\.isEmpty\(\)\)createTab\(target,true\)/);
+  assert.match(java,/GeckoSession[.]SessionState saved=recovery[.]read\(id\)/);
+  assert.match(java,/createTab\(target,saved===?null\)/);
+  assert.match(java,/tab[.]restoreState\(saved\)/);
   assert.doesNotMatch(java,/if\(!target\.isEmpty\(\)\)createTab\(target,false\)/);
 });
 
@@ -66,10 +68,10 @@ test("native readback exposes restored session state",()=>{
   }
 });
 
-test("PRISM browser launch declares the Android 14 data-sync foreground permission",()=>{
+test("PRISM browser launch declares the Android 14 browser observation foreground permission",()=>{
   const tool=read("android-shell/tools/apply-prism-browser.mjs");
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
-  assert.match(tool,/FOREGROUND_SERVICE_DATA_SYNC/);
+  assert.match(tool,/FOREGROUND_SERVICE_SPECIAL_USE/);
   assert.match(java,/GeckoRuntime\.create\(getApplicationContext\(\)\)/);
 });
 

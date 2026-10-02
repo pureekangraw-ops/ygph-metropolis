@@ -97,7 +97,7 @@ async function refreshHubStatus(){
   const bridge=window.PRISM_BRIDGE;
   if(!bridge){$('#hub-status').textContent='ตัวเชื่อมไม่พร้อม: '+safe(window.PRISM_BRIDGE_ERROR);return;}
   const paired=await bridge.status();
-  $('#hub-status').textContent=state.snapshot.live?'เชื่อม GO Hub แล้ว · งานสด '+state.snapshot.works.length+' งาน':paired.status==='PAIRED'?'จับคู่แล้ว · ยังอ่านฮับไม่ได้: '+safe(state.snapshot.error):'ยังไม่เชื่อม GO Hub · ใช้ข้อมูลจับคู่เดิมได้';
+  $('#hub-status').textContent=state.snapshot.live?'เชื่อม GO Hub แล้ว · งานสด '+state.snapshot.works.length+' งาน':paired.status==='PAIRED'?(state.snapshot.cached?'ข้อมูลงานที่เก็บไว้ · รอเชื่อมฮับใหม่: ':'จับคู่แล้ว · ยังอ่านฮับไม่ได้: ')+safe(state.snapshot.error):'ยังไม่เชื่อม GO Hub · ใช้ข้อมูลจับคู่เดิมได้';
   for(const option of $('#handoff-destination').options||[])option.disabled=!state.capabilities.destinations?.includes(option.value);
   if(state.capabilities.destinations?.includes('LIGHT'))$('#handoff-destination').value='LIGHT';
 }

@@ -29,6 +29,10 @@ public class PrismBrowserActivity extends Activity {
   private static final List<GeckoSession> tabs=new ArrayList<>();
   private static final List<String> urls=new ArrayList<>();
   private static int active=-1;
+  private static final Map<GeckoSession,GeckoSession.SessionState> savedStates=new HashMap<>();
+  private static final Map<GeckoSession,String> tabIds=new HashMap<>();
+  private static final Map<GeckoSession,Integer> recoveryAttempts=new HashMap<>();
+  private PrismBrowserRecovery recovery;
   private GeckoView view; private LinearLayout tabBar; private EditText url; private TextView eye;
   private SharedPreferences evidence; private SharedPreferences session;
 
@@ -40,17 +44,19 @@ public class PrismBrowserActivity extends Activity {
     view=findViewById(R.id.prism_gecko); tabBar=findViewById(R.id.prism_tabs); url=findViewById(R.id.prism_url); eye=findViewById(R.id.prism_eye_status);
     evidence=getSharedPreferences(EVIDENCE_PREFS,MODE_PRIVATE);
     session=getSharedPreferences(SESSION_PREFS,MODE_PRIVATE);
+    recovery=new PrismBrowserRecovery(getApplicationContext());
     if(runtime==null) runtime=GeckoRuntime.create(getApplicationContext());
     FactoryEyeHost.install(runtime, s->runOnUiThread(()->eye.setText(s)));
     findViewById(R.id.prism_go).setOnClickListener(v->navigate());
     findViewById(R.id.prism_back).setOnClickListener(v->{if(current()!=null)current().goBack();});
     findViewById(R.id.prism_forward).setOnClickListener(v->{if(current()!=null)current().goForward();});
-    findViewById(R.id.prism_reload).setOnClickListener(v->{if(current()!=null)current().reload();});
+    findViewById(R.id.prism_reload).setOnClickListener(v->{GeckoSession tab=current();if(tab==null)return;if(tab.isOpen())tab.reload();else{recoveryAttempts.remove(tab);recoverContent(tab,"OWNER_RELOAD");}});
     findViewById(R.id.prism_watch).setOnClickListener(v->watch());
     findViewById(R.id.prism_new_tab).setOnClickListener(v->addTab(HOME_URL,true));
     findViewById(R.id.prism_close_tab).setOnClickListener(v->close(active));
     url.setOnEditorActionListener((v,id,e)->{if(id==EditorInfo.IME_ACTION_GO){navigate();return true;}return false;});
     restoreSession();
+    for(GeckoSession tab:tabs)bindTabCallbacks(tab);
   }
 
   private void applySystemBarInsets(){
@@ -74,7 +80,7 @@ public class PrismBrowserActivity extends Activity {
     if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
   }
 
-  public static boolean hasLiveBrowserSessions(){return runtime!=null&&!tabs.isEmpty();}
+  public static boolean hasLiveBrowserSessions(){return runtime!=null&&active>=0&&active<tabs.size()&&tabs.get(active).isOpen();}
   public static int liveTabCount(){return tabs.size();}
   public static int liveActiveTab(){return active;}
   public static String liveActiveUrl(){return active>=0&&active<urls.size()?urls.get(active):"";}
@@ -99,6 +105,11 @@ public class PrismBrowserActivity extends Activity {
     releaseViewSession();
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");
     super.onPause();
+  }
+
+  @Override public void onWindowFocusChanged(boolean focused){
+    super.onWindowFocusChanged(focused);
+    updateSessionVisibility(focused);
   }
 
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
@@ -138,7 +149,15 @@ public class PrismBrowserActivity extends Activity {
       if(savedTabs!=null&&savedTabs.length()>0){
         for(int i=0;i<savedTabs.length();i++){
           String target=savedTabs.optString(i,"").trim();
-          if(!target.isEmpty())createTab(target,true);
+          if(!target.isEmpty()){
+            JSONArray ids=envelope.optJSONArray("tabIds");
+            String id=ids==null?"":ids.optString(i,"");
+            GeckoSession.SessionState saved=recovery.read(id);
+            createTab(target,saved==null);
+            GeckoSession tab=current();
+            if(!id.isEmpty())tabIds.put(tab,id);
+            if(saved!=null){savedStates.put(tab,saved);tab.restoreState(saved);}
+          }
         }
         int savedActive=envelope.optInt("activeTab",0);
         active=Math.max(0,Math.min(savedActive,tabs.size()-1));
@@ -165,7 +184,26 @@ public class PrismBrowserActivity extends Activity {
       setExtensionTabActive(previous,false);
     }
     GeckoSession s=new GeckoSession();
-    s.setContentDelegate(new GeckoSession.ContentDelegate(){});
+    bindTabCallbacks(s);
+    tabIds.put(s,UUID.randomUUID().toString());
+    s.open(runtime); tabs.add(s); urls.add(target); active=tabs.size()-1;
+    if(load)s.loadUri(target);
+  }
+
+  private void bindTabCallbacks(GeckoSession s){
+    s.setContentDelegate(new GeckoSession.ContentDelegate(){
+      @Override public void onCrash(GeckoSession tab){recoverContent(tab,"CONTENT_CRASH");}
+      @Override public void onKill(GeckoSession tab){recoverContent(tab,"CONTENT_KILLED");}
+    });
+    s.setProgressDelegate(new GeckoSession.ProgressDelegate(){
+      @Override public void onPageStop(GeckoSession tab,boolean success){if(success)recoveryAttempts.remove(tab);}
+      @Override public void onSessionStateChange(GeckoSession tab,GeckoSession.SessionState value){
+        if(!tabs.contains(tab))return;
+        savedStates.put(tab,value);
+        recovery.write(tabIds.get(tab),value);
+        persistSession();
+      }
+    });
     s.setNavigationDelegate(new GeckoSession.NavigationDelegate(){
       @Override public void onLocationChange(GeckoSession session,String location,List<GeckoSession.PermissionDelegate.ContentPermission> permissions,Boolean gesture){
         int i=tabs.indexOf(session);
@@ -177,8 +215,26 @@ public class PrismBrowserActivity extends Activity {
         }
       }
     });
-    s.open(runtime); tabs.add(s); urls.add(target); active=tabs.size()-1;
-    if(load)s.loadUri(target);
+  }
+
+  private void recoverContent(GeckoSession tab,String reason){
+    int i=tabs.indexOf(tab);if(i<0)return;
+    recordEvidence(reason,urls.get(i));
+    int attempts=recoveryAttempts.getOrDefault(tab,0);
+    if(attempts>0){eye.setText("Browser · tap reload to retry recovery");return;}
+    recoveryAttempts.put(tab,attempts+1);
+    try{
+      if(view!=null&&view.getSession()==tab)releaseViewSession();
+      GeckoSession.SessionState saved=savedStates.get(tab);
+      if(saved==null)saved=recovery.read(tabIds.get(tab));
+      tab.open(runtime);
+      if(saved!=null)tab.restoreState(saved);else tab.loadUri(urls.get(i));
+      if(i==active)attach();
+      eye.setText("Browser · recovered after "+reason);
+    }catch(Exception error){
+      eye.setText("Browser · recovery required");
+      getSharedPreferences("prism_observer_state",MODE_PRIVATE).edit().putString("state","STALE").putString("unknowns","[\"CONTENT_RECOVERY_FAILED\"]").commit();
+    }
   }
 
   private void attach(){
@@ -267,10 +323,12 @@ public class PrismBrowserActivity extends Activity {
     setExtensionTabActive(closing,false);
     if(view!=null&&view.getSession()==closing)releaseViewSession();
     if(tabs.size()==1){
+      savedStates.remove(closing);recoveryAttempts.remove(closing);recovery.remove(tabIds.remove(closing));
       closing.close();
       tabs.clear(); urls.clear(); active=-1;
       persistSession(); finish(); return;
     }
+    savedStates.remove(closing);recoveryAttempts.remove(closing);recovery.remove(tabIds.remove(closing));
     closing.close(); tabs.remove(i); urls.remove(i);
     if(i<active)active--;
     else if(i==active)active=Math.min(active,tabs.size()-1);
@@ -293,10 +351,13 @@ public class PrismBrowserActivity extends Activity {
     if(session==null)return;
     try{
       JSONArray savedTabs=new JSONArray();
+      JSONArray savedIds=new JSONArray();
+      for(GeckoSession tab:tabs)savedIds.put(tabIds.get(tab));
       for(String target:urls)savedTabs.put(target==null?"":target);
       JSONObject envelope=new JSONObject();
       envelope.put("schemaVersion",SESSION_SCHEMA);
       envelope.put("tabs",savedTabs);
+      envelope.put("tabIds",savedIds);
       envelope.put("activeTab",active);
       envelope.put("activeUrl",currentUrl());
       envelope.put("savedAt",System.currentTimeMillis());
@@ -310,5 +371,5 @@ public class PrismBrowserActivity extends Activity {
     }catch(Exception ignored){}
   }
 
-  @Override protected void onDestroy(){persistSession();super.onDestroy();}
+  @Override protected void onDestroy(){persistSession();releaseViewSession();super.onDestroy();}
 }

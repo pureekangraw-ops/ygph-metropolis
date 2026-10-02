@@ -14,7 +14,7 @@ test("PRISM observer is a real Android foreground service with visible status",(
   assert.match(service,/PRISM • Factory Eye/);
   assert.match(service,/LIVE|BACKGROUND|STALE|OFFLINE/);
   assert.match(patch,/FOREGROUND_SERVICE/);
-  assert.match(patch,/foregroundServiceType=\\?\"dataSync/);
+  assert.match(patch,/foregroundServiceType=\\?\"specialUse/);
 });
 
 test("PRISM keeps live Gecko sessions across Activity stop and restores after process death",()=>{

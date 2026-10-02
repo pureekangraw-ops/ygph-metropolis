@@ -1,11 +1,11 @@
 {
   "product": "PRISM",
-  "assemblyId": "PRISM-ASSEMBLY-1029",
+  "assemblyId": "PRISM-ASSEMBLY-1030",
   "policy": "LOCKSTEP_FAIL_CLOSED",
   "release": {
-    "versionName": "1.0.0-owner.24",
-    "versionCode": 1029,
-    "baselineVersionCode": 1028
+    "versionName": "1.0.0-owner.25",
+    "versionCode": 1030,
+    "baselineVersionCode": 1029
   },
   "compatibility": {
     "applicationId": "com.yggdrasil.prism",
@@ -15,81 +15,81 @@
   "components": [
     {
       "id": "COPILOT",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "PROJECTS",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "HANDOFF",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "MAP",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "LEDGER",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "MONITOR",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "SPECTRUM",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "ANDROID_SHELL",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "PIN_BRIDGE",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "ICON_SET",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "BROWSER",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "FACTORY_EYE",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     },
     {
       "id": "OWNER_PASSWORD",
-      "assemblyId": "PRISM-ASSEMBLY-1029",
-      "versionName": "1.0.0-owner.24",
-      "versionCode": 1029
+      "assemblyId": "PRISM-ASSEMBLY-1030",
+      "versionName": "1.0.0-owner.25",
+      "versionCode": 1030
     }
   ]
 }
