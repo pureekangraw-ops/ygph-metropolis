@@ -66,3 +66,11 @@ test("PRISM browser launch declares the Android 14 data-sync foreground permissi
   assert.match(tool,/FOREGROUND_SERVICE_DATA_SYNC/);
   assert.match(java,/GeckoRuntime\.create\(getApplicationContext\(\)\)/);
 });
+
+
+test("PRISM browser releases the GeckoView display when leaving and reattaches the live GeckoSession on return",()=>{
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  assert.match(java,/onStop\(\)[\s\S]*view\.releaseSession\(\)/);
+  assert.match(java,/onStart\(\)[\s\S]*view\.setSession\(current\(\)\)/);
+  assert.match(java,/private static final List<GeckoSession> tabs/);
+});
