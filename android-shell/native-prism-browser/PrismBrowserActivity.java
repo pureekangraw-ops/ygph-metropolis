@@ -86,8 +86,21 @@ public class PrismBrowserActivity extends Activity {
     if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent);else startService(intent);
   }
 
-  @Override protected void onStart(){super.onStart();sendObserverCommand("com.yggdrasil.prism.OBSERVER_FOREGROUND");}
-  @Override protected void onStop(){persistSession();sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");super.onStop();}
+  @Override protected void onStart(){
+    super.onStart();
+    if(view!=null&&current()!=null){
+      try{view.setSession(current());}catch(Exception ignored){}
+    }
+    sendObserverCommand("com.yggdrasil.prism.OBSERVER_FOREGROUND");
+  }
+  @Override protected void onStop(){
+    persistSession();
+    if(view!=null){
+      try{view.releaseSession();}catch(Exception ignored){}
+    }
+    sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");
+    super.onStop();
+  }
 
   private GeckoSession current(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
 
