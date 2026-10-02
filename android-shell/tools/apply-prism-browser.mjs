@@ -7,7 +7,7 @@ const GECKO_DEP=`implementation 'org.mozilla.geckoview:geckoview-nightly-omni:${
 const MOZILLA_REPO="maven { url 'https://maven.mozilla.org/maven2/' }";
 const ACTIVITY='com.yggdrasil.prism.PrismBrowserActivity';
 const OBSERVER_SERVICE='com.yggdrasil.prism.PrismObserverService';
-const FOREGROUND_SERVICE_DATA_SYNC='android.permission.FOREGROUND_SERVICE_DATA_SYNC';
+const FOREGROUND_SERVICE_SPECIAL_USE='android.permission.FOREGROUND_SERVICE_SPECIAL_USE';
 
 function insertBeforeLast(text,needle,addition){
   const i=text.lastIndexOf(needle); if(i<0)throw new Error('PRISM_BROWSER_PATCH_TARGET_MISSING:'+needle);
@@ -46,7 +46,7 @@ export async function applyPrismBrowser(androidRoot){
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
-  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
 
   const layoutRoot=join(app,'src','main','res','layout'); await mkdir(layoutRoot,{recursive:true});
   await cp(join(source,'activity_prism_browser.xml'),join(layoutRoot,'activity_prism_browser.xml'),{force:true});
@@ -58,13 +58,13 @@ export async function applyPrismBrowser(androidRoot){
   let manifest=await readFile(manifestPath,'utf8');
   if(!manifest.includes('android.permission.INTERNET'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.INTERNET" />');
   if(!manifest.includes('android.permission.FOREGROUND_SERVICE'))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />');
-  if(!manifest.includes(FOREGROUND_SERVICE_DATA_SYNC))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="'+FOREGROUND_SERVICE_DATA_SYNC+'" />');
-  if(!manifest.includes(ACTIVITY)){
+  if(!manifest.includes(FOREGROUND_SERVICE_SPECIAL_USE))manifest=manifest.replace(/(<manifest[^>]*>)/,'$1\n    <uses-permission android:name="'+FOREGROUND_SERVICE_SPECIAL_USE+'" />');
+  if(!manifest.includes(ACTIVITY)&&!manifest.includes('android:name=".PrismBrowserActivity"')){
     const activity='\n        <activity android:name=".PrismBrowserActivity" android:exported="false" android:windowSoftInputMode="stateUnspecified|adjustResize" />\n';
     manifest=manifest.replace('</application>',activity+'    </application>');
   }
-  if(!manifest.includes(OBSERVER_SERVICE)){
-    const service='        <service android:name=".PrismObserverService" android:exported="false" android:foregroundServiceType="dataSync" />\n';
+  if(!manifest.includes(OBSERVER_SERVICE)&&!manifest.includes('android:name=".PrismObserverService"')){
+    const service='        <service android:name=".PrismObserverService" android:exported="false" android:foregroundServiceType="specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Owner-initiated browser Work session observation with persistent visible status" /></service>\n';
     manifest=manifest.replace('</application>',service+'    </application>');
   }
   await writeFile(manifestPath,manifest,'utf8');
