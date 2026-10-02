@@ -74,7 +74,8 @@ test("PRISM browser launch declares the Android 14 data-sync foreground permissi
 test("PRISM browser owns Gecko display and activity lifecycle explicitly",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/onResume\(\)[\s\S]*attach\(\)[\s\S]*updateSessionVisibility\(true\)/);
-  assert.match(java,/onPause\(\)[\s\S]*updateSessionVisibility\(false\)[\s\S]*releaseViewSession\(\)/);
+  assert.match(java,/onPause\(\)[\s\S]*updateSessionVisibility\(false\)[\s\S]*sendObserverCommand/);
+  assert.doesNotMatch(java,/onPause\(\)[\s\S]*releaseViewSession\(\)[\s\S]*super\.onPause\(\)/);
   assert.match(java,/view\.getSession\(\)/);
   assert.match(java,/if\(attached!=null\)view\.releaseSession\(\)/);
   assert.match(java,/view\.setSession\(target\)/);
@@ -93,4 +94,13 @@ test("PRISM browser releases the displayed GeckoSession before tab replacement",
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/GeckoSession attached=view\.getSession\(\)/);
   assert.match(java,/if\(attached!=target\)[\s\S]*view\.releaseSession\(\)[\s\S]*view\.setSession\(target\)/);
+});
+
+
+test("PRISM browser keeps the GeckoView surface attached during ordinary app backgrounding",()=>{
+  const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
+  const pause=java.match(/@Override protected void onPause\(\)[\s\S]*?super\.onPause\(\);\s*}/)?.[0]||"";
+  assert.match(pause,/updateSessionVisibility\(false\)/);
+  assert.doesNotMatch(pause,/releaseViewSession\(\)/);
+  assert.match(java,/onDestroy\(\)[\s\S]*releaseViewSession\(\)/);
 });

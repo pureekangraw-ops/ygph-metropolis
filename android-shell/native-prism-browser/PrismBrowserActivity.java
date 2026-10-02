@@ -96,7 +96,6 @@ public class PrismBrowserActivity extends Activity {
   @Override protected void onPause(){
     updateSessionVisibility(false);
     persistSession();
-    releaseViewSession();
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");
     super.onPause();
   }
@@ -310,5 +309,9 @@ public class PrismBrowserActivity extends Activity {
     }catch(Exception ignored){}
   }
 
-  @Override protected void onDestroy(){persistSession();super.onDestroy();}
+  @Override protected void onDestroy(){
+    persistSession();
+    releaseViewSession();
+    super.onDestroy();
+  }
 }
