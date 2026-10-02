@@ -17,7 +17,7 @@
   </header>
 
   <section class="page active" data-page="HOME">
-    <section class="practical-home">
+    <section class="form-card" aria-label="การเชื่อม GO Hub"><h2>GO Hub</h2><p id="hub-status" aria-live="polite">กำลังตรวจการเชื่อมต่อ</p><details><summary>เชื่อมต่อฮับ</summary><form id="hub-pair-form"><label>ข้อมูลจับคู่จาก GO Hub<textarea id="hub-bootstrap" rows="3" autocomplete="off" spellcheck="false" required></textarea></label><button type="submit">เชื่อม GO Hub</button></form><button id="hub-disconnect" type="button">ยกเลิกการเชื่อมต่อ</button></details></section><section class="practical-home">
       <div class="home-welcome"><h1>PRISM</h1></div>
       <div class="practical-grid" aria-label="พื้นที่หลัก">
         <button data-nav="COPILOT"><span class="practical-icon">✦</span><b>Copilot</b><small>คุยกับ PRISM</small></button>
@@ -85,7 +85,7 @@
       <div id="route-preview" class="send-readiness">กำลังตรวจเส้นทางส่ง…</div>
       <button class="primary wide" type="submit">ส่งงาน</button>
     </form>
-    <div id="handoff-readback" class="result-card" hidden></div>
+    <button id="handoff-result-refresh" type="button">ตรวจผลจากฮับ</button><div id="handoff-readback" class="result-card" hidden></div>
   </section>
 
   <section class="page" data-page="MAP">
