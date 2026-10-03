@@ -228,8 +228,10 @@ export function installLighthouseTransferForm({
     if (resetPayload && selected) payload.value = JSON.stringify(selected.payloadTemplate || {}, null, 2);
   }
 
+  const documentRef = root.ownerDocument || globalThis.document;
+  if (!documentRef?.createElement) return false;
   for (const item of writable) {
-    const option = root.createElement('option');
+    const option = documentRef.createElement('option');
     option.value = item.id;
     option.textContent = item.id;
     capabilitySelect.append(option);

@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,9 +128,22 @@ const CLIENT_ENTRY = `<!doctype html>
 </body>
 </html>`;
 
-function sourceIdentity() {
-  const commit = String(process.env.GITHUB_SHA || '').trim() || null;
-  const ref = String(process.env.GITHUB_REF_NAME || process.env.GITHUB_HEAD_REF || '').trim() || null;
+const execFileAsync = promisify(execFile);
+
+async function checkedOutCommit(repoRoot) {
+  try {
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd:repoRoot });
+    return String(stdout || '').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function sourceIdentity(repoRoot) {
+  const commit = await checkedOutCommit(repoRoot)
+    || String(process.env.LIGHTHOUSE_SOURCE_COMMIT || process.env.GITHUB_SHA || '').trim()
+    || null;
+  const ref = String(process.env.LIGHTHOUSE_SOURCE_REF || process.env.GITHUB_REF_NAME || process.env.GITHUB_HEAD_REF || '').trim() || null;
   const repository = String(process.env.GITHUB_REPOSITORY || 'pureekangraw-ops/ygph-metropolis').trim();
   return { repository, ref, commit };
 }
@@ -192,7 +207,7 @@ export async function stageLighthouseBundle({ repoRoot, destinationRoot }) {
     throw new Error('LIGHTHOUSE_ANDROID_BUILD_IDENTITY_INVALID');
   }
 
-  const source = sourceIdentity();
+  const source = await sourceIdentity(repoRoot);
   const buildIdentity = {
     owner:'ANDROID_APK',
     applicationId:androidIdentity.applicationId,
