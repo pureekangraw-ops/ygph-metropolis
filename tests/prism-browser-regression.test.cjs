@@ -88,13 +88,12 @@ test("PRISM browser owns Gecko display and activity lifecycle explicitly",()=>{
   assert.match(java,/view\.setSession\(target\)/);
 });
 
-test("PRISM browser propagates real active tab state to Gecko and Factory Eye",()=>{
+test("PRISM browser propagates real active tab state without Factory Eye coupling",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/target\.setFocused\(selected\)/);
   assert.match(java,/target\.setActive\(selected\)/);
-  assert.match(java,/getWebExtensionController\(\)\.setTabActive\(target,isActive\)/);
   assert.match(java,/previous\.setActive\(false\)/);
-  assert.match(java,/setExtensionTabActive\(previous,false\)/);
+  assert.doesNotMatch(java,/FactoryEyeHost|setExtensionTabActive|getWebExtensionController/);
 });
 
 test("PRISM browser releases the displayed GeckoSession before tab replacement",()=>{

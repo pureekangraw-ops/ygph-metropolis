@@ -23,7 +23,7 @@
     <Button android:id="@+id/prism_close_tab" android:layout_width="44dp" android:layout_height="40dp" android:minWidth="44dp" android:minHeight="40dp" android:text="×"/>
     <TextView android:id="@+id/prism_eye_status" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1"
       android:gravity="center_vertical" android:ellipsize="end" android:maxLines="1" android:paddingStart="6dp" android:paddingEnd="6dp"
-      android:text="Factory Eye" android:textSize="11sp" android:textColor="#9fc2ff"/>
+      android:text="PRISM Browser" android:textSize="11sp" android:textColor="#9fc2ff"/>
   </LinearLayout>
 
   <HorizontalScrollView android:id="@+id/prism_tab_strip" android:layout_width="match_parent" android:layout_height="40dp" android:scrollbars="none"

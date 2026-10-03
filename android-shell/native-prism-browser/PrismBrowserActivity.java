@@ -46,7 +46,6 @@ public class PrismBrowserActivity extends Activity {
     session=getSharedPreferences(SESSION_PREFS,MODE_PRIVATE);
     recovery=new PrismBrowserRecovery(getApplicationContext());
     if(runtime==null) runtime=GeckoRuntime.create(getApplicationContext());
-    FactoryEyeHost.install(runtime, s->runOnUiThread(()->eye.setText(s)));
     findViewById(R.id.prism_go).setOnClickListener(v->navigate());
     findViewById(R.id.prism_back).setOnClickListener(v->{if(current()!=null)current().goBack();});
     findViewById(R.id.prism_forward).setOnClickListener(v->{if(current()!=null)current().goForward();});
@@ -119,18 +118,12 @@ public class PrismBrowserActivity extends Activity {
     try{if(view.getSession()!=null)view.releaseSession();}catch(Exception ignored){}
   }
 
-  private void setExtensionTabActive(GeckoSession target,boolean isActive){
-    if(runtime==null||target==null)return;
-    try{runtime.getWebExtensionController().setTabActive(target,isActive);}catch(Exception ignored){}
-  }
-
   private void updateSessionVisibility(boolean visible){
     for(int i=0;i<tabs.size();i++){
       GeckoSession target=tabs.get(i);
       boolean selected=visible&&i==active;
       try{target.setFocused(selected);}catch(Exception ignored){}
       try{target.setActive(selected);}catch(Exception ignored){}
-      setExtensionTabActive(target,selected);
     }
   }
 
@@ -139,7 +132,7 @@ public class PrismBrowserActivity extends Activity {
       active=Math.max(0,Math.min(active,tabs.size()-1));
       renderTabs(); attach();
       recordEvidence("SESSION_REATTACHED",currentUrl());
-      eye.setText("Factory Eye · live session reattached · "+tabs.size()+" tabs");
+      eye.setText("PRISM Browser · live session reattached · "+tabs.size()+" tabs");
       return;
     }
     String raw=session.getString("sessionEnvelope","");
@@ -163,7 +156,7 @@ public class PrismBrowserActivity extends Activity {
         active=Math.max(0,Math.min(savedActive,tabs.size()-1));
         renderTabs(); attach();
         recordEvidence("SESSION_RESTORED",currentUrl());
-        eye.setText("Factory Eye · session restored · "+tabs.size()+" tabs");
+        eye.setText("PRISM Browser · session restored · "+tabs.size()+" tabs");
         return;
       }
     }catch(Exception ignored){}
@@ -181,7 +174,6 @@ public class PrismBrowserActivity extends Activity {
     if(previous!=null){
       try{previous.setFocused(false);}catch(Exception ignored){}
       try{previous.setActive(false);}catch(Exception ignored){}
-      setExtensionTabActive(previous,false);
     }
     GeckoSession s=new GeckoSession();
     bindTabCallbacks(s);
@@ -268,7 +260,7 @@ public class PrismBrowserActivity extends Activity {
     active=Math.max(0,Math.min(selected,tabs.size()-1));
     renderTabs(); attach();
     recordEvidence("WATCH",currentUrl());
-    eye.setText("Factory Eye · Watch "+WATCH_URLS.length+" targets · ready");
+    eye.setText("PRISM Browser · Watch "+WATCH_URLS.length+" targets · ready");
     persistSession();
   }
 
@@ -307,7 +299,6 @@ public class PrismBrowserActivity extends Activity {
     if(previous!=null){
       try{previous.setFocused(false);}catch(Exception ignored){}
       try{previous.setActive(false);}catch(Exception ignored){}
-      setExtensionTabActive(previous,false);
     }
     active=i;
     renderTabs();
@@ -320,7 +311,6 @@ public class PrismBrowserActivity extends Activity {
     GeckoSession closing=tabs.get(i);
     try{closing.setFocused(false);}catch(Exception ignored){}
     try{closing.setActive(false);}catch(Exception ignored){}
-    setExtensionTabActive(closing,false);
     if(view!=null&&view.getSession()==closing)releaseViewSession();
     if(tabs.size()==1){
       savedStates.remove(closing);recoveryAttempts.remove(closing);recovery.remove(tabIds.remove(closing));

@@ -26,15 +26,14 @@ test('PRISM browser is a capability of the PRISM shell',()=>{
   assert.match(a,/PrismBrowser/);
   assert.match(tool,/geckoview-nightly-omni/);
   assert.match(tool,/PrismBrowserActivity/);
-  assert.match(tool,/factoryEye:'0.4.0'/);
+  assert.match(tool,/observer:'PRISM_BROWSER_LOCAL'/);
 });
-test('Factory Eye bundle is pinned to canonical Ergasterion v0.4.0 snapshot',()=>{
-  const m=JSON.parse(fs.readFileSync('android-shell/native-prism-browser/factory-eye/manifest.json','utf8'));
-  const b=fs.readFileSync('android-shell/native-prism-browser/factory-eye/background.js','utf8');
-  assert.equal(m.version,'0.4.0');
-  assert.match(b,/8440e37741b72802df4138b7eca14791a1c65d10/);
-  assert.match(b,/github-pureekangraw-ops/);
-  assert.match(b,/cloudflare-dashboard/);
+test('PRISM does not embed the Factory Eye producer',()=>{
+  const tool=fs.readFileSync('android-shell/tools/apply-prism-browser.mjs','utf8');
+  const activity=fs.readFileSync('android-shell/native-prism-browser/PrismBrowserActivity.java','utf8');
+  assert.doesNotMatch(tool,/FactoryEyeHost|assets.*factory-eye/);
+  assert.doesNotMatch(activity,/FactoryEyeHost|ensureBuiltIn/);
+  assert.equal(fs.existsSync('android-shell/native-prism-browser/factory-eye'),false);
 });
 test('owner password is not hardcoded and requires at least eight characters',()=>{
   const h=fs.readFileSync('prism/index.html','utf8'),a=fs.readFileSync('prism/app.mjs','utf8'),tool=fs.readFileSync('android-shell/tools/apply-prism-pin.mjs','utf8');

@@ -46,13 +46,11 @@ export async function applyPrismBrowser(androidRoot){
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
-  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java','PrismFilesPlugin.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  for(const name of ['PrismBrowserActivity.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java','PrismFilesPlugin.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
 
   const layoutRoot=join(app,'src','main','res','layout'); await mkdir(layoutRoot,{recursive:true});
   await cp(join(source,'activity_prism_browser.xml'),join(layoutRoot,'activity_prism_browser.xml'),{force:true});
 
-  const assetRoot=join(app,'src','main','assets','factory-eye'); await mkdir(assetRoot,{recursive:true});
-  await cp(join(source,'factory-eye'),assetRoot,{recursive:true,force:true});
 
   const manifestPath=join(app,'src','main','AndroidManifest.xml');
   let manifest=await readFile(manifestPath,'utf8');
@@ -83,7 +81,7 @@ export async function applyPrismBrowser(androidRoot){
     main=main.replace(superCall,match=>'registerPlugin(PrismFilesPlugin.class);\n    '+match);
     await writeFile(mainPath,main,'utf8');
   }
-  return {activity:ACTIVITY,geckoView:GECKO_VERSION,factoryEye:'0.4.0',watch:['github.com/pureekangraw-ops','dash.cloudflare.com']};
+  return {activity:ACTIVITY,geckoView:GECKO_VERSION,observer:'PRISM_BROWSER_LOCAL',watch:['github.com/pureekangraw-ops','dash.cloudflare.com']};
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)console.log(JSON.stringify(await applyPrismBrowser(process.argv[2]||'android')));
