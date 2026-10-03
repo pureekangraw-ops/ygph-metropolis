@@ -92,7 +92,7 @@
 
   <section class="page" data-page="MAP">
     <div class="page-title"><p class="kicker">MAP</p><h1>แผนที่</h1><p>Map เป็นพื้นหลัก ส่วน Ride เปิดใช้เมื่อคุณต้องการงานวิ่งรถ</p></div>
-    <div class="surface-card"><b>แผนที่ในเครื่อง</b><p id="map-status" aria-live="polite">กำลังตรวจแผนที่…</p><div class="card-actions"><button id="map-import">นำเข้าไฟล์แผนที่ .pmtiles</button><button id="map-open">เปิดแผนที่</button></div></div>
+    <div class="surface-card"><b>แผนที่ในเครื่อง</b><p id="map-status" aria-live="polite">กำลังตรวจแผนที่…</p><div class="card-actions"><button id="map-import">นำเข้าไฟล์แผนที่ .pmtiles</button><button id="map-open" disabled>เปิดแผนที่</button></div></div>
     <form id="map-destination-form" class="form-card"><h2>จุดหมาย</h2><label>ชื่อจุดหมาย<input id="map-label" autocomplete="off"></label><label>ละติจูด<input id="map-lat" type="number" step="any" min="-90" max="90" required></label><label>ลองจิจูด<input id="map-lng" type="number" step="any" min="-180" max="180" required></label><div class="card-actions"><button type="submit">ดูจุดหมายบนแผนที่</button><button id="map-navigate" type="button">นำทาง</button><button id="open-ride-mode" type="button">เปิดโหมด Ride</button></div><p id="map-result" aria-live="polite"></p></form>
     <div id="ride-mode" class="surface-card" hidden><b>Ride</b><p>ฟังก์ชันเสริมสำหรับงานวิ่งรถ ไม่ใช่ตัวตนหลักของหน้า Map</p></div>
   </section>
