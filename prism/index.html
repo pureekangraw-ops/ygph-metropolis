@@ -9,7 +9,8 @@
   <link rel="icon" href="./assets/prism-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body class="locked">\n<section id="pin-gate" class="pin-gate"><div class="pin-card"><img src="./assets/prism-icon.svg" alt=""><p class="kicker">PRISM</p><h1 id="pin-title">เปิด PRISM</h1><form id="pin-form"><input id="pin-input" type="password" minlength="8" maxlength="64" autocomplete="current-password" aria-label="รหัสผ่าน" placeholder="รหัสผ่าน"><input id="pin-confirm" type="password" minlength="8" maxlength="64" autocomplete="new-password" aria-label="ยืนยันรหัสผ่าน" placeholder="ยืนยันรหัสผ่าน" hidden><button id="pin-submit" type="submit">ต่อ</button></form><p id="pin-status" class="helper">กำลังตรวจการตั้งค่า…</p></div></section>
+<body class="locked">
+<section id="pin-gate" class="pin-gate"><div class="pin-card"><img src="./assets/prism-icon.svg" alt=""><p class="kicker">PRISM</p><h1 id="pin-title">เปิด PRISM</h1><form id="pin-form"><input id="pin-input" type="password" minlength="8" maxlength="64" autocomplete="current-password" aria-label="รหัสผ่าน" placeholder="รหัสผ่าน"><input id="pin-confirm" type="password" minlength="8" maxlength="64" autocomplete="new-password" aria-label="ยืนยันรหัสผ่าน" placeholder="ยืนยันรหัสผ่าน" hidden><button id="pin-submit" type="submit">ต่อ</button></form><p id="pin-status" class="helper">กำลังตรวจการตั้งค่า…</p></div></section>
 <main class="app-shell">
   <header class="topbar">
     <div class="brand"><img src="./assets/prism-icon.svg" class="brand-icon" alt=""><div><strong>PRISM</strong><small>ผู้ช่วยกลางของคุณ</small></div></div>
@@ -58,7 +59,8 @@
         <button data-capability="PROJECTS"><b>โปรเจกต์</b><small>ดูงานทั้งหมดและของที่ค้าง</small></button>
         <button data-capability="HANDOFF"><b>ส่งต่องาน</b><small>เรียก GO / LIGHT / PIXIE</small></button>
         <button data-nav="MAP"><b>Map</b><small>แผนที่ · Ride เป็นโหมดเสริม</small></button>
-        <button data-nav="LEDGER"><b>Ledger</b><small>ข้อมูลการเงินทั้งหมด</small></button>\n        <button id="open-browser"><b>Browser</b><small>GeckoView + Factory Eye · GitHub / Cloudflare Watch</small></button>
+        <button data-nav="LEDGER"><b>Ledger</b><small>ข้อมูลการเงินทั้งหมด</small></button>
+        <button id="open-browser"><b>Browser</b><small>GeckoView + Factory Eye · GitHub / Cloudflare Watch</small></button>
       </div>
     </section>
   </section>
@@ -90,14 +92,18 @@
 
   <section class="page" data-page="MAP">
     <div class="page-title"><p class="kicker">MAP</p><h1>แผนที่</h1><p>Map เป็นพื้นหลัก ส่วน Ride เปิดใช้เมื่อคุณต้องการงานวิ่งรถ</p></div>
-    <div class="surface-card"><b>Map</b><p>จุดหมาย เส้นทาง และข้อมูลแผนที่อยู่ตรงนี้</p><button id="open-ride-mode">เปิดโหมด Ride</button></div>
+    <div class="surface-card"><b>แผนที่ในเครื่อง</b><p id="map-status" aria-live="polite">กำลังตรวจแผนที่…</p><div class="card-actions"><button id="map-import">นำเข้าไฟล์แผนที่ .pmtiles</button><button id="map-open">เปิดแผนที่</button></div></div>
+    <form id="map-destination-form" class="form-card"><h2>จุดหมาย</h2><label>ชื่อจุดหมาย<input id="map-label" autocomplete="off"></label><label>ละติจูด<input id="map-lat" type="number" step="any" min="-90" max="90" required></label><label>ลองจิจูด<input id="map-lng" type="number" step="any" min="-180" max="180" required></label><div class="card-actions"><button type="submit">ดูจุดหมายบนแผนที่</button><button id="map-navigate" type="button">นำทาง</button><button id="open-ride-mode" type="button">เปิดโหมด Ride</button></div><p id="map-result" aria-live="polite"></p></form>
     <div id="ride-mode" class="surface-card" hidden><b>Ride</b><p>ฟังก์ชันเสริมสำหรับงานวิ่งรถ ไม่ใช่ตัวตนหลักของหน้า Map</p></div>
   </section>
 
   <section class="page" data-page="LEDGER">
     <div class="page-title"><p class="kicker">LEDGER</p><h1>การเงิน</h1><p>Ledger เป็นเจ้าของข้อมูลการเงินทั้งหมดของ PRISM</p></div>
     <div id="ledger-summary" class="finance-grid"><div><span>เงินพร้อมใช้</span><strong>—</strong></div><div><span>เงินเข้า</span><strong>—</strong></div><div><span>เงินออก</span><strong>—</strong></div><div><span>ภาระใกล้สุด</span><strong>—</strong></div></div>
-    <div class="surface-card"><b>ถาม Copilot เรื่องการเงิน</b><p>PRISM จะอ่านผ่าน Ledger แทนการสร้าง truth การเงินซ้ำ</p><button data-nav="COPILOT" data-finance-prompt>ถาม Copilot</button></div>
+    <p id="ledger-status" aria-live="polite">ปลดล็อกคลังการเงินเพื่ออ่านยอด</p>
+    <form id="ledger-unlock-form" class="form-card"><label>รหัสผ่านคลังการเงิน<input id="ledger-password" type="password" minlength="6" autocomplete="current-password" required></label><button type="submit">เปิดคลังการเงิน</button><details id="ledger-setup"><summary>ตั้งค่าหรือกู้คืนคลังการเงิน</summary><p>ตั้งรหัสกู้คืนอย่างน้อย 12 ตัว และเก็บไว้นอกเครื่อง หากมีคลังเดิม ให้ใช้รหัสกู้คืนเดิมเพื่อเปิดข้อมูลต่อ</p><label>รหัสกู้คืน<input id="ledger-recovery" type="password" minlength="12" autocomplete="off"></label><button id="ledger-initialize" type="button">ตั้งค่าด้วยรหัสผ่านและรหัสกู้คืน</button><button id="ledger-recover" type="button">กู้รหัสผ่านคลังเดิม</button><label>ไฟล์สำรองข้อมูล<input id="ledger-backup-file" type="file" accept=".json,application/json"></label><button id="ledger-restore" type="button">นำเข้าคลังจากไฟล์สำรอง</button></details></form>
+    <div id="ledger-content" hidden><form id="ledger-entry-form" class="form-card"><h2>บันทึกรายการ</h2><label>ประเภท<select id="ledger-direction"><option value="IN">เงินเข้า</option><option value="OUT">เงินออก</option></select></label><label>รายการ<input id="ledger-title" required maxlength="200"></label><label>จำนวนเงิน (บาท)<input id="ledger-amount" type="number" min="0.01" step="0.01" required></label><button id="ledger-save" type="submit">บันทึก</button></form><div class="surface-card"><h2>รายการล่าสุด</h2><div id="ledger-transactions"></div><div class="card-actions"><button id="ledger-refresh">อัปเดตยอด</button><button id="ledger-backup">ดาวน์โหลดสำรองข้อมูล</button><button id="ledger-lock">ล็อกคลัง</button></div></div></div>
+    <div class="surface-card"><b>ถาม Copilot เรื่องการเงิน</b><p>สรุปจากยอดและรายการในคลังที่เปิดอยู่</p><button data-nav="COPILOT" data-finance-prompt>ถาม Copilot</button></div>
   </section>
 
   <section class="page" data-page="MONITOR">
