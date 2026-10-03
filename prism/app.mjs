@@ -20,7 +20,7 @@ async function pinStatus(){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE
 async function unlock(pin){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');const r=await p.verify({pin});if(r?.verified)document.body.classList.remove('locked');return Boolean(r?.verified);}
 async function configurePin(pin,confirmation){if(pin!==confirmation)throw new Error('PIN_CONFIRM_MISMATCH');if(pin.length<8||pin.length>64)throw new Error('PIN_INVALID');const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');await p.provision({pin});return unlock(pin);}
 
-function nav(page){$$('.page').forEach(n=>n.classList.toggle('active',n.dataset.page===page));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('active',n.dataset.nav===page));window.scrollTo({top:0});}
+function nav(page){$$('.page').forEach(n=>n.classList.toggle('active',n.dataset.page===page));$$('.bottom-nav [data-nav]').forEach(n=>n.classList.toggle('active',n.dataset.nav===page));window.scrollTo({top:0});if(page==='MAP')void productUI.refreshMap().catch(error=>$('#map-status').textContent='ยังอ่านแผนที่ไม่ได้: '+safe(error.message));}
 function title(w){return safe(w?.title,'งานนี้');}
 function status(v){const s=String(v||'UNKNOWN').toUpperCase();return ({LIVE:'พร้อม',PASS:'ผ่าน',COMPLETE:'เสร็จแล้ว','ON PROCESS':'กำลังทำ',WAIT:'กำลังรอ','WAIT VERIFY':'รอตรวจ',UNKNOWN:'ยังไม่ทราบ'})[s]||safe(v);}
 function addCopilot(text,who='app'){const t=$('#copilot-thread');const n=document.createElement('div');n.className='copilot-message '+who;n.textContent=text;t.append(n);t.scrollTop=t.scrollHeight;}
