@@ -1,4 +1,3 @@
-const OBSERVER_HEALTH_SCHEMA = 'lighthouse-observer-health-v1';
 const MAP_EVIDENCE_SCHEMA = 'lighthouse-map-evidence-v1';
 const PREVIEW_CONSENT_REQUIRED = 'MAP_PREVIEW_CONSENT_REQUIRED';
 
@@ -35,45 +34,6 @@ function point(value, includeCoordinates) {
     }
   }
   return Object.values(output).some(Boolean) ? output : null;
-}
-
-export function createBrowserObserverHealth({
-  nowMs = Date.now(),
-  lastSeenAt = null,
-  staleAfterMs = 90_000,
-  sessionState = 'UNKNOWN',
-  workerState = 'UNKNOWN',
-  extensionVerified = false,
-  observerVersion = null,
-  workerDeploymentId = null,
-  signedXpiSha256 = null,
-} = {}) {
-  const current = Number(nowMs);
-  const seenAt = timestamp(lastSeenAt);
-  const seenMs = seenAt ? Date.parse(seenAt) : NaN;
-  const ageMs = Number.isFinite(current) && Number.isFinite(seenMs) ? Math.max(0, current - seenMs) : null;
-  const limit = Number.isFinite(Number(staleAfterMs)) && Number(staleAfterMs) >= 0 ? Number(staleAfterMs) : 90_000;
-  let status = 'STALE';
-  if (String(workerState).toUpperCase() === 'HUB_UNAVAILABLE') status = 'HUB_UNAVAILABLE';
-  else if (extensionVerified !== true) status = 'EXTENSION_NOT_VERIFIED';
-  else if (String(sessionState).toUpperCase() === 'INACTIVE') status = 'SESSION_INACTIVE';
-  else if (ageMs == null || ageMs > limit) status = 'STALE';
-  else status = 'LIVE';
-
-  return freeze({
-    schemaVersion:OBSERVER_HEALTH_SCHEMA,
-    status,
-    healthy:status === 'LIVE',
-    lastSeenAt:seenAt,
-    ageMs,
-    staleAfterMs:limit,
-    sessionState:text(sessionState) || 'UNKNOWN',
-    workerState:text(workerState) || 'UNKNOWN',
-    extensionVerified:extensionVerified === true,
-    observerVersion:text(observerVersion),
-    workerDeploymentId:text(workerDeploymentId),
-    signedXpiSha256:text(signedXpiSha256),
-  });
 }
 
 export function createRideMapEvidence({
@@ -132,4 +92,4 @@ export function createMapEvidenceBridge({ now = () => new Date().toISOString() }
   });
 }
 
-export { OBSERVER_HEALTH_SCHEMA, MAP_EVIDENCE_SCHEMA, PREVIEW_CONSENT_REQUIRED };
+export { MAP_EVIDENCE_SCHEMA, PREVIEW_CONSENT_REQUIRED };
