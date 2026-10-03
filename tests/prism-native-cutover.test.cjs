@@ -66,6 +66,7 @@ async function bootOwnerGate(configured) {
   let unlocked = false;
   const calls = [];
   const context = {
+    mountPrismProductUI: () => ({}),
     document: { querySelector: node, querySelectorAll: selector => selector === '[data-capability]' ? [node(selector)] : [],
       body: { classList: { remove(value) { if (value === 'locked') unlocked = true; } } } },
     window: {},
