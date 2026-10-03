@@ -54,7 +54,6 @@ export function mountPrismProductUI({document=globalThis.document,runtime=create
   const destination=()=>({lat:$('#map-lat').value,lng:$('#map-lng').value,label:$('#map-label').value});
   $('#map-destination-form').addEventListener('submit',event=>{event.preventDefault();void mapAction(()=>runtime.openMap(destination()));});
   $('#map-navigate').addEventListener('click',()=>void mapAction(()=>runtime.navigate(destination())));
-  void mapAction(refreshMap);
   return Object.freeze({unlockLedger,lock,refreshMap,async financeSummary(){
     if(!opened)return 'เปิดคลังการเงินในหน้า Ledger ก่อน แล้วผมจะอ่านยอดให้';
     const epoch=generation,t=await refreshLedger();if(epoch!==generation||!opened)return 'คลังการเงินล็อกอยู่';return 'เงินในคลัง '+money(t.balanceSatang)+' · เงินเข้าวันนี้ '+money(t.todayInSatang)+' · เงินออกวันนี้ '+money(t.todayOutSatang)+' · '+t.transactions.length+' รายการ';
