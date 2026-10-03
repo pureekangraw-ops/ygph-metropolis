@@ -26,7 +26,7 @@ public final class PrismObserverService extends Service {
   public static final String ACTION_ACTIVITY_FOREGROUND="com.yggdrasil.prism.OBSERVER_FOREGROUND";
   public static final String ACTION_ACTIVITY_BACKGROUND="com.yggdrasil.prism.OBSERVER_BACKGROUND";
   private static final String PREFS="prism_observer_state";
-  private static final String CHANNEL="prism_factory_eye";
+  private static final String CHANNEL="prism_browser_eye";
   private static final long TICK_MS=5000L;
   private static final long STALE_AFTER_MS=20000L;
   private static volatile boolean activityForeground;
@@ -113,16 +113,16 @@ public final class PrismObserverService extends Service {
     PendingIntent pi=PendingIntent.getActivity(this,0,new Intent(this,PrismBrowserActivity.class),
       Build.VERSION.SDK_INT>=23?PendingIntent.FLAG_IMMUTABLE:0);
     if(Build.VERSION.SDK_INT>=26)return new Notification.Builder(this,CHANNEL)
-      .setSmallIcon(android.R.drawable.ic_menu_view).setContentTitle("PRISM • Factory Eye "+status)
-      .setContentText("GO Eye observer · Android capability boundary respected")
+      .setSmallIcon(android.R.drawable.ic_menu_view).setContentTitle("PRISM • Browser Eye "+status)
+      .setContentText("PRISM local browser observer · no remote producer route")
       .setOngoing(true).setContentIntent(pi).build();
     return new Notification.Builder(this).setSmallIcon(android.R.drawable.ic_menu_view)
-      .setContentTitle("PRISM • Factory Eye "+status).setOngoing(true).setContentIntent(pi).build();
+      .setContentTitle("PRISM • Browser Eye "+status).setOngoing(true).setContentIntent(pi).build();
   }
   private void createChannel(){
     if(Build.VERSION.SDK_INT>=26){
-      NotificationChannel c=new NotificationChannel(CHANNEL,"PRISM Factory Eye",NotificationManager.IMPORTANCE_LOW);
-      c.setDescription("Persistent observer status; no passwords or private input values");
+      NotificationChannel c=new NotificationChannel(CHANNEL,"PRISM Browser Eye",NotificationManager.IMPORTANCE_LOW);
+      c.setDescription("Local PRISM browser status; no passwords or private input values");
       NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);if(nm!=null)nm.createNotificationChannel(c);
     }
   }
