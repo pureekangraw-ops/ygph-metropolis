@@ -81,11 +81,12 @@ jobs:
         run: npm run app:stage-prism
 
       - name: Prove PRISM payload
+        id: release
         run: |
           test -e www/prism/index.html
           test ! -e www/lighthouse
           test ! -e www/lighthouse-next
-          node -e "const m=require('./www/release-manifest.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null||m.sourceCommit!==process.env.EXPECTED_SOURCE_COMMIT||m.versionCode!==1031)process.exit(1)"
+          node -e "const m=require('./www/release-manifest.json'),v=require('./version.json'); if(m.product!=='PRISM'||m.architecture!=='PRISM_NATIVE_V1'||m.legacyParent!==null||m.sourceCommit!==process.env.EXPECTED_SOURCE_COMMIT||m.versionCode!==v.versionCode||m.versionName!==v.versionName)process.exit(1); require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT,'version_name='+v.versionName+'\n')"
 
       - name: Generate Android project
         run: npx cap add android
@@ -172,7 +173,7 @@ jobs:
       - name: Upload owner-test APK
         uses: actions/upload-artifact@v4
         with:
-          name: prism-1.0.0-owner.26
+          name: prism-${{ steps.release.outputs.version_name }}
           path: |
             android-shell/android/app/build/outputs/apk/release/prism-release.apk
             android-shell/release/apk-identity-evidence.json

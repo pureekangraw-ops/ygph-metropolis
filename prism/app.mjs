@@ -83,12 +83,10 @@ $('#handoff-form').addEventListener('submit',async e=>{
 $('#conference-go-light').addEventListener('click',async()=>{const box=$('#handoff-readback'),call=buildConferenceCall({workId:$('#handoff-work').value,checkpointId:$('#handoff-checkpoint').value,participants:['GO','LIGHT']});box.hidden=false;if(!call.ready){box.innerHTML='<strong>ยังเรียกไม่ได้</strong><span>เลือก Work ก่อน</span>';return;}const bridge=window.PRISM_BRIDGE;if(!bridge?.conference){box.innerHTML='<strong>เตรียมห้องคุยแล้ว</strong><span>live conference bridge ยังไม่ถูกพิสูจน์</span>';return;}try{const r=await bridge.conference(call);box.innerHTML='<strong>เรียกแล้ว</strong><span>'+safe(r?.summary,'GO และ LIGHT เข้ารอบ Work เดียวกัน')+'</span>';}catch(e){box.innerHTML='<strong>เรียกไม่สำเร็จ</strong><span>'+safe(e?.message,'ไม่ทราบสาเหตุ')+'</span>';}});
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
 $('[data-finance-prompt]').addEventListener('click',async()=>{nav('COPILOT');try{addCopilot(await productUI.financeSummary());}catch(error){addCopilot('ยังอ่านคลังไม่ได้: '+safe(error.message));}});
-$$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
 async function readBrowserEvidence(){const p=browserPlugin();if(!p?.getEvidence)return null;try{return await p.getEvidence();}catch{return null;}}
 async function openBrowser(){const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');nav('COPILOT');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));nav('COPILOT');}}
 
 $('#open-browser')?.addEventListener('click',openBrowser);
-$('#home-open-browser')?.addEventListener('click',openBrowser);
 
 let pinMode='VERIFY';
 async function initPinGate(){const msg=$('#pin-status'),confirmation=$('#pin-confirm'),heading=$('#pin-title'),button=$('#pin-submit');try{const s=await pinStatus();pinMode=s?.configured?'VERIFY':'SETUP';confirmation.hidden=pinMode!=='SETUP';heading.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านของคุณ':'ยืนยันว่าเป็นคุณ';button.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านและเข้า PRISM':'เข้า PRISM';msg.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านอย่างน้อย 8 ตัว รหัสจะอยู่ในเครื่องนี้เท่านั้น':'ใส่รหัสผ่านเพื่อเปิด PRISM';}catch(e){msg.textContent='ยังตรวจระบบ PIN ไม่ได้: '+safe(e?.message,'UNKNOWN');}}
