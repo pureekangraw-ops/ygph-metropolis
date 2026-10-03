@@ -29,7 +29,7 @@ function prefill(w){if(!w)return;$('#handoff-work').value=safe(w.workId,'');$('#
 function updateRoute(){const r=resolveDispatchRoute(state.capabilities);$('#route-preview').textContent=r.route==='MANUAL'?'ยังไม่มีเส้นส่งสดที่พิสูจน์แล้ว — PRISM จะเตรียม handoff ให้':'พร้อมส่งและรอ readback จากปลายทาง';}
 
 function renderBrowserEye(evidence){
-  const stateNode=$('#factory-eye-state'),detailNode=$('#factory-eye-detail');
+  const stateNode=$('#browser-eye-state'),detailNode=$('#browser-eye-detail');
   if(!stateNode||!detailNode)return;
   const observer=String(evidence?.observerState||'OFFLINE').toUpperCase();
   const verified=evidence?.verified===true;
@@ -41,10 +41,10 @@ function renderBrowserEye(evidence){
   stateNode.textContent=visibleState;
   stateNode.dataset.state=visibleState;
   detailNode.textContent=activeUrl
-    ? 'GO Hub Eye · '+activeUrl
+    ? 'ตาทั่วไป · '+activeUrl
     : visibleState==='OFFLINE'
-      ? 'GO Hub Eye · รอ Browser / Factory Eye เชื่อมต่อ'
-      : 'GO Hub Eye · รอหลักฐานหน้าเว็บล่าสุด';
+      ? 'ตาทั่วไป · รอ PRISM Browser'
+      : 'ตาทั่วไป · รอหลักฐานหน้าเว็บล่าสุด';
 }
 
 function render(){
