@@ -1,5 +1,6 @@
 import {buildPrismHome,summarizeProjects,buildHandoff,buildConferenceCall,resolveDispatchRoute,buildActionIdentity,decideReplay} from './spectrum.mjs';
 import {createPrismHubBridge} from './hub-bridge.mjs';
+import {mountPrismProductUI} from './product-ui.mjs';
 
 try { window.PRISM_BRIDGE ??= createPrismHubBridge(); } catch(error) { window.PRISM_BRIDGE_ERROR=String(error.message||error); }
 
@@ -13,6 +14,7 @@ const browserPlugin=()=>globalThis.Capacitor?.Plugins?.PrismBrowser;
 const replayKey=id=>'prism:replay:'+id;
 const readReplay=id=>{try{return JSON.parse(localStorage.getItem(replayKey(id))||'null');}catch{return null;}};
 const writeReplay=(id,v)=>{try{localStorage.setItem(replayKey(id),JSON.stringify(v));}catch{}};
+const productUI=mountPrismProductUI();
 
 async function pinStatus(){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');return p.status();}
 async function unlock(pin){const p=pinPlugin();if(!p)throw new Error('PIN_NATIVE_BRIDGE_UNAVAILABLE');const r=await p.verify({pin});if(r?.verified)document.body.classList.remove('locked');return Boolean(r?.verified);}
@@ -80,7 +82,7 @@ $('#handoff-form').addEventListener('submit',async e=>{
 });
 $('#conference-go-light').addEventListener('click',async()=>{const box=$('#handoff-readback'),call=buildConferenceCall({workId:$('#handoff-work').value,checkpointId:$('#handoff-checkpoint').value,participants:['GO','LIGHT']});box.hidden=false;if(!call.ready){box.innerHTML='<strong>ยังเรียกไม่ได้</strong><span>เลือก Work ก่อน</span>';return;}const bridge=window.PRISM_BRIDGE;if(!bridge?.conference){box.innerHTML='<strong>เตรียมห้องคุยแล้ว</strong><span>live conference bridge ยังไม่ถูกพิสูจน์</span>';return;}try{const r=await bridge.conference(call);box.innerHTML='<strong>เรียกแล้ว</strong><span>'+safe(r?.summary,'GO และ LIGHT เข้ารอบ Work เดียวกัน')+'</span>';}catch(e){box.innerHTML='<strong>เรียกไม่สำเร็จ</strong><span>'+safe(e?.message,'ไม่ทราบสาเหตุ')+'</span>';}});
 $('#open-ride-mode').addEventListener('click',()=>{$('#ride-mode').hidden=false;});
-$('[data-finance-prompt]').addEventListener('click',()=>{nav('COPILOT');$('#command-input').value='สรุปการเงินจาก Ledger ให้ผม';$('#command-input').focus();});
+$('[data-finance-prompt]').addEventListener('click',async()=>{nav('COPILOT');try{addCopilot(await productUI.financeSummary());}catch(error){addCopilot('ยังอ่านคลังไม่ได้: '+safe(error.message));}});
 $$('[data-capability]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.capability==='PROJECTS'?'PROJECTS':'HANDOFF')));
 async function readBrowserEvidence(){const p=browserPlugin();if(!p?.getEvidence)return null;try{return await p.getEvidence();}catch{return null;}}
 async function openBrowser(){const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');nav('COPILOT');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));nav('COPILOT');}}
