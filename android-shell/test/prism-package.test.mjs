@@ -24,7 +24,7 @@ test('staged provenance uses the pinned PRISM head instead of the PR merge SHA',
   }
 });
 
-test('complete PRISM package preserves runtime and asset bytes with explicit Hub import relocation and excludes legacy parents', async () => {
+test('complete PRISM package preserves runtime and asset bytes with explicit Hub and engine import relocation and excludes legacy parents', async () => {
   const destinationRoot = await mkdtemp(join(tmpdir(), 'prism-package-'));
   try {
     const manifest = await stagePrismNative({ repoRoot, destinationRoot });
@@ -33,7 +33,9 @@ test('complete PRISM package preserves runtime and asset bytes with explicit Hub
     assert.equal(manifest.legacyParent, null);
     for (const file of [...PRISM_RUNTIME_FILES, ...PRISM_ASSETS]) {
       const source = await readFile(join(repoRoot, 'prism', file));
-      const expected = file === 'hub-bridge.mjs' ? Buffer.from(source.toString('utf8').replace('../lighthouse-next/control-port/', './control-port/')) : source;
+      let expected = source;
+      if (file === 'hub-bridge.mjs') expected = Buffer.from(source.toString('utf8').replace('../lighthouse-next/control-port/', './control-port/'));
+      if (file === 'product-runtime.mjs') expected = Buffer.from(source.toString('utf8').replaceAll("from '../greenfield/", "from './engine/greenfield/").replaceAll("from '../lighthouse-next/", "from './engine/lighthouse-next/"));
       assert.deepEqual(await readFile(join(destinationRoot, 'prism', file)), expected, file);
     }
     for (const tree of ['lighthouse', 'lighthouse-next', 'greenfield', 'ui', 'worker', 'preview.html']) {

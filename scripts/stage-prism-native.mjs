@@ -1,10 +1,24 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','hub-bridge.mjs','manifest.webmanifest','component-release.json']);
+export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','hub-bridge.mjs','product-runtime.mjs','product-ui.mjs','manifest.webmanifest','component-release.json']);
 export const PRISM_ASSETS=Object.freeze(['assets/prism-icon.svg','assets/prism-icon-maskable.svg']);
 async function copy(repoRoot,dest,relative){const target=join(dest,'prism',relative);await mkdir(dirname(target),{recursive:true});await cp(join(repoRoot,'prism',relative),target,{force:true});}
+async function stageProductEngine(repoRoot,destinationRoot){
+  const entries=['greenfield/first-run.mjs','greenfield/runtime.mjs','lighthouse-next/runtime-ledger.mjs','lighthouse-next/ride-map-native.mjs'];
+  const pending=entries.map(file=>resolve(repoRoot,file)),seen=new Set();
+  while(pending.length){
+    const source=pending.pop();if(seen.has(source))continue;seen.add(source);
+    const file=relative(repoRoot,source).replaceAll('\\','/');
+    if(file.startsWith('../')||!file.endsWith('.mjs'))throw new Error('PRISM_ENGINE_DEPENDENCY_INVALID:'+file);
+    const content=await readFile(source,'utf8');
+    const target=join(destinationRoot,'prism','engine',file);await mkdir(dirname(target),{recursive:true});await writeFile(target,content,'utf8');
+    for(const match of content.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?)['"]([.][^'"]+)['"]/g))pending.push(resolve(dirname(source),match[1]));
+  }
+  const adapterPath=join(destinationRoot,'prism','product-runtime.mjs');
+  await writeFile(adapterPath,(await readFile(adapterPath,'utf8')).replaceAll("from '../greenfield/","from './engine/greenfield/").replaceAll("from '../lighthouse-next/","from './engine/lighthouse-next/"),'utf8');
+}
 export async function stagePrismNative({repoRoot,destinationRoot}){
   const version=JSON.parse(await readFile(join(repoRoot,'android-shell','version.json'),'utf8'));
   const identity=JSON.parse(await readFile(join(repoRoot,'android-shell','apk-identity.json'),'utf8'));
@@ -21,6 +35,7 @@ export async function stagePrismNative({repoRoot,destinationRoot}){
   }
   const bridgePath=join(destinationRoot,'prism','hub-bridge.mjs');
   await writeFile(bridgePath,(await readFile(bridgePath,'utf8')).replace('../lighthouse-next/control-port/','./control-port/'),'utf8');
+  await stageProductEngine(repoRoot,destinationRoot);
   const root='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRISM</title><meta http-equiv="refresh" content="0;url=./prism/index.html"></head><body><script>location.replace("./prism/index.html")</script></body></html>';
   await writeFile(join(destinationRoot,'index.html'),root,'utf8');
   const manifest={product:'PRISM',architecture:'PRISM_NATIVE_V1',legacyParent:null,applicationId:identity.applicationId,versionName:version.versionName,versionCode:version.versionCode,componentPolicy:components.policy,components:components.components,roots:['COPILOT','PROJECTS','MAP','LEDGER'],deep:['HANDOFF','MONITOR'],capabilities:{MAP:'NATIVE_OVERLAY',LEDGER:'OWNER_BOUNDARY',COPILOT:'SPECTRUM'},sourceCommit:process.env.PRISM_SOURCE_COMMIT||process.env.GITHUB_SHA||null};
