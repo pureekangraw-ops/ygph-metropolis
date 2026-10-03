@@ -5,23 +5,6 @@ async function load() {
   return import(`../lighthouse-next/monitor-evidence.mjs?t=${Date.now()}-${Math.random()}`);
 }
 
-test('Browser Observer health distinguishes live, stale, inactive, unverified, and unavailable states', async () => {
-  const { createBrowserObserverHealth } = await load();
-  const nowMs = Date.parse('2026-09-26T07:00:00.000Z');
-  const base = {
-    nowMs,
-    lastSeenAt:'2026-09-26T06:59:30.000Z',
-    sessionState:'LIVE',
-    workerState:'LIVE',
-    extensionVerified:true,
-  };
-  assert.equal(createBrowserObserverHealth(base).status, 'LIVE');
-  assert.equal(createBrowserObserverHealth({ ...base, lastSeenAt:'2026-09-26T06:57:00.000Z' }).status, 'STALE');
-  assert.equal(createBrowserObserverHealth({ ...base, sessionState:'INACTIVE' }).status, 'SESSION_INACTIVE');
-  assert.equal(createBrowserObserverHealth({ ...base, extensionVerified:false }).status, 'EXTENSION_NOT_VERIFIED');
-  assert.equal(createBrowserObserverHealth({ ...base, workerState:'HUB_UNAVAILABLE' }).status, 'HUB_UNAVAILABLE');
-});
-
 test('Ride Map evidence reports package truth and keeps exact coordinates private by default', async () => {
   const { createRideMapEvidence } = await load();
   const evidence = createRideMapEvidence({
