@@ -311,7 +311,6 @@ public class PrismBrowserActivity extends Activity {
     GeckoSession closing=tabs.get(i);
     try{closing.setFocused(false);}catch(Exception ignored){}
     try{closing.setActive(false);}catch(Exception ignored){}
-    setExtensionTabActive(closing,false);
     if(view!=null&&view.getSession()==closing)releaseViewSession();
     if(tabs.size()==1){
       savedStates.remove(closing);recoveryAttempts.remove(closing);recovery.remove(tabIds.remove(closing));
