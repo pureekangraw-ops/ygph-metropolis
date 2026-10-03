@@ -46,7 +46,7 @@ export async function applyPrismBrowser(androidRoot){
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
-  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  for(const name of ['PrismBrowserActivity.java','FactoryEyeHost.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java','PrismFilesPlugin.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
 
   const layoutRoot=join(app,'src','main','res','layout'); await mkdir(layoutRoot,{recursive:true});
   await cp(join(source,'activity_prism_browser.xml'),join(layoutRoot,'activity_prism_browser.xml'),{force:true});
@@ -75,6 +75,12 @@ export async function applyPrismBrowser(androidRoot){
     const superCall=/super[.]onCreate[(][^)]*[)];/;
     if(!superCall.test(main))throw new Error('PRISM_BROWSER_MAIN_ACTIVITY_ONCREATE_MISSING');
     main=main.replace(superCall,match=>'registerPlugin(PrismBrowserPlugin.class);\n    '+match);
+    await writeFile(mainPath,main,'utf8');
+  }
+  if(!main.includes('registerPlugin(PrismFilesPlugin.class)')){
+    const superCall=/super[.]onCreate[(][^)]*[)];/;
+    if(!superCall.test(main))throw new Error('PRISM_FILES_MAIN_ACTIVITY_ONCREATE_MISSING');
+    main=main.replace(superCall,match=>'registerPlugin(PrismFilesPlugin.class);\n    '+match);
     await writeFile(mainPath,main,'utf8');
   }
   return {activity:ACTIVITY,geckoView:GECKO_VERSION,factoryEye:'0.4.0',watch:['github.com/pureekangraw-ops','dash.cloudflare.com']};
