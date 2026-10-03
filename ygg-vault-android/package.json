@@ -1,0 +1,9 @@
+{
+  "name":"ygg-vault-android",
+  "version":"0.1.0",
+  "private":true,
+  "engines":{"node":">=22"},
+  "scripts":{"android:add":"npx cap add android","android:sync":"npx cap sync android","android:debug":"cd android && ./gradlew assembleDebug"},
+  "dependencies":{"@capacitor/core":"8.5.0"},
+  "devDependencies":{"@capacitor/android":"8.5.0","@capacitor/cli":"8.5.0"}
+}
