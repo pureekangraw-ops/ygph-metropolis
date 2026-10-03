@@ -31,7 +31,7 @@ public class PrismBrowserPlugin extends Plugin {
     out.put("observerStateAt",o.getLong("stateAt",0));
     out.put("observerHeartbeatAt",o.getLong("heartbeatAt",0));
     out.put("observerUnknowns",o.getString("unknowns","[]"));
-    out.put("observerNotification","PRISM • Factory Eye "+o.getString("state","OFFLINE"));
+    out.put("observerNotification","PRISM • Browser Eye "+o.getString("state","OFFLINE"));
     out.put("verified",e.getLong("capturedAt",0)>0 && s.getString("sessionEnvelope","").length()>0 && o.getLong("heartbeatAt",0)>0);
     call.resolve(out);
   }
