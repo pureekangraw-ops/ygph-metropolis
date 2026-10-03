@@ -1,0 +1,6 @@
+{
+  "appId":"com.yggmetro.vault",
+  "appName":"YGG Vault",
+  "webDir":"www",
+  "server":{"androidScheme":"https"}
+}
