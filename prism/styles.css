@@ -75,3 +75,19 @@ body.locked .app-shell,body.locked .bottom-nav{visibility:hidden}.pin-gate{posit
 .factory-eye-card{height:88px;min-height:88px;max-height:88px;overflow:hidden}
 .page{width:100%;min-width:0}
 @media(max-width:359px){.practical-grid{grid-auto-rows:112px}.practical-grid button{height:112px;min-height:112px;max-height:112px}}
+
+/* Hub setup stays collapsed; Copilot contains only the conversation. */
+.hub-settings{min-width:0;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.hub-settings>summary{min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none}
+.hub-settings>summary::-webkit-details-marker{display:none}
+#hub-status{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
+.hub-settings-label{flex:0 0 auto;color:#9fc2ff}
+.hub-settings-body{display:grid;gap:12px;padding:12px 0 16px}
+.hub-settings-body form,.hub-settings-body label{display:grid;gap:10px}
+.hub-settings-body textarea{width:100%;min-height:90px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.hub-settings-body button,.home-work-menu button{min-height:48px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.home-work-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.page[data-page="COPILOT"] .copilot-stage{height:calc(100dvh - var(--header-h) - var(--nav-h) - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;display:flex;flex-direction:column;gap:12px}
+.page[data-page="COPILOT"] .copilot-thread{flex:1;min-height:0;max-height:none;overflow-y:auto}
+.page[data-page="COPILOT"] .copilot-message{flex-shrink:0}
+.page[data-page="COPILOT"] .copilot-intro,.page[data-page="COPILOT"] .ask-box{flex-shrink:0}
