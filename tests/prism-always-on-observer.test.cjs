@@ -11,7 +11,7 @@ test("PRISM observer is a real Android foreground service with visible status",(
   assert.match(service,/extends Service/);
   assert.match(service,/startForeground\(42/);
   assert.match(service,/START_STICKY/);
-  assert.match(service,/PRISM • Factory Eye/);
+  assert.match(service,/PRISM • Browser Eye/);
   assert.match(service,/LIVE|BACKGROUND|STALE|OFFLINE/);
   assert.match(patch,/FOREGROUND_SERVICE/);
   assert.match(patch,/foregroundServiceType=\\?\"specialUse/);
@@ -35,9 +35,9 @@ test("observer state is explicit and never substitutes stale data for evidence",
   }
 });
 
-test("observer patch ships one service and the existing single Factory Eye",()=>{
+test("observer patch ships one local PRISM service without Factory Eye producer",()=>{
   const patch=read("android-shell/tools/apply-prism-browser.mjs");
   assert.match(patch,/PrismObserverService\.java/);
-  assert.match(patch,/FactoryEyeHost\.java/);
+  assert.doesNotMatch(patch,/FactoryEyeHost\.java|factory-eye/);
   assert.doesNotMatch(patch,/PrismObserverService\.java.*PrismObserverService\.java/);
 });
