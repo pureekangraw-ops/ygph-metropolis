@@ -5,6 +5,11 @@ function dom(){
   return {node,document:{querySelector:node,querySelectorAll:s=>s==='#ledger-summary strong'?summary:[],createElement:()=>node('row'+Math.random())}};
 }
 async function flush(){for(let i=0;i<8;i++)await new Promise(resolve=>setImmediate(resolve));}
+test('launching the shell does not queue a large native map verification before owner entry',async()=>{
+  const {mountPrismProductUI}=await import('../prism/product-ui.mjs');const ui=dom();let reads=0;
+  const controller=mountPrismProductUI({document:ui.document,storage:{getItem:()=>null},runtime:{async mapStatus(){reads++;return {available:true,packageState:'ACTIVE',region:'Bangkok'};}}});
+  await flush();assert.equal(reads,0);await controller.refreshMap();assert.equal(reads,1);assert.match(ui.node('#map-status').textContent,/Bangkok/);
+});
 test('Ledger form retries an unknown write with the same id and clears all displayed financial data on lock',async()=>{
   const {mountPrismProductUI}=await import('../prism/product-ui.mjs');const ui=dom(),values=new Map(),calls=[];let locked=0;
   const truth={balanceSatang:10000,todayInSatang:10000,todayOutSatang:0,transactions:[]};
