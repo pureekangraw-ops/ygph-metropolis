@@ -115,7 +115,6 @@ public class PrismBrowserActivity extends Activity {
     invalidatePageObservation();
     updateSessionVisibility(false);
     persistSession();
-    releaseViewSession();
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_BACKGROUND");
     super.onPause();
   }

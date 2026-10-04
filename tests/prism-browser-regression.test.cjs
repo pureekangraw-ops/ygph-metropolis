@@ -82,7 +82,9 @@ test("PRISM browser launch declares the Android 14 browser observation foregroun
 test("PRISM browser owns Gecko display and activity lifecycle explicitly",()=>{
   const java=read("android-shell/native-prism-browser/PrismBrowserActivity.java");
   assert.match(java,/onResume\(\)[\s\S]*attach\(\)[\s\S]*updateSessionVisibility\(true\)/);
-  assert.match(java,/onPause\(\)[\s\S]*updateSessionVisibility\(false\)[\s\S]*releaseViewSession\(\)/);
+  assert.match(java,/onPause\(\)[\s\S]*updateSessionVisibility\(false\)[\s\S]*sendObserverCommand/);
+  assert.doesNotMatch(java,/onPause\(\)[\s\S]*releaseViewSession\(\)[\s\S]*super\.onPause\(\)/);
+  assert.match(java,/onDestroy\(\)[\s\S]*releaseViewSession\(\)/);
   assert.match(java,/view\.getSession\(\)/);
   assert.match(java,/if\(attached!=null\)view\.releaseSession\(\)/);
   assert.match(java,/view\.setSession\(target\)/);
