@@ -62,16 +62,27 @@ public final class PrismPageObserver {
   public void navigationStarted(){invalidate();}
   public void navigationStopped(){captureNotBefore=System.currentTimeMillis();}
   public void disconnect(){invalidate();credentials.clear();}
+  private final class Publication implements Runnable {
+    final JSONObject config,packet;final int captureEpoch;final boolean invalidation;
+    Publication(JSONObject config,JSONObject packet,int captureEpoch,boolean invalidation){this.config=config;this.packet=packet;this.captureEpoch=captureEpoch;this.invalidation=invalidation;}
+    @Override public void run(){publish(config,packet,captureEpoch,invalidation);}
+  }
   private synchronized void enqueue(JSONObject config,JSONObject packet,int captureEpoch,boolean invalidation){
-    if(invalidation)publisher.getQueue().clear();
-    else if(publisher.getQueue().remainingCapacity()==0)return;
-    try {publisher.execute(()->{
+    if(invalidation){
+      for(Runnable queued:publisher.getQueue()){
+        Publication old=(Publication)queued;
+        if(!old.invalidation||old.config.optString("sessionId").equals(config.optString("sessionId")))publisher.getQueue().remove(queued);
+      }
+    }else if(publisher.getQueue().remainingCapacity()==0)return;
+    try {publisher.execute(new Publication(config,packet,captureEpoch,invalidation));}catch(RejectedExecutionException error){state("OFFLINE");}
+  }
+  private void publish(JSONObject config,JSONObject packet,int captureEpoch,boolean invalidation){
       try {
-        if(captureEpoch!=epoch||(!invalidation&&!PrismBrowserActivity.isObserverForeground()))return;
+        if(!invalidation&&(captureEpoch!=epoch||!PrismBrowserActivity.isObserverForeground()))return;
         JSONObject current=credentials.load();if(!invalidation&&(current==null||!current.optString("sessionId").equals(config.optString("sessionId"))))return;
         String body=packet.toString();int response=-1;JSONObject receipt=null;
         for(int attempt=0;attempt<2;attempt++){
-          if(captureEpoch!=epoch)return;
+          if(!invalidation&&captureEpoch!=epoch)return;
           HttpURLConnection connection=null;
           try {
             connection=(HttpURLConnection)new URL(config.getString("factoryOrigin")+"/api/prism-eye/observe").openConnection();
@@ -90,7 +101,6 @@ public final class PrismPageObserver {
           context.getSharedPreferences("prism_observer_state",Context.MODE_PRIVATE).edit().putLong("lastEvidenceAt",captured).apply();
         }else state(response==401?"PAIRING_REQUIRED":response>=400&&response<500?"REJECTED":"OFFLINE");
       }catch(Exception error){state("OFFLINE");}
-    });}catch(RejectedExecutionException error){state("OFFLINE");}
   }
   private static String readReceipt(java.io.InputStream in) throws Exception {
     java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int count;
