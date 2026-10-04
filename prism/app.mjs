@@ -1,6 +1,7 @@
 import {buildPrismHome,summarizeProjects,buildHandoff,buildConferenceCall,resolveDispatchRoute,buildActionIdentity,decideReplay} from './spectrum.mjs';
 import {createPrismHubBridge} from './hub-bridge.mjs';
 import {mountPrismProductUI} from './product-ui.mjs';
+import {observerReadiness} from './observer.mjs';
 
 try { window.PRISM_BRIDGE ??= createPrismHubBridge(); } catch(error) { window.PRISM_BRIDGE_ERROR=String(error.message||error); }
 
@@ -53,6 +54,9 @@ async function refreshBrowserEye(){
   const evidence=await readBrowserEvidence();
   if(evidence?.verified)state.snapshot={...state.snapshot,browserEvidence:evidence};
   renderBrowserEye(evidence);
+  const pageEye=observerReadiness(evidence);
+  if($('#page-eye-state'))$('#page-eye-state').textContent=pageEye.state;
+  if($('#page-eye-detail'))$('#page-eye-detail').textContent=pageEye.detail;
   return evidence;
 }
 function startBrowserEyePolling(){
@@ -100,6 +104,12 @@ async function readBrowserEvidence(){const p=browserPlugin();if(!p?.getEvidence)
 async function openBrowser(){const p=browserPlugin();if(!p?.open){addCopilot('Browser native bridge ยังไม่พร้อม');nav('COPILOT');return;}try{await p.open();}catch(e){addCopilot('เปิด Browser ไม่ได้: '+safe(e?.message,'UNKNOWN'));nav('COPILOT');}}
 
 $('#open-browser')?.addEventListener('click',openBrowser);
+$('#observer-pair-form')?.addEventListener('submit',async event=>{
+  event.preventDefault();const input=$('#observer-bootstrap');
+  try {const p=browserPlugin();if(!p?.configureObserver)throw Error('NATIVE_OBSERVER_UNAVAILABLE');await p.configureObserver({bootstrap:input.value});input.value='';await refreshBrowserEye();}
+  catch {input.value='';$('#page-eye-detail').textContent='จับคู่ไม่ได้ · ตรวจข้อมูลจับคู่หรือรุ่นแอป';}
+});
+$('#observer-disconnect')?.addEventListener('click',async()=>{await browserPlugin()?.disconnectObserver?.();await refreshBrowserEye();});
 
 let pinMode='VERIFY';
 async function initPinGate(){const msg=$('#pin-status'),confirmation=$('#pin-confirm'),heading=$('#pin-title'),button=$('#pin-submit');try{const s=await pinStatus();pinMode=s?.configured?'VERIFY':'SETUP';confirmation.hidden=pinMode!=='SETUP';heading.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านของคุณ':'ยืนยันว่าเป็นคุณ';button.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านและเข้า PRISM':'เข้า PRISM';msg.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านอย่างน้อย 8 ตัว รหัสจะอยู่ในเครื่องนี้เท่านั้น':'ใส่รหัสผ่านเพื่อเปิด PRISM';}catch(e){msg.textContent='ยังตรวจระบบ PIN ไม่ได้: '+safe(e?.message,'UNKNOWN');}}
