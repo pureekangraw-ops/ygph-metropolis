@@ -41,3 +41,11 @@ test("observer patch ships one local PRISM service without Factory Eye producer"
   assert.doesNotMatch(patch,/FactoryEyeHost\.java|factory-eye/);
   assert.doesNotMatch(patch,/PrismObserverService\.java.*PrismObserverService\.java/);
 });
+
+test("PRISM shell refreshes its local Browser eye without depending on Hub live events",()=>{
+  const app=read("prism/app.mjs");
+  assert.match(app,/const BROWSER_EYE_REFRESH_MS=5000/);
+  assert.match(app,/async function refreshBrowserEye\(\)/);
+  assert.match(app,/setInterval\(\(\)=>void refreshBrowserEye\(\),BROWSER_EYE_REFRESH_MS\)/);
+  assert.doesNotMatch(app,/setInterval\([^\n]*loadSnapshot/);
+});
