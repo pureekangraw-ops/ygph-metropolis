@@ -7,9 +7,10 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.RejectedExecutionException;
 import org.json.JSONObject;
 import org.mozilla.geckoview.*;
 
@@ -18,8 +19,7 @@ public final class PrismPageObserver {
   private static PrismPageObserver instance;
   private final PrismObserverCredentials credentials;
   private final Context context;
-  private final ExecutorService publisher=Executors.newSingleThreadExecutor();
-  private final AtomicInteger pending=new AtomicInteger();
+  private final ThreadPoolExecutor publisher=new ThreadPoolExecutor(1,1,0L,TimeUnit.MILLISECONDS,new LinkedBlockingQueue<Runnable>(2));
   private volatile int epoch;
   private volatile long captureNotBefore;
   private WebExtension extension;
@@ -32,7 +32,7 @@ public final class PrismPageObserver {
     if(extension==null)return;
     session.getWebExtensionController().setMessageDelegate(extension,new WebExtension.MessageDelegate(){
       @Override public GeckoResult<Object> onMessage(String nativeApp,Object message,WebExtension.MessageSender sender){
-        if(!"prism_observer".equals(nativeApp)||!sender.isTopLevel||sender.session!=PrismBrowserActivity.observerActiveSession()||!PrismBrowserActivity.isObserverForeground()||!(message instanceof JSONObject))return null;
+        if(!"prism_observer".equals(nativeApp)||!sender.isTopLevel()||sender.session!=PrismBrowserActivity.observerActiveSession()||!PrismBrowserActivity.isObserverForeground()||!(message instanceof JSONObject))return null;
         JSONObject input=(JSONObject)message,page=input.optJSONObject("page");
         if(!"ERGASTERION_FACTORY_EYE_CONTENT_PULSE".equals(input.optString("type"))||page==null||!input.optBoolean("visible")||!"visible".equals(page.optString("visibilityState"))||page.optBoolean("capturesInputValues",true)||page.optBoolean("createsAuthority",true))return null;
         try {
@@ -62,9 +62,10 @@ public final class PrismPageObserver {
   public void navigationStarted(){invalidate();}
   public void navigationStopped(){captureNotBefore=System.currentTimeMillis();}
   public void disconnect(){invalidate();credentials.clear();}
-  private void enqueue(JSONObject config,JSONObject packet,int captureEpoch,boolean invalidation){
-    if(pending.incrementAndGet()>2&&!invalidation){pending.decrementAndGet();return;}
-    publisher.execute(()->{
+  private synchronized void enqueue(JSONObject config,JSONObject packet,int captureEpoch,boolean invalidation){
+    if(invalidation)publisher.getQueue().clear();
+    else if(publisher.getQueue().remainingCapacity()==0)return;
+    try {publisher.execute(()->{
       try {
         if(captureEpoch!=epoch||(!invalidation&&!PrismBrowserActivity.isObserverForeground()))return;
         JSONObject current=credentials.load();if(!invalidation&&(current==null||!current.optString("sessionId").equals(config.optString("sessionId"))))return;
@@ -84,13 +85,12 @@ public final class PrismPageObserver {
         if(invalidation)return;
         JSONObject latestConfig=credentials.load();if(latestConfig==null||!latestConfig.optString("sessionId").equals(config.optString("sessionId"))||captureEpoch!=epoch)return;
         if(receipt!=null&&receipt.optJSONObject("workContext")!=null&&receipt.optBoolean("ok")&&packet.optString("observationId").equals(receipt.optString("observationId"))&&packet.optString("workId").equals(receipt.optJSONObject("workContext").optString("workId"))&&packet.optString("checkpointId").equals(receipt.optJSONObject("workContext").optString("checkpointId"))){
-          if(invalidation){state("STALE");return;}
-          long captured=Instant.parse(packet.getString("capturedAt")).toEpochMilli();
+                    long captured=Instant.parse(packet.getString("capturedAt")).toEpochMilli();
           credentials.status().edit().putString("state","PUBLISHED").putLong("capturedAt",captured).putLong("publishedAt",System.currentTimeMillis()).putString("observationId",packet.getString("observationId")).apply();
           context.getSharedPreferences("prism_observer_state",Context.MODE_PRIVATE).edit().putLong("lastEvidenceAt",captured).apply();
         }else state(response==401?"PAIRING_REQUIRED":response>=400&&response<500?"REJECTED":"OFFLINE");
-      }catch(Exception error){state("OFFLINE");}finally{pending.decrementAndGet();}
-    });
+      }catch(Exception error){state("OFFLINE");}
+    });}catch(RejectedExecutionException error){state("OFFLINE");}
   }
   private static String readReceipt(java.io.InputStream in) throws Exception {
     java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int count;
