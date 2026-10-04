@@ -24,3 +24,11 @@ test("PRISM home renders its local Browser eye independently",()=>{
   assert.match(app,/ตาทั่วไป/);
   assert.doesNotMatch(app,/GO Hub Eye/);
 });
+
+test("PRISM local Browser eye refreshes independently of Hub events",()=>{
+  const app=read("prism/app.mjs");
+  assert.match(app,/const BROWSER_EYE_REFRESH_MS=5000/);
+  assert.match(app,/async function refreshBrowserEye\(\)/);
+  assert.match(app,/setInterval\(\(\)=>void refreshBrowserEye\(\),BROWSER_EYE_REFRESH_MS\)/);
+  assert.doesNotMatch(app,/setInterval\([^\n]*loadSnapshot/);
+});
