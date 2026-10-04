@@ -23,7 +23,9 @@ test('direct observer status does not confuse local heartbeat with published pag
 });
 test('native capture wiring scopes credentials and validates the current top-level session',()=>{
   const native=fs.readFileSync(path.join(root,'android-shell/native-prism-browser/PrismPageObserver.java'),'utf8');
-  for(const guard of ['sender.isTopLevel','sender.session','isObserverForeground','sessionToken','/api/prism-eye/observe','captured<=captureNotBefore','observerNavigationPending()'])assert.ok(native.includes(guard),guard);
+  for(const guard of ['sender.isTopLevel()','sender.session','isObserverForeground','sessionToken','/api/prism-eye/observe','captured<=captureNotBefore','observerNavigationPending()'])assert.ok(native.includes(guard),guard);
+  assert.match(native,/new LinkedBlockingQueue<Runnable>\(2\)/);
+  assert.match(native,/if\(invalidation\)publisher.getQueue\(\).clear\(\)/);
   const credentials=fs.readFileSync(path.join(root,'android-shell/native-prism-browser/PrismObserverCredentials.java'),'utf8');
   assert.match(credentials,/AndroidKeyStore/);assert.match(credentials,/AES\/GCM\/NoPadding/);
   const patch=fs.readFileSync(path.join(root,'android-shell/tools/apply-prism-browser.mjs'),'utf8');assert.ok(patch.includes('PrismPageObserver.java'));assert.ok(patch.includes('prism-observer'));
