@@ -9,6 +9,8 @@ const $$=s=>[...document.querySelectorAll(s)];
 const safe=(v,f='—')=>String(v??'').trim()||f;
 const html=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={snapshot:{works:[],live:false,monitor:{}},capabilities:{COUNTER:false,DIRECT_API:false,DEVICE_BRIDGE:false}};
+const BROWSER_EYE_REFRESH_MS=5000;
+let browserEyeRefreshTimer=null;
 const pinPlugin=()=>globalThis.Capacitor?.Plugins?.PrismPin;
 const browserPlugin=()=>globalThis.Capacitor?.Plugins?.PrismBrowser;
 const replayKey=id=>'prism:replay:'+id;
@@ -47,6 +49,17 @@ function renderBrowserEye(evidence){
       : 'ตาทั่วไป · รอหลักฐานหน้าเว็บล่าสุด';
 }
 
+async function refreshBrowserEye(){
+  const evidence=await readBrowserEvidence();
+  if(evidence?.verified)state.snapshot={...state.snapshot,browserEvidence:evidence};
+  renderBrowserEye(evidence);
+  return evidence;
+}
+function startBrowserEyePolling(){
+  if(browserEyeRefreshTimer!==null)return;
+  browserEyeRefreshTimer=setInterval(()=>void refreshBrowserEye(),BROWSER_EYE_REFRESH_MS);
+}
+
 function render(){
   const home=buildPrismHome(state.snapshot),sum=summarizeProjects(state.snapshot);
   $('#decision-count').textContent=home.decisions.length;
@@ -60,7 +73,7 @@ function render(){
   $$('[data-call-work]').forEach(b=>b.onclick=()=>{prefill(home.active.find(w=>w.workId===b.dataset.callWork));nav('HANDOFF');});
 }
 
-async function loadSnapshot(){const browserEvidence=await readBrowserEvidence();const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}if(browserEvidence?.verified)state.snapshot={...state.snapshot,browserEvidence};renderBrowserEye(browserEvidence);render();updateRoute();await refreshHubStatus();if(browserEvidence&&state.snapshot.live)try{await bridge.publishState(browserEvidence);}catch(e){$('#hub-status').textContent='อ่านงานได้ แต่ส่งสถานะกลับยังไม่สำเร็จ: '+safe(e.message);} }
+async function loadSnapshot(){const browserEvidence=await refreshBrowserEye();const bridge=window.PRISM_BRIDGE;if(bridge?.getSnapshot){try{const x=await bridge.getSnapshot();if(x&&typeof x==='object')state.snapshot=x;if(bridge.getCapabilities)state.capabilities=await bridge.getCapabilities();}catch(e){state.snapshot={...state.snapshot,live:false,error:String(e?.message||e)};}}if(browserEvidence?.verified)state.snapshot={...state.snapshot,browserEvidence};renderBrowserEye(browserEvidence);render();updateRoute();await refreshHubStatus();if(browserEvidence&&state.snapshot.live)try{await bridge.publishState(browserEvidence);}catch(e){$('#hub-status').textContent='อ่านงานได้ แต่ส่งสถานะกลับยังไม่สำเร็จ: '+safe(e.message);} }
 async function submitIntent(text){addCopilot(text,'user');const bridge=window.PRISM_BRIDGE;if(!bridge?.submitIntent){addCopilot('ยังไม่มี Copilot runtime ที่พิสูจน์แล้ว จึงไม่แกล้งว่าส่งสำเร็จ');return;}try{const r=await bridge.submitIntent(text);addCopilot(safe(r?.summary,'รับคำสั่งแล้ว'));if(r?.kind==='SEARCH')for(const item of r.result?.evidence||[])addCopilot([item.title,item.snippet,item.source].filter(Boolean).join('\n'));await loadSnapshot();}catch(e){addCopilot('ยังทำให้ไม่ได้ตอนนี้: '+safe(e?.message,'ไม่ทราบสาเหตุ'));}}
 
 $$('[data-nav]').forEach(b=>b.addEventListener('click',()=>nav(b.dataset.nav)));
@@ -90,7 +103,7 @@ $('#open-browser')?.addEventListener('click',openBrowser);
 
 let pinMode='VERIFY';
 async function initPinGate(){const msg=$('#pin-status'),confirmation=$('#pin-confirm'),heading=$('#pin-title'),button=$('#pin-submit');try{const s=await pinStatus();pinMode=s?.configured?'VERIFY':'SETUP';confirmation.hidden=pinMode!=='SETUP';heading.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านของคุณ':'ยืนยันว่าเป็นคุณ';button.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านและเข้า PRISM':'เข้า PRISM';msg.textContent=pinMode==='SETUP'?'ตั้งรหัสผ่านอย่างน้อย 8 ตัว รหัสจะอยู่ในเครื่องนี้เท่านั้น':'ใส่รหัสผ่านเพื่อเปิด PRISM';}catch(e){msg.textContent='ยังตรวจระบบ PIN ไม่ได้: '+safe(e?.message,'UNKNOWN');}}
-$('#pin-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('#pin-input'),confirmation=$('#pin-confirm'),msg=$('#pin-status');try{msg.textContent='กำลังตรวจ…';const ok=pinMode==='SETUP'?await configurePin(input.value,confirmation.value):await unlock(input.value);if(ok){input.value='';confirmation.value='';msg.textContent='';await loadSnapshot();await startHubLive();}else{input.value='';msg.textContent='รหัสผ่านไม่ถูกต้อง';input.focus();}}catch(err){msg.textContent=err?.message==='PIN_CONFIRM_MISMATCH'?'รหัสผ่านสองช่องไม่ตรงกัน':'ยังเปิด PRISM ไม่ได้: '+safe(err?.message,'UNKNOWN');}});
+$('#pin-form').addEventListener('submit',async e=>{e.preventDefault();const input=$('#pin-input'),confirmation=$('#pin-confirm'),msg=$('#pin-status');try{msg.textContent='กำลังตรวจ…';const ok=pinMode==='SETUP'?await configurePin(input.value,confirmation.value):await unlock(input.value);if(ok){input.value='';confirmation.value='';msg.textContent='';await loadSnapshot();startBrowserEyePolling();await startHubLive();}else{input.value='';msg.textContent='รหัสผ่านไม่ถูกต้อง';input.focus();}}catch(err){msg.textContent=err?.message==='PIN_CONFIRM_MISMATCH'?'รหัสผ่านสองช่องไม่ตรงกัน':'ยังเปิด PRISM ไม่ได้: '+safe(err?.message,'UNKNOWN');}});
 initPinGate();$('#pin-input').focus();
 
 async function refreshHubStatus(){
