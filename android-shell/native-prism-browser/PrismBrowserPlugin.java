@@ -33,8 +33,21 @@ public class PrismBrowserPlugin extends Plugin {
     out.put("observerUnknowns",o.getString("unknowns","[]"));
     out.put("observerNotification","PRISM • Browser Eye "+o.getString("state","OFFLINE"));
     out.put("verified",e.getLong("capturedAt",0)>0 && s.getString("sessionEnvelope","").length()>0 && o.getLong("heartbeatAt",0)>0);
+    SharedPreferences page=new PrismObserverCredentials(getContext()).status();
+    out.put("pageObserverState",page.getString("state","PAIRING_REQUIRED"));
+    out.put("pageCapturedAt",page.getLong("capturedAt",0));
+    out.put("pagePublishedAt",page.getLong("publishedAt",0));
+    out.put("pageObservationId",page.getString("observationId",""));
+    out.put("pageObserverExpiresAt",page.getLong("expiresAt",0));
+    out.put("pageScreenshotStatus","UNSUPPORTED");
     call.resolve(out);
   }
+
+  @PluginMethod public void configureObserver(PluginCall call){
+    try {new PrismObserverCredentials(getContext()).configure(call.getString("bootstrap",""));call.resolve();}
+    catch(Exception error){call.reject("PRISM_OBSERVER_BOOTSTRAP_INVALID");}
+  }
+  @PluginMethod public void disconnectObserver(PluginCall call){PrismPageObserver.get(getContext()).disconnect();call.resolve();}
 
   @PluginMethod public void open(PluginCall call) {
     Intent intent = new Intent(getContext(), PrismBrowserActivity.class);

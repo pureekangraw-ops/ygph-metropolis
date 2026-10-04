@@ -26,6 +26,8 @@ public class PrismBrowserActivity extends Activity {
   private static final String EVIDENCE_SCHEMA="prism-browser-evidence-v1";
   private static final String SESSION_SCHEMA="prism-browser-session-v1";
   private static GeckoRuntime runtime;
+  private static PrismPageObserver pageObserver;
+  private static volatile boolean observerForeground;
   private static final List<GeckoSession> tabs=new ArrayList<>();
   private static final List<String> urls=new ArrayList<>();
   private static int active=-1;
@@ -46,10 +48,12 @@ public class PrismBrowserActivity extends Activity {
     session=getSharedPreferences(SESSION_PREFS,MODE_PRIVATE);
     recovery=new PrismBrowserRecovery(getApplicationContext());
     if(runtime==null) runtime=GeckoRuntime.create(getApplicationContext());
+    pageObserver=PrismPageObserver.get(getApplicationContext());
+    pageObserver.install(runtime);
     findViewById(R.id.prism_go).setOnClickListener(v->navigate());
     findViewById(R.id.prism_back).setOnClickListener(v->{if(current()!=null)current().goBack();});
     findViewById(R.id.prism_forward).setOnClickListener(v->{if(current()!=null)current().goForward();});
-    findViewById(R.id.prism_reload).setOnClickListener(v->{GeckoSession tab=current();if(tab==null)return;if(tab.isOpen())tab.reload();else{recoveryAttempts.remove(tab);recoverContent(tab,"OWNER_RELOAD");}});
+    findViewById(R.id.prism_reload).setOnClickListener(v->{GeckoSession tab=current();if(tab==null)return;if(tab.isOpen()){invalidatePageObservation();tab.reload();}else{recoveryAttempts.remove(tab);recoverContent(tab,"OWNER_RELOAD");}});
     findViewById(R.id.prism_watch).setOnClickListener(v->watch());
     findViewById(R.id.prism_new_tab).setOnClickListener(v->addTab(HOME_URL,true));
     findViewById(R.id.prism_close_tab).setOnClickListener(v->close(active));
@@ -83,6 +87,13 @@ public class PrismBrowserActivity extends Activity {
   public static int liveTabCount(){return tabs.size();}
   public static int liveActiveTab(){return active;}
   public static String liveActiveUrl(){return active>=0&&active<urls.size()?urls.get(active):"";}
+  public static GeckoSession observerActiveSession(){return active>=0&&active<tabs.size()?tabs.get(active):null;}
+  public static String observerActiveTabId(){GeckoSession s=observerActiveSession();return s==null?"":tabIds.getOrDefault(s,"");}
+  private static final java.util.Set<GeckoSession> navigating=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<GeckoSession,Boolean>());
+  public static boolean observerNavigationPending(){return navigating.contains(observerActiveSession());}
+  public static boolean isObserverForeground(){return observerForeground;}
+  public static void bindObserverTabs(){if(pageObserver!=null)for(GeckoSession s:tabs)pageObserver.bind(s);}
+  private void invalidatePageObservation(){if(pageObserver!=null)pageObserver.invalidate();}
 
   private void sendObserverCommand(String action){
     Intent intent=new Intent();
@@ -93,12 +104,15 @@ public class PrismBrowserActivity extends Activity {
 
   @Override protected void onResume(){
     super.onResume();
+    observerForeground=true;
     attach();
     updateSessionVisibility(true);
     sendObserverCommand("com.yggdrasil.prism.OBSERVER_FOREGROUND");
   }
 
   @Override protected void onPause(){
+    observerForeground=false;
+    invalidatePageObservation();
     updateSessionVisibility(false);
     persistSession();
     releaseViewSession();
@@ -108,6 +122,8 @@ public class PrismBrowserActivity extends Activity {
 
   @Override public void onWindowFocusChanged(boolean focused){
     super.onWindowFocusChanged(focused);
+    observerForeground=focused;
+    if(!focused)invalidatePageObservation();
     updateSessionVisibility(focused);
   }
 
@@ -170,6 +186,7 @@ public class PrismBrowserActivity extends Activity {
   }
 
   private void createTab(String target,boolean load){
+    invalidatePageObservation();
     GeckoSession previous=current();
     if(previous!=null){
       try{previous.setFocused(false);}catch(Exception ignored){}
@@ -183,12 +200,14 @@ public class PrismBrowserActivity extends Activity {
   }
 
   private void bindTabCallbacks(GeckoSession s){
+    if(pageObserver!=null)pageObserver.bind(s);
     s.setContentDelegate(new GeckoSession.ContentDelegate(){
       @Override public void onCrash(GeckoSession tab){recoverContent(tab,"CONTENT_CRASH");}
       @Override public void onKill(GeckoSession tab){recoverContent(tab,"CONTENT_KILLED");}
     });
     s.setProgressDelegate(new GeckoSession.ProgressDelegate(){
-      @Override public void onPageStop(GeckoSession tab,boolean success){if(success)recoveryAttempts.remove(tab);}
+      @Override public void onPageStart(GeckoSession tab,String target){navigating.add(tab);if(tab==current()&&pageObserver!=null)pageObserver.navigationStarted();}
+      @Override public void onPageStop(GeckoSession tab,boolean success){navigating.remove(tab);if(success)recoveryAttempts.remove(tab);if(tab==current()&&pageObserver!=null)pageObserver.navigationStopped();}
       @Override public void onSessionStateChange(GeckoSession tab,GeckoSession.SessionState value){
         if(!tabs.contains(tab))return;
         savedStates.put(tab,value);
@@ -200,6 +219,7 @@ public class PrismBrowserActivity extends Activity {
       @Override public void onLocationChange(GeckoSession session,String location,List<GeckoSession.PermissionDelegate.ContentPermission> permissions,Boolean gesture){
         int i=tabs.indexOf(session);
         if(i>=0&&location!=null){
+          if(i==active)invalidatePageObservation();
           urls.set(i,location);
           if(i==active)runOnUiThread(()->url.setText(location));
           recordEvidence("LOCATION",location);
@@ -210,6 +230,7 @@ public class PrismBrowserActivity extends Activity {
   }
 
   private void recoverContent(GeckoSession tab,String reason){
+    if(tab==current())invalidatePageObservation();
     int i=tabs.indexOf(tab);if(i<0)return;
     recordEvidence(reason,urls.get(i));
     int attempts=recoveryAttempts.getOrDefault(tab,0);
@@ -250,7 +271,7 @@ public class PrismBrowserActivity extends Activity {
     if(q.startsWith("http://")||q.startsWith("https://"))target=q;
     else if(q.contains(" "))target="https://www.google.com/search?q="+URLEncoder.encode(q,StandardCharsets.UTF_8);
     else target="https://"+q;
-    urls.set(active,target); current().loadUri(target); persistSession();
+    invalidatePageObservation();urls.set(active,target); current().loadUri(target); persistSession();
   }
 
   private void watch(){
@@ -301,6 +322,7 @@ public class PrismBrowserActivity extends Activity {
       try{previous.setActive(false);}catch(Exception ignored){}
     }
     active=i;
+    invalidatePageObservation();
     renderTabs();
     attach();
     persistSession();
@@ -308,6 +330,7 @@ public class PrismBrowserActivity extends Activity {
 
   private void close(int i){
     if(i<0||i>=tabs.size())return;
+    invalidatePageObservation();
     GeckoSession closing=tabs.get(i);
     try{closing.setFocused(false);}catch(Exception ignored){}
     try{closing.setActive(false);}catch(Exception ignored){}

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "PRISM native semantic observer",
+  "version": "0.3.1",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "prism-native-observer@yggmetro.com"
+    }
+  },
+  "permissions": [
+    "geckoViewAddons",
+    "nativeMessaging",
+    "nativeMessagingFromContent"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content-observer.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
+
