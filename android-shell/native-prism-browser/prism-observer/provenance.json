@@ -1,0 +1,13 @@
+{
+  "sourceOwner": "ERGASTERION",
+  "sourceRepository": "pureekangraw-ops/Ergasterion-factory",
+  "sourceRevision": "a7d248eb9797d0ca8f49b9be56896c0ab6b5d19d",
+  "sourcePath": "pixie-lab-v1/browser-adapter/firefox-tab-observer/content-observer.js",
+  "sourceBlobSha": "42e5da52345dd18b7cdf6472d3791cfd11296997",
+  "observerVersion": "0.3.1",
+  "transforms": [
+    "strip URL query and fragment before publication",
+    "native messaging transport only; no Firefox background producer"
+  ],
+  "createsAuthority": false
+}
