@@ -46,7 +46,10 @@ export async function applyPrismBrowser(androidRoot){
 
   const javaRoot=join(app,'src','main','java','com','yggdrasil','prism');
   await mkdir(javaRoot,{recursive:true});
-  for(const name of ['PrismBrowserActivity.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java','PrismFilesPlugin.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  for(const name of ['PrismBrowserActivity.java','PrismBrowserPlugin.java','PrismObserverService.java','PrismBrowserRecovery.java','PrismFilesPlugin.java','PrismPageObserver.java','PrismObserverCredentials.java'])await cp(join(source,name),join(javaRoot,name),{force:true});
+  const observerAssets=join(app,'src','main','assets','prism-observer');
+  await mkdir(observerAssets,{recursive:true});
+  await cp(join(source,'prism-observer'),observerAssets,{recursive:true,force:true});
 
   const layoutRoot=join(app,'src','main','res','layout'); await mkdir(layoutRoot,{recursive:true});
   await cp(join(source,'activity_prism_browser.xml'),join(layoutRoot,'activity_prism_browser.xml'),{force:true});
