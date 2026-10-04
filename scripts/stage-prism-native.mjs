@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','hub-bridge.mjs','product-runtime.mjs','product-ui.mjs','manifest.webmanifest','component-release.json']);
+export const PRISM_RUNTIME_FILES=Object.freeze(['index.html','styles.css','app.mjs','spectrum.mjs','hub-bridge.mjs','product-runtime.mjs','product-ui.mjs','observer.mjs','manifest.webmanifest','component-release.json']);
 export const PRISM_ASSETS=Object.freeze(['assets/prism-icon.svg','assets/prism-icon-maskable.svg']);
 async function copy(repoRoot,dest,relative){const target=join(dest,'prism',relative);await mkdir(dirname(target),{recursive:true});await cp(join(repoRoot,'prism',relative),target,{force:true});}
 async function stageProductEngine(repoRoot,destinationRoot){
