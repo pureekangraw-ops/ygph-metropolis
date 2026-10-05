@@ -1,7 +1,7 @@
 # PRISM Browser Observer direct evidence — design for review
 
 Date: 2026-10-04
-Status: DESIGN REVIEW REQUIRED — runtime not verified
+Status: IMPLEMENTED IN MAIN — runtime transport/build verified; physical owner-device page acceptance remains WAIT VERIFY
 Work: WORK-FINISH-PRISM-WEB-EYE-20261004-20261004-001
 Checkpoint: CP-WORK-FINISH-PRISM-WEB-EYE-20261004-20261004-001
 Tablet: TABLET:0410-9SPT
@@ -12,6 +12,16 @@ GO can read fresh evidence from the actual page open in BIG's PRISM Browser. Evi
 ## Governing boundary
 Agent Mission initialContext says: "Factory Eye talks to PRISM directly; GO Hub receives only evidence/audit bound to Work/Checkpoint and is not the middle pipe for viewing the web."
 PRISM remains the native browser. Factory owns the shared observation capability and evidence custody. Hub exposes governed evidence/audit readback. No navigation, click, typing or scrolling authority is added.
+
+## Consolidation readback — 2026-10-05
+- PRISM app, Android Browser, local Browser Eye, Factory Eye transport and GO readback are one PRISM product lineage with separate authority lanes.
+- Current main baseline: `cd5d506b1412ff9d36e9946a28bee20eccc82598`.
+- PR #208 merged direct PRISM page-evidence publication to Factory.
+- PR #209 merged Browser/Gecko lifecycle stability across Android backgrounding.
+- Main PRISM Owner Build run `37200280124` passed on the current baseline.
+- Historical open PRs #179, #183, #194 and #199 are diverged from current main and must not be merged over newer PRISM truth; their remaining requirements are reconciled against main instead.
+- PR #181 is historical observer-ownership cleanup. Current architecture keeps the local Browser Eye in PRISM while Factory owns shared observation/evidence custody.
+- Physical owner-device acceptance is still required before claiming the complete Web Eye result DONE.
 
 ## Verified starting point
 - PRISM main inspected at 11f1e39b931cab9fcd3d893ff3f0e2c375c7410f.
