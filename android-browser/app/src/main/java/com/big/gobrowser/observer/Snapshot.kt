@@ -40,9 +40,18 @@ fun sanitizeUrl(raw: String): String = runCatching {
 
 fun truncateUtf8(raw: String, maxBytes: Int = SNAPSHOT_TEXT_LIMIT_BYTES): Pair<String, Boolean> {
     require(maxBytes > 0)
-    val bytes = raw.toByteArray(StandardCharsets.UTF_8)
-    if (bytes.size <= maxBytes) return raw to false
-    var end = maxBytes
-    while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
-    return String(bytes, 0, end, StandardCharsets.UTF_8) to true
+    if (raw.toByteArray(StandardCharsets.UTF_8).size <= maxBytes) return raw to false
+    val result = StringBuilder()
+    var used = 0
+    var index = 0
+    while (index < raw.length) {
+        val codePoint = raw.codePointAt(index)
+        val charCount = Character.charCount(codePoint)
+        val codePointBytes = String(Character.toChars(codePoint)).toByteArray(StandardCharsets.UTF_8).size
+        if (used + codePointBytes > maxBytes) break
+        result.appendCodePoint(codePoint)
+        used += codePointBytes
+        index += charCount
+    }
+    return result.toString() to true
 }
