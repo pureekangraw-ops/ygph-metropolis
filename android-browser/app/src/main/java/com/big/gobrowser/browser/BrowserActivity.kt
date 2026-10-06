@@ -39,7 +39,7 @@ class BrowserActivity : Activity() {
         }
         address = EditText(this).apply {
             hint = "https://example.com"
-            singleLine = true
+            setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_GO
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
