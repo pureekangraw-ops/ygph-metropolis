@@ -37,7 +37,7 @@ class MapStateStore(private val root: File) {
         s.put("zones", zones).put("grids", grids).put("pins", pins).put("notes", notes).put("recommendations", recommendations).put("highlights", highlights).put("focused", optional(j.state.focused))
         return JSONObject().put("version", j.version).put("state", s).put("pending", j.pending?.let { JSONObject().put("commandId", it.command.commandId).put("revision", it.revision).put("token", it.token) } ?: JSONObject.NULL).put("receipts", JSONObject())
     }
-    private fun text(o: JSONObject, key: String): String? = if (o.isNull(key)) null else o.optString(key, null)
+    private fun text(o: JSONObject, key: String): String? = if (o.isNull(key)) null else o.optString(key, "")
     private fun decode(o: JSONObject): MapJournal {
         require(o.optInt("version", 1) == 1) { "unsupported journal version" }
         val s = o.getJSONObject("state"); val zones = linkedMapOf<String, Zone>(); val grids = linkedMapOf<String, Grid>(); val pins = linkedMapOf<String, Pin>()

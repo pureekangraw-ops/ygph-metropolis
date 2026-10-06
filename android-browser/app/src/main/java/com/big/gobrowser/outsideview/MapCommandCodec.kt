@@ -9,20 +9,21 @@ object MapCommandCodec {
         val expected = if (json.has("expectedRevision")) json.optLong("expectedRevision") else null
         return MapCommand(
             commandId = json.getString("commandId"), action = action, target = target,
-            note = json.optString("note", null), expectedRevision = expected,
-            scope = json.optString("scope", null), presentation = json.optString("presentation", null),
+            note = nullable(json, "note"), expectedRevision = expected,
+            scope = nullable(json, "scope"), presentation = nullable(json, "presentation"),
             zone = json.optJSONObject("zone")?.let(::zone),
             grid = json.optJSONObject("grid")?.let(::grid),
             pin = json.optJSONObject("pin")?.let(::pin)
         )
     }
+    private fun nullable(o: JSONObject, key: String): String? = if (o.isNull(key)) null else o.optString(key, "")
     private fun bounds(o: JSONObject) = Bounds(o.getDouble("west"), o.getDouble("south"), o.getDouble("east"), o.getDouble("north"))
     private fun point(o: JSONObject) = Point(o.getDouble("longitude"), o.getDouble("latitude"))
-    private fun zone(o: JSONObject): Zone = Zone(o.getString("id"), o.getString("label"), o.optJSONObject("bounds")?.let(::bounds), emptyList(), o.optString("parentId", null), o.optBoolean("geometryKnown", true))
-    private fun grid(o: JSONObject): Grid = Grid(o.getString("id"), o.getString("zoneId"), bounds(o.getJSONObject("bounds")), o.optBoolean("uncertain", false), o.optString("label", null))
+    private fun zone(o: JSONObject): Zone = Zone(o.getString("id"), o.getString("label"), o.optJSONObject("bounds")?.let(::bounds), emptyList(), nullable(o,"parentId"), o.optBoolean("geometryKnown", true))
+    private fun grid(o: JSONObject): Grid = Grid(o.getString("id"), o.getString("zoneId"), bounds(o.getJSONObject("bounds")), o.optBoolean("uncertain", false), nullable(o,"label"))
     private fun pin(o: JSONObject): Pin {
         val e = o.optJSONObject("evidence")
-        val evidence = Evidence(EvidenceStatus.valueOf(e?.optString("coordinate", "UNKNOWN") ?: "UNKNOWN"), e?.optString("source", null), e?.optLong("observedAt")?.takeIf { e.has("observedAt") }, e?.optLong("availableUntil")?.takeIf { e.has("availableUntil") })
-        return Pin(o.getString("id"), o.getString("label"), point(o.getJSONObject("point")), o.getString("gridId"), evidence, o.optString("zoneId", null), o.optString("note", null))
+        val evidence = Evidence(EvidenceStatus.valueOf(e?.optString("coordinate", "UNKNOWN") ?: "UNKNOWN"), e?.let { nullable(it,"source") }, e?.let { if(it.isNull("observedAt")) null else it.optLong("observedAt") }, e?.let { if(it.isNull("availableUntil")) null else it.optLong("availableUntil") })
+        return Pin(o.getString("id"), o.getString("label"), point(o.getJSONObject("point")), o.getString("gridId"), evidence, nullable(o,"zoneId"), nullable(o,"note"))
     }
 }
