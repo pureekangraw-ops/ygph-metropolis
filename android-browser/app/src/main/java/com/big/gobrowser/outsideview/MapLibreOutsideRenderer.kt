@@ -16,7 +16,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         val pkg=packageStore?.active()
         if(packageStore!=null&&pkg==null){callback(RenderConfirmation(request.commandId,request.revision,request.styleGeneration,request.token,emptySet(),error="no-active-local-pmtiles"));return}
         surface.features=MapFeatureBuilder.build(request.state);surface.attribution=pkg?.attribution;surface.invalidate()
-        surface.post{if(surface.isShown)callback(RenderConfirmation(request.commandId,request.revision,request.styleGeneration,request.token,surface.featureIds(),request.state.focused,pkg?.bounds))else callback(RenderConfirmation(request.commandId,request.revision,request.styleGeneration,request.token,emptySet(),error="frame-not-visible"))}
+        surface.post{if(surface.visibility==View.VISIBLE)callback(RenderConfirmation(request.commandId,request.revision,request.styleGeneration,request.token,surface.featureIds(),request.state.focused,pkg?.bounds))else callback(RenderConfirmation(request.commandId,request.revision,request.styleGeneration,request.token,emptySet(),error="frame-not-visible"))}
     }
     override fun cancel(){generation+=1;surface.features=null}
     private class OutsideMapSurface(context:android.content.Context):View(context){
