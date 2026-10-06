@@ -27,6 +27,24 @@ class RelayClientTest {
         assertEquals(0, outbox.pending().size)
     }
 
+    @Test fun mismatchedAckKeepsSnapshotPending() {
+        val snapshot = Snapshot("d", "t", "c", 1, 7, 1_000L, "0.1.0", url = "https://owner", title = "", text = "x", targets = emptyList(), truncated = false)
+        for (ack in listOf(Ack("other", 7, 1_000L), Ack("c", 6, 1_000L))) {
+            val outbox = Outbox(clock = { 1_000L })
+            val relay = object : RelayClient {
+                override fun publish(snapshot: Snapshot) = ack
+                override fun pollCommands(): List<Command> = emptyList()
+                override fun publishReceipt(receipt: Receipt) = ack
+            }
+            val sync = SyncService(relay, outbox)
+            sync.enqueue(snapshot)
+            val report = sync.syncOnce()
+            assertEquals(0, report.published)
+            assertEquals(1, report.failed)
+            assertEquals("c", outbox.pending().single().captureId)
+        }
+    }
+
     private class FakeRelay : RelayClient {
         var published = 0
         override fun publish(snapshot: Snapshot): Ack { published += 1; return Ack(snapshot.captureId, snapshot.sequence, 1_000L) }
