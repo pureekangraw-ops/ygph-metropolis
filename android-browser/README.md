@@ -9,11 +9,14 @@ Standalone Android WebView browser for the GO Observer experiment. This project 
 - Tab store with active-tab selection and URL-only session restore.
 - Session restore does not grant control or observer permission.
 - Activity lifecycle/power-state check for interactive actions.
-- JVM test for URL policy and an instrumentation smoke test.
+- Native-initiated DOM observation with freshness, redaction, truncation, and debounce.
+- Guarded command model plus allowlisted WebView action dispatcher (no arbitrary JavaScript).
+- Encrypted device credential boundary, bounded outbox, configurable HTTPS relay adapter, and transport-only sync pass.
+- JVM tests and an instrumentation smoke test.
 
 ## Not claimed yet
 
-DOM observation, screenshots, command execution, relay transport, MCP integration, and a signed/released APK are not implemented here. Those require the observer/control contracts and a verified backend path from the attached design.
+The relay adapter is deliberately route-configurable: no MCP endpoint, Work ID, credential, or owner-specific route is invented here. Live MCP readback, device installation, background-service deployment, and production signing remain unverified until the owner route, permissions, and a real Android device are available.
 
 ## Build
 

@@ -15,7 +15,8 @@ data class Command(
     val issuedAtEpochMs: Long,
     val expiresAtEpochMs: Long,
     val action: BrowserAction,
-    val authority: String
+    val authority: String,
+    val parameters: Map<String, String> = emptyMap()
 )
 
 data class ControlState(
