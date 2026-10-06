@@ -171,7 +171,7 @@ fun validate(command: MapCommand, state: MapState, now: Long): List<String> {
         MapAction.NOTE -> if (command.target == null || command.note == null) errors += "note target and value required"
         MapAction.RECOMMEND, MapAction.HIGHLIGHT, MapAction.FOCUS -> if (command.target == null) errors += "target required"
         MapAction.REMOVE -> if (command.target == null) errors += "target required"
-        MapAction.CLEAR -> if (command.scope.isNullOrBlank()) errors += "clear scope required"
+        MapAction.CLEAR -> if (command.scope !in setOf("pins", "grids", "zones", "all")) errors += "clear scope invalid"
         MapAction.ROUTE -> errors += "route disabled"
     }
     return errors
