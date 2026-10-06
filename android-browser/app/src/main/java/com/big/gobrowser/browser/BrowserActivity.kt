@@ -1,0 +1,95 @@
+package com.big.gobrowser.browser
+
+import android.app.Activity
+import android.os.Bundle
+import android.os.PowerManager
+import android.view.Gravity
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.Toast
+
+class BrowserActivity : Activity() {
+    private lateinit var tabStore: TabStore
+    private lateinit var address: EditText
+    private lateinit var lifecycle: BrowserLifecycle
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        lifecycle = BrowserLifecycle(this, getSystemService(PowerManager::class.java))
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(8, 8, 8, 8)
+        }
+        address = EditText(this).apply {
+            hint = "https://example.com"
+            singleLine = true
+            imeOptions = EditorInfo.IME_ACTION_GO
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
+        }
+        val back = button("‹") { tabStore.active()?.webView?.goBack() }
+        val forward = button("›") { tabStore.active()?.webView?.goForward() }
+        val reload = button("↻") { tabStore.active()?.webView?.reload() }
+        val newTab = button("+") { tabStore.open(); configureActiveWebView() }
+        toolbar.addView(back)
+        toolbar.addView(forward)
+        toolbar.addView(address)
+        toolbar.addView(reload)
+        toolbar.addView(newTab)
+
+        val browserContainer = FrameLayout(this)
+        root.addView(toolbar, LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        root.addView(browserContainer, LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        setContentView(root)
+
+        tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
+        tabStore.restore()
+        configureActiveWebView()
+    }
+
+    private fun configureActiveWebView() {
+        tabStore.active()?.webView?.webViewClient = client()
+    }
+
+    private fun client() = object : WebViewClient() {
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+            !BrowserSettings.isAllowedUrl(request.url.toString())
+
+        override fun onPageFinished(view: WebView, url: String) {
+            address.setText(url)
+        }
+    }
+
+    private fun navigateFromAddress() {
+        val raw = address.text.toString().trim()
+        if (!BrowserSettings.isAllowedUrl(raw)) {
+            Toast.makeText(this, "เปิดได้เฉพาะ HTTPS", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!lifecycle.isInteractive()) return
+        tabStore.active()?.webView?.loadUrl(raw)
+    }
+
+    private fun button(label: String, action: () -> Unit) = Button(this).apply {
+        text = label
+        setOnClickListener { action() }
+        minimumWidth = 0
+    }
+
+    override fun onBackPressed() {
+        val active = tabStore.active()?.webView
+        if (active?.canGoBack() == true) active.goBack() else super.onBackPressed()
+    }
+}
