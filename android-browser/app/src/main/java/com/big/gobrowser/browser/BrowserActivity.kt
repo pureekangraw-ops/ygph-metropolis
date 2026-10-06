@@ -51,7 +51,7 @@ class BrowserActivity : Activity() {
 
         val browserContainer = FrameLayout(this)
         root.addView(toolbar, LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        root.addView(browserContainer, LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        root.addView(browserContainer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
 
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
@@ -85,7 +85,7 @@ class BrowserActivity : Activity() {
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
         text = label
         setOnClickListener { action() }
-        minimumWidth = 0
+        minWidth = 0
     }
 
     override fun onBackPressed() {
