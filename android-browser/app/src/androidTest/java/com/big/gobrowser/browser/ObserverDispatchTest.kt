@@ -54,7 +54,8 @@ class ObserverDispatchTest {
     }
 
     @Test fun keystoreCredentialRoundTripAndRevocation() {
-        val store = AndroidDeviceCredentialStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        val store = AndroidDeviceCredentialStore(InstrumentationRegistry.getInstrumentation().targetContext,
+            keyAlias = "go-browser-instrumentation-only", preferencesName = "relay-credential-instrumentation-only")
         store.revoke()
         try {
             store.save("fixture-token")

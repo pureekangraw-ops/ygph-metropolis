@@ -17,8 +17,12 @@ interface DeviceCredentialStore {
     fun revoke()
 }
 
-class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
-    private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+class AndroidDeviceCredentialStore(
+    context: Context,
+    private val keyAlias: String = KEY_ALIAS,
+    preferencesName: String = PREFERENCES
+) : DeviceCredentialStore {
+    private val preferences = context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
     override fun save(token: String) {
@@ -45,13 +49,13 @@ class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
 
     override fun revoke() {
         preferences.edit().remove(IV_KEY).remove(DATA_KEY).apply()
-        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
+        if (keyStore.containsAlias(keyAlias)) keyStore.deleteEntry(keyAlias)
     }
 
     private fun key(): SecretKey {
-        if (!keyStore.containsAlias(KEY_ALIAS)) {
+        if (!keyStore.containsAlias(keyAlias)) {
             KeyGenerator.getInstance("AES", KEYSTORE).apply {
-                init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                init(KeyGenParameterSpec.Builder(keyAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setKeySize(256)
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -59,7 +63,7 @@ class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
                 generateKey()
             }
         }
-        return (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)
+        return (keyStore.getKey(keyAlias, null) as? SecretKey)
             ?: throw IllegalStateException("Device credential key unavailable")
     }
 
