@@ -1,21 +1,30 @@
 # Relay contract boundary
 
-Status: **UNRESOLVED / NOT LIVE**
+Owner route and live MCP status: **UNRESOLVED / NOT LIVE VERIFIED**.
 
-The Android client now has a generic HTTPS adapter, but this repository does not choose the owner route. A verified owner contract must provide exactly three HTTPS endpoints and their JSON schema:
+The device user opens **Relay**, pastes the owner contract JSON and device bearer token, reviews the three routes and scope, then chooses **Connect**. Connecting does not start sharing. **Share** enables the active foreground tab; **Stop**, pause, navigation or switching away revokes its epoch and clears queued snapshots. Navigation can start a fresh observer session while the foreground tab remains shared. A request already in flight cannot be recalled.
 
-- publish observation snapshot
-- poll foreground commands
-- publish command receipt
+Configuration is explicitly entered each process session. There are no default endpoints, device identity, WorkContext or authority grants for a live connection. Local configuration checks do not prove backend authorization; the owner must still verify the contract.
 
-The adapter sends the app/schema version, snapshot identity, freshness fields, redacted targets, and receipt outcome without rewriting them. It does not invent Work IDs, MCP paths, cookies, authorization headers, or backend routes.
+Required configuration fields:
 
-Required owner-side evidence before enabling a live client:
+| Field | Meaning |
+| --- | --- |
+| `publishSnapshots` | Exact absolute HTTPS snapshot POST URL |
+| `pollCommands` | Exact absolute HTTPS command GET URL |
+| `publishReceipts` | Exact absolute HTTPS receipt POST URL |
+| `deviceId` | Owner-provisioned device identity |
+| `workId` | Current owner Work identity |
+| `checkpointId` | Current checkpoint identity |
+| `actor` | Authorized actor |
+| `authorities` | Explicit list such as `browser.click`, matching the command action |
 
-1. route ownership and authentication scope;
-2. device credential provisioning and revocation;
-3. WorkContext/authority mapping;
-4. stale revision, revoked epoch, duplicate command, and timeout-after-mutation behavior;
-5. deployed readback from the owner system.
+The token is supplied separately, encrypted with Android Keystore, and never put in snapshots or diagnostics. **Disconnect** revokes the local credential and sharing session. Server-side token revocation remains the owner's responsibility. Redirects are rejected so bearer credentials are not forwarded to another endpoint.
 
-Until these are supplied, simulation/unit tests are not MCP end-to-end evidence.
+Snapshot payloads include `deviceId`, `tabId`, `captureId`, `revision`, `sequence`, `epoch`, `capturedAtEpochMs`, `appVersion`, `schema`, URL without query/fragment, text, targets and truncation status. The command must refer to the exact capture, tab, revision and epoch and match the configured device, actor, Work, checkpoint and action scope. Command JSON follows `Command` field names; `parameters` contains strings. The poll response is an array or an object with a `commands` array.
+
+Every snapshot POST must return JSON containing an exact matching `id` (capture ID), `sequence`, and a positive integral `acceptedAtEpochMs`. Receipt POST responses use the command ID, `sequence: 0`, and the same timestamp requirement. Empty, incomplete or mismatched ACKs do not remove queued items. POST retries may happen after a lost ACK, so the owner must deduplicate snapshots by capture ID and receipts by command ID.
+
+WebView dispatch returns an `ACCEPTED` action receipt after the native callback, or a rejection/unknown outcome. An actual subsequent DOM capture may provide `afterCaptureId`; a dispatch or navigation start is not evidence of business completion. Business outcome remains `UNKNOWN`.
+
+Before claiming live operation, verify route ownership, token provisioning/revocation, WorkContext/authority mapping, publish → poll → dispatch → receipt → owner readback, stale/revoked/duplicate behavior, and lifecycle behavior on the real device. Unit tests and compiled instrumentation are not live MCP evidence.

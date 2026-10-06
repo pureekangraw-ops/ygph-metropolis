@@ -12,7 +12,8 @@
     .slice(0, 500);
   const previous = window.__goObserverTargets;
   const targetsChanged = !previous || previous.url !== location.href || previous.nodes.length !== nodes.length || nodes.some((node,index) => node !== previous.nodes[index]);
-  window.__goObserverTargets = {captureId: captureToken, nodes, url: location.href};
+  const signature = node => [node.tagName, node.type || '', node.getAttribute('href') || '', node.getAttribute('role') || '', label(node)].join('\u001f');
+  window.__goObserverTargets = {captureId: captureToken, nodes, signatures:nodes.map(signature), url: location.href};
   return JSON.stringify({
     captureId: captureToken,
     targetsChanged,

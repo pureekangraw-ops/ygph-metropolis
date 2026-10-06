@@ -34,5 +34,12 @@ class Outbox(
         entries.entries.removeIf { it.value.capturedAtEpochMs < cutoff }
     }
 
-    private fun estimatedBytes(): Long = entries.values.sumOf { it.text.toByteArray().size.toLong() + 512L }
+    // Six bytes per UTF-16 unit bounds JSON escaping; include targets and all metadata.
+    private fun estimatedBytes(): Long = entries.values.sumOf { snapshot ->
+        val strings = listOf(snapshot.deviceId, snapshot.tabId, snapshot.captureId, snapshot.appVersion,
+            snapshot.schema, snapshot.url, snapshot.title, snapshot.text)
+        512L + strings.sumOf { it.length.toLong() * 6 } + snapshot.targets.sumOf {
+            192L + (it.id.length.toLong() + (it.role?.length ?: 0) + (it.label?.length ?: 0) + it.kind.length) * 6
+        }
+    }
 }

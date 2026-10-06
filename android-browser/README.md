@@ -12,7 +12,9 @@ Standalone Android WebView browser for the GO Observer experiment. This project 
 - Native-initiated DOM observation with freshness, redaction, truncation, and debounce.
 - Guarded command model plus allowlisted WebView action dispatcher (no arbitrary JavaScript).
 - Encrypted device credential boundary, bounded outbox, configurable HTTPS relay adapter, and transport-only sync pass.
-- JVM tests and an instrumentation smoke test.
+- Foreground Activity wiring: Share → capture → outbox → relay poll → guarded asynchronous WebView dispatch → receipt.
+- Explicit owner route/WorkContext configuration and local confirmation; no default live connection.
+- JVM/Node regression tests and offline WebView/Keystore instrumentation fixtures.
 
 ## Not claimed yet
 
@@ -24,4 +26,4 @@ The relay adapter is deliberately route-configurable: no MCP endpoint, Work ID, 
 gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-The current workspace has Java but no Android SDK/emulator or Gradle executable, so local Android build is a tooling-blocked check. CI is configured to run the Android checks when this directory changes.
+Run `node --test tests/*.test.mjs` for DOM regression tests. CI checks JVM tests, Android lint, instrumentation compilation, and debug APK build. Android build requires a working SDK and dependency access; instrumentation execution requires an emulator/device. See [relay contract](integration/relay-contract.md) for setup and the [verification boundary](integration-verification.md) for limitations.

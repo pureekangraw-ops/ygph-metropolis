@@ -15,6 +15,9 @@
   const style = getComputedStyle(el), rect = el.getBoundingClientRect();
   if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0 || el.disabled) return {ok:false,reason:'TARGET_NOT_VISIBLE'};
   if ((el.type || '').toLowerCase() === 'password') return {ok:false,reason:'PASSWORD_TARGET_REJECTED'};
+  const label = (el.getAttribute('aria-label') || el.innerText || el.textContent || '').trim().slice(0,300);
+  const signature = [el.tagName, el.type || '', el.getAttribute('href') || '', el.getAttribute('role') || '', label].join('\u001f');
+  if (saved.signatures[Number(match[1])] !== signature) return {ok:false,reason:'TARGET_CHANGED'};
   if (command.action === 'CLICK') {
     el.click(); return {ok:true,reason:'CLICK_DISPATCHED'};
   }

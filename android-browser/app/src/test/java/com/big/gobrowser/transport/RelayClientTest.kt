@@ -55,6 +55,25 @@ class RelayClientTest {
         assertEquals(Ack("c", 7, 1000), validateRelayAck(org.json.JSONObject("{\"id\":\"c\",\"sequence\":7,\"acceptedAtEpochMs\":1000}"), "c", 7))
     }
 
+    @Test fun revokedSessionStopsRemainingPublicationsAndPolling() {
+        val outbox = Outbox(clock = { 1000L })
+        val snapshot = Snapshot("d", "t", "a", 1, 1, 1000, "v", url = "https://owner", title = "", text = "x", targets = emptyList(), truncated = false)
+        outbox.enqueue(snapshot); outbox.enqueue(snapshot.copy(captureId = "b", sequence = 2))
+        var allowed = true
+        var calls = 0
+        val relay = object : RelayClient {
+            override fun publish(snapshot: Snapshot): Ack {
+                calls++; allowed = false; return Ack(snapshot.captureId, snapshot.sequence, 1000)
+            }
+            override fun pollCommands(): List<Command> = error("Revoked session polled")
+            override fun publishReceipt(receipt: Receipt): Ack = error("Unused")
+        }
+        val report = SyncService(relay, outbox).syncOnce { allowed }
+        assertEquals(1, calls); assertEquals(1, report.published)
+        assertEquals("b", outbox.pending().single().captureId)
+        assertEquals(0, report.commands.size)
+    }
+
     private class FakeRelay : RelayClient {
         var published = 0
         override fun publish(snapshot: Snapshot): Ack { published += 1; return Ack(snapshot.captureId, snapshot.sequence, 1_000L) }

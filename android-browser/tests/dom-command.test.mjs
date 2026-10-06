@@ -8,7 +8,7 @@ function page() {
   const hidden=make('hidden',false), password=make('password',true,'password'), wanted=make('');
   const nodes=[hidden,password,wanted];
   const document={title:'Page',body:{innerText:'Page'},querySelectorAll(){return nodes;},contains(el){return nodes.includes(el);}};
-  const context=vm.createContext({document,window:{},location:{origin:'https://owner',pathname:'/'},getComputedStyle:el=>({display:el.visible?'block':'none',visibility:'visible'}),captureToken:'capture-1',Event:class {}});
+  const context=vm.createContext({document,window:{},location:{origin:'https://owner',pathname:'/',href:'https://owner/'},getComputedStyle:el=>({display:el.visible?'block':'none',visibility:'visible'}),captureToken:'capture-1',Event:class {}});
   return {context,nodes,wanted};
 }
 function observe(p) {return JSON.parse(vm.runInContext(fs.readFileSync(new URL('observer.js',assets),'utf8'),p.context));}
@@ -27,4 +27,14 @@ test('click uses captured element despite hidden and password predecessors',()=>
 test('stale capture and replaced element are rejected',()=>{
   const p=page();observe(p);assert.equal(click(p,'old').ok,false);
   p.nodes.pop();assert.equal(click(p).ok,false);assert.equal(p.wanted.clicks,0);
+});
+
+test('changed target meaning cannot reuse the captured command',()=>{
+  const p=page();observe(p);p.wanted.innerText='Different operation';
+  assert.equal(click(p).reason,'TARGET_CHANGED');assert.equal(p.wanted.clicks,0);
+});
+test('replacing nodes forces a new snapshot even if labels are identical',()=>{
+  const p=page();assert.equal(observe(p).targetsChanged,true);
+  assert.equal(observe(p).targetsChanged,false);
+  p.nodes[2]={...p.wanted};assert.equal(observe(p).targetsChanged,true);
 });

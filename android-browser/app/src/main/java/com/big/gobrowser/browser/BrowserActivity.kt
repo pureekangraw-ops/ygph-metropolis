@@ -171,8 +171,8 @@ class BrowserActivity : Activity() {
             if (permissionGeneration != generation || service !== sync) {
                 handler.post { syncBusy = false }; return@execute
             }
-            val acknowledged = batch.filter { runCatching { service.publishReceipt(it) }.isSuccess }
-            val report = runCatching { service.syncOnce() }.getOrNull()
+            val acknowledged = batch.filter { permissionGeneration == generation && service === sync && runCatching { service.publishReceipt(it) }.isSuccess }
+            val report = runCatching { service.syncOnce { permissionGeneration == generation && service === sync } }.getOrNull()
             handler.post {
                 syncBusy = false
                 if (destroyed || permissionGeneration != generation || service !== sync) return@post

@@ -11,11 +11,12 @@ class SyncService(
 ) {
     fun enqueue(snapshot: Snapshot): Boolean = outbox.enqueue(snapshot)
 
-    fun syncOnce(): SyncReport {
+    fun syncOnce(stillAllowed: () -> Boolean = { true }): SyncReport {
         var published = 0
         var failed = 0
         var lastError: String? = null
         outbox.pending().forEach { snapshot ->
+            if (!stillAllowed()) return@forEach
             runCatching {
                 val ack = relay.publish(snapshot)
                 require(ack.id == snapshot.captureId && ack.sequence == snapshot.sequence && ack.acceptedAtEpochMs > 0) { "Snapshot ACK mismatch" }
@@ -26,7 +27,7 @@ class SyncService(
                 lastError = it::class.simpleName ?: "PUBLISH_FAILED"
             }
         }
-        val commands = runCatching { relay.pollCommands() }.getOrElse {
+        val commands = runCatching { if (stillAllowed()) relay.pollCommands() else emptyList() }.getOrElse {
             lastError = it::class.simpleName ?: "POLL_FAILED"
             emptyList()
         }
