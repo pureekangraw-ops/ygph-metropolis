@@ -14,7 +14,8 @@ object PmtilesValidator {
             val magic=ByteArray(7); raf.readFully(magic); require(String(magic,Charsets.US_ASCII)=="PMTiles") { "invalid PMTiles magic" }
             val version=raf.readUnsignedByte(); require(version in 3..4) { "unsupported PMTiles version" }
         }
-        val attribution = File(file.parentFile, file.name + ".json").takeIf { it.isFile }?.readText()?.let { Regex("\\\"attribution\\\"\\s*:\\s*\\\"([^\\\"]*)").find(it)?.groupValues?.get(1) }.orEmpty()
+        val metadata = File(file.parentFile, file.name + ".json").takeIf { it.isFile }?.readText().orEmpty()
+        val attribution = metadata.substringAfter("\"attribution\"", "").substringAfter(":", "").trim().trimStart('"').substringBefore('"')
         require(attribution.isNotBlank()) { "attribution required" }
         return MapPackage(file,sha(file),attribution,0,14,Bounds(-180.0,-85.051129,180.0,85.051129),setOf("place","outside_zone","outside_grid","outside_pin"))
     }
