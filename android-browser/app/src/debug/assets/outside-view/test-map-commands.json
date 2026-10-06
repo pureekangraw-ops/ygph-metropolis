@@ -1,0 +1,6 @@
+{
+  "mode": "TEST",
+  "liveIntake": false,
+  "commands": [],
+  "note": "Debug fixture only; no real place data."
+}

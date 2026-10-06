@@ -80,6 +80,7 @@ class BrowserActivity : Activity() {
         shareButton = button("Share") { toggleShare() }
         toolbar.addView(shareButton)
         toolbar.addView(button("Eye") { captureActive(notify = true) })
+        toolbar.addView(button("Outside") { startActivity(android.content.Intent(this, com.big.gobrowser.outsideview.OutsideViewActivity::class.java)) })
         // Connection settings have their own row to keep the browser toolbar usable.
         val settings = LinearLayout(this)
         settings.addView(button("Relay") { configureRelay() })
