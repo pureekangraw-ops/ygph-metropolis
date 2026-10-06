@@ -32,7 +32,12 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: JVM unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/android-browser-unit-tests.log"
+      - name: Publish JVM test diagnostics
+        if: ${{ failure() }}
+        run: cat "$RUNNER_TEMP/android-browser-unit-tests.log" >> "$GITHUB_STEP_SUMMARY"
       - name: Android lint
         run: gradle --no-daemon :app:lintDebug
       - name: Debug APK build
