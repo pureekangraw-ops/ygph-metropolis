@@ -38,6 +38,17 @@ jobs:
       - name: Publish JVM test diagnostics
         if: ${{ failure() }}
         run: cat "$RUNNER_TEMP/android-browser-unit-tests.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload JVM test diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-browser-jvm-test-diagnostics
+          path: |
+            ${{ github.workspace }}/android-browser/app/build/test-results/testDebugUnitTest
+            ${{ github.workspace }}/android-browser/app/build/reports/tests/testDebugUnitTest
+            ${{ runner.temp }}/android-browser-unit-tests.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Android lint
         run: gradle --no-daemon :app:lintDebug
       - name: Debug APK build
