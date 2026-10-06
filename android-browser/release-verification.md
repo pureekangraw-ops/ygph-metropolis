@@ -1,0 +1,8 @@
+# Release verification
+
+- JVM unit tests: run in CI.
+- Android lint/debug APK: run in CI.
+- Emulator instrumentation: pending available emulator.
+- BIG device install/navigation/lock/offline/process-restore: BLOCKED until APK and device access are available.
+- Live MCP readback: BLOCKED until the owner relay route and authority contract are verified.
+- Production signing: not implemented; this project only builds a debug APK for controlled testing.
