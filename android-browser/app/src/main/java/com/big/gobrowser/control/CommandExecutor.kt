@@ -1,6 +1,6 @@
 package com.big.gobrowser.control
 
-interface ActionRunner {
+fun interface ActionRunner {
     fun run(command: Command): String?
 }
 
