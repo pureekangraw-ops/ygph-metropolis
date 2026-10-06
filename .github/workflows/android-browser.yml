@@ -42,12 +42,12 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: |
-          while IFS= read -r line; do
+          grep -E '(^e:|error:|ERROR|FAILURE|Execution failed|What went wrong|There were failing tests|tests failed|Caused by:|Unresolved reference|Exception)' "$RUNNER_TEMP/android-browser-unit-tests.log" | tail -n 80 | while IFS= read -r line; do
             safe="${line//'%'/'%25'}"
             safe="${safe//$'\r'/'%0D'}"
             safe="${safe//$'\n'/'%0A'}"
             echo "::error title=Gradle::$safe"
-          done < <(tail -n 120 "$RUNNER_TEMP/android-browser-unit-tests.log")
+          done
       - name: Upload JVM test diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
