@@ -8,7 +8,6 @@ on:
       - 'android-shell/**'
       - 'scripts/stage-prism-native.mjs'
       - 'tests/**'
-      - '.github/workflows/**'
   push:
     branches: [main]
     paths:
@@ -16,7 +15,6 @@ on:
       - 'android-shell/**'
       - 'scripts/stage-prism-native.mjs'
       - 'tests/**'
-      - '.github/workflows/**'
 
 concurrency:
   group: prism-owner-build-${{ github.event.pull_request.number || github.ref }}
