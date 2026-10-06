@@ -31,5 +31,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Unit tests, lint, and debug build
-        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: JVM unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Android lint
+        run: gradle --no-daemon :app:lintDebug
+      - name: Debug APK build
+        run: gradle --no-daemon :app:assembleDebug
