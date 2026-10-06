@@ -61,5 +61,20 @@ jobs:
           retention-days: 7
       - name: Android lint
         run: gradle --no-daemon :app:lintDebug
+      - name: Android instrumentation compile
+        run: gradle --no-daemon :app:compileDebugAndroidTestKotlin
       - name: Debug APK build
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verify and upload debug APK
+        run: |
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$apk"
+          sha256sum "$apk" | tee app/build/outputs/apk/debug/app-debug.apk.sha256
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-browser-debug-apk
+          path: |
+            android-browser/app/build/outputs/apk/debug/app-debug.apk
+            android-browser/app/build/outputs/apk/debug/app-debug.apk.sha256
+          retention-days: 14

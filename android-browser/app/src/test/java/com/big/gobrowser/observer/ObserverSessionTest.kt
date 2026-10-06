@@ -6,10 +6,13 @@ import org.junit.Test
 
 class ObserverSessionTest {
     @Test fun duplicateContentDoesNotCreateSnapshot() {
-        val session = ObserverSession("d", "0.1.0") { 1_000L }
+        var now = 1_000L
+        val session = ObserverSession("d", "0.1.0") { now }
         session.start("tab")
         assertNotNull(session.capture("tab", "https://example.com", "", "same", emptyList()))
+        now = 3_001L
         assertNull(session.capture("tab", "https://example.com", "", "same", emptyList()))
+        assertNotNull(session.capture("tab", "https://example.com", "", "new", emptyList()))
         session.stop("tab")
         assertNull(session.capture("tab", "https://example.com", "", "new", emptyList()))
     }

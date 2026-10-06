@@ -9,6 +9,7 @@ class ObserverSession(
     private var sharedTabId: String? = null
     private var lastCaptureAt: Long? = null
     private var lastFingerprint: String? = null
+    private val debounceMs = 2_000L
 
     fun start(tabId: String) { sharedTabId = tabId }
 
@@ -20,8 +21,10 @@ class ObserverSession(
 
     fun capture(tabId: String, url: String, title: String, text: String, targets: List<Target>): Snapshot? {
         if (!isSharing(tabId)) return null
+        val now = clock()
         val fingerprint = listOf(url, title, text, targets).toString()
         if (fingerprint == lastFingerprint) return null
+        if (lastCaptureAt != null && now - lastCaptureAt!! < debounceMs) return null
         lastFingerprint = fingerprint
         return observer.capture(tabId, url, title, text, targets).also { lastCaptureAt = it.capturedAtEpochMs }
     }
