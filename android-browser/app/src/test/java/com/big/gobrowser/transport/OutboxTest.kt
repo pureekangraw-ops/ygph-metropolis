@@ -17,7 +17,7 @@ class OutboxTest {
         val observer = DomObserver("d", "0.1.0") { 1L }
         val first = observer.capture("tab", "https://example.com", "", "a", emptyList())
         val second = observer.capture("tab", "https://example.com", "", "b", emptyList())
-        val outbox = Outbox()
+        val outbox = Outbox(clock = { 1_000L })
         outbox.enqueue(first); outbox.enqueue(second); outbox.ack(first.captureId)
         assertEquals(second.captureId, outbox.pending().single().captureId)
     }
