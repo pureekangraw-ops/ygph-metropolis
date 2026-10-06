@@ -6,9 +6,9 @@ import org.junit.Test
 
 class BrowserSettingsTest {
     @Test fun allowsHttpsOnly() {
-        assertTrue(BrowserSettings.isAllowedUrl("https://example.com/path"))
-        assertFalse(BrowserSettings.isAllowedUrl("http://example.com/path"))
-        assertFalse(BrowserSettings.isAllowedUrl("javascript:alert(1)"))
-        assertFalse(BrowserSettings.isAllowedUrl("not a url"))
+        assertTrue(UrlPolicy.isAllowed("https://example.com/path"))
+        assertFalse(UrlPolicy.isAllowed("http://example.com/path"))
+        assertFalse(UrlPolicy.isAllowed("javascript:alert(1)"))
+        assertFalse(UrlPolicy.isAllowed("not a url"))
     }
 }

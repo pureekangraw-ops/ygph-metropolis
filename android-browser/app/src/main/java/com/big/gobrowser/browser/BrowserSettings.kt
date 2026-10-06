@@ -2,17 +2,11 @@ package com.big.gobrowser.browser
 
 import android.webkit.WebSettings
 import android.webkit.WebView
-import java.net.URI
 
 object BrowserSettings {
     const val START_URL = "https://example.com/"
 
-    fun isAllowedUrl(raw: String): Boolean {
-        return runCatching {
-            val uri = URI(raw.trim())
-            uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()
-        }.getOrDefault(false)
-    }
+    fun isAllowedUrl(raw: String): Boolean = UrlPolicy.isAllowed(raw)
 
     fun configure(webView: WebView) {
         webView.settings.apply {
