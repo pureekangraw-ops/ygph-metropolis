@@ -19,6 +19,5 @@ object BrowserSettings {
             builtInZoomControls = false
             displayZoomControls = false
         }
-        webView.settings.safeBrowsingEnabled = true
     }
 }
