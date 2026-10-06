@@ -25,7 +25,8 @@ data class RelayEndpoints(
 ) {
     init {
         listOf(publishSnapshots, pollCommands, publishReceipts).forEach { endpoint ->
-            require(endpoint.startsWith("https://")) { "Relay endpoints must use HTTPS" }
+            val uri = java.net.URI(endpoint)
+            require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null) { "Relay endpoints must be absolute HTTPS URLs" }
             require(!endpoint.contains(" ")) { "Relay endpoint must not contain spaces" }
         }
     }
@@ -73,6 +74,7 @@ class HttpRelayClient(
         val connection = (URL(endpoint).openConnection() as? HttpURLConnection)
             ?: throw RelayProtocolException("Relay endpoint is not HTTP")
         try {
+            connection.instanceFollowRedirects = false
             connection.requestMethod = method
             connection.connectTimeout = connectTimeoutMs
             connection.readTimeout = readTimeoutMs
@@ -93,11 +95,8 @@ class HttpRelayClient(
         }
     }
 
-    private fun JSONObject.toAck(defaultId: String, defaultSequence: Long): Ack = Ack(
-        id = optString("id", defaultId),
-        sequence = optLong("sequence", defaultSequence),
-        acceptedAtEpochMs = optLong("acceptedAtEpochMs", clock())
-    )
+    private fun JSONObject.toAck(expectedId: String, expectedSequence: Long): Ack =
+        validateRelayAck(this, expectedId, expectedSequence)
 
     companion object {
         private fun snapshotJson(snapshot: Snapshot) = JSONObject().apply {
@@ -106,6 +105,7 @@ class HttpRelayClient(
             put("captureId", snapshot.captureId)
             put("revision", snapshot.revision)
             put("sequence", snapshot.sequence)
+            put("epoch", snapshot.epoch)
             put("capturedAtEpochMs", snapshot.capturedAtEpochMs)
             put("appVersion", snapshot.appVersion)
             put("schema", snapshot.schema)
@@ -155,4 +155,20 @@ class HttpRelayClient(
             }.orEmpty()
         )
     }
+}
+
+/** Validate the wire response before anything is removed from a local queue. */
+internal fun validateRelayAck(json: JSONObject, expectedId: String, expectedSequence: Long): Ack {
+    if (!json.has("id") || !json.has("sequence") || !json.has("acceptedAtEpochMs"))
+        throw RelayProtocolException("Incomplete ACK")
+    val id = json.get("id")
+    val sequence = json.get("sequence")
+    val timestamp = json.get("acceptedAtEpochMs")
+    if (id !is String || sequence !is Number || timestamp !is Number ||
+        sequence.toDouble() != sequence.toLong().toDouble() || timestamp.toDouble() != timestamp.toLong().toDouble())
+        throw RelayProtocolException("Invalid ACK types")
+    val ack = Ack(id, sequence.toLong(), timestamp.toLong())
+    if (ack.id != expectedId || ack.sequence != expectedSequence || ack.acceptedAtEpochMs <= 0)
+        throw RelayProtocolException("ACK mismatch")
+    return ack
 }

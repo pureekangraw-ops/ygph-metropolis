@@ -45,6 +45,16 @@ class RelayClientTest {
         }
     }
 
+    @Test fun wireAckRequiresAllMatchingFields() {
+        for (raw in listOf("{}", "{\"id\":\"c\"}",
+            "{\"id\":\"other\",\"sequence\":7,\"acceptedAtEpochMs\":1000}",
+            "{\"id\":\"c\",\"sequence\":7.5,\"acceptedAtEpochMs\":1000}",
+            "{\"id\":\"c\",\"sequence\":7,\"acceptedAtEpochMs\":0}")) {
+            assertThrows(RelayProtocolException::class.java) { validateRelayAck(org.json.JSONObject(raw), "c", 7) }
+        }
+        assertEquals(Ack("c", 7, 1000), validateRelayAck(org.json.JSONObject("{\"id\":\"c\",\"sequence\":7,\"acceptedAtEpochMs\":1000}"), "c", 7))
+    }
+
     private class FakeRelay : RelayClient {
         var published = 0
         override fun publish(snapshot: Snapshot): Ack { published += 1; return Ack(snapshot.captureId, snapshot.sequence, 1_000L) }

@@ -3,12 +3,12 @@ package com.big.gobrowser.transport
 import android.content.Context
 import android.util.Base64
 import java.security.KeyStore
-import java.security.SecureRandom
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 /** Device credential boundary. The token never enters logs or snapshots. */
 interface DeviceCredentialStore {
@@ -23,13 +23,12 @@ class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
 
     override fun save(token: String) {
         require(token.isNotBlank()) { "Credential must not be blank" }
-        val iv = ByteArray(12).also(SecureRandom()::nextBytes)
         val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.ENCRYPT_MODE, key(), GCMParameterSpec(128, iv))
+            init(Cipher.ENCRYPT_MODE, key())
         }
         val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
         preferences.edit()
-            .putString(IV_KEY, Base64.encodeToString(iv, Base64.NO_WRAP))
+            .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(DATA_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .apply()
     }
@@ -46,12 +45,17 @@ class AndroidDeviceCredentialStore(context: Context) : DeviceCredentialStore {
 
     override fun revoke() {
         preferences.edit().remove(IV_KEY).remove(DATA_KEY).apply()
+        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS)
     }
 
     private fun key(): SecretKey {
         if (!keyStore.containsAlias(KEY_ALIAS)) {
             KeyGenerator.getInstance("AES", KEYSTORE).apply {
-                init(256)
+                init(KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setKeySize(256)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .build())
                 generateKey()
             }
         }

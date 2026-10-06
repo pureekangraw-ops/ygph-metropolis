@@ -17,7 +17,8 @@ class SyncService(
         var lastError: String? = null
         outbox.pending().forEach { snapshot ->
             runCatching {
-                relay.publish(snapshot)
+                val ack = relay.publish(snapshot)
+                require(ack.id == snapshot.captureId && ack.sequence == snapshot.sequence && ack.acceptedAtEpochMs > 0) { "Snapshot ACK mismatch" }
                 outbox.ack(snapshot.captureId)
                 published += 1
             }.onFailure {
@@ -32,7 +33,9 @@ class SyncService(
         return SyncReport(published, failed, commands, outbox.droppedCount, lastError)
     }
 
-    fun publishReceipt(receipt: Receipt): Ack = relay.publishReceipt(receipt)
+    fun publishReceipt(receipt: Receipt): Ack = relay.publishReceipt(receipt).also {
+        require(it.id == receipt.commandId && it.sequence == 0L && it.acceptedAtEpochMs > 0) { "Receipt ACK mismatch" }
+    }
 }
 
 data class SyncReport(

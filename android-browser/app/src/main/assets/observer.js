@@ -10,13 +10,18 @@
     .filter(visible)
     .filter((node) => (node.type || '').toLowerCase() !== 'password')
     .slice(0, 500);
+  const previous = window.__goObserverTargets;
+  const targetsChanged = !previous || previous.url !== location.href || previous.nodes.length !== nodes.length || nodes.some((node,index) => node !== previous.nodes[index]);
+  window.__goObserverTargets = {captureId: captureToken, nodes, url: location.href};
   return JSON.stringify({
+    captureId: captureToken,
+    targetsChanged,
     title: document.title || '',
     url: location.origin + location.pathname,
     text: (document.body && document.body.innerText || '').slice(0, 200000),
     targets: nodes.map((node, index) => {
       const rect = node.getBoundingClientRect();
-      return { id: node.id || `target-${index}`, role: node.getAttribute('role'), label: label(node), kind: node.tagName.toLowerCase(), left: Math.round(rect.left), top: Math.round(rect.top), right: Math.round(rect.right), bottom: Math.round(rect.bottom) };
+      return { id: `target-${index}`, role: node.getAttribute('role'), label: label(node), kind: node.tagName.toLowerCase(), left: Math.round(rect.left), top: Math.round(rect.top), right: Math.round(rect.right), bottom: Math.round(rect.bottom) };
     })
   });
 }())

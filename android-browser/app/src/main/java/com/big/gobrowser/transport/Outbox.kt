@@ -11,6 +11,7 @@ class Outbox(
     var droppedCount: Long = 0
         private set
 
+    @Synchronized
     fun enqueue(snapshot: Snapshot): Boolean {
         prune()
         entries[snapshot.captureId] = snapshot
@@ -21,8 +22,11 @@ class Outbox(
         return entries.containsKey(snapshot.captureId)
     }
 
+    @Synchronized
     fun pending(): List<Snapshot> = prune().let { entries.values.toList() }
+    @Synchronized
     fun ack(captureId: String) { entries.remove(captureId) }
+    @Synchronized
     fun clearTab(tabId: String) { entries.entries.removeIf { it.value.tabId == tabId } }
 
     private fun prune(): Unit {

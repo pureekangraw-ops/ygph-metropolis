@@ -12,7 +12,7 @@ class DomObserver(
     private var revision = 0L
     private var previousFingerprint: String? = null
 
-    fun capture(tabId: String, url: String, title: String, text: String, targets: List<Target>): Snapshot {
+    fun capture(tabId: String, url: String, title: String, text: String, targets: List<Target>, captureId: String? = null): Snapshot {
         val sanitizedUrl = sanitizeUrl(url)
         val (boundedText, truncated) = truncateUtf8(text)
         val fingerprint = listOf(sanitizedUrl, title, boundedText, targets).toString()
@@ -21,6 +21,6 @@ class DomObserver(
             previousFingerprint = fingerprint
         }
         sequence += 1
-        return Snapshot(deviceId, tabId, UUID.randomUUID().toString(), revision, sequence, clock(), appVersion, url = sanitizedUrl, title = title, text = boundedText, targets = targets, truncated = truncated)
+        return Snapshot(deviceId, tabId, captureId ?: UUID.randomUUID().toString(), revision, sequence, clock(), appVersion, url = sanitizedUrl, title = title, text = boundedText, targets = targets, truncated = truncated)
     }
 }

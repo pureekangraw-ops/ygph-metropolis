@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - "android-browser/**"
+      - ".github/workflows/android-browser.yml"
   push:
     branches: [main]
     paths:
       - "android-browser/**"
+      - ".github/workflows/android-browser.yml"
 
 permissions:
   contents: read
@@ -31,6 +33,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: DOM targeting regression tests
+        run: node --test tests/*.test.mjs
       - name: JVM unit tests
         run: |
           set -o pipefail

@@ -14,4 +14,27 @@ class CommandExecutorTest {
         assertEquals(ReceiptStatus.UNKNOWN, executor.execute(command, state).status)
         assertEquals(1, calls)
     }
+    @Test fun asynchronousDispatchWaitsForReadbackAndReservesCommandId() {
+        var completion: ((ActionReadback) -> Unit)? = null
+        val receipts = mutableListOf<Receipt>()
+        val executor = CommandExecutor(ActionRunner { error("Synchronous runner must not be used") }) { 1_000 }
+        executor.executeAsync(command, state, { _, done -> completion = done }, receipts::add)
+        assertEquals(0, receipts.size)
+        executor.executeAsync(command, state, { _, _ -> error("Duplicate dispatched") }, receipts::add)
+        assertEquals("DUPLICATE_COMMAND", receipts.single().reason)
+        completion!!(ActionReadback(true, "CLICK_DISPATCHED", "after", "DOM_CAPTURED"))
+        completion!!(ActionReadback(true, "SECOND_CALLBACK"))
+        assertEquals(2, receipts.size)
+        assertEquals(ReceiptStatus.ACCEPTED, receipts.last().status)
+        assertEquals("after", receipts.last().afterCaptureId)
+        assertEquals(BusinessOutcome.UNKNOWN, receipts.last().businessOutcome)
+    }
+
+    @Test fun asynchronousGuardRejectsRevokedEpochBeforeDispatch() {
+        val executor = CommandExecutor(ActionRunner { null }) { 1_000 }
+        var receipt: Receipt? = null
+        executor.executeAsync(command, state.copy(epoch = 1), { _, _ -> error("Revoked command dispatched") }, { receipt = it })
+        assertEquals(ReceiptStatus.REJECTED, receipt!!.status)
+        assertEquals("REVOKED_EPOCH", receipt!!.reason)
+    }
 }

@@ -30,7 +30,8 @@ data class Snapshot(
     val title: String,
     val text: String,
     val targets: List<Target>,
-    val truncated: Boolean
+    val truncated: Boolean,
+    val epoch: Long = 0
 )
 
 fun sanitizeUrl(raw: String): String = runCatching {
