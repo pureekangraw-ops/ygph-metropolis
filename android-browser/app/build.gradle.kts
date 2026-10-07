@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.big.gobrowser"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.big.gobrowser"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 3
         versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
