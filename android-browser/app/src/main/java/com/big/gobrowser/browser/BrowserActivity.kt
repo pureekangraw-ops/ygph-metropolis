@@ -21,6 +21,9 @@ import android.widget.Toast
 import com.big.gobrowser.control.*
 import com.big.gobrowser.observer.*
 import com.big.gobrowser.transport.*
+import com.big.gobrowser.lyra.LyraDialog
+import org.json.JSONObject
+import org.json.JSONArray
 import java.util.concurrent.Executors
 
 class BrowserActivity : Activity() {
@@ -72,27 +75,53 @@ class BrowserActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
         }
-        toolbar.addView(button("‹") { tabStore.active()?.webView?.goBack() })
-        toolbar.addView(button("›") { tabStore.active()?.webView?.goForward() })
         toolbar.addView(address)
-        toolbar.addView(button("↻") { tabStore.active()?.webView?.reload() })
-        toolbar.addView(button("+") { stopSharing(); tabStore.open(); configureActiveWebView() })
+        toolbar.addView(button("ไป") { navigateFromAddress() })
+        val navigation = LinearLayout(this)
+        navigation.addView(button("‹") { tabStore.active()?.webView?.goBack() })
+        navigation.addView(button("›") { tabStore.active()?.webView?.goForward() })
+        navigation.addView(button("↻") { tabStore.active()?.webView?.reload() })
+        navigation.addView(button("แท็บ") { showTabs() })
+        navigation.addView(button("+") { stopSharing(); tabStore.open(); configureActiveWebView() })
         shareButton = button("Share") { toggleShare() }
-        toolbar.addView(shareButton)
-        toolbar.addView(button("Eye") { captureActive(notify = true) })
-        toolbar.addView(button("Outside") { startActivity(android.content.Intent(this, com.big.gobrowser.outsideview.OutsideViewActivity::class.java)) })
-        // Connection settings have their own row to keep the browser toolbar usable.
         val settings = LinearLayout(this)
+        settings.addView(button("ไลร่า") { LyraDialog.show(this,"INSIDE") { lyraContext() } })
+        settings.addView(button("แผนที่") { startActivity(android.content.Intent(this, com.big.gobrowser.outsideview.OutsideViewActivity::class.java)) })
+        settings.addView(shareButton)
+        settings.addView(button("เมโทร") { connectStation() })
         settings.addView(button("Relay") { configureRelay() })
         settings.addView(button("Disconnect") { disconnect() })
         val browserContainer = FrameLayout(this)
         root.addView(toolbar)
-        root.addView(settings)
+        root.addView(scroll(navigation))
+        root.addView(scroll(settings))
         root.addView(browserContainer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
         tabStore.restore()
         configureActiveWebView()
+    }
+
+    private fun scroll(row:LinearLayout)=android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2)) }
+    private fun showTabs() {
+        val tabs=tabStore.list()
+        AlertDialog.Builder(this).setTitle("แท็บ").setItems(tabs.map {it.webView.title?:it.webView.url?:"หน้าใหม่"}.toTypedArray()){_,i->stopSharing();tabStore.select(tabs[i].id);configureActiveWebView()}
+            .setNeutralButton("ปิดแท็บนี้"){_,_->stopSharing();tabStore.active()?.let {tabStore.close(it.id)};if(tabStore.active()==null)tabStore.open();configureActiveWebView()}.setNegativeButton("กลับ",null).show()
+    }
+    private fun lyraContext():JSONObject {
+        val tab=tabStore.active()
+        val snap=tab?.let {observerSession.latest(it.id)}
+        if(snap==null || tab==null || !observerSession.isSharing(tab.id))return JSONObject()
+        val targets=JSONArray();snap.targets.take(32).forEach {targets.put(JSONObject().put("id",it.id).put("label",it.label).put("kind",it.kind).put("role",it.role))}
+        return JSONObject().put("browser",JSONObject().put("deviceId",snap.deviceId).put("tabId",snap.tabId).put("captureId",snap.captureId).put("revision",snap.revision).put("epoch",permissions.epoch(tab.id)).put("capturedAtEpochMs",snap.capturedAtEpochMs).put("foreground",foreground).put("interactive",lifecycle.isInteractive()).put("url",snap.url).put("title",snap.title).put("text",snap.text.take(4000)).put("targets",targets))
+    }
+    private fun connectStation() {
+        ObservatoryStationConnection(this).pair(this) { config,secret ->
+            stopSharing();receipts.clear();credentials.save(secret);owner=config
+            observerSession=ObserverSession(config.deviceId,"0.2.0")
+            sync=SyncService(HttpRelayClient(config.endpoints,object:DeviceCredentialStore {override fun load()=secret;override fun save(token:String)=error("read-only");override fun revoke()=Unit}),outbox)
+            say("เชื่อมเมโทรแล้ว กด Share เพื่อเปิดให้โกอ่านและจัดการ")
+        }
     }
 
     private fun configureActiveWebView() { tabStore.active()?.webView?.webViewClient = client() }
@@ -124,7 +153,8 @@ class BrowserActivity : Activity() {
         generation += 1
         tabStore.active()?.let { tab ->
             observerSession.stop(tab.id)
-            permissions.revoke(tab.id)
+            val epoch=permissions.revoke(tab.id)
+            if(owner!=null)network.execute {runCatching {ObservatoryStationConnection(this).stop("browser",epoch)}}
             outbox.clearTab(tab.id)
         }
         commands.clear()
@@ -260,6 +290,7 @@ class BrowserActivity : Activity() {
         stopSharing()
         sync = null; owner = null; receipts.clear()
         runCatching { credentials.revoke() }.onFailure { say("ล้าง credential ไม่สำเร็จ") }
+        network.execute {ObservatoryStationConnection(this).disconnect()}
     }
 
     private fun navigateFromAddress() {

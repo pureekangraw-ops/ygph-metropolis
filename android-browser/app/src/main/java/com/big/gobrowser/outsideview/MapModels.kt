@@ -122,7 +122,7 @@ data class MapJournal(
     val version: Int = 1
 )
 
-enum class ExecutionScope { TEST, LIVE_DISABLED }
+enum class ExecutionScope { TEST, LOCAL_OWNER, LIVE_DISABLED }
 data class RenderRequest(val commandId: String, val revision: Long, val styleGeneration: Long, val token: String, val state: MapState)
 data class RenderConfirmation(
     val commandId: String,
