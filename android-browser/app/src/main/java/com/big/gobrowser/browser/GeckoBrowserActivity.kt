@@ -70,9 +70,10 @@ class GeckoBrowserActivity : Activity() {
         ObservatoryTheme.address(address); addressRow.addView(address); addressRow.addView(button("ไป") { navigateFromAddress() })
         root.addView(addressRow)
         val navigation = scrollRow(button("ย้อนกลับ") { engine.back() }, button("ถัดไป") { engine.forward() }, button("รีโหลด") { engine.reload() }, button("แท็บ") { showTabs() }, button("+") { engine.open(); renderActive() })
-        val controls = scrollRow(button("GO / Share") { toggleShare() }, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เชื่อมต่อ") { showConnectionMenu() })
+        val share = button("GO / Share") { toggleShare() }
+        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เชื่อมต่อ") { showConnectionMenu() })
         root.addView(navigation); root.addView(controls)
-        shareButton = controls.getChildAt(0) as Button
+        shareButton = share
         sharingStatus = ObservatoryTheme.status(this); root.addView(sharingStatus)
         eyeStatus = ObservatoryTheme.status(this); root.addView(eyeStatus)
         val browserContainer = FrameLayout(this).apply { setBackgroundColor(0xff07101b.toInt()) }
