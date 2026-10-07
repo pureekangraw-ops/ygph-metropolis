@@ -7,16 +7,13 @@
     return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
   };
   const label = (node) => clean(node.getAttribute('aria-label') || node.innerText || node.textContent || node.getAttribute('placeholder') || node.getAttribute('name'));
-  const documentId = crypto.randomUUID();
-  const frameId = window.top === window ? 'frame-0' : `frame-${documentId}`;
-  let lastFingerprint = null;
+  const frameId = window.top === window ? 'frame-0' : `frame-${Math.abs([...(`${location.href}|${window.name}`)].reduce((n, ch) => ((n * 31) + ch.charCodeAt(0)) | 0, 7))}`;
   const href = (node) => {
     if (!(node instanceof HTMLAnchorElement) || !node.href) return null;
     try { const u = new URL(node.href); if (!['http:', 'https:'].includes(u.protocol)) return null; u.username = ''; u.password = ''; u.hash = ''; return u.href.slice(0, 800); } catch { return null; }
   };
   const signature = (node) => [node.tagName, node.getAttribute('type') || '', node.getAttribute('role') || '', node.getAttribute('href') || '', label(node)].join('\u001f');
   const nativePort = browser.runtime.connectNative('observatory_observer');
-  nativePort.postMessage({type:'FRAME_READY', frameId, documentId});
   nativePort.onMessage.addListener((message) => {
     if (!message || message.type !== 'EXECUTE') return;
     const command = message;
@@ -39,13 +36,13 @@
       }
     }
     nativePort.postMessage({...result, commandId: command.commandId});
-    if (result.ok) publish(true);
   });
 
-  const publish = (force = false) => {
+  const publish = () => {
     if (!document.body || document.visibilityState !== 'visible') return;
     const nodes = [...document.querySelectorAll('a,button,input,textarea,select,[role],[tabindex]')]
       .filter(visible).filter((node) => String(node.type || '').toLowerCase() !== 'password').slice(0, 500);
+    const captureId = crypto.randomUUID();
     const targets = nodes.map((node, index) => {
       const rect = node.getBoundingClientRect();
       const tag = node.tagName.toLowerCase();
@@ -56,21 +53,15 @@
         left: Math.round(rect.left), top: Math.round(rect.top), right: Math.round(rect.right), bottom: Math.round(rect.bottom)
       };
     });
-    const fingerprint = JSON.stringify([location.href, document.title, clean(document.body.innerText, 200000), targets]);
-    const saved = window.__observatoryTargets;
-    const sameNodes = saved && nodes.length === saved.nodes.length && nodes.every((node, i) => node === saved.nodes[i]);
-    const captureId = !force && sameNodes && fingerprint === lastFingerprint ? saved.captureId : crypto.randomUUID();
-    lastFingerprint = fingerprint;
     window.__observatoryTargets = { captureId, frameId, url: location.href, nodes, signatures: nodes.map(signature) };
     browser.runtime.sendNativeMessage('observatory_observer', {
       type: 'OBSERVATION',
-      page: { captureId, frameId, documentId, url: location.href, title: document.title || '', text: clean(document.body.innerText, 200000), targets,
+      page: { captureId, frameId, url: location.href, title: document.title || '', text: clean(document.body.innerText, 200000), targets,
         visibility: document.visibilityState, capturesInputValues: false, createsAuthority: false, capturedAt: new Date().toISOString() }
     }).catch(() => {});
   };
   publish();
   const observer = new MutationObserver(() => { clearTimeout(window.__observatoryPublishTimer); window.__observatoryPublishTimer = setTimeout(publish, 350); });
   observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['aria-label','aria-disabled','disabled','href','role','type']});
-  setInterval(() => publish(), 1800);
+  setInterval(publish, 1800);
 })();
-
