@@ -28,7 +28,36 @@ class TabStore(
         BrowserSettings.configure(webView)
         val tab = BrowserTab(UUID.randomUUID().toString(), webView)
         tabs[tab.id] = tab
-        container.addView(webView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.Layou…205 tokens truncated…activeId?.let(tabs::get)
+        container.addView(webView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        select(tab.id)
+        webView.loadUrl(url)
+        persist()
+        return tab.id
+    }
+
+    fun select(id: String) {
+        val tab = tabs[id] ?: return
+        activeId = id
+        tabs.forEach { (tabId, candidate) ->
+            candidate.webView.visibility = if (tabId == id) View.VISIBLE else View.GONE
+        }
+        onActiveUrlChanged(tab.webView.url.orEmpty())
+        persist()
+    }
+
+    fun close(id: String) {
+        val tab = tabs.remove(id) ?: return
+        container.removeView(tab.webView)
+        tab.webView.stopLoading()
+        tab.webView.destroy()
+        if (activeId == id) {
+            activeId = tabs.keys.lastOrNull()
+            activeId?.let(::select)
+        }
+        persist()
+    }
+
+    fun active(): BrowserTab? = activeId?.let(tabs::get)
 
     fun list(): List<BrowserTab> = tabs.values.toList()
 

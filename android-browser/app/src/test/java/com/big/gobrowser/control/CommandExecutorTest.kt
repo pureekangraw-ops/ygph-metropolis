@@ -37,4 +37,14 @@ class CommandExecutorTest {
         assertEquals(ReceiptStatus.REJECTED, receipt!!.status)
         assertEquals("REVOKED_EPOCH", receipt!!.reason)
     }
+    @Test fun asyncExecutionTimestampPrecedesAfterCapture() {
+        var time=1000L
+        var finish:((ActionReadback)->Unit)?=null
+        var result:Receipt?=null
+        val executor=CommandExecutor(ActionRunner {null}) {time}
+        executor.executeAsync(command,state,{_,done->finish=done},{result=it})
+        time=1200L
+        finish!!(ActionReadback(true,"CLICK_DISPATCHED","after","DOM_CAPTURED"))
+        assertEquals(1000L,result!!.executedAtEpochMs)
+    }
 }
