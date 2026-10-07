@@ -70,8 +70,13 @@ class OutsideViewActivity : Activity() {
             if(rejection!=null){status.text="ปฏิเสธคำสั่งเมโทร: $rejection";if(relay.started(envelope))relay.completed(envelope,MapReceipt(c.commandId,MapReceiptStatus.REJECTED,rejection,store.load().state.revision));remote.remove(c.commandId);pump();return}
             if(!relay.started(envelope)){status.text="บันทึกคำสั่งเมโทรไม่ได้หรือ payload เปลี่ยน";remote.remove(c.commandId);pump();return}
             // Journal owns command dedupe. A terminal receipt is returned without executing again.
-            val existing=store.load().receipts[c.commandId]
-            if(existing!=null){remote.remove(c.commandId);relay.completed(envelope,existing);pump();return}
+            val journal=store.load();val existing=journal.receipts[c.commandId]
+            if(existing!=null){
+                remote.remove(c.commandId)
+                if(journal.hashes[c.commandId]==MapCommandCodec.canonical(c))relay.completed(envelope,existing)
+                else relay.completed(envelope,MapReceipt(c.commandId,MapReceiptStatus.REJECTED,"command-id-reused-with-different-payload",journal.state.revision))
+                pump();return
+            }
         }
         busy=true;val r=executor.submit(c)
         if(r.status!=MapReceiptStatus.PENDING){busy=false;status.text="${r.status}: ${r.reason}";remote.remove(c.commandId)?.let {relay.completed(it,r)};pump()}

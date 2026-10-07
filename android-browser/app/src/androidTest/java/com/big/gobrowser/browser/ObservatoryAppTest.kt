@@ -43,7 +43,7 @@ class ObservatoryAppTest {
         while(System.nanoTime()<deadline) {
             val done=CountDownLatch(1)
             run {
-                val roots=androidx.test.espresso.RootMatchers.isDialog()
+                val roots=androidx.test.espresso.matcher.RootMatchers.isDialog()
                 // The attached dialog WebView is captured from its bridge via Espresso's displayed root.
                 androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(WebView::class.java)).inRoot(roots).perform(object:androidx.test.espresso.ViewAction {
                     override fun getConstraints()=androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(WebView::class.java)

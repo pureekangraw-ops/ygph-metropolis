@@ -39,7 +39,7 @@ class BrowserActivity : Activity() {
         val prefs=getSharedPreferences("observatory-epochs",MODE_PRIVATE)
         val seed=maxOf(System.currentTimeMillis(),prefs.getLong("browser",0L)+1)
         check(prefs.edit().putLong("browser",seed).commit())
-        PermissionStore(seed)
+        PermissionStore(seed,deviceScope=true)
     }
     private val outbox = Outbox()
     private val executor = CommandExecutor(ActionRunner { null })
@@ -52,6 +52,7 @@ class BrowserActivity : Activity() {
     private var syncBusy = false
     @Volatile private var generation = 0L
     private val commands = java.util.ArrayDeque<Command>()
+    private val commandLedger=BrowserCommandLedger()
     private val receipts = java.util.ArrayDeque<Receipt>()
     private val tick = object : Runnable {
         override fun run() {
@@ -132,7 +133,7 @@ class BrowserActivity : Activity() {
     }
 
     private fun bindStation(config:OwnerRelayConfiguration,secret:String) {
-        receipts.clear();credentials.save(secret);owner=config
+        receipts.clear();commandLedger.clear();credentials.save(secret);owner=config
         observerSession=ObserverSession(config.deviceId,"0.2.0")
         sync=SyncService(HttpRelayClient(config.endpoints,object:DeviceCredentialStore {override fun load()=secret;override fun save(token:String)=error("read-only");override fun revoke()=Unit}),outbox)
     }
@@ -173,7 +174,7 @@ class BrowserActivity : Activity() {
             observerSession.stop(tab.id)
             val epoch=permissions.revoke(tab.id)
             getSharedPreferences("observatory-epochs",MODE_PRIVATE).edit().putLong("browser",epoch).commit()
-            if(owner!=null)network.execute {runCatching {ObservatoryStationConnection(this).stop("browser",epoch)}}
+            if(owner!=null)network.execute {runCatching {ObservatoryStationConnection(this).stop("browser",epoch-1)}}
             outbox.clearTab(tab.id)
         }
         commands.clear()
@@ -229,7 +230,7 @@ class BrowserActivity : Activity() {
                 if (destroyed || permissionGeneration != generation || service !== sync) return@post
                 acknowledged.forEach { receipts.remove(it) }
                 if (report != null) {
-                    report.commands.take(100 - commands.size).forEach { commands.addLast(it) }
+                    report.commands.take(100 - commands.size).forEach { if(commandLedger.admit(it)==null)commands.addLast(it) }
                     processNextCommand()
                 }
             }
@@ -271,7 +272,7 @@ class BrowserActivity : Activity() {
     }
 
     private fun queueReceipt(receipt: Receipt) {
-        if (receipts.size < 100) receipts.addLast(receipt)
+        if (receipts.size < 100 && receipts.none {it.commandId==receipt.commandId}) receipts.addLast(receipt)
     }
 
     private fun configureRelay() {
@@ -308,7 +309,7 @@ class BrowserActivity : Activity() {
 
     private fun disconnect() {
         stopSharing()
-        sync = null; owner = null; receipts.clear()
+        sync = null; owner = null; receipts.clear();commandLedger.clear()
         runCatching { credentials.revoke() }.onFailure { say("ล้าง credential ไม่สำเร็จ") }
         network.execute {ObservatoryStationConnection(this).disconnect()}
     }

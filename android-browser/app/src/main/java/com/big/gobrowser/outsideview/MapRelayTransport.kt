@@ -20,13 +20,13 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
     private val worker=Executors.newSingleThreadExecutor()
     private var config:MapRelayConfiguration?=null
     private var token:String?=null
-    private var generation=0L
+    @Volatile private var generation=0L
     private var epoch=0L
     private var sequence=0L
     private var inFlight=false
-    private var closed=false
+    @Volatile private var closed=false
     private val admitted=mutableMapOf<String,String>()
-    var sharing=false;private set
+    @Volatile var sharing=false;private set
     var capture:MapRelayCapture?=null;private set
     private val loop=object:Runnable {override fun run(){if(sharing&&!closed){sync();handler.postDelayed(this,5000)}}}
     fun start():Boolean {
@@ -76,6 +76,10 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
     private fun records()=runCatching {JSONObject(prefs.getString("records","{}")!!)}.getOrElse {JSONObject()}
     private fun record(id:String)=records().optJSONObject(id)
     private fun saveRecords(records:JSONObject)=prefs.edit().putString("records",records.toString()).commit()
+    private fun hasPendingReceipt(sessionEpoch:Long):Boolean {
+        val ledger=records()
+        return ledger.keys().asSequence().any {key->val record=ledger.getJSONObject(key);record.optLong("epoch")==sessionEpoch&&!record.optBoolean("sent")&&record.has("receipt")}
+    }
     private fun buildSnapshot():JSONObject? {
         val c=config?:return null
         val j=store.load();if(j.pending!=null||!ready()||!power.isInteractive)return null
@@ -96,17 +100,31 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
         val snapshot=if(pending!=null)pending.second.optJSONObject("after") else buildSnapshot()
         if(pending==null&&snapshot==null){status("ยังแชร์ไม่ได้: แผนที่ยังไม่ยืนยันเฟรมหรือ snapshot ใหญ่เกินขนาด");return}
         inFlight=true
+        val hasCapture=capture!=null
+        val sessionEpoch=epoch
         worker.execute {
+            var didPublish=false
             val result=runCatching {
-                if(snapshot!=null){val ack=JSONObject(StationHttp.request(c.publishSnapshots,body=snapshot,token=t));require(ack.getString("id")==snapshot.getString("captureId")) {"SNAPSHOT_ACK_MISMATCH"}}
-                if(pending!=null){val ack=JSONObject(StationHttp.request(c.publishReceipts,body=pending.second.getJSONObject("receipt"),token=t));require(ack.getString("id")==pending.first) {"RECEIPT_ACK_MISMATCH"};emptyList<JSONObject>()}
-                else {val a=JSONObject(StationHttp.request(c.pollCommands,"GET",token=t)).getJSONArray("commands");(0 until minOf(a.length(),100)).map {a.getJSONObject(it)}}
+                fun active(){check(g==generation&&sharing&&!closed&&power.isInteractive) {"SHARING_SESSION_STOPPED"}}
+                fun publish(){
+                    if(snapshot==null)return
+                    // A native frame can complete while polling. Its durable receipt takes priority
+                    // over the idle refresh prepared before that poll.
+                    if(pending==null&&hasPendingReceipt(sessionEpoch))return
+                    active()
+                    val ack=JSONObject(StationHttp.request(c.publishSnapshots,body=snapshot,token=t))
+                    require(ack.getString("id")==snapshot.getString("captureId")) {"SNAPSHOT_ACK_MISMATCH"};didPublish=true
+                }
+                MapRelayExchange.run(hasCapture,pending!=null,::active,
+                    poll={active();val a=JSONObject(StationHttp.request(c.pollCommands,"GET",token=t)).getJSONArray("commands");(0 until minOf(a.length(),100)).map {a.getJSONObject(it)}},
+                    publish=::publish,
+                    receipt={active();val entry=requireNotNull(pending);val ack=JSONObject(StationHttp.request(c.publishReceipts,body=entry.second.getJSONObject("receipt"),token=t));require(ack.getString("id")==entry.first) {"RECEIPT_ACK_MISMATCH"}})
             }
             handler.post {
                 inFlight=false
                 if(g!=generation||!sharing||closed)return@post
                 result.onSuccess {commands->
-                    snapshot?.let {capture=MapRelayCapture(it.getString("captureId"),it.getLong("revision"),it.getLong("epoch"),it.getLong("capturedAtEpochMs"))}
+                    if(didPublish)snapshot?.let {capture=MapRelayCapture(it.getString("captureId"),it.getLong("revision"),it.getLong("epoch"),it.getLong("capturedAtEpochMs"))}
                     if(pending!=null){val current=records();current.optJSONObject(pending.first)?.put("sent",true);saveRecords(current);admitted.remove(pending.first);status("เมโทรรับ receipt แล้ว · ผลงานธุรกิจ UNKNOWN");sync()}
                     else commands.forEach {raw->runCatching {MapRelayEnvelope.decode(raw)}.onSuccess {e->
                         val canonical=e.identity();val old=record(e.command.commandId)
@@ -115,6 +133,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
                         if(admitted[e.command.commandId]==null){if(admitted.size>=100){status("คิวคำสั่งแผนที่เต็ม");return@onSuccess};admitted[e.command.commandId]=canonical;receive(e)}
                     }.onFailure {status("คำสั่งเมโทรไม่ตรงสัญญา: ${it.message}")}}
                 }.onFailure {status("เมโทรยังไม่รับข้อมูลแผนที่: ${it.message}")}
+                if(result.isSuccess&&pending==null&&hasPendingReceipt(sessionEpoch))sync()
             }
         }
     }
