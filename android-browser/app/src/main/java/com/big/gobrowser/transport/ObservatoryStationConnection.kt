@@ -11,14 +11,21 @@ import java.net.URI
 import java.util.UUID
 import java.util.concurrent.Executors
 
-class ObservatoryStationConnection(context:Context) {
-    private val settings=context.applicationContext.getSharedPreferences("observatory-station",Context.MODE_PRIVATE)
-    private val credential=AndroidDeviceCredentialStore(context,"observatory-station-token","observatory-station-credential")
+class ObservatoryStationConnection(context:Context,settingsName:String="observatory-station",keyAlias:String="observatory-station-token",credentialName:String="observatory-station-credential") {
+    private val settings=context.applicationContext.getSharedPreferences(settingsName,Context.MODE_PRIVATE)
+    private val credential=AndroidDeviceCredentialStore(context,keyAlias,credentialName)
     fun saved():JSONObject?=settings.getString("connection",null)?.let {runCatching {JSONObject(it)}.getOrNull()}
     fun token()=credential.load()
     fun config(view:String)=saved()?.optJSONObject(if(view=="browser")"browser" else "map")
     fun stop(view:String,epoch:Long) {val c=config(view)?:return;val endpoint=c.optString("stopSharing");if(endpoint.isNotBlank())StationHttp.request(endpoint,body=JSONObject().put("view",view).put("epoch",epoch),token=token())}
-    fun disconnect() {val c=config("browser")?:config("map");val t=token();settings.edit().remove("connection").apply();credential.revoke();val endpoint=c?.optString("disconnect").orEmpty();if(endpoint.isNotBlank()&&t!=null)runCatching {StationHttp.request(endpoint,body=JSONObject(),token=t)}}
+    /** Local revoke happens before waiting for network; Activity destruction cannot restore it. */
+    fun revokeLocally():()->Unit {
+        val c=config("browser")?:config("map");val t=token()
+        check(settings.edit().remove("connection").commit());credential.revoke()
+        val endpoint=c?.optString("disconnect").orEmpty()
+        return {if(endpoint.isNotBlank()&&t!=null)runCatching {StationHttp.request(endpoint,body=JSONObject(),token=t)};Unit}
+    }
+    fun disconnect()=revokeLocally().invoke()
     fun pair(activity:Activity,connected:(OwnerRelayConfiguration,String)->Unit) {
         val form=LinearLayout(activity).apply {orientation=LinearLayout.VERTICAL;setPadding(24,12,24,12)}
         val origin=EditText(activity).apply {hint="ที่อยู่เมโทร";setSingleLine();setText("https://metropolis.pureekangraw.workers.dev")}

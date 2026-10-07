@@ -314,7 +314,9 @@ class BrowserActivity : Activity() {
         stopSharing()
         sync = null; owner = null; receipts.clear();commandLedger.clear()
         runCatching { credentials.revoke() }.onFailure { say("ล้าง credential ไม่สำเร็จ") }
-        network.execute {ObservatoryStationConnection(this).disconnect()}
+        runCatching {ObservatoryStationConnection(this).revokeLocally()}
+            .onSuccess {notifyServer->network.execute {notifyServer()}}
+            .onFailure {say("ล้างการเชื่อมเมโทรไม่สำเร็จ") }
     }
 
     private fun navigateFromAddress() {
