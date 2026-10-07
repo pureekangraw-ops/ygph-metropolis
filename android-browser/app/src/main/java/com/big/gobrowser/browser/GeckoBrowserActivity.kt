@@ -173,6 +173,6 @@ class GeckoBrowserActivity : Activity() {
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     override fun onResume() { super.onResume(); foreground = true; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
     override fun onPause() { foreground = false; engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
-    override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); stopService(Intent(this, GeckoObserverService::class.java)); handler.removeCallbacks(tick); network.shutdownNow(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
