@@ -105,13 +105,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: cd android-browser && gradle --no-daemon :app:connectedDebugAndroidTest
-      - name: Capture emulator evidence
-        if: always()
-        run: |
-          mkdir -p /tmp/observatory-emulator-evidence
-          adb logcat -d > /tmp/observatory-emulator-evidence/logcat.txt || true
-          adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png /tmp/observatory-emulator-evidence/ || true
+          script: bash android-browser/scripts/emulator-acceptance.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -119,5 +113,5 @@ jobs:
           path: |
             android-browser/app/build/reports/androidTests/connected
             android-browser/app/build/outputs/androidTest-results/connected
-            /tmp/observatory-emulator-evidence
+            android-browser/app/build/emulator-evidence
           retention-days: 14
