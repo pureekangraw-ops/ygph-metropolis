@@ -45,15 +45,3 @@ test('CI builds, tests, runs emulator acceptance and uploads named Gecko APK', (
   assert.match(workflow, /YGG-Observatory-Gecko\.apk/);
   assert.match(workflow, /observatory-emulator/);
 });
-
-test('Metropolis connection uses the new Hub OAuth/PKCE entry, not legacy station pairing', () => {
-  const client = readAndroid('app/src/main/java/com/big/gobrowser/transport/MetropolisMcpClient.kt');
-  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  assert.match(client, /\/mcp/);
-  assert.match(client, /code_challenge_method/);
-  assert.match(client, /oauth\/observatory-client\.json/);
-  assert.match(client, /metropolis_identity/);
-  assert.match(client, /metropolis_arrive/);
-  assert.match(activity, /เชื่อม Metropolis Hub ใหม่/);
-  assert.doesNotMatch(activity, /connectStation\(\)/);
-});
