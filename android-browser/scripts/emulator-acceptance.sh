@@ -21,5 +21,11 @@ if [ "$status" -ne 0 ]; then
     safe="${safe//$'\n'/'%0A'}"
     echo "::error title=Emulator::$safe"
   done
+  find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print0 2>/dev/null | xargs -0 -r grep -h -E '(<failure|<error)' | tail -n 40 | while IFS= read -r line; do
+    safe="${line//'%'/'%25'}"
+    safe="${safe//$'\r'/'%0D'}"
+    safe="${safe//$'\n'/'%0A'}"
+    echo "::error title=JUnit::$safe"
+  done
 fi
 exit "$status"
