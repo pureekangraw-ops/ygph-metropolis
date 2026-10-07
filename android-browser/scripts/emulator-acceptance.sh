@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-set -uo pipefail
-cd "$(dirname "$0")/.."
+set -euo pipefail
+mkdir -p /tmp/observatory-emulator-evidence
+collect_evidence() {
+  timeout 15 adb logcat -d > /tmp/observatory-emulator-evidence/logcat.txt || true
+  timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png /tmp/observatory-emulator-evidence/ || true
+  timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png /tmp/observatory-emulator-evidence/ || true
+}
+trap collect_evidence EXIT
 gradle --no-daemon :app:connectedDebugAndroidTest
-test_status=$?
-mkdir -p app/build/emulator-evidence
-# Collect while the runner's emulator is alive; the action shuts it down on return.
-timeout 15s adb logcat -d > app/build/emulator-evidence/logcat.txt || true
-timeout 15s adb pull /sdcard/Android/data/com.big.gobrowser/files/. app/build/emulator-evidence/ || true
-exit "$test_status"
