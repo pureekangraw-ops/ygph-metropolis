@@ -103,6 +103,7 @@ class BrowserActivity : Activity() {
         root.addView(scroll(settings))
         root.addView(browserContainer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
+        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
         setContentView(root)
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
         tabStore.restore()

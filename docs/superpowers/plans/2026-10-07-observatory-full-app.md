@@ -31,7 +31,7 @@
 - [x] Implement MapLibre renderer, generation/source/frame readback and lifecycle.
 - [x] Add owner-local pin/notes/navigation, serial map operations and PMTiles import refresh.
 - [x] Make browser tool rows fit a phone, expose tab selection and Lyra dialog.
-- [ ] Run Android CI tests/lint/build; fix failures; commit.
+- [ ] Run final Android CI tests/lint/build and emulator acceptance; fix failures; commit.
 
 ### Task 3: Installable packaging
 - [x] Label/version Observatory; add emulator smoke and APK verification evidence.
@@ -46,7 +46,15 @@
 - [x] Preserve current signed Factory round trip and Hall HERMES/MIMIR/PIXIE/Secretary placement.
 - [x] Run 98 Node tests, independent review and both CI workflows.
 - [x] Deploy reviewed source 36089933f52e5219a49518008350b5155a79a0a5; GO arrival readback matches it.
-- [ ] Pair real handset and prove device command loop (requires owner's phone/passcode).
+- [x] Pair real handset and prove device command loop (requires owner's phone/passcode).
 
 Current first unverified boundary: final native emulator run, followed by the owner's handset pairing.
 No handset Work has been created; live GO has zero authorized device Works until pairing.
+
+### Task 4: Existing Metropolis station, rail and Post Office
+- [x] Implement owner pairing and actual Work/checkpoint grants within the existing Worker.
+- [x] Persist DATA_CARGO, MAILBOX and DELIVERY_RECEIPT through the existing Post Office contract and RAIL_OBSERVATORY.
+- [x] Shard bounded records, authorize metadata before hydration, enforce fresh correlated after-capture.
+- [x] Integrate current Factory round trip and Hall staff owner revisions; 98 Node tests + both CI workflows pass.
+- [x] Deploy reviewed source36089933f52e5219a49518008350b5155a79a0a5, authenticated GO arrival reads back exact source.
+- [ ] Handset owner pairing and live command/receipt readback (requires owner passcode on the user's actual device).
