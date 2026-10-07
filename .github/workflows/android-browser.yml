@@ -34,7 +34,12 @@ jobs:
         with:
           gradle-version: "8.11.1"
       - name: DOM targeting regression tests
-        run: node --test tests/*.test.mjs
+        run: |
+          set -o pipefail
+          node --test tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
+      - name: Publish DOM test diagnostics
+        if: ${{ failure() }}
+        run: cat "$RUNNER_TEMP/android-browser-dom-tests.log" >> "$GITHUB_STEP_SUMMARY"
       - name: JVM unit tests
         run: |
           set -o pipefail
@@ -61,6 +66,7 @@ jobs:
             ${{ github.workspace }}/android-browser/app/build/test-results/testDebugUnitTest
             ${{ github.workspace }}/android-browser/app/build/reports/tests/testDebugUnitTest
             ${{ runner.temp }}/android-browser-unit-tests.log
+            ${{ runner.temp }}/android-browser-dom-tests.log
           if-no-files-found: warn
           retention-days: 7
       - name: Android lint
