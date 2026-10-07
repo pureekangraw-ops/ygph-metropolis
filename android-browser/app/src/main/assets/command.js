@@ -18,7 +18,7 @@
   if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0 || el.disabled || el.getAttribute('aria-disabled') === 'true') return {ok:false,reason:'TARGET_NOT_VISIBLE'};
   if ((el.type || '').toLowerCase() === 'password' || /password|passcode|otp|verification/i.test(el.getAttribute('autocomplete') || '')) return {ok:false,reason:'PASSWORD_TARGET_REJECTED'};
   const label = (el.getAttribute('aria-label') || el.innerText || el.textContent || el.getAttribute('placeholder') || el.getAttribute('name') || '').trim().slice(0,300);
-  const signature = [el.tagName, el.getAttribute('type') || '', el.getAttribute('href') || '', el.getAttribute('role') || '', label].join('\u001f');
+  const signature = [el.tagName, el.type || '', el.getAttribute('href') || '', el.getAttribute('role') || '', label].join('\u001f');
   if (saved.signatures?.[index] !== signature || (p.signature && p.signature !== signature)) return {ok:false,reason:'TARGET_CHANGED'};
   if (command.action === 'CLICK') { el.click(); return {ok:true,reason:'CLICK_DISPATCHED'}; }
   if (command.action === 'FILL') {
