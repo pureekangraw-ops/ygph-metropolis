@@ -53,7 +53,7 @@ class BrowserActivity : Activity() {
     @Volatile private var generation = 0L
     private val commands = java.util.ArrayDeque<Command>()
     private val commandLedger=BrowserCommandLedger()
-    private val receipts = java.util.ArrayDeque<Receipt>()
+    private val receipts = EpochReceiptQueue()
     private val tick = object : Runnable {
         override fun run() {
             if (!foreground) return
@@ -102,6 +102,7 @@ class BrowserActivity : Activity() {
         root.addView(scroll(navigation))
         root.addView(scroll(settings))
         root.addView(browserContainer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
         setContentView(root)
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
         tabStore.restore()
@@ -170,6 +171,7 @@ class BrowserActivity : Activity() {
 
     private fun stopSharing() {
         generation += 1
+        receipts.revoke(generation)
         tabStore.active()?.let { tab ->
             observerSession.stop(tab.id)
             val epoch=permissions.revoke(tab.id)
@@ -266,13 +268,13 @@ class BrowserActivity : Activity() {
             }
         }) { receipt ->
             commandBusy = false
-            if (commandConnection === sync) queueReceipt(receipt)
+            if (commandConnection === sync) queueReceipt(receipt,permissionGeneration)
             processNextCommand()
         }
     }
 
-    private fun queueReceipt(receipt: Receipt) {
-        if (receipts.size < 100 && receipts.none {it.commandId==receipt.commandId}) receipts.addLast(receipt)
+    private fun queueReceipt(receipt: Receipt,epoch:Long=generation) {
+        receipts.enqueue(epoch,receipt)
     }
 
     private fun configureRelay() {

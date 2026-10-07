@@ -50,6 +50,7 @@ class OutsideViewActivity : Activity() {
         root.addView(scroll(files))
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
         root.addView(TextView(this).apply {text=packageStore.active()?.attribution?:"© OpenStreetMap contributors · openstreetmap.org/copyright";textSize=12f;setOnClickListener {startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.openstreetmap.org/copyright")))}})
+        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
