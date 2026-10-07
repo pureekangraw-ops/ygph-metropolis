@@ -12,6 +12,8 @@ object CommandGuard {
         if (command.captureId != state.captureId) return GuardResult(false, GuardReason.STALE_CAPTURE)
         if (command.revision != state.revision) return GuardResult(false, GuardReason.STALE_REVISION)
         if (command.epoch != state.epoch) return GuardResult(false, GuardReason.REVOKED_EPOCH)
+        val frame = command.parameters["frameId"] ?: command.frameId
+        if (frame != state.frameId) return GuardResult(false, GuardReason.FRAME_MISMATCH)
         if (command.authority.isBlank()) return GuardResult(false, GuardReason.AUTHORITY_REQUIRED)
         return GuardResult(true, GuardReason.ACCEPTED)
     }

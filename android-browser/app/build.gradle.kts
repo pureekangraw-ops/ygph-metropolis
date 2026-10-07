@@ -34,6 +34,7 @@ android {
 
 dependencies {
     implementation("org.maplibre.gl:android-sdk-opengl:13.6.1")
+    implementation("org.mozilla.geckoview:geckoview-nightly-omni:153.0.20260615093007")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-ktx:1.10.0")

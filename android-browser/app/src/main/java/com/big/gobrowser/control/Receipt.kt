@@ -1,6 +1,6 @@
 package com.big.gobrowser.control
 
-enum class ReceiptStatus { ACCEPTED, REJECTED, EXECUTED, UNKNOWN }
+enum class ReceiptStatus { RECEIVED, ACCEPTED, EXECUTED, READBACK, REJECTED, UNKNOWN }
 enum class BusinessOutcome { VERIFIED, UNKNOWN }
 
 data class Receipt(

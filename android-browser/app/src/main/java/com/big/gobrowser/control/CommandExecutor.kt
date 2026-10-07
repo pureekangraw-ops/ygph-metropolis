@@ -29,7 +29,7 @@ class CommandExecutor(
         val finish: (ActionReadback) -> Unit = { result ->
             if (!delivered) {
                 delivered = true
-                callback(receipt(if (result.accepted) ReceiptStatus.ACCEPTED else ReceiptStatus.REJECTED, result.reason, result))
+                callback(receipt(if (!result.accepted) ReceiptStatus.REJECTED else if (result.captureId != null) ReceiptStatus.READBACK else ReceiptStatus.EXECUTED, result.reason, result))
             }
         }
         try { dispatch(command, finish) }

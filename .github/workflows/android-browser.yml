@@ -73,16 +73,16 @@ jobs:
         run: |
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
-          installer="app/build/outputs/apk/debug/YGG-Observatory-0.3.0.apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk"
           cp "$apk" "$installer"
           sha256sum "$installer" | tee "$installer.sha256"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: go-browser-debug-apk
+          name: YGG-Observatory-Gecko
           path: |
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-0.3.0.apk
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-0.3.0.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk.sha256
           retention-days: 14
 
   observatory-emulator:

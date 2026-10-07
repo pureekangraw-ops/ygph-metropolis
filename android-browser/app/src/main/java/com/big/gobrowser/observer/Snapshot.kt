@@ -14,7 +14,14 @@ data class Target(
     val left: Int,
     val top: Int,
     val right: Int,
-    val bottom: Int
+    val bottom: Int,
+    val frameId: String = "frame-0",
+    val tag: String = "",
+    val type: String = "",
+    val href: String? = null,
+    val visibility: String = "visible",
+    val disabled: Boolean = false,
+    val signature: String = ""
 )
 
 data class Snapshot(
