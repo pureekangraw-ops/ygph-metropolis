@@ -29,7 +29,7 @@ class CommandExecutor(
         val finish: (ActionReadback) -> Unit = { result ->
             if (!delivered) {
                 delivered = true
-                callback(receipt(if (!result.accepted) ReceiptStatus.REJECTED else if (result.captureId != null) ReceiptStatus.READBACK else ReceiptStatus.EXECUTED, result.reason, result))
+                callback(receipt(if (result.reason == "EXECUTION_UNCONFIRMED") ReceiptStatus.UNKNOWN else if (!result.accepted) ReceiptStatus.REJECTED else if (result.captureId != null) ReceiptStatus.READBACK else ReceiptStatus.EXECUTED, result.reason, result))
             }
         }
         try { dispatch(command, finish) }
@@ -57,3 +57,4 @@ class CommandExecutor(
 
 /** A dispatch/readback is evidence of browser action only, never business success. */
 data class ActionReadback(val accepted: Boolean, val reason: String, val captureId: String? = null, val text: String? = null)
+

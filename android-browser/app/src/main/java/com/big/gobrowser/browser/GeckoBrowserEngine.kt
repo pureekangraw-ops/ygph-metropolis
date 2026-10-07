@@ -49,13 +49,14 @@ class GeckoBrowserEngine(
     }
     fun restore() {
         if (tabs.isNotEmpty()) return
+        val savedActive = prefs.getString("active", null)
         val records = runCatching { JSONArray(prefs.getString("tabs", "[]")) }.getOrDefault(JSONArray())
         for (i in 0 until records.length()) {
             val record = records.optJSONObject(i) ?: continue; val url = record.optString("url"); val id = record.optString("id")
             if (id.isNotBlank() && BrowserSettings.isAllowedUrl(url)) open(url, id, recovery.read(id))
         }
         if (tabs.isEmpty()) open()
-        prefs.getString("active", null)?.takeIf(tabs::containsKey)?.let(::select)
+        savedActive?.takeIf(tabs::containsKey)?.let(::select)
     }
     fun select(id: String) { if (!tabs.containsKey(id)) return; updateVisibility(false); activeId = id; active()?.let { onUrlChanged(it.requestedUrl); attached?.let { view -> if (view.session !== it.session) { view.releaseSession(); view.setSession(it.session) } } }; updateVisibility(true); persist() }
     fun close(id: String) { val tab = tabs.remove(id) ?: return; val view = attached; if (view?.session === tab.session) { view.releaseSession(); attached = view }; recovery.remove(id); tab.session.close(); if (activeId == id) activeId = tabs.keys.lastOrNull(); if (tabs.isEmpty()) open() else { active()?.let { onUrlChanged(it.requestedUrl) }; attached?.let { attach(it) } }; persist() }
@@ -80,7 +81,18 @@ class GeckoBrowserEngine(
             override fun onLocationChange(session: GeckoSession, url: String?, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) { if (url != null) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() } }
         })
     }
-    private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl); if (tab.id == activeId && attached == null) persist() } }
+    private fun recover(tab: GeckoTab) {
+        val state = recovery.read(tab.id)
+        val view = attached
+        runCatching {
+            if (view?.session === tab.session) view.releaseSession()
+            if (!tab.session.isOpen) tab.session.open(runtime)
+            observer.bind(tab.session)
+            if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl)
+            if (tab.id == activeId) view?.setSession(tab.session)
+            updateVisibility(tab.id == activeId); persist()
+        }
+    }
     private fun persist() { val records = JSONArray(); tabs.values.forEach { records.put(JSONObject().put("id", it.id).put("url", it.requestedUrl)) }; prefs.edit().putString("tabs", records.toString()).putString("active", activeId).apply() }
     private object RuntimeHolder { private var value: GeckoRuntime? = null; fun runtime(context: Context): GeckoRuntime = value ?: GeckoRuntime.create(context).also { value = it } }
 }
@@ -94,3 +106,4 @@ data class DomCapture(val captureId: String, val frameId: String, val url: Strin
         }
     }
 }
+

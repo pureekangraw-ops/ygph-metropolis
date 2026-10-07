@@ -121,7 +121,7 @@ class GeckoBrowserActivity : Activity() {
         if (destroyed || !foreground || engine.active()?.id != tab.id || !observerSession.isSharing(tab.id)) return
         if (captureBusy) return
         captureBusy = true; val epoch = generation
-        val snapshot = observerSession.capture(tab.id, capture.url, capture.title, capture.text, capture.targets, capture.captureId, force = false)
+        val snapshot = observerSession.capture(tab.id, capture.url, capture.title, capture.text, capture.targets, capture.captureId, force = commandBusy || observerSession.latest(tab.id)?.captureId != capture.captureId)
         if (snapshot != null && sync != null) outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
         captureBusy = false
         if (epoch == generation && snapshot != null) eyeStatus.text = "Observer · ${snapshot.targets.size} targets · ${snapshot.targets.count { it.frameId != "frame-0" }} iframe targets · ${snapshot.captureId.take(8)}"
@@ -133,7 +133,9 @@ class GeckoBrowserActivity : Activity() {
     private fun processNextCommand() {
         if (captureBusy || commandBusy || commands.isEmpty() || destroyed) return
         val command = commands.removeFirst(); val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }
-        val state = ControlState(foreground && tab != null && observerSession.isSharing(tab.id) && latest != null && System.currentTimeMillis() - latest.capturedAtEpochMs <= Freshness.LIVE_CAPTURE_MAX_AGE_MS, lifecycleInteractive(), owner?.deviceId.orEmpty(), tab?.id.orEmpty(), latest?.captureId.orEmpty(), latest?.revision ?: -1, tab?.let { permissions.epoch(it.id) } ?: -1)
+        val requestedFrame = command.parameters["frameId"] ?: command.frameId
+        val observedFrame = if (requestedFrame == "frame-0" || latest?.targets?.any { it.frameId == requestedFrame } == true) requestedFrame else "UNOBSERVED_FRAME"
+        val state = ControlState(foreground && tab != null && observerSession.isSharing(tab.id) && latest != null && System.currentTimeMillis() - latest.capturedAtEpochMs <= Freshness.LIVE_CAPTURE_MAX_AGE_MS, lifecycleInteractive(), owner?.deviceId.orEmpty(), tab?.id.orEmpty(), latest?.captureId.orEmpty(), latest?.revision ?: -1, tab?.let { permissions.epoch(it.id) } ?: -1, observedFrame)
         if (owner == null || !owner!!.allows(command)) { queueReceipt(Receipt(command.commandId, ReceiptStatus.REJECTED, "OWNER_SCOPE_MISMATCH", latest?.captureId, null, System.currentTimeMillis(), null, BusinessOutcome.UNKNOWN)); processNextCommand(); return }
         commandBusy = true; val boundSync = sync; val commandEpoch = generation
         executor.executeAsync(command, state, { request, complete ->
@@ -176,3 +178,4 @@ class GeckoBrowserActivity : Activity() {
     override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); stopService(Intent(this, GeckoObserverService::class.java)); handler.removeCallbacks(tick); network.shutdownNow(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
+

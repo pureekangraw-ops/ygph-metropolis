@@ -47,4 +47,13 @@ class CommandExecutorTest {
         finish!!(ActionReadback(true,"CLICK_DISPATCHED","after","DOM_CAPTURED"))
         assertEquals(1000L,result!!.executedAtEpochMs)
     }
+    @Test fun bridgeTimeoutIsUnknownRatherThanRejected() {
+        val executor = CommandExecutor(ActionRunner { null }) { 1_000 }
+        var receipt: Receipt? = null
+        executor.executeAsync(command, state, { _, done -> done(ActionReadback(false, "EXECUTION_UNCONFIRMED")) }, { receipt = it })
+        assertEquals(ReceiptStatus.UNKNOWN, receipt!!.status)
+        assertEquals(BusinessOutcome.UNKNOWN, receipt!!.businessOutcome)
+    }
+
 }
+
