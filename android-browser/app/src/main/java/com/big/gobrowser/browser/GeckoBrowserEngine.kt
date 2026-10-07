@@ -77,7 +77,7 @@ class GeckoBrowserEngine(
             override fun onSessionStateChange(session: GeckoSession, state: GeckoSession.SessionState) { recovery.write(tab.id, state); persist() }
         })
         tab.session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(session: GeckoSession, url: String, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() }
+            override fun onLocationChange(session: GeckoSession, url: String?, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) { if (url != null) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() } }
         })
     }
     private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl); if (tab.id == activeId && attached == null) persist() } }
