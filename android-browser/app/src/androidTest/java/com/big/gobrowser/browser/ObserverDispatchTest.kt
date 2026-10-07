@@ -26,7 +26,9 @@ class ObserverDispatchTest {
         val ready = CountDownLatch(1)
         val done = CountDownLatch(1)
         var accepted = false
+        var reason: String? = null
         var clicks: String? = null
+        var targetSummary = ""
         lateinit var view: WebView
         lateinit var host: ViewGroup
         instrumentation.runOnMainSync {
@@ -46,19 +48,22 @@ class ObserverDispatchTest {
             assertTrue("Fixture page loaded", ready.await(10, TimeUnit.SECONDS))
             instrumentation.runOnMainSync {
                 WebViewObserver(instrumentation.targetContext, view).capture { capture ->
-                    if (capture == null) { done.countDown(); return@capture }
-                    val targetId = capture.targets.firstOrNull()?.id ?: "target-0"
+                    if (capture == null) { reason = "CAPTURE_NULL"; done.countDown(); return@capture }
+                    targetSummary = capture.targets.joinToString { "${it.id}:${it.kind}:${it.label}" }
+                    val target = capture.targets.firstOrNull { it.label == "Wanted" }
+                    if (target == null) { reason = "TARGET_NOT_CAPTURED:$targetSummary"; done.countDown(); return@capture }
                     val command = Command("command", "GO", "work", "checkpoint", "tab", "device", capture.captureId,
-                        1, 0, 0, 30000, BrowserAction.CLICK, "browser.click", mapOf("targetId" to targetId))
+                        1, 0, 0, 30000, BrowserAction.CLICK, "browser.click", mapOf("targetId" to target.id))
                     WebViewCommandDispatcher(view).dispatch(command) { result ->
                         accepted = result.accepted
+                        reason = result.reason
                         view.evaluateJavascript("window.fixtureClicks || 0") { clicks = it; done.countDown() }
                     }
                 }
             }
-            assertTrue("Native dispatch completed", done.await(10, TimeUnit.SECONDS))
-            assertTrue(accepted)
-            assertEquals("1", clicks)
+            assertTrue("Native dispatch completed reason=$reason targets=$targetSummary", done.await(10, TimeUnit.SECONDS))
+            assertTrue("Dispatch rejected: reason=$reason targets=$targetSummary", accepted)
+            assertEquals("Expected click readback, reason=$reason targets=$targetSummary", "1", clicks)
         } finally {
             instrumentation.runOnMainSync {
                 host.removeView(view)
