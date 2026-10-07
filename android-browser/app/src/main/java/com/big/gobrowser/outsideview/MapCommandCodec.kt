@@ -9,7 +9,7 @@ object MapCommandCodec {
         val target = json.optJSONObject("target")?.let { MapTarget(it.getString("id"), it.getString("kind")) }
         return MapCommand(json.getString("commandId"), action, target,
             json.optJSONObject("zone")?.let(::zone), json.optJSONObject("grid")?.let(::grid), json.optJSONObject("pin")?.let(::pin),
-            nullable(json,"note"), if(json.has("expectedRevision")) json.optLong("expectedRevision") else null,
+            nullable(json,"note"), if(json.has("expectedRevision")&&!json.isNull("expectedRevision")) json.getLong("expectedRevision") else null,
             nullable(json,"scope"), nullable(json,"presentation"))
     }
     fun encode(command: MapCommand): JSONObject = JSONObject().put("commandId",command.commandId).put("action",command.action.name)

@@ -14,9 +14,10 @@ class CommandExecutor(
     fun executeAsync(command: Command, state: ControlState,
                      dispatch: (Command, (ActionReadback) -> Unit) -> Unit,
                      callback: (Receipt) -> Unit) {
+        val dispatchedAt = now()
         fun receipt(status: ReceiptStatus, reason: String, result: ActionReadback? = null) =
             Receipt(command.commandId, status, reason, state.captureId, result?.captureId,
-                now(), result?.text, BusinessOutcome.UNKNOWN)
+                dispatchedAt, result?.text, BusinessOutcome.UNKNOWN)
         if (command.commandId in completed) {
             callback(receipt(ReceiptStatus.UNKNOWN, "DUPLICATE_COMMAND")); return
         }

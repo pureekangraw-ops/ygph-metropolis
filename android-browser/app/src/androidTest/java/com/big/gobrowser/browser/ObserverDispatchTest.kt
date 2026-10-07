@@ -66,4 +66,18 @@ class ObserverDispatchTest {
             assertEquals("replacement-token", store.load())
         } finally { store.revoke() }
     }
+    @Test fun stationLocalRevocationSurvivesCancelledNetworkDelivery() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs="station-revoke-test";val alias="station-revoke-test-key";val credentials="station-revoke-test-token"
+        val credential=AndroidDeviceCredentialStore(context,alias,credentials)
+        val settings=context.getSharedPreferences(prefs,android.content.Context.MODE_PRIVATE)
+        try {
+            credential.save("fixture-token")
+            settings.edit().putString("connection","{\"browser\":{\"disconnect\":\"https://fixture.invalid/disconnect\"}}").commit()
+            val station=com.big.gobrowser.transport.ObservatoryStationConnection(context,prefs,alias,credentials)
+            station.revokeLocally() // Deliberately never run the returned network callback.
+            val restarted=com.big.gobrowser.transport.ObservatoryStationConnection(context,prefs,alias,credentials)
+            assertNull(restarted.saved());assertNull(restarted.token())
+        } finally {credential.revoke();settings.edit().clear().commit()}
+    }
 }

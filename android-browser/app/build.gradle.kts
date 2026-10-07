@@ -11,8 +11,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -33,6 +33,8 @@ android {
 }
 
 dependencies {
+    implementation("org.maplibre.gl:android-sdk-opengl:13.6.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-ktx:1.10.0")
 

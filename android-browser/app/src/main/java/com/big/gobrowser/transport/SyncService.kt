@@ -15,6 +15,7 @@ class SyncService(
         var published = 0
         var failed = 0
         var lastError: String? = null
+        val acknowledged=mutableSetOf<String>()
         outbox.pending().forEach { snapshot ->
             if (!stillAllowed()) return@forEach
             runCatching {
@@ -22,6 +23,7 @@ class SyncService(
                 require(ack.id == snapshot.captureId && ack.sequence == snapshot.sequence && ack.acceptedAtEpochMs > 0) { "Snapshot ACK mismatch" }
                 outbox.ack(snapshot.captureId)
                 published += 1
+                acknowledged.add(snapshot.captureId)
             }.onFailure {
                 failed += 1
                 lastError = it::class.simpleName ?: "PUBLISH_FAILED"
@@ -31,7 +33,7 @@ class SyncService(
             lastError = it::class.simpleName ?: "POLL_FAILED"
             emptyList()
         }
-        return SyncReport(published, failed, commands, outbox.droppedCount, lastError)
+        return SyncReport(published, failed, commands, outbox.droppedCount, lastError,acknowledged)
     }
 
     fun publishReceipt(receipt: Receipt): Ack = relay.publishReceipt(receipt).also {
@@ -44,5 +46,6 @@ data class SyncReport(
     val failed: Int,
     val commands: List<Command>,
     val droppedCount: Long,
-    val error: String? = null
+    val error: String? = null,
+    val acknowledgedCaptureIds:Set<String> = emptySet()
 )

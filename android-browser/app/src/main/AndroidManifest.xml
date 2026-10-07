@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:allowBackup="false" android:label="GO Browser" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <application android:allowBackup="false" android:label="YGG Observatory" android:supportsRtl="true" android:theme="@style/ObservatoryTheme" android:usesCleartextTraffic="false">
         <activity android:name=".outsideview.OutsideViewActivity" android:exported="false" />
         <activity android:name=".browser.BrowserActivity" android:exported="true">
             <intent-filter>
