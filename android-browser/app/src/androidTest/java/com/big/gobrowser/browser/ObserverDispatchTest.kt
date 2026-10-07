@@ -1,5 +1,6 @@
 package com.big.gobrowser.browser
 
+import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -37,10 +38,15 @@ class ObserverDispatchTest {
         try {
             assertTrue("Fixture page loaded", ready.await(10, TimeUnit.SECONDS))
             instrumentation.runOnMainSync {
+                val width = 1080
+                val height = 1920
+                view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+                view.layout(0, 0, width, height)
                 WebViewObserver(instrumentation.targetContext, view).capture { capture ->
                     if (capture == null) { done.countDown(); return@capture }
+                    val targetId = capture.targets.firstOrNull()?.id ?: "target-0"
                     val command = Command("command", "GO", "work", "checkpoint", "tab", "device", capture.captureId,
-                        1, 0, 0, 30000, BrowserAction.CLICK, "browser.click", mapOf("targetId" to "target-0"))
+                        1, 0, 0, 30000, BrowserAction.CLICK, "browser.click", mapOf("targetId" to targetId))
                     WebViewCommandDispatcher(view).dispatch(command) { result ->
                         accepted = result.accepted
                         view.evaluateJavascript("window.fixtureClicks || 0") { clicks = it; done.countDown() }
