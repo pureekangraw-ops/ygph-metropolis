@@ -137,7 +137,7 @@ class GeckoBrowserActivity : Activity() {
         commandBusy = true; val boundSync = sync; val commandEpoch = generation
         executor.executeAsync(command, state, { request, complete ->
             if (tab == null) complete(ActionReadback(false, "NO_ACTIVE_GECKO_SESSION"))
-            else GeckoCommandDispatcher(this, tab.session).dispatch(request) { result ->
+            else engine.dispatch(tab, request) { result ->
                 if (!result.accepted) complete(ActionReadback(false, result.reason))
                 else awaitReadback(tab.id, latest?.captureId, complete)
             }
@@ -173,5 +173,5 @@ class GeckoBrowserActivity : Activity() {
     override fun onResume() { super.onResume(); foreground = true; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
     override fun onPause() { foreground = false; engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
     override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdownNow(); super.onDestroy() }
-    override fun onBackPressed() { if (engine.active()?.session?.canGoBack() == true) engine.back() else super.onBackPressed() }
+    override fun onBackPressed() { engine.back() }
 }

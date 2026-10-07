@@ -63,7 +63,7 @@ class GeckoBrowserEngine(
     fun back() { active()?.session?.goBack() }
     fun forward() { active()?.session?.goForward() }
     fun reload() { active()?.session?.reload() }
-    fun reloadIfNeededForReadback(result: DispatchResult) { /* fresh WebExtension capture supplies the evidence; no business success is inferred */ }
+    fun dispatch(tab: GeckoTab, command: com.big.gobrowser.control.Command, callback: (DispatchResult) -> Unit) { GeckoCommandDispatcher(observer, tab.session).dispatch(command, callback) }
     fun updateVisibility(visible: Boolean) { tabs.values.forEach { tab -> val selected = visible && tab.id == activeId; runCatching { tab.session.setFocused(selected); tab.session.setActive(selected) } } }
     fun isOpen(tab: GeckoTab): Boolean = runCatching { tab.session.isOpen }.getOrDefault(false)
     private fun bind(tab: GeckoTab) {
@@ -77,7 +77,7 @@ class GeckoBrowserEngine(
             override fun onSessionStateChange(session: GeckoSession, state: GeckoSession.SessionState) { recovery.write(tab.id, state); persist() }
         })
         tab.session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(session: GeckoSession, url: String?, perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>?, hasUserGesture: Boolean?) { if (url != null) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() } }
+            override fun onLocationChange(session: GeckoSession, url: String) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() }
         })
     }
     private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl); if (tab.id == activeId && attached == null) persist() } }

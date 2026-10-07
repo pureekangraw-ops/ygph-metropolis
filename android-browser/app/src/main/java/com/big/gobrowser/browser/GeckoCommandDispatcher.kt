@@ -6,9 +6,8 @@ import com.big.gobrowser.control.Command
 import org.json.JSONObject
 import org.mozilla.geckoview.GeckoSession
 
-/** Native guarded hand for a GeckoSession. DOM commands run only after capture checks in content JS. */
-class GeckoCommandDispatcher(private val context: Context, private val session: GeckoSession) {
-    private val script = context.assets.open("command.js").bufferedReader().use { it.readText() }
+/** Native guarded hand for a GeckoSession, using the WebExtension command port for DOM actions. */
+class GeckoCommandDispatcher(private val observer: GeckoPageObserver, private val session: GeckoSession) {
     fun dispatch(command: Command, callback: (DispatchResult) -> Unit) {
         when (command.action) {
             BrowserAction.BACK -> { session.goBack(); callback(DispatchResult(true, "BACK_DISPATCHED")); return }
@@ -22,21 +21,13 @@ class GeckoCommandDispatcher(private val context: Context, private val session: 
             BrowserAction.SELECT, BrowserAction.CLOSE -> { callback(DispatchResult(false, "ACTION_REQUIRES_TAB_STORE")); return }
             else -> Unit
         }
-        val payload = JSONObject().put("action", command.action.name).put("captureId", command.captureId)
-            .put("frameId", command.parameters["frameId"] ?: "frame-0")
+        val payload = JSONObject().put("type", "EXECUTE").put("commandId", command.commandId)
+            .put("action", command.action.name).put("captureId", command.captureId)
+            .put("frameId", command.parameters["frameId"] ?: command.frameId)
             .put("targetId", command.parameters["targetId"] ?: "")
             .put("signature", command.parameters["signature"] ?: "")
             .put("parameters", JSONObject(command.parameters))
-        val expression = "(function(){const command=${payload};return JSON.stringify((function(){${script}\n})());})()"
-        try {
-            session.evaluateJS(expression).accept({ value ->
-                val result = runCatching {
-                    val raw = value?.toString()?.trim('"')?.replace("\\\"", "\"") ?: "{}"
-                    JSONObject(raw)
-                }.getOrNull()
-                callback(DispatchResult(result?.optBoolean("ok", false) == true, result?.optString("reason", "READBACK_UNAVAILABLE") ?: "READBACK_UNAVAILABLE"))
-            }, { callback(DispatchResult(false, "READBACK_UNAVAILABLE")) })
-        } catch (_: Throwable) { callback(DispatchResult(false, "EXECUTION_UNCONFIRMED")) }
+        observer.dispatch(session, payload) { accepted, reason -> callback(DispatchResult(accepted, reason)) }
     }
 }
 
