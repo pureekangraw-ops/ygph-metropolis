@@ -10,7 +10,7 @@ class CommandExecutor(
 ) {
     private val completed = mutableSetOf<String>()
 
-    /** Reserve before dispatch; emit only after the asynchronous WebView callback. */
+    /** Reserve before dispatch; emit only after the asynchronous Gecko callback. */
     fun executeAsync(command: Command, state: ControlState,
                      dispatch: (Command, (ActionReadback) -> Unit) -> Unit,
                      callback: (Receipt) -> Unit) {
@@ -29,7 +29,13 @@ class CommandExecutor(
         val finish: (ActionReadback) -> Unit = { result ->
             if (!delivered) {
                 delivered = true
-                callback(receipt(if (!result.accepted) ReceiptStatus.REJECTED else if (result.captureId != null) ReceiptStatus.READBACK else ReceiptStatus.EXECUTED, result.reason, result))
+                val status = when {
+                    result.reason == "EXECUTION_UNCONFIRMED" -> ReceiptStatus.UNKNOWN
+                    !result.accepted -> ReceiptStatus.REJECTED
+                    result.captureId != null -> ReceiptStatus.READBACK
+                    else -> ReceiptStatus.EXECUTED
+                }
+                callback(receipt(status, result.reason, result))
             }
         }
         try { dispatch(command, finish) }
