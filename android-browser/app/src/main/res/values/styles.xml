@@ -1,0 +1,11 @@
+<resources>
+    <style name="ObservatoryTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#c7f464</item>
+        <item name="android:windowBackground">#101516</item>
+        <item name="android:statusBarColor">#101516</item>
+        <item name="android:navigationBarColor">#101516</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

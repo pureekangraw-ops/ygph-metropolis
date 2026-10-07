@@ -22,6 +22,8 @@ import com.big.gobrowser.control.*
 import com.big.gobrowser.observer.*
 import com.big.gobrowser.transport.*
 import com.big.gobrowser.lyra.LyraDialog
+import com.big.gobrowser.ui.*
+import com.big.gobrowser.R
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.concurrent.Executors
@@ -32,6 +34,10 @@ class BrowserActivity : Activity() {
     private lateinit var lifecycle: BrowserLifecycle
     private lateinit var observerSession: ObserverSession
     private lateinit var shareButton: Button
+    private lateinit var sharingStatus: android.widget.TextView
+    private var lastAck:Long?=null
+    private var acknowledgedCapture:String?=null
+    private var deliveryFailed=false
     private lateinit var credentials: AndroidDeviceCredentialStore
     private val handler = Handler(Looper.getMainLooper())
     private val network = Executors.newSingleThreadExecutor()
@@ -59,6 +65,7 @@ class BrowserActivity : Activity() {
             if (!foreground) return
             if (!commandBusy) captureActive()
             syncActive()
+            updateSharingStatus()
             handler.postDelayed(this, 5_000)
         }
     }
@@ -69,6 +76,7 @@ class BrowserActivity : Activity() {
         credentials = AndroidDeviceCredentialStore(this)
         observerSession = ObserverSession("local-device", "0.1.0")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(ObservatoryTheme.title(this,"หอดูดาว · บราวเซอร์"))
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -81,29 +89,33 @@ class BrowserActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
         }
+        ObservatoryTheme.address(address)
         toolbar.addView(address)
         toolbar.addView(button("ไป") { navigateFromAddress() })
         val navigation = LinearLayout(this)
-        navigation.addView(button("‹") { tabStore.active()?.webView?.goBack() })
+        navigation.addView(ObservatoryTheme.iconButton(this,R.drawable.ic_prism_back,"ย้อนกลับ") { tabStore.active()?.webView?.goBack() })
         navigation.addView(button("›") { tabStore.active()?.webView?.goForward() })
         navigation.addView(button("↻") { tabStore.active()?.webView?.reload() })
         navigation.addView(button("แท็บ") { showTabs() })
         navigation.addView(button("+") { stopSharing(); tabStore.open(); configureActiveWebView() })
-        shareButton = button("Share") { toggleShare() }
+        shareButton = button("แชร์ให้โก") { toggleShare() }
         val settings = LinearLayout(this)
         settings.addView(button("ไลร่า") { LyraDialog.show(this,"INSIDE") { lyraContext() } })
         settings.addView(button("แผนที่") { startActivity(android.content.Intent(this, com.big.gobrowser.outsideview.OutsideViewActivity::class.java)) })
         settings.addView(shareButton)
-        settings.addView(button("เมโทร") { connectStation() })
-        settings.addView(button("Relay") { configureRelay() })
-        settings.addView(button("Disconnect") { disconnect() })
+        settings.addView(ObservatoryTheme.iconButton(this,R.drawable.ic_prism_settings,"ตั้งค่าการเชื่อมต่อ") {
+            AlertDialog.Builder(this).setTitle("การเชื่อมต่อ").setItems(arrayOf("เชื่อมเมโทร","Relay จากเจ้าของระบบ","ยกเลิกการเชื่อมต่อ")){_,choice->when(choice){0->connectStation();1->configureRelay();2->disconnect()}}.show()
+        })
         val browserContainer = FrameLayout(this)
         root.addView(toolbar)
-        root.addView(scroll(navigation))
-        root.addView(scroll(settings))
+        fitRow(navigation);fitRow(settings)
+        root.addView(navigation)
+        root.addView(settings)
+        sharingStatus=ObservatoryTheme.status(this)
+        root.addView(sharingStatus)
         root.addView(browserContainer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
-        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(root)
+        ObservatoryTheme.apply(this,root)
+        PhoneLayout.fitSystemBars(root)
         setContentView(root)
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
         tabStore.restore()
@@ -112,9 +124,16 @@ class BrowserActivity : Activity() {
         val config=connection.config("browser")?.let {runCatching {OwnerRelayConfiguration.parse(it.toString())}.getOrNull()}
         val secret=connection.token()
         if(config!=null&&secret!=null)bindStation(config,secret)
+        updateSharingStatus()
     }
 
-    private fun scroll(row:LinearLayout)=android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2)) }
+    private fun fitRow(row:LinearLayout){for(i in 0 until row.childCount)row.getChildAt(i).layoutParams=LinearLayout.LayoutParams(0,-2,1f).apply {setMargins(ObservatoryTheme.dp(this@BrowserActivity,3),0,ObservatoryTheme.dp(this@BrowserActivity,3),0)}}
+    private fun updateSharingStatus(){
+        val tab=tabStore.active();val now=System.currentTimeMillis()
+        val fresh=tab?.let {observerSession.latest(it.id)}?.let {now-it.capturedAtEpochMs in 0..30_000 && it.captureId==acknowledgedCapture}==true
+        val state=SharingStatus.resolve(tab?.let {observerSession.isSharing(it.id)}==true,owner!=null,foreground,ObservatoryTheme.online(this),fresh,lastAck,deliveryFailed,now)
+        sharingStatus.text=state.label;sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
+    }
     private fun showTabs() {
         val tabs=tabStore.list()
         AlertDialog.Builder(this).setTitle("แท็บ").setItems(tabs.map {it.webView.title?:it.webView.url?:"หน้าใหม่"}.toTypedArray()){_,i->stopSharing();tabStore.select(tabs[i].id);configureActiveWebView()}
@@ -135,8 +154,8 @@ class BrowserActivity : Activity() {
     }
 
     private fun bindStation(config:OwnerRelayConfiguration,secret:String) {
-        receipts.clear();commandLedger.clear();credentials.save(secret);owner=config
-        observerSession=ObserverSession(config.deviceId,"0.2.0")
+        receipts.clear();commandLedger.clear();credentials.save(secret);owner=config;lastAck=null;acknowledgedCapture=null;deliveryFailed=false
+        observerSession=ObserverSession(config.deviceId,"0.3.0")
         sync=SyncService(HttpRelayClient(config.endpoints,object:DeviceCredentialStore {override fun load()=secret;override fun save(token:String)=error("read-only");override fun revoke()=Unit}),outbox)
     }
     private fun configureActiveWebView() { tabStore.active()?.webView?.webViewClient = client() }
@@ -154,7 +173,7 @@ class BrowserActivity : Activity() {
                 return
             }
             stopSharing()
-            if (sharing && foreground) { observerSession.start(tab.id); shareButton.text = "Stop" }
+            if (sharing && foreground) { observerSession.start(tab.id); shareButton.text = "หยุดแชร์" }
         }
         override fun onPageFinished(view: WebView, url: String) {
             if (tabStore.active()?.webView !== view) return
@@ -167,7 +186,8 @@ class BrowserActivity : Activity() {
     private fun toggleShare() {
         val tab = tabStore.active() ?: return
         if (observerSession.isSharing(tab.id)) { stopSharing(); say("หยุดแชร์แท็บแล้ว") }
-        else { observerSession.start(tab.id); shareButton.text = "Stop"; captureActive(notify = true) }
+        else { lastAck=null;acknowledgedCapture=null;deliveryFailed=false;observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureActive(notify = true) }
+        updateSharingStatus()
     }
 
     private fun stopSharing() {
@@ -181,7 +201,9 @@ class BrowserActivity : Activity() {
             outbox.clearTab(tab.id)
         }
         commands.clear()
-        shareButton.text = "Share"
+        shareButton.text = "แชร์ให้โก"
+        lastAck=null;acknowledgedCapture=null;deliveryFailed=false
+        updateSharingStatus()
     }
 
     private fun captureActive(force: Boolean = false, notify: Boolean = false, done: (Snapshot?) -> Unit = {}) {
@@ -232,6 +254,12 @@ class BrowserActivity : Activity() {
                 syncBusy = false
                 if (destroyed || permissionGeneration != generation || service !== sync) return@post
                 acknowledged.forEach { receipts.remove(it) }
+                deliveryFailed=report==null || report.error!=null || report.failed>0
+                if(report!=null && report.published>0){
+                    val latest=observerSession.latest(tab.id)
+                    if(latest!=null && latest.captureId in report.acknowledgedCaptureIds){lastAck=System.currentTimeMillis();acknowledgedCapture=latest.captureId}
+                }
+                updateSharingStatus()
                 if (report != null) {
                     report.commands.take(100 - commands.size).forEach { if(commandLedger.admit(it)==null)commands.addLast(it) }
                     processNextCommand()
@@ -312,7 +340,7 @@ class BrowserActivity : Activity() {
 
     private fun disconnect() {
         stopSharing()
-        sync = null; owner = null; receipts.clear();commandLedger.clear()
+        sync = null; owner = null; receipts.clear();commandLedger.clear();updateSharingStatus()
         runCatching { credentials.revoke() }.onFailure { say("ล้าง credential ไม่สำเร็จ") }
         runCatching {ObservatoryStationConnection(this).revokeLocally()}
             .onSuccess {notifyServer->network.execute {notifyServer()}}
@@ -325,9 +353,7 @@ class BrowserActivity : Activity() {
         if (foreground && lifecycle.isInteractive()) tabStore.active()?.webView?.loadUrl(raw)
     }
     private fun say(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
-    private fun button(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; setOnClickListener { action() }; minWidth = 0
-    }
+    private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
     override fun onResume() { super.onResume(); foreground = true; handler.post(tick) }
     override fun onPause() {
         foreground = false; handler.removeCallbacks(tick); stopSharing(); super.onPause()

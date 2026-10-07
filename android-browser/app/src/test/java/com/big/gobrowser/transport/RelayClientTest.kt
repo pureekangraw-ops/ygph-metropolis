@@ -22,6 +22,7 @@ class RelayClientTest {
         assertEquals(true, sync.enqueue(snapshot))
         val report = sync.syncOnce()
         assertEquals(1, report.published)
+        assertEquals(setOf("c"), report.acknowledgedCaptureIds)
         assertEquals(0, report.failed)
         assertEquals(1, relay.published)
         assertEquals(0, outbox.pending().size)
@@ -40,6 +41,7 @@ class RelayClientTest {
             sync.enqueue(snapshot)
             val report = sync.syncOnce()
             assertEquals(0, report.published)
+            assertEquals(emptySet<String>(),report.acknowledgedCaptureIds)
             assertEquals(1, report.failed)
             assertEquals("c", outbox.pending().single().captureId)
         }

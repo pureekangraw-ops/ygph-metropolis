@@ -26,6 +26,7 @@ import java.io.File
 class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStore:LocalMapPackageStore?=null):MapRenderer {
     val mapView:MapView
     private var map:MapLibreMap?=null
+    private var locationFix:Point?=null
     private var generation=0L
     private var resumed=false
     private var pending:Pair<RenderRequest,(RenderConfirmation)->Unit>?=null
@@ -61,6 +62,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
             style.addLayer(FillLayer("zone-fill",sourceIds[0]).withProperties(fillColor(color("#73b4d4")),fillOpacity(.25f)))
             style.addLayer(LineLayer("grid-lines",sourceIds[1]).withProperties(lineColor(color("#315f8e")),lineWidth(size(2,5,4))))
             style.addLayer(CircleLayer("pin-dots",sourceIds[2]).withProperties(circleColor(color("#cf476a")),circleRadius(size(7,12,10)),circleStrokeColor("#ffffff"),circleStrokeWidth(2f)))
+            drawLocation()
             onReady()
         }
     }
@@ -113,6 +115,22 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         val actual=map?.cameraPosition?.target
         val camera=actual?.let {Bounds(it.longitude,it.latitude,it.longitude,it.latitude)}
         return RenderConfirmation(r.commandId,r.revision,r.styleGeneration,r.token,ids,r.state.focused,camera,error,map?.cameraPosition?.zoom)
+    }
+    fun showLocation(point:Point?){locationFix=point;drawLocation()}
+    private fun drawLocation(){
+        val style=map?.style?:return
+        if(!style.isFullyLoaded)return
+        val json=locationFix?.let {"{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[${it.longitude},${it.latitude}]},\"properties\":{}}]}"}?:"{\"type\":\"FeatureCollection\",\"features\":[]}"
+        val source=style.getSourceAs<GeoJsonSource>("device-location")
+        if(source==null){
+            style.addSource(GeoJsonSource("device-location",json,GeoJsonOptions().withSynchronousUpdate(true)))
+            style.addLayer(CircleLayer("device-location-dot","device-location").withProperties(circleColor("#78bfff"),circleRadius(8f),circleStrokeColor("#101516"),circleStrokeWidth(3f)))
+        }else source.setGeoJson(json)
+    }
+    fun centerOnLocation(point:Point):Boolean {
+        if(!foregroundReady || pending!=null)return false
+        map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude,point.longitude),15.0))?:return false
+        return true
     }
     fun center():Point?=map?.cameraPosition?.target?.let {Point(it.longitude,it.latitude)}
     override fun cancel(){generation++;pending=null;handler.removeCallbacks(timeout);updatesComplete=false;frameStarted=false;map?.cancelTransitions()}

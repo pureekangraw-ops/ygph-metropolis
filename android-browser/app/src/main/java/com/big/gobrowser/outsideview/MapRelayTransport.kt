@@ -12,7 +12,7 @@ import java.util.UUID
 import java.util.concurrent.Executors
 
 /** Explicit native sharing session. Server acceptance never stands for business completion. */
-class MapRelayTransport(context:Context,private val store:MapStateStore,private val ready:()->Boolean,private val receive:(MapRelayEnvelope)->Unit,private val status:(String)->Unit) {
+class MapRelayTransport(context:Context,private val store:MapStateStore,private val ready:()->Boolean,private val receive:(MapRelayEnvelope)->Unit,private val status:(String)->Unit,private val delivery:(Long?,Boolean)->Unit={_,_->}) {
     private val connection=ObservatoryStationConnection(context)
     private val prefs=context.getSharedPreferences("observatory-map-relay",Context.MODE_PRIVATE)
     private val power=context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -36,7 +36,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
         if(c==null||t.isNullOrBlank()){status("เชื่อมเมโทรจากหน้าบราวเซอร์ก่อนเปิดแชร์แผนที่");return false}
         config=c;token=t;generation++;epoch=maxOf(System.currentTimeMillis(),prefs.getLong("epoch",0)+1);sequence=0
         require(prefs.edit().putLong("epoch",epoch).commit()) {"MAP_EPOCH_PERSIST_FAILED"}
-        capture=null;admitted.clear();sharing=true;status("เปิดแชร์แผนที่ให้ ${c.actor} · ${c.workId}");handler.post(loop);return true
+        capture=null;admitted.clear();sharing=true;delivery(null,false);status("เปิดแชร์แผนที่ให้ ${c.actor} · ${c.workId}");handler.post(loop);return true
     }
     fun stop() {
         if(!sharing)return
@@ -124,7 +124,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
                 inFlight=false
                 if(g!=generation||!sharing||closed)return@post
                 result.onSuccess {commands->
-                    if(didPublish)snapshot?.let {capture=MapRelayCapture(it.getString("captureId"),it.getLong("revision"),it.getLong("epoch"),it.getLong("capturedAtEpochMs"))}
+                    if(didPublish)snapshot?.let {capture=MapRelayCapture(it.getString("captureId"),it.getLong("revision"),it.getLong("epoch"),it.getLong("capturedAtEpochMs"));delivery(System.currentTimeMillis(),false)}
                     if(pending!=null){val current=records();current.optJSONObject(pending.first)?.put("sent",true);saveRecords(current);admitted.remove(pending.first);status("เมโทรรับ receipt แล้ว · ผลงานธุรกิจ UNKNOWN");sync()}
                     else commands.forEach {raw->runCatching {MapRelayEnvelope.decode(raw)}.onSuccess {e->
                         val canonical=e.identity();val old=record(e.command.commandId)
@@ -132,7 +132,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
                         if(old?.has("receipt")==true)return@onSuccess
                         if(admitted[e.command.commandId]==null){if(admitted.size>=100){status("คิวคำสั่งแผนที่เต็ม");return@onSuccess};admitted[e.command.commandId]=canonical;receive(e)}
                     }.onFailure {status("คำสั่งเมโทรไม่ตรงสัญญา: ${it.message}")}}
-                }.onFailure {status("เมโทรยังไม่รับข้อมูลแผนที่: ${it.message}")}
+                }.onFailure {delivery(null,true);status("เมโทรยังไม่รับข้อมูลแผนที่: ${it.message}")}
                 if(result.isSuccess&&pending==null&&hasPendingReceipt(sessionEpoch))sync()
             }
         }
