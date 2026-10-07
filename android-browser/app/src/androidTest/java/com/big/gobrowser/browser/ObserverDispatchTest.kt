@@ -1,14 +1,16 @@
 package com.big.gobrowser.browser
 
-import android.view.View
+import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.ActivityTestRule
 import com.big.gobrowser.control.*
 import com.big.gobrowser.observer.WebViewObserver
 import com.big.gobrowser.transport.AndroidDeviceCredentialStore
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CountDownLatch
@@ -17,6 +19,8 @@ import java.util.concurrent.TimeUnit
 /** Offline fixtures exercise native JSON marshalling and the real WebView runtime. */
 @RunWith(AndroidJUnit4::class)
 class ObserverDispatchTest {
+    @get:Rule val activityRule = ActivityTestRule(BrowserActivity::class.java)
+
     @Test fun capturedVisibleTargetIsDispatchedThroughNativeBoundary() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val ready = CountDownLatch(1)
@@ -24,8 +28,11 @@ class ObserverDispatchTest {
         var accepted = false
         var clicks: String? = null
         lateinit var view: WebView
+        lateinit var host: ViewGroup
         instrumentation.runOnMainSync {
+            host = activityRule.activity.findViewById(android.R.id.content)
             view = WebView(instrumentation.targetContext)
+            host.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             BrowserSettings.configure(view)
             view.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) { ready.countDown() }
@@ -38,10 +45,6 @@ class ObserverDispatchTest {
         try {
             assertTrue("Fixture page loaded", ready.await(10, TimeUnit.SECONDS))
             instrumentation.runOnMainSync {
-                val width = 1080
-                val height = 1920
-                view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
-                view.layout(0, 0, width, height)
                 WebViewObserver(instrumentation.targetContext, view).capture { capture ->
                     if (capture == null) { done.countDown(); return@capture }
                     val targetId = capture.targets.firstOrNull()?.id ?: "target-0"
@@ -56,7 +59,12 @@ class ObserverDispatchTest {
             assertTrue("Native dispatch completed", done.await(10, TimeUnit.SECONDS))
             assertTrue(accepted)
             assertEquals("1", clicks)
-        } finally { instrumentation.runOnMainSync { view.destroy() } }
+        } finally {
+            instrumentation.runOnMainSync {
+                host.removeView(view)
+                view.destroy()
+            }
+        }
     }
 
     @Test fun keystoreCredentialRoundTripAndRevocation() {
