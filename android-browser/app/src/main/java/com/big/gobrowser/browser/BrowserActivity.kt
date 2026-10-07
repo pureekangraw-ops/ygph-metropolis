@@ -35,7 +35,12 @@ class BrowserActivity : Activity() {
     private lateinit var credentials: AndroidDeviceCredentialStore
     private val handler = Handler(Looper.getMainLooper())
     private val network = Executors.newSingleThreadExecutor()
-    private val permissions = PermissionStore()
+    private val permissions by lazy {
+        val prefs=getSharedPreferences("observatory-epochs",MODE_PRIVATE)
+        val seed=maxOf(System.currentTimeMillis(),prefs.getLong("browser",0L)+1)
+        check(prefs.edit().putLong("browser",seed).commit())
+        PermissionStore(seed)
+    }
     private val outbox = Outbox()
     private val executor = CommandExecutor(ActionRunner { null })
     private var owner: OwnerRelayConfiguration? = null
@@ -100,6 +105,10 @@ class BrowserActivity : Activity() {
         tabStore = TabStore(this, browserContainer) { url -> address.setText(url) }
         tabStore.restore()
         configureActiveWebView()
+        val connection=ObservatoryStationConnection(this)
+        val config=connection.config("browser")?.let {runCatching {OwnerRelayConfiguration.parse(it.toString())}.getOrNull()}
+        val secret=connection.token()
+        if(config!=null&&secret!=null)bindStation(config,secret)
     }
 
     private fun scroll(row:LinearLayout)=android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2)) }
@@ -117,13 +126,16 @@ class BrowserActivity : Activity() {
     }
     private fun connectStation() {
         ObservatoryStationConnection(this).pair(this) { config,secret ->
-            stopSharing();receipts.clear();credentials.save(secret);owner=config
-            observerSession=ObserverSession(config.deviceId,"0.2.0")
-            sync=SyncService(HttpRelayClient(config.endpoints,object:DeviceCredentialStore {override fun load()=secret;override fun save(token:String)=error("read-only");override fun revoke()=Unit}),outbox)
+            stopSharing();bindStation(config,secret)
             say("เชื่อมเมโทรแล้ว กด Share เพื่อเปิดให้โกอ่านและจัดการ")
         }
     }
 
+    private fun bindStation(config:OwnerRelayConfiguration,secret:String) {
+        receipts.clear();credentials.save(secret);owner=config
+        observerSession=ObserverSession(config.deviceId,"0.2.0")
+        sync=SyncService(HttpRelayClient(config.endpoints,object:DeviceCredentialStore {override fun load()=secret;override fun save(token:String)=error("read-only");override fun revoke()=Unit}),outbox)
+    }
     private fun configureActiveWebView() { tabStore.active()?.webView?.webViewClient = client() }
     private fun client() = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -133,12 +145,18 @@ class BrowserActivity : Activity() {
             val tab = tabStore.active() ?: return
             if (tab.webView !== view) return
             val sharing = observerSession.isSharing(tab.id)
+            if(commandBusy && sharing && foreground) {
+                observerSession.stop(tab.id);observerSession.start(tab.id)
+                outbox.clearTab(tab.id);commands.clear()
+                return
+            }
             stopSharing()
             if (sharing && foreground) { observerSession.start(tab.id); shareButton.text = "Stop" }
         }
         override fun onPageFinished(view: WebView, url: String) {
             if (tabStore.active()?.webView !== view) return
             address.setText(url)
+            tabStore.urlChanged()
             captureActive()
         }
     }
@@ -154,6 +172,7 @@ class BrowserActivity : Activity() {
         tabStore.active()?.let { tab ->
             observerSession.stop(tab.id)
             val epoch=permissions.revoke(tab.id)
+            getSharedPreferences("observatory-epochs",MODE_PRIVATE).edit().putLong("browser",epoch).commit()
             if(owner!=null)network.execute {runCatching {ObservatoryStationConnection(this).stop("browser",epoch)}}
             outbox.clearTab(tab.id)
         }
@@ -175,7 +194,8 @@ class BrowserActivity : Activity() {
                 captureBusy = false; done(null); return@capture
             }
             val snapshot = observerSession.capture(tab.id, capture.url, capture.title, capture.text, capture.targets,
-                capture.captureId, force || capture.targetsChanged)
+                capture.captureId, force || capture.targetsChanged ||
+                    observerSession.latest(tab.id)?.let {System.currentTimeMillis()-it.capturedAtEpochMs>=15_000} == true)
             // Dedupe may retain the last snapshot; bind only while dispatch is gated by captureBusy.
             val latest = snapshot ?: observerSession.latest(tab.id)
             if (snapshot != null && sync != null) outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
@@ -202,8 +222,8 @@ class BrowserActivity : Activity() {
             if (permissionGeneration != generation || service !== sync) {
                 handler.post { syncBusy = false }; return@execute
             }
-            val acknowledged = batch.filter { permissionGeneration == generation && service === sync && runCatching { service.publishReceipt(it) }.isSuccess }
             val report = runCatching { service.syncOnce { permissionGeneration == generation && service === sync } }.getOrNull()
+            val acknowledged = batch.filter { permissionGeneration == generation && service === sync && runCatching { service.publishReceipt(it) }.isSuccess }
             handler.post {
                 syncBusy = false
                 if (destroyed || permissionGeneration != generation || service !== sync) return@post

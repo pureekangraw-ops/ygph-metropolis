@@ -82,3 +82,42 @@ jobs:
             android-browser/app/build/outputs/apk/debug/app-debug.apk
             android-browser/app/build/outputs/apk/debug/app-debug.apk.sha256
           retention-days: 14
+
+  observatory-emulator:
+    needs: android-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Enable KVM
+        run: |
+          sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: cd android-browser && gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Capture emulator evidence
+        if: always()
+        run: |
+          mkdir -p /tmp/observatory-emulator-evidence
+          adb logcat -d > /tmp/observatory-emulator-evidence/logcat.txt || true
+          adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png /tmp/observatory-emulator-evidence/ || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: observatory-emulator-evidence
+          path: |
+            android-browser/app/build/reports/androidTests/connected
+            android-browser/app/build/outputs/androidTest-results/connected
+            /tmp/observatory-emulator-evidence
+          retention-days: 14

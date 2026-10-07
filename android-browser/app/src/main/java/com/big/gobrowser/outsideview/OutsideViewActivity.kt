@@ -23,6 +23,9 @@ class OutsideViewActivity : Activity() {
     private val handler=Handler(Looper.getMainLooper())
     private val worker=Executors.newSingleThreadExecutor()
     private val commands=java.util.ArrayDeque<MapCommand>()
+    private lateinit var relay:MapRelayTransport
+    private lateinit var shareButton:Button
+    private val remote=mutableMapOf<String,MapRelayEnvelope>()
     private var busy=false
     private var destroyed=false
     override fun onCreate(savedInstanceState:Bundle?) {
@@ -36,6 +39,8 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ไลร่า"){LyraDialog.show(this,"OUTSIDE"){context()}})
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
+        shareButton=button("แชร์ให้โก"){if(relay.sharing){relay.stop();discardRemoteQueue();shareButton.text="แชร์ให้โก"}else if(relay.start())shareButton.text="หยุดแชร์"}
+        tools.addView(shareButton)
         tools.addView(button("กลับ"){finish()})
         root.addView(scroll(tools))
         val files=LinearLayout(this)
@@ -47,13 +52,30 @@ class OutsideViewActivity : Activity() {
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
+        relay=MapRelayTransport(this,store,{renderer.foregroundReady}, { envelope->
+            if(remote.size<100&&commands.size<100){remote[envelope.command.commandId]=envelope;commands.addLast(envelope.command);pump()}else status.text="คิวคำสั่งแผนที่เต็ม"
+        }, {status.text=it})
         renderer.onSelect=::pinDialog
         renderer.onError={status.text=it}
-        renderer.onConfirmed={confirmation->if(!confirmation.commandId.startsWith("screen-")){busy=false;status.text="บันทึกบนแผนที่แล้ว · ${confirmation.revision}";pump()}}
+        renderer.onConfirmed={confirmation->if(!confirmation.commandId.startsWith("screen-")){busy=false;status.text="บันทึกบนแผนที่แล้ว · ${confirmation.revision}";remote.remove(confirmation.commandId)?.let {e->store.load().receipts[confirmation.commandId]?.let {relay.completed(e,it)}};pump()}}
         renderer.onReady={if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
-    private fun pump(){if(busy||commands.isEmpty()||!renderer.foregroundReady)return;val c=commands.removeFirst();busy=true;val r=executor.submit(c);if(r.status !in setOf(MapReceiptStatus.PENDING,MapReceiptStatus.APPLIED)){busy=false;status.text="${r.status}: ${r.reason}";pump()}}
+    private fun discardRemoteQueue(){val ids=remote.keys.toSet();commands.removeAll {it.commandId in ids};remote.clear()}
+    private fun pump(){
+        if(busy||commands.isEmpty()||!renderer.foregroundReady)return
+        val c=commands.removeFirst();val envelope=remote[c.commandId]
+        if(envelope!=null){
+            val rejection=relay.rejection(envelope)
+            if(rejection!=null){status.text="ปฏิเสธคำสั่งเมโทร: $rejection";if(relay.started(envelope))relay.completed(envelope,MapReceipt(c.commandId,MapReceiptStatus.REJECTED,rejection,store.load().state.revision));remote.remove(c.commandId);pump();return}
+            if(!relay.started(envelope)){status.text="บันทึกคำสั่งเมโทรไม่ได้หรือ payload เปลี่ยน";remote.remove(c.commandId);pump();return}
+            // Journal owns command dedupe. A terminal receipt is returned without executing again.
+            val existing=store.load().receipts[c.commandId]
+            if(existing!=null){remote.remove(c.commandId);relay.completed(envelope,existing);pump();return}
+        }
+        busy=true;val r=executor.submit(c)
+        if(r.status!=MapReceiptStatus.PENDING){busy=false;status.text="${r.status}: ${r.reason}";remote.remove(c.commandId)?.let {relay.completed(it,r)};pump()}
+    }
     private fun pinDialog(point:Point) {
         val name=EditText(this).apply {hint="ชื่อจุด"}
         AlertDialog.Builder(this).setTitle("บันทึกจุด ${"%.5f".format(point.latitude)}, ${"%.5f".format(point.longitude)}").setView(name).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก"){_,_->
@@ -77,10 +99,10 @@ class OutsideViewActivity : Activity() {
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
-    override fun onResume(){super.onResume();busy=false;renderer.onResume()}
-    override fun onPause(){renderer.onPause();super.onPause()}
+    override fun onResume(){super.onResume();busy=store.load().pending!=null;renderer.onResume()}
+    override fun onPause(){relay.stop();discardRemoteQueue();shareButton.text="แชร์ให้โก";renderer.onPause();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
-    override fun onDestroy(){destroyed=true;worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;relay.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
     override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState)}
 }
