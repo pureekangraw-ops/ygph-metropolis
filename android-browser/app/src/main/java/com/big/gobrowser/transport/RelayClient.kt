@@ -99,7 +99,7 @@ class HttpRelayClient(
         validateRelayAck(this, expectedId, expectedSequence)
 
     companion object {
-        private fun snapshotJson(snapshot: Snapshot) = JSONObject().apply {
+        internal fun snapshotJson(snapshot: Snapshot) = JSONObject().apply {
             put("deviceId", snapshot.deviceId)
             put("tabId", snapshot.tabId)
             put("captureId", snapshot.captureId)
@@ -119,6 +119,13 @@ class HttpRelayClient(
                     put("role", target.role ?: JSONObject.NULL)
                     put("label", target.label ?: JSONObject.NULL)
                     put("kind", target.kind)
+                    put("frameId", target.frameId)
+                    put("tag", target.tag)
+                    put("type", target.type)
+                    put("href", target.href ?: JSONObject.NULL)
+                    put("visibility", target.visibility)
+                    put("disabled", target.disabled)
+                    put("signature", target.signature)
                     put("left", target.left); put("top", target.top)
                     put("right", target.right); put("bottom", target.bottom)
                 })
@@ -136,7 +143,7 @@ class HttpRelayClient(
             put("businessOutcome", receipt.businessOutcome.name)
         }
 
-        private fun commandFromJson(json: JSONObject) = Command(
+        internal fun commandFromJson(json: JSONObject) = Command(
             commandId = json.getString("commandId"),
             actor = json.getString("actor"),
             workId = json.getString("workId"),
@@ -152,7 +159,8 @@ class HttpRelayClient(
             authority = json.getString("authority"),
             parameters = json.optJSONObject("parameters")?.let { params ->
                 params.keys().asSequence().associateWith { key -> params.optString(key) }
-            }.orEmpty()
+            }.orEmpty(),
+            frameId = json.optString("frameId", "frame-0")
         )
     }
 }
@@ -172,3 +180,4 @@ internal fun validateRelayAck(json: JSONObject, expectedId: String, expectedSequ
         throw RelayProtocolException("ACK mismatch")
     return ack
 }
+
