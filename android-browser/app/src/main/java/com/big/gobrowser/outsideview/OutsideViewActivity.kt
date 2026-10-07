@@ -45,6 +45,7 @@ class OutsideViewActivity : Activity() {
         root.addView(scroll(tools))
         val files=LinearLayout(this)
         files.addView(button("นำเข้า PMTiles"){startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)})
+        files.addView(button("ลองแสดงใหม่"){renderer.reloadStyle()})
         files.addView(button("โน้ต"){noteDialog("outside","พื้นที่นี้")})
         root.addView(scroll(files))
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
@@ -52,13 +53,13 @@ class OutsideViewActivity : Activity() {
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
-        relay=MapRelayTransport(this,store,{renderer.foregroundReady}, { envelope->
+        relay=MapRelayTransport(this,store,{val journal=store.load();renderer.foregroundReady&&journal.renderedRevision==journal.state.revision}, { envelope->
             if(remote.size<100&&commands.size<100){remote[envelope.command.commandId]=envelope;commands.addLast(envelope.command);pump()}else status.text="คิวคำสั่งแผนที่เต็ม"
         }, {status.text=it})
         renderer.onSelect=::pinDialog
         renderer.onError={status.text=it}
-        renderer.onConfirmed={confirmation->if(!confirmation.commandId.startsWith("screen-")){busy=false;status.text="บันทึกบนแผนที่แล้ว · ${confirmation.revision}";remote.remove(confirmation.commandId)?.let {e->store.load().receipts[confirmation.commandId]?.let {relay.completed(e,it)}};pump()}}
-        renderer.onReady={if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
+        renderer.onConfirmed={confirmation->if(confirmation.commandId.startsWith("screen-"))store.confirmScreen(confirmation);if(!confirmation.commandId.startsWith("screen-")){busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";remote.remove(confirmation.commandId)?.let {e->store.load().receipts[confirmation.commandId]?.let {relay.completed(e,it)}};pump()}}
+        renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
     private fun discardRemoteQueue(){val ids=remote.keys.toSet();commands.removeAll {it.commandId in ids};remote.clear()}

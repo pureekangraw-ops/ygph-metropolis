@@ -68,7 +68,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
         if(record.has("receipt")){sync();return}
         val after=if(r.status==MapReceiptStatus.APPLIED)buildSnapshot() else null
         if(r.status==MapReceiptStatus.APPLIED&&after==null){status("เฟรมยืนยันแล้ว แต่ snapshot ใหญ่เกินขนาด · ยังไม่ส่ง APPLIED");return}
-        val readback=JSONObject().put("revision",r.revision).put("rendererToken",r.rendererToken?:JSONObject.NULL).put("confirmedFeatureIds",JSONArray(r.confirmedFeatureIds.toList())).toString()
+        val readback=JSONObject().put("revision",r.revision).put("rendererToken",r.rendererToken?:JSONObject.NULL).put("confirmedFeatureIds",JSONArray(r.confirmedFeatureIds.toList())).put("confirmedCamera",r.confirmedCamera?.let {JSONObject().put("longitude",it.longitude).put("latitude",it.latitude).put("zoom",r.confirmedZoom?:JSONObject.NULL)}?:JSONObject.NULL).toString()
         val receipt=JSONObject().put("commandId",r.commandId).put("status",r.status.name).put("reason",r.reason?:JSONObject.NULL).put("beforeCaptureId",record.getString("before")).put("afterCaptureId",after?.getString("captureId")?:JSONObject.NULL).put("executedAtEpochMs",record.getLong("startedAt")).put("readback",readback).put("businessOutcome","UNKNOWN")
         record.put("receipt",receipt).put("after",after?:JSONObject.NULL)
         val records=records().put(r.commandId,record);if(!saveRecords(records)){status("บันทึก receipt ไม่สำเร็จ · ยังไม่ส่งผล");return};sync()
@@ -82,7 +82,7 @@ class MapRelayTransport(context:Context,private val store:MapStateStore,private 
     }
     private fun buildSnapshot():JSONObject? {
         val c=config?:return null
-        val j=store.load();if(j.pending!=null||!ready()||!power.isInteractive)return null
+        val j=store.load();if(j.pending!=null||j.renderedRevision!=j.state.revision||!ready()||!power.isInteractive)return null
         fun entries(key:String,commands:List<MapCommand>):JSONArray=JSONArray().also {a->commands.forEach {a.put(MapCommandCodec.encode(it).getJSONObject(key))}}
         val state=j.state
         val wire=JSONObject().put("zones",entries("zone",state.zones.values.map {MapCommand("_",MapAction.UPSERT_ZONE,zone=it)})).put("grids",entries("grid",state.grids.values.map {MapCommand("_",MapAction.UPSERT_GRID,grid=it)})).put("pins",entries("pin",state.pins.values.map {MapCommand("_",MapAction.UPSERT_PIN,pin=it)}))

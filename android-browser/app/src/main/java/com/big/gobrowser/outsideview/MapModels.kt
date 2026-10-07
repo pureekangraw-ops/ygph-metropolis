@@ -111,7 +111,9 @@ data class MapReceipt(
     val reason: String? = null,
     val revision: Long = 0L,
     val rendererToken: String? = null,
-    val confirmedFeatureIds: Set<String> = emptySet()
+    val confirmedFeatureIds: Set<String> = emptySet(),
+    val confirmedCamera: Point? = null,
+    val confirmedZoom: Double? = null
 )
 data class PendingRender(val command: MapCommand, val revision: Long, val token: String)
 data class MapJournal(
@@ -119,11 +121,12 @@ data class MapJournal(
     val pending: PendingRender? = null,
     val hashes: Map<String, String> = emptyMap(),
     val receipts: Map<String, MapReceipt> = emptyMap(),
-    val version: Int = 1
+    val version: Int = 1,
+    val renderedRevision: Long = -1
 )
 
 enum class ExecutionScope { TEST, LOCAL_OWNER, LIVE_DISABLED }
-data class RenderRequest(val commandId: String, val revision: Long, val styleGeneration: Long, val token: String, val state: MapState)
+data class RenderRequest(val commandId: String, val revision: Long, val styleGeneration: Long, val token: String, val state: MapState, val focus: MapTarget? = null)
 data class RenderConfirmation(
     val commandId: String,
     val revision: Long,
@@ -132,7 +135,8 @@ data class RenderConfirmation(
     val confirmedFeatureIds: Set<String>,
     val presentation: String? = null,
     val camera: Bounds? = null,
-    val error: String? = null
+    val error: String? = null,
+    val cameraZoom: Double? = null
 )
 
 fun gridId(zoneId: String, bounds: Bounds): String {
@@ -169,12 +173,19 @@ fun validate(command: MapCommand, state: MapState, now: Long): List<String> {
             }
         }
         MapAction.NOTE -> if (command.target == null || command.note == null) errors += "note target and value required"
-        MapAction.RECOMMEND, MapAction.HIGHLIGHT, MapAction.FOCUS -> if (command.target == null) errors += "target required"
+        MapAction.RECOMMEND, MapAction.HIGHLIGHT, MapAction.FOCUS -> if (command.target == null || mapTargetCenter(state,command.target)==null) errors += "known target geometry required"
         MapAction.REMOVE -> if (command.target == null) errors += "target required"
         MapAction.CLEAR -> if (command.scope == null || command.scope !in setOf("pins", "grids", "zones", "all")) errors += "clear scope invalid"
         MapAction.ROUTE -> errors += "route disabled"
     }
     return errors
+}
+
+fun mapTargetCenter(state:MapState,target:MapTarget):Point?=when(target.kind){
+    "pin"->state.pins[target.id]?.point
+    "grid"->state.grids[target.id]?.bounds?.center()
+    "zone"->state.zones[target.id]?.takeIf {it.geometryKnown}?.let {zone->zone.bounds?.center()?:zone.polygon.takeIf {it.isNotEmpty()}?.let {points->Bounds(points.minOf {it.longitude},points.minOf {it.latitude},points.maxOf {it.longitude},points.maxOf {it.latitude}).center()}}
+    else->null
 }
 
 private fun pointInPolygon(point: Point, polygon: List<Point>): Boolean {
