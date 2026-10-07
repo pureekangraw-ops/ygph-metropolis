@@ -120,7 +120,7 @@ class OutsideViewActivity : Activity() {
     }
     private fun updateSharingStatus(){
         val journal=store.load()
-        val state=SharingStatus.resolve(relay.sharing,ObservatoryStationConnection(this).config("map")!=null,foreground,ObservatoryTheme.online(this),renderer.foregroundReady && journal.renderedRevision==journal.state.revision && relay.capture?.revision==journal.state.revision && relay.capture?.let {System.currentTimeMillis()-it.capturedAtEpochMs in 0..30_000}==true,lastAck,deliveryFailed,System.currentTimeMillis())
+        val state=SharingStatus.resolve(relay.sharing,ObservatoryStationConnection(this).config("map")!=null,foreground,ObservatoryTheme.online(this),renderer.foregroundReady && journal.renderedRevision==journal.state.revision && relay.capture?.revision==journal.state.revision && relay.capture?.let {System.currentTimeMillis()-it.capturedAt in 0..30_000}==true,lastAck,deliveryFailed,System.currentTimeMillis())
         sharingStatus.text=state.label;sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
     }
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
