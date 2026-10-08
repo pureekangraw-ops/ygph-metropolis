@@ -1,0 +1,26 @@
+name: Observatory Web Map Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'observatory-web/**'
+      - '.github/workflows/observatory-web.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'observatory-web/**'
+      - '.github/workflows/observatory-web.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-web-map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check observatory-web/worker.mjs
+      - run: node --test observatory-web/*.test.mjs
