@@ -58,6 +58,7 @@ class GeckoBrowserActivity : Activity() {
         observerSession = ObserverSession("local-device", "0.4.0-gecko")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ObservatoryTheme.title(this, "หอดูดาว · Gecko Browser"))
+        root.addView(ObservatoryBuildStamp.view(this))
         val addressRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(8, 4, 8, 4) }
         address = EditText(this).apply { hint = "https://example.com"; setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_GO; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true } }
         ObservatoryTheme.address(address); addressRow.addView(address); addressRow.addView(button("ไป") { navigateFromAddress() })
