@@ -42,7 +42,7 @@ class GeckoBrowserEngine(
     fun list(): List<GeckoTab> = tabs.values.toList()
     fun attach(view: GeckoView) { attached = view; active()?.let { view.setSession(it.session) }; updateVisibility(true) }
     fun detach() { attached?.releaseSession(); attached = null }
-    fun open(url: String = BrowserSettings.START_URL, id: String? = null, state: GeckoSession.SessionState? = null): String {
+    fun open(url: String = BrowserSettings.OBSERVATORY_HOME_URL, id: String? = null, state: GeckoSession.SessionState? = null): String {
         require(BrowserSettings.isAllowedUrl(url)) { "HTTPS_URL_REQUIRED" }
         val tabId = id ?: java.util.UUID.randomUUID().toString(); val session = GeckoSession(); val tab = GeckoTab(tabId, session, url)
         bind(tab); tabs[tabId] = tab; select(tabId); session.open(runtime)
