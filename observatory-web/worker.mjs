@@ -98,6 +98,6 @@ export default {
   const u=new URL(request.url);
   if(request.method!=='GET'||(u.pathname!=='/'&&u.pathname!=='/health'))return new Response('Not found',{status:404});
   if(u.pathname==='/health')return Response.json({service:'YGG_OBSERVATORY_WEB_MAP',status:'READY',storage:'BROWSER_LOCAL_ONLY',remotePin:false});
-  return new Response(PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; script-src 'unsafe-inline' https://unpkg.com; style-src 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; connect-src https://*.tile.openstreetmap.org; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"}})
+  return new Response(PAGE,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','content-security-policy':"default-src 'none'; script-src 'unsafe-inline' https://unpkg.com; style-src 'unsafe-inline' https://unpkg.com; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src https://tile.openstreetmap.org; font-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"}})
  }
 };
