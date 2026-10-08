@@ -236,7 +236,7 @@ class MetropolisMcpClient(context: Context) {
     }
 
     private fun readTokens(): JSONObject? = credential.load()?.let { runCatching { JSONObject(it) }.getOrNull() }
-    private fun post(callback: (Result<HubArrival>) -> Unit, result: Result<HubArrival>) = main.post { callback(result) }
+    private fun <T> post(callback: (Result<T>) -> Unit, result: Result<T>) = main.post { callback(result) }
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
     private fun randomToken(bytes: Int): String = ByteArray(bytes).also(SecureRandom()::nextBytes).let(::base64Url)
     private fun base64Url(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
