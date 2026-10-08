@@ -70,3 +70,25 @@ test('Gecko starts at Observatory map while API origin remains only for GO OAuth
   assert.match(activity, /button\("เชื่อม GO"\)/);
   assert.doesNotMatch(activity, /GeckoView .*\$\{if \(foreground\) "LIVE"/);
 });
+
+
+test('Observatory version stamp appears on browser and map and is sourced from CI checkout', () => {
+  const gradle = readAndroid('app/build.gradle.kts');
+  const stamp = readAndroid('app/src/main/java/com/big/gobrowser/ui/ObservatoryBuildStamp.kt');
+  const browser = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
+  const workflow = readRepo('.github/workflows/android-browser.yml');
+  assert.match(gradle, /versionName = "0\.4\.2"/);
+  assert.match(gradle, /versionCode = 5/);
+  assert.match(gradle, /buildConfigField\("String", "SOURCE_COMMIT"/);
+  assert.match(gradle, /buildConfigField\("String", "BUILD_RUN_ID"/);
+  assert.match(stamp, /BuildConfig\.VERSION_NAME/);
+  assert.match(stamp, /BuildConfig\.SOURCE_COMMIT/);
+  assert.match(stamp, /BuildConfig\.BUILD_RUN_ID/);
+  assert.match(stamp, /setOnLongClickListener/);
+  assert.match(browser, /root\.addView\(ObservatoryBuildStamp\.view\(this\)\)/);
+  assert.match(map, /root\.addView\(ObservatoryBuildStamp\.view\(this\)\)/);
+  assert.match(workflow, /OBSERVATORY_SOURCE_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(workflow, /OBSERVATORY_BUILD_RUN_ID: \$\{\{ github\.run_id \}\}/);
+  assert.equal((workflow.match(/ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/g) || []).length, 2);
+});
