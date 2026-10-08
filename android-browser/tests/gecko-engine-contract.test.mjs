@@ -87,6 +87,7 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   assert.match(stamp, /BuildConfig\.BUILD_RUN_ID/);
   assert.match(stamp, /setOnLongClickListener/);
   assert.match(browser, /root\.addView\(ObservatoryBuildStamp\.view\(this\)\)/);
+  assert.match(browser, /ObserverSession\("local-device", "\$\{BuildConfig\.VERSION_NAME\}-gecko"\)/);
   assert.match(map, /root\.addView\(ObservatoryBuildStamp\.view\(this\)\)/);
   assert.match(workflow, /OBSERVATORY_SOURCE_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   assert.match(workflow, /OBSERVATORY_BUILD_RUN_ID: \$\{\{ github\.run_id \}\}/);
