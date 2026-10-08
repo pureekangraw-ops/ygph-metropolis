@@ -5,6 +5,7 @@ import android.webkit.WebView
 
 object BrowserSettings {
     const val START_URL = "https://example.com/"
+    const val OBSERVATORY_HOME_URL = "https://observatory-web.pureekangraw.workers.dev/"
 
     fun isAllowedUrl(raw: String): Boolean = UrlPolicy.isAllowed(raw)
 
