@@ -7,12 +7,24 @@ android {
     namespace = "com.big.gobrowser"
     compileSdk = 36
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    // Exact checkout revision and run ID are embedded in the APK for visible provenance.
+    val sourceRevision = System.getenv("OBSERVATORY_SOURCE_SHA")
+        ?.takeIf { it.matches(Regex("[0-9a-f]{40}")) } ?: "UNKNOWN"
+    val buildRunId = System.getenv("OBSERVATORY_BUILD_RUN_ID")
+        ?.takeIf { it.matches(Regex("[0-9]+")) } ?: "LOCAL"
+
     defaultConfig {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.1"
+        versionCode = 5
+        versionName = "0.4.2"
+        buildConfigField("String", "SOURCE_COMMIT", "\"$sourceRevision\"")
+        buildConfigField("String", "BUILD_RUN_ID", "\"$buildRunId\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
