@@ -1,4 +1,4 @@
-const PAGE = \`<!doctype html>
+const PAGE = `<!doctype html>
 <html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>YGG Observatory · Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -92,7 +92,7 @@ if(location.hash.startsWith('#pins=')){try{
 }catch{notify('อ่านข้อมูลหมุดจากลิงก์ไม่ได้')}}
 render();
 })();
-</script></body></html>\`;
+</script></body></html>`;
 export default {
  async fetch(request){
   const u=new URL(request.url);
