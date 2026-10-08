@@ -20,18 +20,26 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * Native OAuth/PKCE client for the new Metropolis Hub.
  *
- * This client only authenticates GO and reads the current Hub identity/arrival
- * snapshot. It deliberately does not invent a browser relay contract; browser
- * Work execution remains blocked until the Hub exposes the corresponding Work
- * grant and readback path.
+ * Authenticates GO at Metropolis, reads existing authorized Observatory Work,
+ * and pairs a read-only device rail. The GO OAuth bearer is sent only to Hub;
+ * snapshots use the separate, revocable Station credential.
  */
 class MetropolisMcpClient(context: Context) {
-    data class HubArrival(val actor: String, val nickname: String, val sourceSha: String, val observedAt: String)
+    data class HubWork(val workId: String, val ownerSystem: String, val authorizedActions: Set<String>)
+    data class HubArrival(
+        val actor: String,
+        val nickname: String,
+        val sourceSha: String,
+        val observedAt: String,
+        val observatoryWorks: List<HubWork>
+    )
+    data class ObservatoryPair(val deviceId: String, val workId: String, val publishSnapshot: String)
 
     private data class Pending(val verifier: String, val state: String)
 
     private val app = context.applicationContext
     private val credential = AndroidDeviceCredentialStore(app, "metropolis-hub-oauth", "metropolis-hub-oauth")
+    private val stationCredential = AndroidDeviceCredentialStore(app, "observatory-station-rail", "observatory-station-rail")
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val requestId = AtomicLong(0)
@@ -76,16 +84,72 @@ class MetropolisMcpClient(context: Context) {
                 val actor = profile.optString("name", "GO")
                 val nickname = profile.optString("nickname", "GO — Metropolis")
                 val current = arrival.optJSONObject("structuredContent") ?: arrival
-                HubArrival(actor, nickname, current.optString("sourceSha"), current.optString("observedAt"))
+                val works = current.optJSONObject("current")?.optJSONArray("works")
+                val observatoryWorks = (0 until (works?.length() ?: 0)).mapNotNull { index ->
+                    val work = works?.optJSONObject(index) ?: return@mapNotNull null
+                    val actions = work.optJSONArray("authorizedActions")
+                    val authorized = (0 until (actions?.length() ?: 0))
+                        .mapNotNull { actionIndex -> actions?.optString(actionIndex)?.takeIf(String::isNotBlank) }
+                        .toSet()
+                    if (work.optBoolean("present")
+                        && work.optString("ownerSystem") == "OBSERVATORY"
+                        && "read" in authorized) {
+                        HubWork(work.optString("workId"), "OBSERVATORY", authorized)
+                    } else null
+                }.filter { it.workId.isNotBlank() }
+                HubArrival(actor, nickname, current.optString("sourceSha"), current.optString("observedAt"), observatoryWorks)
             }
             post(onComplete, result)
         }
         return true
     }
 
+    /** Pair only after the existing GO OAuth identity and an authorized OBSERVATORY Work were read from Hub. */
+    fun pairObservatory(workId: String, onComplete: (Result<ObservatoryPair>) -> Unit) {
+        io.execute {
+            val result = runCatching {
+                require(workId.isNotBlank()) { "WORK_ID_REQUIRED" }
+                val body = JSONObject().put("workId", workId).toString()
+                val paired = JSONObject(protectedRequest("$ISSUER/observatory/pair", body))
+                val deviceId = paired.getString("deviceId")
+                val endpoint = paired.getString("publishSnapshot")
+                require(endpoint.startsWith("$ISSUER/observatory/device/$deviceId/")) { "STATION_ENDPOINT_INVALID" }
+                require(paired.getString("token").isNotBlank()) { "STATION_CREDENTIAL_MISSING" }
+                stationCredential.save(paired.toString())
+                ObservatoryPair(deviceId, workId, endpoint)
+            }
+            post(onComplete, result)
+        }
+    }
+
+    fun pairedObservatory(): ObservatoryPair? = stationCredential.load()?.let { raw ->
+        runCatching {
+            val json = JSONObject(raw)
+            ObservatoryPair(json.getString("deviceId"), json.getString("workId"), json.getString("publishSnapshot"))
+        }.getOrNull()
+    }
+
+    /** Publish through the station-only credential; the GO OAuth bearer is never sent to Observatory/device. */
+    fun publishSnapshot(view: String, snapshot: JSONObject): JSONObject {
+        require(view == "browser" || view == "map") { "VIEW_INVALID" }
+        val pairing = stationCredential.load()?.let { JSONObject(it) } ?: throw IllegalStateException("OBSERVATORY_NOT_PAIRED")
+        val endpoint = pairing.getString("publishSnapshot")
+        require(endpoint == "$ISSUER/observatory/device/${pairing.getString("deviceId")}/snapshot") { "STATION_ENDPOINT_INVALID" }
+        val token = pairing.getString("token")
+        val body = JSONObject().put("view", view).put("snapshot", snapshot).toString()
+        return JSONObject(request(endpoint, "POST", body, token))
+    }
+
     fun disconnect() {
         pending = null
+        val station = stationCredential.load()?.let { runCatching { JSONObject(it) }.getOrNull() }
+        stationCredential.revoke()
         credential.revoke()
+        if (station != null) {
+            val endpoint = "$ISSUER/observatory/device/${station.optString("deviceId")}/disconnect"
+            val token = station.optString("token")
+            io.execute { runCatching { request(endpoint, "POST", "{}", token) } }
+        }
     }
 
     fun close() = io.shutdownNow()
@@ -119,6 +183,20 @@ class MetropolisMcpClient(context: Context) {
             val renewed = refresh(refreshToken)
             credential.save(renewed.toString())
             rpc(renewed.getString("access_token"), "tools/call", JSONObject().put("name", name).put("arguments", arguments))
+        }
+    }
+
+    private fun protectedRequest(endpoint: String, body: String): String {
+        val current = readTokens() ?: throw IllegalStateException("HUB_NOT_CONNECTED")
+        return try {
+            request(endpoint, "POST", body, current.getString("access_token"))
+        } catch (error: HubHttpException) {
+            if (error.status != 401) throw error
+            val refreshToken = current.optString("refresh_token")
+            if (refreshToken.isBlank()) throw error
+            val renewed = refresh(refreshToken)
+            credential.save(renewed.toString())
+            request(endpoint, "POST", body, renewed.getString("access_token"))
         }
     }
 

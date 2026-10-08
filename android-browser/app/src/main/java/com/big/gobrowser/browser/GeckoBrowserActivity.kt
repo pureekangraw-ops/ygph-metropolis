@@ -3,7 +3,6 @@ package com.big.gobrowser.browser
 import android.app.*
 import android.content.*
 import android.os.*
-import android.text.InputType
 import android.view.*
 import android.view.inputmethod.EditorInfo
 import android.widget.*
@@ -26,7 +25,6 @@ class GeckoBrowserActivity : Activity() {
     private lateinit var sharingStatus: TextView
     private lateinit var eyeStatus: TextView
     private lateinit var observerSession: ObserverSession
-    private lateinit var credentials: AndroidDeviceCredentialStore
     private lateinit var metropolis: MetropolisMcpClient
     private val handler = Handler(Looper.getMainLooper())
     private val network = Executors.newSingleThreadExecutor()
@@ -37,16 +35,9 @@ class GeckoBrowserActivity : Activity() {
         PermissionStore(seed, deviceScope = true)
     }
     private val outbox = Outbox()
-    private val commandLedger = BrowserCommandLedger()
-    private val executor = CommandExecutor(ActionRunner { null })
-    private val receipts = EpochReceiptQueue()
-    private val commands = ArrayDeque<Command>()
-    private var owner: OwnerRelayConfiguration? = null
-    @Volatile private var sync: SyncService? = null
     private var foreground = false
     private var destroyed = false
     private var captureBusy = false
-    private var commandBusy = false
     private var syncBusy = false
     private var generation = 0L
     private var lastAck: Long? = null
@@ -56,14 +47,13 @@ class GeckoBrowserActivity : Activity() {
     private val tick = object : Runnable {
         override fun run() {
             if (!foreground || destroyed) return
-            if (!commandBusy) engine.active()?.let { captureIfShared(it) }
+            engine.active()?.let { captureIfShared(it) }
             syncActive(); updateSharingStatus(); handler.postDelayed(this, 5_000L)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        credentials = AndroidDeviceCredentialStore(this)
         metropolis = MetropolisMcpClient(this)
         observerSession = ObserverSession("local-device", "0.4.0-gecko")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -108,31 +98,37 @@ class GeckoBrowserActivity : Activity() {
         AlertDialog.Builder(this).setTitle("แท็บ").setItems(tabs.map { it.requestedUrl }.toTypedArray()) { _, index -> engine.select(tabs[index].id); renderActive() }
             .setNeutralButton("ปิดแท็บนี้") { _, _ -> engine.active()?.let { engine.close(it.id) }; renderActive() }.setNegativeButton("กลับ", null).show()
     }
-    private fun showConnectionMenu() { AlertDialog.Builder(this).setTitle("การเชื่อมต่อ").setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "ยกเลิกการเชื่อมต่อ")) { _, choice -> when (choice) { 0 -> connectHub(); 1 -> disconnect() } }.show() }
+    private fun showConnectionMenu() {
+        AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
+            .setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "จับคู่ Observatory กับ Work ที่อ่านได้", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
+                when (choice) { 0 -> connectHub(); 1 -> pairObservatory(); 2 -> disconnect() }
+            }.show()
+    }
     private fun updateSharingStatus() {
         val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }; val now = System.currentTimeMillis()
         val fresh = latest != null && now - latest.capturedAtEpochMs in 0..30_000 && latest.captureId == acknowledgedCapture
-        val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, owner != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
+        val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, metropolis.pairedObservatory() != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
         sharingStatus.text = state.label; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "LIVE" else "WAITING"} · frame-aware observer$hub"
     }
     private fun toggleShare() {
         val tab = engine.active() ?: return
+        if (metropolis.pairedObservatory() == null) { say("เชื่อม Hub และจับคู่ Work ของ Observatory ก่อน"); showConnectionMenu(); return }
         if (observerSession.isSharing(tab.id)) { stopSharing(); say("หยุดแชร์แท็บแล้ว") }
         else { lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureIfShared(tab, true); updateSharingStatus() }
     }
     private fun stopSharing() {
-        generation += 1; receipts.revoke(generation)
+        generation += 1
         engine.active()?.let { tab -> observerSession.stop(tab.id); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
-        commands.clear(); shareButton.text = "GO / Share"; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
+        shareButton.text = "GO / Share"; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
     }
     private fun onCapture(tab: GeckoBrowserEngine.GeckoTab, capture: DomCapture) {
         if (destroyed || !foreground || engine.active()?.id != tab.id || !observerSession.isSharing(tab.id)) return
         if (captureBusy) return
         captureBusy = true; val epoch = generation
         val snapshot = observerSession.capture(tab.id, capture.url, capture.title, capture.text, capture.targets, capture.captureId, force = false)
-        if (snapshot != null && sync != null) outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
+        if (snapshot != null && metropolis.pairedObservatory() != null) outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
         captureBusy = false
         if (epoch == generation && snapshot != null) eyeStatus.text = "Observer · ${snapshot.targets.size} targets · ${snapshot.targets.count { it.frameId != "frame-0" }} iframe targets · ${snapshot.captureId.take(8)}"
     }
@@ -140,46 +136,63 @@ class GeckoBrowserActivity : Activity() {
         if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) { if (notify) say("กด Share ขณะเปิดหน้าเว็บก่อน"); return }
         if (notify) eyeStatus.text = "Observer · waiting for Gecko content snapshot"
     }
-    private fun processNextCommand() {
-        if (captureBusy || commandBusy || commands.isEmpty() || destroyed) return
-        val command = commands.removeFirst(); val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }
-        val state = ControlState(foreground && tab != null && observerSession.isSharing(tab.id) && latest != null && System.currentTimeMillis() - latest.capturedAtEpochMs <= Freshness.LIVE_CAPTURE_MAX_AGE_MS, lifecycleInteractive(), owner?.deviceId.orEmpty(), tab?.id.orEmpty(), latest?.captureId.orEmpty(), latest?.revision ?: -1, tab?.let { permissions.epoch(it.id) } ?: -1)
-        if (owner == null || !owner!!.allows(command)) { queueReceipt(Receipt(command.commandId, ReceiptStatus.REJECTED, "OWNER_SCOPE_MISMATCH", latest?.captureId, null, System.currentTimeMillis(), null, BusinessOutcome.UNKNOWN)); processNextCommand(); return }
-        commandBusy = true; val boundSync = sync; val commandEpoch = generation
-        executor.executeAsync(command, state, { request, complete ->
-            if (tab == null) complete(ActionReadback(false, "NO_ACTIVE_GECKO_SESSION"))
-            else engine.dispatch(tab, request) { result ->
-                if (!result.accepted) complete(ActionReadback(false, result.reason))
-                else awaitReadback(tab.id, latest?.captureId, complete)
-            }
-        }) { receipt -> commandBusy = false; if (boundSync === sync && commandEpoch == generation) queueReceipt(receipt, commandEpoch); processNextCommand() }
-    }
-    private fun awaitReadback(tabId: String, beforeCaptureId: String?, complete: (ActionReadback) -> Unit, attempt: Int = 0) {
-        val latest = observerSession.latest(tabId)
-        if (latest != null && latest.captureId != beforeCaptureId) { complete(ActionReadback(true, "READBACK", latest.captureId, "GECKO_READBACK")); return }
-        if (attempt >= 20) { complete(ActionReadback(true, "EXECUTED_READBACK_UNKNOWN", null, "READBACK_UNKNOWN")); return }
-        handler.postDelayed({ awaitReadback(tabId, beforeCaptureId, complete, attempt + 1) }, 100L)
-    }
     private fun syncActive() {
-        val service = sync ?: return; val tab = engine.active() ?: return; if (syncBusy || !foreground || !observerSession.isSharing(tab.id)) return
-        syncBusy = true; val epoch = generation; val pending = receipts.toList(); network.execute {
-            if (epoch != generation || service !== sync) { runOnUiThread { syncBusy = false }; return@execute }
-            val report = runCatching { service.syncOnce { epoch == generation && service === sync } }.getOrNull()
-            val acknowledged = pending.filter { runCatching { service.publishReceipt(it) }.isSuccess }
-            runOnUiThread { syncBusy = false; if (destroyed || epoch != generation || service !== sync) return@runOnUiThread; acknowledged.forEach(receipts::remove); deliveryFailed = report == null || report.error != null || report.failed > 0; if (report != null && report.published > 0) { observerSession.latest(tab.id)?.let { latest -> if (latest.captureId in report.acknowledgedCaptureIds) { lastAck = System.currentTimeMillis(); acknowledgedCapture = latest.captureId } } }; report?.commands?.take(100 - commands.size)?.forEach { if (commandLedger.admit(it) == null) commands.addLast(it) }; processNextCommand(); updateSharingStatus() }
+        val tab = engine.active() ?: return
+        if (syncBusy || !foreground || !observerSession.isSharing(tab.id) || metropolis.pairedObservatory() == null) return
+        val snapshot = outbox.pending().lastOrNull()
+            ?: observerSession.latest(tab.id)?.takeIf { it.captureId != acknowledgedCapture }
+            ?: return
+        val now = System.currentTimeMillis()
+        if (now - snapshot.capturedAtEpochMs !in 0..30_000) { deliveryFailed = true; updateSharingStatus(); return }
+        syncBusy = true; val epoch = generation; network.execute {
+            val result = runCatching {
+                val wire = HttpRelayClient.snapshotJson(snapshot).apply { remove("deviceId") }
+                metropolis.publishSnapshot("browser", wire)
+            }
+            runOnUiThread {
+                syncBusy = false
+                if (destroyed || epoch != generation || !observerSession.isSharing(tab.id)) return@runOnUiThread
+                result.onSuccess { ack ->
+                    if (ack.optBoolean("accepted")
+                        && ack.optString("operation") == "observe"
+                        && ack.optString("captureId") == snapshot.captureId
+                        && ack.optLong("sequence", -1) == snapshot.sequence) {
+                        outbox.ack(snapshot.captureId)
+                        lastAck = System.currentTimeMillis()
+                        acknowledgedCapture = snapshot.captureId
+                        deliveryFailed = false
+                    } else deliveryFailed = true
+                }.onFailure { deliveryFailed = true }
+                updateSharingStatus()
+            }
         }
     }
-    private fun queueReceipt(receipt: Receipt, epoch: Long = generation) { receipts.enqueue(epoch, receipt) }
-    private fun bindStation(config: OwnerRelayConfiguration, secret: String) { stopSharing(); receipts.clear(); commandLedger.clear(); credentials.save(secret); owner = config; observerSession = ObserverSession(config.deviceId, "0.4.0-gecko"); sync = SyncService(HttpRelayClient(config.endpoints, object : DeviceCredentialStore { override fun load() = secret; override fun save(token: String) = error("read-only"); override fun revoke() = Unit }), outbox); say("เชื่อมเมโทรแล้ว กด GO / Share เพื่อเริ่ม") }
-    private fun configureRelay() {
-        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 8) }; val contract = EditText(this).apply { hint = "Owner relay configuration (JSON)"; minLines = 4 }; val token = EditText(this).apply { hint = "Device token"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }; form.addView(contract); form.addView(token)
-        AlertDialog.Builder(this).setTitle("Relay จากเจ้าของระบบ").setView(form).setNegativeButton("Cancel", null).setPositiveButton("Review") { _, _ -> val config = runCatching { OwnerRelayConfiguration.parse(contract.text.toString()) }.getOrNull(); val secret = token.text.toString(); token.text.clear(); if (config == null || secret.isBlank()) say("ต้องมี owner configuration และ token ที่ถูกต้อง") else bindStation(config, secret) }.show()
+    private fun pairObservatory() {
+        val arrival = hubArrival
+        if (arrival?.actor != "GO") { say("เชื่อม GO กับ Metropolis Hub ก่อน"); return }
+        val works = arrival.observatoryWorks
+        if (works.isEmpty()) { say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
+        AlertDialog.Builder(this).setTitle("เลือก Observatory Work")
+            .setItems(works.map { it.workId }.toTypedArray()) { _, index ->
+                val work = works[index]
+                metropolis.pairObservatory(work.workId) { result ->
+                    result.onSuccess { pair ->
+                        runOnUiThread {
+                            stopSharing()
+                            say("จับคู่ Station แล้ว · ${pair.workId} · read-only")
+                            updateSharingStatus()
+                        }
+                    }.onFailure { error ->
+                        runOnUiThread { say("จับคู่ไม่ได้: ${error.message?.take(100)}") }
+                    }
+                }
+            }.setNegativeButton("ยกเลิก", null).show()
     }
     private fun connectHub() {
         say("เปิดหน้า Metropolis Hub เพื่อกรอก Owner passcode")
         engine.navigate(metropolis.authorizationUrl())
     }
-    private fun disconnect() { stopSharing(); sync = null; owner = null; hubArrival = null; receipts.clear(); commandLedger.clear(); metropolis.disconnect(); runCatching { credentials.revoke() }; updateSharingStatus() }
+    private fun disconnect() { stopSharing(); hubArrival = null; metropolis.disconnect(); updateSharingStatus() }
     private fun navigateFromAddress() { val raw = address.text.toString().trim(); if (!BrowserSettings.isAllowedUrl(raw)) { say("เปิดได้เฉพาะ HTTPS"); return }; if (foreground && lifecycleInteractive()) engine.navigate(raw) }
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
