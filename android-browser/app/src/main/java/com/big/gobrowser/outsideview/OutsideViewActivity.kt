@@ -39,6 +39,7 @@ class OutsideViewActivity : Activity() {
         store=MapStateStore(this);packageStore=LocalMapPackageStore(this)
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         root.addView(ObservatoryTheme.title(this,"หอดูดาว · แผนที่"))
+        root.addView(ObservatoryBuildStamp.view(this))
         status=ObservatoryTheme.status(this).apply {text="กดค้างบนแผนที่เพื่อบันทึกจุด"}
         sharingStatus=ObservatoryTheme.status(this);root.addView(sharingStatus)
         gpsStatus=ObservatoryTheme.status(this).apply {text="ตำแหน่งฉัน · กดเพื่อใช้ GPS จากเครื่อง"}
