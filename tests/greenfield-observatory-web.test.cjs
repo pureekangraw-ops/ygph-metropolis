@@ -20,6 +20,8 @@ test('Observatory Web Map serves safe HTML with parseable client code', async ()
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /text\/html/);
   assert.match(res.headers.get('content-security-policy'), /object-src 'none'/);
+  // OSM's tile service rejects browsers that suppress the cross-origin Referer.
+  assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   // Leaflet requests the apex tile.openstreetmap.org host; a wildcard alone does not match it.
   const policy = res.headers.get('content-security-policy');
   assert.match(policy, /img-src[^;]*https:\/\/tile\.openstreetmap\.org(?:[; ]|$)/);
