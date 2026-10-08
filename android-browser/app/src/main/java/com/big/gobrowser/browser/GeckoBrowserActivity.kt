@@ -7,6 +7,7 @@ import android.view.*
 import android.view.inputmethod.EditorInfo
 import android.widget.*
 import com.big.gobrowser.R
+import com.big.gobrowser.BuildConfig
 import com.big.gobrowser.control.*
 import com.big.gobrowser.lyra.LyraDialog
 import com.big.gobrowser.observer.*
@@ -55,7 +56,7 @@ class GeckoBrowserActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         metropolis = MetropolisMcpClient(this)
-        observerSession = ObserverSession("local-device", "0.4.0-gecko")
+        observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ObservatoryTheme.title(this, "หอดูดาว · Gecko Browser"))
         root.addView(ObservatoryBuildStamp.view(this))
