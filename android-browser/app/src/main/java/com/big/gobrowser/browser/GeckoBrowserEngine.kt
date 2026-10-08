@@ -8,6 +8,7 @@ import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.AllowOrDeny
 import com.big.gobrowser.observer.Target
 
 /** Engine-neutral browser surface backed by one process GeckoRuntime and one session per tab. */
@@ -79,9 +80,9 @@ class GeckoBrowserEngine(
             override fun onSessionStateChange(session: GeckoSession, state: GeckoSession.SessionState) { recovery.write(tab.id, state); persist() }
         })
         tab.session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
-            override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<GeckoSession.NavigationDelegate.AllowOrDeny>? {
+            override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<AllowOrDeny>? {
                 // Intercept OAuth callback before Gecko navigates to the non-page endpoint.
-                if (onNavigationIntercept(tab, request.uri)) return GeckoResult.fromValue(GeckoSession.NavigationDelegate.AllowOrDeny.DENY)
+                if (onNavigationIntercept(tab, request.uri)) return GeckoResult.fromValue(AllowOrDeny.DENY)
                 return null
             }
             override fun onLocationChange(session: GeckoSession, url: String?, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
