@@ -20,6 +20,9 @@ test('Observatory Web Map serves safe HTML with parseable client code', async ()
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /text\/html/);
   assert.match(res.headers.get('content-security-policy'), /object-src 'none'/);
+  // Leaflet requests the apex tile.openstreetmap.org host; a wildcard alone does not match it.
+  const policy = res.headers.get('content-security-policy');
+  assert.match(policy, /img-src[^;]*https:\/\/tile\.openstreetmap\.org(?:[; ]|$)/);
   const html = await res.text();
   assert.match(html, /OpenStreetMap/);
   assert.match(html, /localStorage/);
