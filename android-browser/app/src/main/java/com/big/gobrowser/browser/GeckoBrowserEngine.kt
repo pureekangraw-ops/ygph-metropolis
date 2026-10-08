@@ -7,6 +7,7 @@ import org.json.JSONObject
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.GeckoResult
 import com.big.gobrowser.observer.Target
 
 /** Engine-neutral browser surface backed by one process GeckoRuntime and one session per tab. */
@@ -78,7 +79,14 @@ class GeckoBrowserEngine(
             override fun onSessionStateChange(session: GeckoSession, state: GeckoSession.SessionState) { recovery.write(tab.id, state); persist() }
         })
         tab.session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(session: GeckoSession, url: String?, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) { if (url != null && !onNavigationIntercept(tab, url)) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() } }
+            override fun onLoadRequest(session: GeckoSession, request: GeckoSession.NavigationDelegate.LoadRequest): GeckoResult<GeckoSession.NavigationDelegate.AllowOrDeny>? {
+                // Intercept OAuth callback before Gecko navigates to the non-page endpoint.
+                if (onNavigationIntercept(tab, request.uri)) return GeckoResult.fromValue(GeckoSession.NavigationDelegate.AllowOrDeny.DENY)
+                return null
+            }
+            override fun onLocationChange(session: GeckoSession, url: String?, permissions: List<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
+                if (url != null) { tab.requestedUrl = url; if (tab.id == activeId) onUrlChanged(url); persist() }
+            }
         })
     }
     private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl); if (tab.id == activeId && attached == null) persist() } }
