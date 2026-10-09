@@ -34,7 +34,7 @@ class AndroidDeviceCredentialStore(
         preferences.edit()
             .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(DATA_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .apply()
+            .commit().also { check(it) { "CREDENTIAL_SAVE_FAILED" } }
     }
 
     override fun load(): String? {
