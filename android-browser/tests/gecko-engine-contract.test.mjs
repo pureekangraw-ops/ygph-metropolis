@@ -96,13 +96,24 @@ test('Observatory version stamp appears on browser and map and is sourced from C
 
 test('connection diagnostics expose safe pairing evidence and require credential readback', () => {
   const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  assert.match(activity, /val actor = hubArrival\?\.actor \?: "NOT_CONNECTED"/);
-  assert.match(activity, /val eligibleWorks = hubArrival\?\.observatoryWorks\?\.size\?\.toString\(\) \?: "NOT_CHECKED"/);
-  assert.match(activity, /val pairState = pair\?\.let \{ "PAIRED · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "MISSING"/);
-  assert.match(activity, /Hub: \$actor · Observatory Work \(read\): \$eligibleWorks · Station pairing: \$pairState · Latest: \$lastConnectionStatus/);
+  assert.match(activity, /val actor = hubArrival\?\.actor \?: "ยังไม่เชื่อมต่อ"/);
+  assert.match(activity, /val eligibleWorks = hubArrival\?\.observatoryWorks\?\.size\?\.toString\(\) \?: "ยังไม่ตรวจ"/);
+  assert.match(activity, /val pairState = pair\?\.let \{ "จับคู่แล้ว · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "ยังไม่จับคู่"/);
+  assert.match(activity, /Hub: \$actor · Work หอดูดาวที่อ่านได้: \$eligibleWorks · การจับคู่: \$pairState · ผลล่าสุด:/);
   assert.match(activity, /safeConnectionCode\(/);
   assert.match(activity, /saved == null \|\| saved\.workId != work\.workId/);
   assert.match(activity, /saved\.deviceId != pair\.deviceId/);
   assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
+  assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
+});
+
+
+test('new Observatory connection diagnostics are Thai and keep safe status codes', () => {
+  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  assert.match(activity, /Work หอดูดาวที่อ่านได้:/);
+  assert.match(activity, /การจับคู่: \$pairState · ผลล่าสุด:/);
+  assert.match(activity, /private fun connectionStatusLabel\(code: String\)/);
+  assert.match(activity, /"HTTP_406_ACCEPT_REQUIRED" -> "Hub ปฏิเสธรูปแบบคำขอ \(406\)"/);
+  assert.match(activity, /return "\$message \[\$code\]"/);
   assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
 });
