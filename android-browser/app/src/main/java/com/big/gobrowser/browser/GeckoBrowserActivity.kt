@@ -87,7 +87,7 @@ class GeckoBrowserActivity : Activity() {
                         hubArrival = arrival
                         lastConnectionStatus = "HUB_ARRIVE_OK"
                         engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
-                        say("OAuth สำเร็จ · ${arrival.actor} · กำลังจับคู่ Observatory")
+                        say("เชื่อมต่อ Hub สำเร็จ · ${arrival.actor} · กำลังจับคู่หอดูดาว")
                         updateSharingStatus()
                         pairObservatory()
                     }
@@ -96,7 +96,7 @@ class GeckoBrowserActivity : Activity() {
                         if (destroyed || isFinishing) return@runOnUiThread
                         lastConnectionStatus = safeConnectionCode(error)
                         engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
-                        say("เชื่อม Hub ไม่ได้ · $lastConnectionStatus")
+                        say("เชื่อม Hub ไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
                         updateSharingStatus()
                     }
                 }
@@ -207,17 +207,17 @@ class GeckoBrowserActivity : Activity() {
                         if (saved == null || saved.workId != work.workId || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
                             lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
                             updateSharingStatus()
-                            say("Hub ตอบรับ pairing แต่เครื่องอ่าน credential กลับไม่ตรงกัน")
+                            say("Hub ตอบรับการจับคู่ แต่ตรวจข้อมูลที่บันทึกในเครื่องไม่ผ่าน")
                             return@onSuccess
                         }
                         lastConnectionStatus = "PAIR_READBACK_OK"
                         stopSharing()
-                        say("จับคู่ Observatory สำเร็จ · อ่าน credential กลับแล้ว · พร้อมเปิด Share")
+                        say("จับคู่หอดูดาวสำเร็จ · ตรวจข้อมูลที่บันทึกแล้ว · พร้อมแชร์")
                         updateSharingStatus()
                     }.onFailure { error ->
                         lastConnectionStatus = safeConnectionCode(error)
                         updateSharingStatus()
-                        say("จับคู่ Station ไม่ได้ · $lastConnectionStatus")
+                        say("จับคู่หอดูดาวไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
                     }
                 }
             }
@@ -225,7 +225,7 @@ class GeckoBrowserActivity : Activity() {
         if (works.size == 1) {
             pair(works.single())
         } else {
-            AlertDialog.Builder(this).setTitle("เลือก Observatory Work")
+            AlertDialog.Builder(this).setTitle("เลือก Work ของหอดูดาว")
                 .setItems(works.map { it.workId }.toTypedArray()) { _, index -> pair(works[index]) }
                 .setNegativeButton("ยกเลิก", null).show()
         }
@@ -233,17 +233,48 @@ class GeckoBrowserActivity : Activity() {
     private fun connectHub() {
         lastConnectionStatus = "OAUTH_STARTED"
         updateConnectionDiagnostics()
-        say("เปิดหน้า Metropolis Hub เพื่อกรอก Owner passcode")
+        say("เปิดหน้า Metropolis Hub เพื่อยืนยันตัวตนเจ้าของ")
         engine.navigate(metropolis.authorizationUrl())
     }
     private fun disconnect() { lastConnectionStatus = "DISCONNECTED"; stopSharing(); hubArrival = null; metropolis.disconnect(); updateSharingStatus() }
     private fun updateConnectionDiagnostics() {
         if (!::connectionDiagnostics.isInitialized) return
-        val actor = hubArrival?.actor ?: "NOT_CONNECTED"
-        val eligibleWorks = hubArrival?.observatoryWorks?.size?.toString() ?: "NOT_CHECKED"
+        val actor = hubArrival?.actor ?: "ยังไม่เชื่อมต่อ"
+        val eligibleWorks = hubArrival?.observatoryWorks?.size?.toString() ?: "ยังไม่ตรวจ"
         val pair = metropolis.pairedObservatory()
-        val pairState = pair?.let { "PAIRED · …${it.workId.takeLast(8)}" } ?: "MISSING"
-        connectionDiagnostics.text = "Hub: $actor · Observatory Work (read): $eligibleWorks · Station pairing: $pairState · Latest: $lastConnectionStatus"
+        val pairState = pair?.let { "จับคู่แล้ว · …${it.workId.takeLast(8)}" } ?: "ยังไม่จับคู่"
+        connectionDiagnostics.text = "Hub: $actor · Work หอดูดาวที่อ่านได้: $eligibleWorks · การจับคู่: $pairState · ผลล่าสุด: ${connectionStatusLabel(lastConnectionStatus)}"
+    }
+
+    private fun connectionStatusLabel(code: String): String {
+        val message = when (code) {
+            "NOT_ATTEMPTED" -> "ยังไม่ได้เริ่มตรวจ"
+            "OAUTH_STARTED" -> "กำลังเชื่อม Hub"
+            "HUB_ARRIVE_OK" -> "Hub ยืนยันตัวตนแล้ว"
+            "GO_SESSION_REQUIRED" -> "ต้องเชื่อมต่อด้วยบัญชี GO ก่อน"
+            "NO_AUTHORIZED_OBSERVATORY_WORK" -> "ไม่พบ Work หอดูดาวที่ GO มีสิทธิ์อ่าน"
+            "STATION_PAIRING_REQUIRED", "PAIRING_MISSING" -> "ยังไม่ได้จับคู่หอดูดาว"
+            "PAIR_REQUESTED" -> "กำลังส่งคำขอจับคู่"
+            "PAIR_READBACK_OK" -> "จับคู่และตรวจข้อมูลที่บันทึกแล้ว"
+            "PAIR_SAVE_READBACK_MISMATCH" -> "ข้อมูลจับคู่ที่บันทึกไม่ตรงกับคำตอบจาก Hub"
+            "SNAPSHOT_REQUESTED" -> "กำลังส่งข้อมูลอ่านกลับ"
+            "SNAPSHOT_ACK_OK" -> "ระบบเจ้าของยืนยันรับข้อมูลแล้ว"
+            "ACK_MISMATCH" -> "คำยืนยันรับข้อมูลไม่ตรงกัน"
+            "CAPTURE_STALE" -> "ข้อมูลอ่านกลับหมดอายุแล้ว"
+            "DISCONNECTED" -> "ยกเลิกการเชื่อมต่อแล้ว"
+            "OAUTH_STATE_MISMATCH" -> "ข้อมูลยืนยันการเชื่อมต่อไม่ตรงกัน"
+            "HUB_NOT_CONNECTED" -> "ยังไม่ได้เชื่อม Hub"
+            "HTTP_401_AUTH" -> "Hub ไม่ยืนยันตัวตน (401)"
+            "HTTP_403_DENIED" -> "Hub ไม่อนุญาต (403)"
+            "HTTP_406_ACCEPT_REQUIRED" -> "Hub ปฏิเสธรูปแบบคำขอ (406)"
+            "HTTP_5XX" -> "Hub เกิดข้อผิดพลาดภายใน (5xx)"
+            "STATION_ENDPOINT_INVALID" -> "ที่อยู่ปลายทางหอดูดาวไม่ถูกต้อง"
+            "STATION_CREDENTIAL_MISSING" -> "ไม่พบข้อมูลยืนยันตัวตนของหอดูดาว"
+            "HUB_RPC_ERROR" -> "Hub ตอบกลับข้อผิดพลาด"
+            "REQUEST_FAILED" -> "คำขอไม่สำเร็จ"
+            else -> if (code.startsWith("HTTP_")) "Hub ตอบกลับข้อผิดพลาด (${code.removePrefix("HTTP_")})" else "สถานะอื่น ($code)"
+        }
+        return "$message [$code]"
     }
 
     /** Render only allowlisted status codes; never surface response bodies or credentials. */
