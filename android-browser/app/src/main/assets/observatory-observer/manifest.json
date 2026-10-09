@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "name": "Observatory Gecko observer",
+  "version": "1.0.0",
+  "browser_specific_settings": {
+    "gecko": { "id": "observatory-native-observer@yggmetro.com" }
+  },
+  "permissions": ["geckoViewAddons", "nativeMessaging", "nativeMessagingFromContent"],
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["content-observer.js"],
+    "run_at": "document_idle",
+    "all_frames": true
+  }]
+}

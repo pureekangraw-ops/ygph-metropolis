@@ -7,7 +7,7 @@ PRISM owner.29 attached release identifies source 831f8a82cb0a095b7c135ac85ca5ab
 - Browser primary actions fit the phone width; advanced station/relay/disconnect controls move into settings.
 - Device location starts only after the owner taps the location button and grants Android foreground permission. Approximate location is accepted. All listeners stop and the marker clears on pause. Fixes older than 30 seconds, future fixes and invalid coordinates/accuracy are rejected. Mock locations are labelled. Device fixes are separate from durable owner-selected pins and are not sent as GPS evidence in the map station payload.
 - LIVE means the station accepted a recent snapshot while the local surface is fresh. Opening Share is WAITING. Offline, stale, unpaired and background/stopped states are distinct. Delivery does not mean that GO or a business action succeeded.
-- WebView, station contracts and command authority remain the current implementation. No GeckoView migration or PRISM signing identity transfer.
+- GeckoView now reuses the mature PRISM session, recovery, lifecycle, and WebExtension observer architecture. Observatory station contracts, command authority and package identity remain Observatory-owned; no PRISM signing identity is transferred.
 - Installer uses Observatory package com.big.gobrowser, version 0.3.0, development signing.
 
 Validation: DOM/Lyra regression tests; JVM location-age/invalid-fix and sharing ACK/freshness tests; phone-layout and actual MapLibre location-layer instrumentation; existing rendering/journal/credential instrumentation. Real handset GPS precision and live owner pairing remain device acceptance.

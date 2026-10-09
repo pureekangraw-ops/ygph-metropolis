@@ -16,7 +16,8 @@ data class Command(
     val expiresAtEpochMs: Long,
     val action: BrowserAction,
     val authority: String,
-    val parameters: Map<String, String> = emptyMap()
+    val parameters: Map<String, String> = emptyMap(),
+    val frameId: String = "frame-0"
 )
 
 data class ControlState(
@@ -26,8 +27,9 @@ data class ControlState(
     val tabId: String,
     val captureId: String,
     val revision: Long,
-    val epoch: Long
+    val epoch: Long,
+    val frameId: String = "frame-0"
 )
 
-enum class GuardReason { ACCEPTED, EXPIRED, TOO_FAR_IN_FUTURE, NOT_INTERACTIVE, WRONG_DEVICE, WRONG_TAB, STALE_CAPTURE, STALE_REVISION, REVOKED_EPOCH, AUTHORITY_REQUIRED }
+enum class GuardReason { ACCEPTED, EXPIRED, TOO_FAR_IN_FUTURE, NOT_INTERACTIVE, WRONG_DEVICE, WRONG_TAB, STALE_CAPTURE, STALE_REVISION, REVOKED_EPOCH, FRAME_MISMATCH, AUTHORITY_REQUIRED }
 data class GuardResult(val accepted: Boolean, val reason: GuardReason)

@@ -25,16 +25,13 @@ class OutsideViewActivity : Activity() {
     private lateinit var sharingStatus:TextView
     private lateinit var gpsStatus:TextView
     private lateinit var location:ForegroundLocationController
-    private var lastAck:Long?=null
-    private var deliveryFailed=false
     private var foreground=false
     private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();handler.postDelayed(this,5_000)}}}
     private val handler=Handler(Looper.getMainLooper())
     private val worker=Executors.newSingleThreadExecutor()
     private val commands=java.util.ArrayDeque<MapCommand>()
-    private lateinit var relay:MapRelayTransport
+    private lateinit var mapShare:ObservatoryMapShare
     private lateinit var shareButton:Button
-    private val remote=mutableMapOf<String,MapRelayEnvelope>()
     private var busy=false
     private var destroyed=false
     override fun onCreate(savedInstanceState:Bundle?) {
@@ -42,6 +39,7 @@ class OutsideViewActivity : Activity() {
         store=MapStateStore(this);packageStore=LocalMapPackageStore(this)
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         root.addView(ObservatoryTheme.title(this,"หอดูดาว · แผนที่"))
+        root.addView(ObservatoryBuildStamp.view(this))
         status=ObservatoryTheme.status(this).apply {text="กดค้างบนแผนที่เพื่อบันทึกจุด"}
         sharingStatus=ObservatoryTheme.status(this);root.addView(sharingStatus)
         gpsStatus=ObservatoryTheme.status(this).apply {text="ตำแหน่งฉัน · กดเพื่อใช้ GPS จากเครื่อง"}
@@ -50,7 +48,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ไลร่า"){LyraDialog.show(this,"OUTSIDE"){context()}})
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
-        shareButton=button("แชร์ให้โก"){if(relay.sharing){relay.stop();discardRemoteQueue();shareButton.text="แชร์ให้โก"}else {lastAck=null;deliveryFailed=false;if(relay.start())shareButton.text="หยุดแชร์"};updateSharingStatus()}
+        shareButton=button("แชร์ให้โก"){if(mapShare.sharing){mapShare.stop();shareButton.text="แชร์ให้โก"}else if(mapShare.start())shareButton.text="หยุดแชร์";updateSharingStatus()}
         tools.addView(shareButton)
         tools.addView(button("กลับ"){finish()})
         root.addView(scroll(tools))
@@ -68,36 +66,28 @@ class OutsideViewActivity : Activity() {
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
-        relay=MapRelayTransport(this,store,{val journal=store.load();renderer.foregroundReady&&journal.renderedRevision==journal.state.revision}, { envelope->
-            if(remote.size<100&&commands.size<100){remote[envelope.command.commandId]=envelope;commands.addLast(envelope.command);pump()}else status.text="คิวคำสั่งแผนที่เต็ม"
-        }, {status.text=it}, {ack,failed->if(ack!=null)lastAck=ack;deliveryFailed=failed;updateSharingStatus()})
+        mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
         location.onCenter={point->if(!renderer.centerOnLocation(point))gpsStatus.text="แผนที่กำลังทำงาน · กดตำแหน่งฉันอีกครั้งเมื่อพร้อม"}
         renderer.onSelect=::pinDialog
         renderer.onError={status.text=it}
-        renderer.onConfirmed={confirmation->if(confirmation.commandId.startsWith("screen-"))store.confirmScreen(confirmation);if(!confirmation.commandId.startsWith("screen-")){busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";remote.remove(confirmation.commandId)?.let {e->store.load().receipts[confirmation.commandId]?.let {relay.completed(e,it)}};pump()}}
+        renderer.onConfirmed={confirmation->
+            if(confirmation.commandId.startsWith("screen-"))store.confirmScreen(confirmation)
+            else {busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";pump()}
+        }
         renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
-    private fun discardRemoteQueue(){val ids=remote.keys.toSet();commands.removeAll {it.commandId in ids};remote.clear()}
     private fun pump(){
         if(busy||commands.isEmpty()||!renderer.foregroundReady)return
-        val c=commands.removeFirst();val envelope=remote[c.commandId]
-        if(envelope!=null){
-            val rejection=relay.rejection(envelope)
-            if(rejection!=null){status.text="ปฏิเสธคำสั่งเมโทร: $rejection";if(relay.started(envelope))relay.completed(envelope,MapReceipt(c.commandId,MapReceiptStatus.REJECTED,rejection,store.load().state.revision));remote.remove(c.commandId);pump();return}
-            if(!relay.started(envelope)){status.text="บันทึกคำสั่งเมโทรไม่ได้หรือ payload เปลี่ยน";remote.remove(c.commandId);pump();return}
-            // Journal owns command dedupe. A terminal receipt is returned without executing again.
-            val journal=store.load();val existing=journal.receipts[c.commandId]
-            if(existing!=null){
-                remote.remove(c.commandId)
-                if(journal.hashes[c.commandId]==MapCommandCodec.canonical(c))relay.completed(envelope,existing)
-                else relay.completed(envelope,MapReceipt(c.commandId,MapReceiptStatus.REJECTED,"command-id-reused-with-different-payload",journal.state.revision))
-                pump();return
-            }
+        busy=true
+        val command=commands.removeFirst()
+        val receipt=executor.submit(command)
+        if(receipt.status!=MapReceiptStatus.PENDING){
+            busy=false
+            status.text="${receipt.status}: ${receipt.reason ?: ""}"
+            pump()
         }
-        busy=true;val r=executor.submit(c)
-        if(r.status!=MapReceiptStatus.PENDING){busy=false;status.text="${r.status}: ${r.reason}";remote.remove(c.commandId)?.let {relay.completed(it,r)};pump()}
     }
     private fun pinDialog(point:Point) {
         val name=EditText(this).apply {hint="ชื่อจุด"}
@@ -119,9 +109,13 @@ class OutsideViewActivity : Activity() {
         return JSONObject().put("mapSummary",JSONObject().put("revision",state.revision).put("pins",pins).put("notes",JSONObject(state.notes as Map<*,*>)).put("center",center?.let {JSONObject().put("longitude",it.longitude).put("latitude",it.latitude)}?:JSONObject.NULL))
     }
     private fun updateSharingStatus(){
+        if(!::mapShare.isInitialized||!::sharingStatus.isInitialized)return
         val journal=store.load()
-        val state=SharingStatus.resolve(relay.sharing,ObservatoryStationConnection(this).config("map")!=null,foreground,ObservatoryTheme.online(this),renderer.foregroundReady && journal.renderedRevision==journal.state.revision && relay.capture?.revision==journal.state.revision && relay.capture?.let {System.currentTimeMillis()-it.capturedAt in 0..30_000}==true,lastAck,deliveryFailed,System.currentTimeMillis())
-        sharingStatus.text=state.label;sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
+        val recent=mapShare.lastAck?.let {System.currentTimeMillis()-it in 0..30_000}==true
+        val fresh=recent&&renderer.foregroundReady&&journal.renderedRevision==journal.state.revision&&mapShare.acknowledgedRevision==journal.state.revision
+        val state=SharingStatus.resolve(mapShare.sharing,mapShare.isPaired(),foreground,ObservatoryTheme.online(this),fresh,mapShare.lastAck,mapShare.deliveryFailed,System.currentTimeMillis())
+        sharingStatus.text=state.label
+        sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
     }
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==ForegroundLocationController.REQUEST_CODE)location.permissionResult()}
@@ -129,9 +123,9 @@ class OutsideViewActivity : Activity() {
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
     override fun onResume(){super.onResume();foreground=true;busy=store.load().pending!=null;renderer.onResume();location.resume();handler.post(statusTick)}
-    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();relay.stop();discardRemoteQueue();shareButton.text="แชร์ให้โก";renderer.onPause();updateSharingStatus();super.onPause()}
+    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();shareButton.text="แชร์ให้โก";renderer.onPause();updateSharingStatus();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
-    override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();relay.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
     override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState)}
 }
