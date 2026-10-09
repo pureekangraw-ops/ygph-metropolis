@@ -219,7 +219,7 @@ class MetropolisMcpClient(context: Context) {
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 20_000
-            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept", if (endpoint == "$ISSUER/mcp") "application/json, text/event-stream" else "application/json")
             setRequestProperty("Content-Type", contentType)
             setRequestProperty("MCP-Protocol-Version", "2025-06-18")
             token?.let { setRequestProperty("Authorization", "Bearer $it") }
