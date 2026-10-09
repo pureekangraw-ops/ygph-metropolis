@@ -19,7 +19,11 @@ test('retired LIGHTHOUSE CLI and updater cannot emit another release', () => {
 });
 
 test('PRISM has one executable workflow and one signed APK output', () => {
-  assert.deepEqual(fs.readdirSync('.github/workflows').filter(f => /\.ya?ml$/.test(f)), ['prism-owner-build.yml']);
+  const workflows = fs.readdirSync('.github/workflows').filter(f => /\.ya?ml$/.test(f));
+  assert.deepEqual(workflows.filter(f => /prism/i.test(f)), ['prism-owner-build.yml']);
+  assert.ok(workflows.includes('android-browser.yml'), 'Android Observatory build stays separate from PRISM release');
+  const browserWorkflow = fs.readFileSync('.github/workflows/android-browser.yml', 'utf8');
+  assert.match(browserWorkflow, /name: Android Browser Foundation/);
   const workflow = fs.readFileSync('.github/workflows/prism-owner-build.yml', 'utf8');
   assert.doesNotMatch(workflow, /assembleDebug|app-debug\.apk|app:stage-next|stage-lighthouse|wrangler|cloudflare\/wrangler-action/);
   assert.match(workflow, /pull_request:/);

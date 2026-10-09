@@ -1,0 +1,9 @@
+{
+  "status": "BLOCKED",
+  "reason": "OWNER_RELAY_ROUTE_AND_AUTHORITY_UNRESOLVED",
+  "liveMcp": false,
+  "deviceTest": false,
+  "productionSigning": false,
+  "source": "PR-212",
+  "note": "No endpoint, credential, Work ID, or live receipt is invented by the Android client."
+}

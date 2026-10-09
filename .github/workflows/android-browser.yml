@@ -1,0 +1,134 @@
+name: Android Browser Foundation
+
+on:
+  pull_request:
+    paths:
+      - "android-browser/**"
+      - ".github/workflows/android-browser.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android-browser/**"
+      - ".github/workflows/android-browser.yml"
+
+permissions:
+  contents: read
+
+# Stamp the exact checked-out source into the APK, with a direct link to this build.
+env:
+  OBSERVATORY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  OBSERVATORY_BUILD_RUN_ID: ${{ github.run_id }}
+
+jobs:
+  android-browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-browser
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: "15859902"
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: DOM targeting regression tests
+        run: |
+          set -o pipefail
+          node --test tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
+      - name: Publish DOM test diagnostics
+        if: ${{ failure() }}
+        run: cat "$RUNNER_TEMP/android-browser-dom-tests.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: JVM unit tests
+        run: |
+          set -o pipefail
+          gradle --no-daemon :app:testDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/android-browser-unit-tests.log"
+      - name: Publish JVM test diagnostics
+        if: ${{ failure() }}
+        run: cat "$RUNNER_TEMP/android-browser-unit-tests.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish Gradle failure lines
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          grep -E '(^e:|error:|ERROR|FAILURE|Execution failed|What went wrong|There were failing tests|tests failed|Caused by:|Unresolved reference|Exception)' "$RUNNER_TEMP/android-browser-unit-tests.log" | tail -n 80 | while IFS= read -r line; do
+            safe="${line//'%'/'%25'}"
+            safe="${safe//$'\r'/'%0D'}"
+            safe="${safe//$'\n'/'%0A'}"
+            echo "::error title=Gradle::$safe"
+          done
+      - name: Upload JVM test diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-browser-jvm-test-diagnostics
+          path: |
+            ${{ github.workspace }}/android-browser/app/build/test-results/testDebugUnitTest
+            ${{ github.workspace }}/android-browser/app/build/reports/tests/testDebugUnitTest
+            ${{ runner.temp }}/android-browser-unit-tests.log
+            ${{ runner.temp }}/android-browser-dom-tests.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Android lint
+        run: gradle --no-daemon :app:lintDebug
+      - name: Android instrumentation compile
+        run: gradle --no-daemon :app:compileDebugAndroidTestKotlin
+      - name: Debug APK build
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify and upload debug APK
+        run: |
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk"
+          cp "$apk" "$installer"
+          sha256sum "$installer" | tee "$installer.sha256"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YGG-Observatory-Gecko
+          path: |
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk.sha256
+          retention-days: 14
+
+  observatory-emulator:
+    needs: android-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Enable KVM
+        run: |
+          sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash android-browser/scripts/emulator-acceptance.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: observatory-emulator-evidence
+          path: |
+            android-browser/app/build/reports/androidTests/connected
+            android-browser/app/build/outputs/androidTest-results/connected
+            android-browser/app/build/emulator-evidence
+          retention-days: 14
