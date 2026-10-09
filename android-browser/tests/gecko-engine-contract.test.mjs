@@ -93,3 +93,25 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   assert.match(workflow, /OBSERVATORY_BUILD_RUN_ID: \$\{\{ github\.run_id \}\}/);
   assert.equal((workflow.match(/ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/g) || []).length, 2);
 });
+
+
+
+test('legacy Metropolis API-root tab is redirected to the Observatory UI before GeckoView attaches', () => {
+  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const engine = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserEngine.kt');
+  const restore = activity.indexOf('engine.restore()');
+  const restoredUrl = activity.indexOf("val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')", restore);
+  const redirect = activity.indexOf('if (restored == MetropolisMcpClient.ISSUER) engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)', restoredUrl);
+  const attach = activity.indexOf('engine.attach(geckoView)', redirect);
+  assert.ok(restore >= 0 && restoredUrl > restore && redirect > restoredUrl && attach > redirect,
+    'legacy API-root recovery must be corrected before GeckoView is attached');
+  assert.match(engine, /fun open\(url: String = BrowserSettings\.OBSERVATORY_HOME_URL/);
+});
+
+test('CI fixes runner drift and uses actions whose manifests declare Node 24', () => {
+  const workflow = readRepo('.github/workflows/android-browser.yml');
+  assert.equal((workflow.match(/runs-on: ubuntu-24\.04/g) || []).length, 2);
+  assert.equal((workflow.match(/actions\/upload-artifact@v7/g) || []).length, 3);
+  assert.equal((workflow.match(/gradle\/actions\/setup-gradle@v6/g) || []).length, 2);
+  assert.doesNotMatch(workflow, /ubuntu-latest|upload-artifact@v4|setup-gradle@v4/);
+});
