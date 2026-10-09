@@ -46,6 +46,7 @@ class GeckoBrowserActivity : Activity() {
     private var acknowledgedCapture: String? = null
     private var deliveryFailed = false
     private var lastConnectionStatus = "NOT_ATTEMPTED"
+    private var lastPairingReadbackSummary = ""
     private var hubArrival: MetropolisMcpClient.HubArrival? = null
     private val tick = object : Runnable {
         override fun run() {
@@ -198,21 +199,22 @@ class GeckoBrowserActivity : Activity() {
         val works = arrival.observatoryWorks
         if (works.isEmpty()) { lastConnectionStatus = "NO_AUTHORIZED_OBSERVATORY_WORK"; updateConnectionDiagnostics(); say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
         fun pair(work: MetropolisMcpClient.HubWork) {
+            lastPairingReadbackSummary = ""
             lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
             metropolis.pairObservatory(work.workId) { result ->
                 runOnUiThread {
                     if (destroyed || isFinishing) return@runOnUiThread
-                    result.onSuccess { pair ->
-                        val saved = metropolis.pairedObservatory()
-                        if (saved == null || saved.workId != work.workId || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
+                    result.onSuccess { pairing ->
+                        lastPairingReadbackSummary = pairing.readback.safeSummary()
+                        if (!pairing.readback.passed) {
                             lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
                             updateSharingStatus()
-                            say("Hub ตอบรับการจับคู่ แต่ตรวจข้อมูลที่บันทึกในเครื่องไม่ผ่าน")
+                            say("Hub รับแล้ว แต่ readback ไม่ผ่าน · ${pairing.readback.safeSummary()}")
                             return@onSuccess
                         }
                         lastConnectionStatus = "PAIR_READBACK_OK"
                         stopSharing()
-                        say("จับคู่หอดูดาวสำเร็จ · ตรวจข้อมูลที่บันทึกแล้ว · พร้อมแชร์")
+                        say("จับคู่หอดูดาวสำเร็จ · บันทึกและอ่านกลับผ่าน · พร้อมแชร์")
                         updateSharingStatus()
                     }.onFailure { error ->
                         lastConnectionStatus = safeConnectionCode(error)
@@ -243,7 +245,8 @@ class GeckoBrowserActivity : Activity() {
         val eligibleWorks = hubArrival?.observatoryWorks?.size?.toString() ?: "ยังไม่ตรวจ"
         val pair = metropolis.pairedObservatory()
         val pairState = pair?.let { "จับคู่แล้ว · …${it.workId.takeLast(8)}" } ?: "ยังไม่จับคู่"
-        connectionDiagnostics.text = "Hub: $actor · Work หอดูดาวที่อ่านได้: $eligibleWorks · การจับคู่: $pairState · ผลล่าสุด: ${connectionStatusLabel(lastConnectionStatus)}"
+        val readback = lastPairingReadbackSummary.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
+        connectionDiagnostics.text = "Hub: $actor · Work หอดูดาวที่อ่านได้: $eligibleWorks · การจับคู่: $pairState · ผลล่าสุด: ${connectionStatusLabel(lastConnectionStatus)}$readback"
     }
 
     private fun connectionStatusLabel(code: String): String {
