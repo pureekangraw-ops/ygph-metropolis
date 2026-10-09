@@ -100,7 +100,7 @@ test('legacy Metropolis API-root tab is redirected to the Observatory UI before 
   const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   const engine = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserEngine.kt');
   const restore = activity.indexOf('engine.restore()');
-  const restoredUrl = activity.indexOf('val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')', restore);
+  const restoredUrl = activity.indexOf("val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')", restore);
   const redirect = activity.indexOf('if (restored == MetropolisMcpClient.ISSUER) engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)', restoredUrl);
   const attach = activity.indexOf('engine.attach(geckoView)', redirect);
   assert.ok(restore >= 0 && restoredUrl > restore && redirect > restoredUrl && attach > redirect,
