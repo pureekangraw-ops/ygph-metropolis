@@ -49,6 +49,9 @@ public final class RideMapActivity extends Activity {
   private LatLng dropoff;
   private LatLng currentLocation;
   private boolean locationRequested = false;
+  private android.content.SharedPreferences viewPrefs;
+
+  private static final String VIEW_PREFS = "lighthouse_ride_map_view";
 
   private final LocationListener locationListener = new LocationListener() {
     @Override public void onLocationChanged(Location location) {
@@ -110,7 +113,33 @@ public final class RideMapActivity extends Activity {
       return;
     }
     LatLng target = pickup != null ? pickup : dropoff;
-    if (target != null) map.setCameraPosition(new CameraPosition.Builder().target(target).zoom(14d).build());
+    if (target != null) {
+      map.setCameraPosition(new CameraPosition.Builder().target(target).zoom(14d).build());
+      return;
+    }
+    restoreViewportOrLocate();
+  }
+
+  private void restoreViewportOrLocate() {
+    if (map == null) return;
+    if (viewPrefs != null && viewPrefs.contains("lat") && viewPrefs.contains("lng")) {
+      double lat = Double.longBitsToDouble(viewPrefs.getLong("lat", Double.doubleToRawLongBits(13.7563d)));
+      double lng = Double.longBitsToDouble(viewPrefs.getLong("lng", Double.doubleToRawLongBits(100.5018d)));
+      float zoom = viewPrefs.getFloat("zoom", 13f);
+      map.setCameraPosition(new CameraPosition.Builder().target(new LatLng(lat, lng)).zoom(zoom).build());
+    } else {
+      requestForegroundLocation();
+    }
+  }
+
+  private void persistViewport() {
+    if (map == null || viewPrefs == null || map.getCameraPosition() == null || map.getCameraPosition().target == null) return;
+    CameraPosition camera = map.getCameraPosition();
+    viewPrefs.edit()
+      .putLong("lat", Double.doubleToRawLongBits(camera.target.getLatitude()))
+      .putLong("lng", Double.doubleToRawLongBits(camera.target.getLongitude()))
+      .putFloat("zoom", (float) camera.zoom)
+      .apply();
   }
 
   private boolean hasCoarseLocation() {
@@ -171,6 +200,9 @@ public final class RideMapActivity extends Activity {
   private void showCurrentLocation(Location location) {
     if (location == null) return;
     currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+    if (pickup == null && dropoff == null && map != null) {
+      map.setCameraPosition(new CameraPosition.Builder().target(currentLocation).zoom(15d).build());
+    }
     if (mapStyle == null) return;
 
     GeoJsonSource source = mapStyle.getSourceAs(CURRENT_SOURCE);
@@ -209,6 +241,7 @@ public final class RideMapActivity extends Activity {
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    viewPrefs = getSharedPreferences(VIEW_PREFS, MODE_PRIVATE);
     String packagePath = getIntent().getStringExtra("packagePath");
     if (packagePath == null || packagePath.trim().isEmpty()) {
       finish();
@@ -290,6 +323,7 @@ public final class RideMapActivity extends Activity {
     if (locationRequested && hasCoarseLocation()) startLocationUpdates();
   }
   @Override protected void onPause() {
+    persistViewport();
     stopLocationUpdates();
     if (mapView != null) mapView.onPause();
     super.onPause();
