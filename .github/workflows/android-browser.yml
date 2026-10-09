@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+# Stamp the exact checked-out source into the APK, with a direct link to this build.
+env:
+  OBSERVATORY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  OBSERVATORY_BUILD_RUN_ID: ${{ github.run_id }}
+
 jobs:
   android-browser:
     runs-on: ubuntu-latest
@@ -22,6 +27,8 @@ jobs:
         working-directory: android-browser
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -97,6 +104,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

@@ -7,6 +7,7 @@ import android.view.*
 import android.view.inputmethod.EditorInfo
 import android.widget.*
 import com.big.gobrowser.R
+import com.big.gobrowser.BuildConfig
 import com.big.gobrowser.control.*
 import com.big.gobrowser.lyra.LyraDialog
 import com.big.gobrowser.observer.*
@@ -55,16 +56,17 @@ class GeckoBrowserActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         metropolis = MetropolisMcpClient(this)
-        observerSession = ObserverSession("local-device", "0.4.0-gecko")
+        observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ObservatoryTheme.title(this, "หอดูดาว · Gecko Browser"))
+        root.addView(ObservatoryBuildStamp.view(this))
         val addressRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(8, 4, 8, 4) }
         address = EditText(this).apply { hint = "https://example.com"; setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_GO; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true } }
         ObservatoryTheme.address(address); addressRow.addView(address); addressRow.addView(button("ไป") { navigateFromAddress() })
         root.addView(addressRow)
         val navigation = scrollRow(button("ย้อนกลับ") { engine.back() }, button("ถัดไป") { engine.forward() }, button("รีโหลด") { engine.reload() }, button("แท็บ") { showTabs() }, button("+") { engine.open(); renderActive() })
         val share = button("GO / Share") { toggleShare() }
-        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เชื่อมต่อ") { showConnectionMenu() })
+        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เชื่อม GO") { if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub() })
         root.addView(navigation); root.addView(controls)
         shareButton = share
         sharingStatus = ObservatoryTheme.status(this); root.addView(sharingStatus)
@@ -76,14 +78,29 @@ class GeckoBrowserActivity : Activity() {
         engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { address.setText(url) } }, { tab, capture -> onCapture(tab, capture) }) { _, url ->
             metropolis.handleCallback(url) { result ->
                 result.onSuccess { arrival ->
-                    hubArrival = arrival
-                    runOnUiThread { say("เชื่อม Metropolis Hub แล้ว · ${arrival.actor}"); updateSharingStatus() }
+                    runOnUiThread {
+                        if (destroyed || isFinishing) return@runOnUiThread
+                        hubArrival = arrival
+                        engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
+                        say("OAuth สำเร็จ · ${arrival.actor} · กำลังจับคู่ Observatory")
+                        updateSharingStatus()
+                        pairObservatory()
+                    }
                 }.onFailure { error ->
-                    runOnUiThread { say("เชื่อม Hub ไม่ได้: ${error.message?.take(100)}") }
+                    runOnUiThread {
+                        if (destroyed || isFinishing) return@runOnUiThread
+                        engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
+                        say("เชื่อม Hub ไม่ได้: ${error.message?.take(100)}")
+                        updateSharingStatus()
+                    }
                 }
             }
         }
-        engine.restore(); engine.attach(geckoView); updateSharingStatus()
+        engine.restore()
+        // An earlier build persisted the Metropolis API root as a browser tab. It is not a web UI.
+        val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')
+        if (restored == MetropolisMcpClient.ISSUER) engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
+        engine.attach(geckoView); updateSharingStatus()
     }
 
     private fun scrollRow(vararg views: View): HorizontalScrollView {
@@ -110,7 +127,7 @@ class GeckoBrowserActivity : Activity() {
         val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, metropolis.pairedObservatory() != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
         sharingStatus.text = state.label; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
-        eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "LIVE" else "WAITING"} · frame-aware observer$hub"
+        eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
     }
     private fun toggleShare() {
         val tab = engine.active() ?: return
@@ -169,24 +186,30 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun pairObservatory() {
         val arrival = hubArrival
-        if (arrival?.actor != "GO") { say("เชื่อม GO กับ Metropolis Hub ก่อน"); return }
+        if (arrival?.actor != "GO") { say("เชื่อม GO กับ Metropolis ก่อน"); return }
         val works = arrival.observatoryWorks
         if (works.isEmpty()) { say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
-        AlertDialog.Builder(this).setTitle("เลือก Observatory Work")
-            .setItems(works.map { it.workId }.toTypedArray()) { _, index ->
-                val work = works[index]
-                metropolis.pairObservatory(work.workId) { result ->
-                    result.onSuccess { pair ->
-                        runOnUiThread {
-                            stopSharing()
-                            say("จับคู่ Station แล้ว · ${pair.workId} · read-only")
-                            updateSharingStatus()
-                        }
+        fun pair(work: MetropolisMcpClient.HubWork) {
+            metropolis.pairObservatory(work.workId) { result ->
+                runOnUiThread {
+                    if (destroyed || isFinishing) return@runOnUiThread
+                    result.onSuccess {
+                        stopSharing()
+                        say("จับคู่ Observatory สำเร็จ · พร้อมเปิด Share")
+                        updateSharingStatus()
                     }.onFailure { error ->
-                        runOnUiThread { say("จับคู่ไม่ได้: ${error.message?.take(100)}") }
+                        say("จับคู่ Station ไม่ได้: ${error.message?.take(100)}")
                     }
                 }
-            }.setNegativeButton("ยกเลิก", null).show()
+            }
+        }
+        if (works.size == 1) {
+            pair(works.single())
+        } else {
+            AlertDialog.Builder(this).setTitle("เลือก Observatory Work")
+                .setItems(works.map { it.workId }.toTypedArray()) { _, index -> pair(works[index]) }
+                .setNegativeButton("ยกเลิก", null).show()
+        }
     }
     private fun connectHub() {
         say("เปิดหน้า Metropolis Hub เพื่อกรอก Owner passcode")
