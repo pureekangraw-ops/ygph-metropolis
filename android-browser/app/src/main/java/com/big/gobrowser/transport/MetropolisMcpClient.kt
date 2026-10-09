@@ -34,6 +34,7 @@ class MetropolisMcpClient(context: Context) {
         val observatoryWorks: List<HubWork>
     )
     data class ObservatoryPair(val deviceId: String, val workId: String, val publishSnapshot: String)
+    data class ObservatoryPairingResult(val pair: ObservatoryPair, val readback: ObservatoryPairingReadback)
 
     private data class Pending(val verifier: String, val state: String)
 
@@ -44,6 +45,7 @@ class MetropolisMcpClient(context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private val requestId = AtomicLong(0)
     @Volatile private var pending: Pending? = null
+    @Volatile private var pairingReadbackRejected = false
 
     fun authorizationUrl(): String {
         val verifier = randomToken(48)
@@ -105,7 +107,7 @@ class MetropolisMcpClient(context: Context) {
     }
 
     /** Pair only after the existing GO OAuth identity and an authorized OBSERVATORY Work were read from Hub. */
-    fun pairObservatory(workId: String, onComplete: (Result<ObservatoryPair>) -> Unit) {
+    fun pairObservatory(workId: String, onComplete: (Result<ObservatoryPairingResult>) -> Unit) {
         io.execute {
             val result = runCatching {
                 require(workId.isNotBlank()) { "WORK_ID_REQUIRED" }
@@ -115,18 +117,30 @@ class MetropolisMcpClient(context: Context) {
                 val endpoint = paired.getString("publishSnapshot")
                 require(endpoint.startsWith("$ISSUER/observatory/device/$deviceId/")) { "STATION_ENDPOINT_INVALID" }
                 require(paired.getString("token").isNotBlank()) { "STATION_CREDENTIAL_MISSING" }
-                stationCredential.save(paired.toString())
-                ObservatoryPair(deviceId, workId, endpoint)
+                val expected = ObservatoryPair(deviceId, workId, endpoint)
+                val write = runCatching { stationCredential.saveAndVerify(paired.toString()) }
+                val saved = runCatching { pairedObservatory() }.getOrNull()
+                val readback = ObservatoryPairingReadback.compare(
+                    expected = expected,
+                    saved = saved,
+                    credential = write.getOrElse { CredentialSaveReadback(false, false) },
+                    storageError = write.isFailure,
+                )
+                pairingReadbackRejected = !readback.passed
+                ObservatoryPairingResult(expected, readback)
             }
             post(onComplete, result)
         }
     }
 
-    fun pairedObservatory(): ObservatoryPair? = stationCredential.load()?.let { raw ->
-        runCatching {
-            val json = JSONObject(raw)
-            ObservatoryPair(json.getString("deviceId"), json.getString("workId"), json.getString("publishSnapshot"))
-        }.getOrNull()
+    fun pairedObservatory(): ObservatoryPair? {
+        if (pairingReadbackRejected) return null
+        return stationCredential.load()?.let { raw ->
+            runCatching {
+                val json = JSONObject(raw)
+                ObservatoryPair(json.getString("deviceId"), json.getString("workId"), json.getString("publishSnapshot"))
+            }.getOrNull()
+        }
     }
 
     /** Publish through the station-only credential; the GO OAuth bearer is never sent to Observatory/device. */
@@ -144,6 +158,7 @@ class MetropolisMcpClient(context: Context) {
         pending = null
         val station = stationCredential.load()?.let { runCatching { JSONObject(it) }.getOrNull() }
         stationCredential.revoke()
+        pairingReadbackRejected = false
         credential.revoke()
         if (station != null) {
             val endpoint = "$ISSUER/observatory/device/${station.optString("deviceId")}/disconnect"

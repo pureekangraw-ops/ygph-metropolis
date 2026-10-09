@@ -101,10 +101,19 @@ test('connection diagnostics expose safe pairing evidence and require credential
   assert.match(activity, /val pairState = pair\?\.let \{ "จับคู่แล้ว · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "ยังไม่จับคู่"/);
   assert.match(activity, /Hub: \$actor · Work หอดูดาวที่อ่านได้: \$eligibleWorks · การจับคู่: \$pairState · ผลล่าสุด:/);
   assert.match(activity, /safeConnectionCode\(/);
-  assert.match(activity, /saved == null \|\| saved\.workId != work\.workId/);
-  assert.match(activity, /saved\.deviceId != pair\.deviceId/);
-  assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
+  assert.match(activity, /!pairing\.readback\.passed/);
+  assert.match(activity, /lastPairingReadbackSummary = pairing\.readback\.safeSummary\(\)/);
+  assert.match(activity, /connectionDiagnostics\.text.*\$readback/s);
   assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
+  const client = readAndroid('app/src/main/java/com/big/gobrowser/transport/MetropolisMcpClient.kt');
+  const store = readAndroid('app/src/main/java/com/big/gobrowser/transport/DeviceCredentialStore.kt');
+  const readback = readAndroid('app/src/main/java/com/big/gobrowser/transport/ObservatoryPairingReadback.kt');
+  assert.match(client, /stationCredential\.saveAndVerify\(paired\.toString\(\)\)/);
+  assert.match(client, /pairingReadbackRejected = !readback\.passed/);
+  assert.match(client, /if \(pairingReadbackRejected\) return null/);
+  assert.match(store, /fun saveAndVerify\([\s\S]*?\.commit\(\)/);
+  assert.match(readback, /RD\[C\$\{bit\(commitSucceeded\)\} X\$\{bit\(credentialExactReadback\)\}/);
+  assert.doesNotMatch(readback, /sessionToken|access_token|response\.body/i);
 });
 
 

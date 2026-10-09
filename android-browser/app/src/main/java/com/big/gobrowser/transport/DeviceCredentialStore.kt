@@ -17,6 +17,8 @@ interface DeviceCredentialStore {
     fun revoke()
 }
 
+data class CredentialSaveReadback(val commitSucceeded: Boolean, val exactReadback: Boolean)
+
 class AndroidDeviceCredentialStore(
     context: Context,
     private val keyAlias: String = KEY_ALIAS,
@@ -35,6 +37,21 @@ class AndroidDeviceCredentialStore(
             .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(DATA_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .apply()
+    }
+
+    /** Persist synchronously and verify the encrypted payload can be read back without exposing it. */
+    fun saveAndVerify(token: String): CredentialSaveReadback {
+        require(token.isNotBlank()) { "Credential must not be blank" }
+        val cipher = Cipher.getInstance(TRANSFORMATION).apply {
+            init(Cipher.ENCRYPT_MODE, key())
+        }
+        val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
+        val committed = preferences.edit()
+            .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .putString(DATA_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .commit()
+        val exactReadback = runCatching { load() == token }.getOrDefault(false)
+        return CredentialSaveReadback(committed, exactReadback)
     }
 
     override fun load(): String? {
