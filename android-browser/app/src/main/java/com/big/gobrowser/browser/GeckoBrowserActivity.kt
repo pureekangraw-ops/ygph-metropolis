@@ -25,6 +25,7 @@ class GeckoBrowserActivity : Activity() {
     private lateinit var shareButton: Button
     private lateinit var sharingStatus: TextView
     private lateinit var eyeStatus: TextView
+    private lateinit var connectionDiagnostics: TextView
     private lateinit var observerSession: ObserverSession
     private lateinit var metropolis: MetropolisMcpClient
     private val handler = Handler(Looper.getMainLooper())
@@ -44,6 +45,7 @@ class GeckoBrowserActivity : Activity() {
     private var lastAck: Long? = null
     private var acknowledgedCapture: String? = null
     private var deliveryFailed = false
+    private var lastConnectionStatus = "NOT_ATTEMPTED"
     private var hubArrival: MetropolisMcpClient.HubArrival? = null
     private val tick = object : Runnable {
         override fun run() {
@@ -71,6 +73,8 @@ class GeckoBrowserActivity : Activity() {
         shareButton = share
         sharingStatus = ObservatoryTheme.status(this); root.addView(sharingStatus)
         eyeStatus = ObservatoryTheme.status(this); root.addView(eyeStatus)
+        connectionDiagnostics = ObservatoryTheme.status(this).apply { maxLines = 2 }
+        root.addView(connectionDiagnostics)
         val browserContainer = FrameLayout(this).apply { setBackgroundColor(0xff07101b.toInt()) }
         root.addView(browserContainer, LinearLayout.LayoutParams(-1, 0, 1f))
         ObservatoryTheme.apply(this, root); PhoneLayout.fitSystemBars(root); setContentView(root)
@@ -81,6 +85,7 @@ class GeckoBrowserActivity : Activity() {
                     runOnUiThread {
                         if (destroyed || isFinishing) return@runOnUiThread
                         hubArrival = arrival
+                        lastConnectionStatus = "HUB_ARRIVE_OK"
                         engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
                         say("OAuth สำเร็จ · ${arrival.actor} · กำลังจับคู่ Observatory")
                         updateSharingStatus()
@@ -89,8 +94,9 @@ class GeckoBrowserActivity : Activity() {
                 }.onFailure { error ->
                     runOnUiThread {
                         if (destroyed || isFinishing) return@runOnUiThread
+                        lastConnectionStatus = safeConnectionCode(error)
                         engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
-                        say("เชื่อม Hub ไม่ได้: ${error.message?.take(100)}")
+                        say("เชื่อม Hub ไม่ได้ · $lastConnectionStatus")
                         updateSharingStatus()
                     }
                 }
@@ -128,10 +134,11 @@ class GeckoBrowserActivity : Activity() {
         sharingStatus.text = state.label; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
+        updateConnectionDiagnostics()
     }
     private fun toggleShare() {
         val tab = engine.active() ?: return
-        if (metropolis.pairedObservatory() == null) { say("เชื่อม Hub และจับคู่ Work ของ Observatory ก่อน"); showConnectionMenu(); return }
+        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม Hub และจับคู่ Work ของ Observatory ก่อน"); showConnectionMenu(); return }
         if (observerSession.isSharing(tab.id)) { stopSharing(); say("หยุดแชร์แท็บแล้ว") }
         else { lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureIfShared(tab, true); updateSharingStatus() }
     }
@@ -160,8 +167,8 @@ class GeckoBrowserActivity : Activity() {
             ?: observerSession.latest(tab.id)?.takeIf { it.captureId != acknowledgedCapture }
             ?: return
         val now = System.currentTimeMillis()
-        if (now - snapshot.capturedAtEpochMs !in 0..30_000) { deliveryFailed = true; updateSharingStatus(); return }
-        syncBusy = true; val epoch = generation; network.execute {
+        if (now - snapshot.capturedAtEpochMs !in 0..30_000) { lastConnectionStatus = "CAPTURE_STALE"; deliveryFailed = true; updateSharingStatus(); return }
+        syncBusy = true; lastConnectionStatus = "SNAPSHOT_REQUESTED"; updateConnectionDiagnostics(); val epoch = generation; network.execute {
             val result = runCatching {
                 val wire = HttpRelayClient.snapshotJson(snapshot).apply { remove("deviceId") }
                 metropolis.publishSnapshot("browser", wire)
@@ -178,27 +185,39 @@ class GeckoBrowserActivity : Activity() {
                         lastAck = System.currentTimeMillis()
                         acknowledgedCapture = snapshot.captureId
                         deliveryFailed = false
-                    } else deliveryFailed = true
-                }.onFailure { deliveryFailed = true }
+                        lastConnectionStatus = "SNAPSHOT_ACK_OK"
+                    } else { deliveryFailed = true; lastConnectionStatus = "ACK_MISMATCH" }
+                }.onFailure { deliveryFailed = true; lastConnectionStatus = safeConnectionCode(it) }
                 updateSharingStatus()
             }
         }
     }
     private fun pairObservatory() {
         val arrival = hubArrival
-        if (arrival?.actor != "GO") { say("เชื่อม GO กับ Metropolis ก่อน"); return }
+        if (arrival?.actor != "GO") { lastConnectionStatus = "GO_SESSION_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO กับ Metropolis ก่อน"); return }
         val works = arrival.observatoryWorks
-        if (works.isEmpty()) { say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
+        if (works.isEmpty()) { lastConnectionStatus = "NO_AUTHORIZED_OBSERVATORY_WORK"; updateConnectionDiagnostics(); say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
         fun pair(work: MetropolisMcpClient.HubWork) {
+            lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
             metropolis.pairObservatory(work.workId) { result ->
                 runOnUiThread {
                     if (destroyed || isFinishing) return@runOnUiThread
-                    result.onSuccess {
+                    result.onSuccess { pair ->
+                        val saved = metropolis.pairedObservatory()
+                        if (saved == null || saved.workId != work.workId || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
+                            lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
+                            updateSharingStatus()
+                            say("Hub ตอบรับ pairing แต่เครื่องอ่าน credential กลับไม่ตรงกัน")
+                            return@onSuccess
+                        }
+                        lastConnectionStatus = "PAIR_READBACK_OK"
                         stopSharing()
-                        say("จับคู่ Observatory สำเร็จ · พร้อมเปิด Share")
+                        say("จับคู่ Observatory สำเร็จ · อ่าน credential กลับแล้ว · พร้อมเปิด Share")
                         updateSharingStatus()
                     }.onFailure { error ->
-                        say("จับคู่ Station ไม่ได้: ${error.message?.take(100)}")
+                        lastConnectionStatus = safeConnectionCode(error)
+                        updateSharingStatus()
+                        say("จับคู่ Station ไม่ได้ · $lastConnectionStatus")
                     }
                 }
             }
@@ -212,10 +231,43 @@ class GeckoBrowserActivity : Activity() {
         }
     }
     private fun connectHub() {
+        lastConnectionStatus = "OAUTH_STARTED"
+        updateConnectionDiagnostics()
         say("เปิดหน้า Metropolis Hub เพื่อกรอก Owner passcode")
         engine.navigate(metropolis.authorizationUrl())
     }
-    private fun disconnect() { stopSharing(); hubArrival = null; metropolis.disconnect(); updateSharingStatus() }
+    private fun disconnect() { lastConnectionStatus = "DISCONNECTED"; stopSharing(); hubArrival = null; metropolis.disconnect(); updateSharingStatus() }
+    private fun updateConnectionDiagnostics() {
+        if (!::connectionDiagnostics.isInitialized) return
+        val actor = hubArrival?.actor ?: "NOT_CONNECTED"
+        val eligibleWorks = hubArrival?.observatoryWorks?.size?.toString() ?: "NOT_CHECKED"
+        val pair = metropolis.pairedObservatory()
+        val pairState = pair?.let { "PAIRED · …${it.workId.takeLast(8)}" } ?: "MISSING"
+        connectionDiagnostics.text = "Hub: $actor · Observatory Work (read): $eligibleWorks · Station pairing: $pairState · Latest: $lastConnectionStatus"
+    }
+
+    /** Render only allowlisted status codes; never surface response bodies or credentials. */
+    private fun safeConnectionCode(error: Throwable): String {
+        val message = error.message.orEmpty()
+        val httpStatus = Regex("HUB_HTTP_(\\d{3})").find(message)?.groupValues?.getOrNull(1)
+        if (httpStatus != null) return when (httpStatus) {
+            "401" -> "HTTP_401_AUTH"
+            "403" -> "HTTP_403_DENIED"
+            "406" -> "HTTP_406_ACCEPT_REQUIRED"
+            else -> if (httpStatus.startsWith("5")) "HTTP_5XX" else "HTTP_$httpStatus"
+        }
+        return when {
+            "HUB_OAUTH_STATE_MISMATCH" in message -> "OAUTH_STATE_MISMATCH"
+            "HUB_NOT_CONNECTED" in message -> "HUB_NOT_CONNECTED"
+            "NO_AUTHORIZED_OBSERVATORY_WORK" in message -> "NO_AUTHORIZED_OBSERVATORY_WORK"
+            "STATION_ENDPOINT_INVALID" in message -> "STATION_ENDPOINT_INVALID"
+            "STATION_CREDENTIAL_MISSING" in message -> "STATION_CREDENTIAL_MISSING"
+            "OBSERVATORY_NOT_PAIRED" in message -> "PAIRING_MISSING"
+            "HUB_RPC_" in message -> "HUB_RPC_ERROR"
+            else -> "REQUEST_FAILED"
+        }
+    }
+
     private fun navigateFromAddress() { val raw = address.text.toString().trim(); if (!BrowserSettings.isAllowedUrl(raw)) { say("เปิดได้เฉพาะ HTTPS"); return }; if (foreground && lifecycleInteractive()) engine.navigate(raw) }
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)

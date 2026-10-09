@@ -93,3 +93,16 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   assert.match(workflow, /OBSERVATORY_BUILD_RUN_ID: \$\{\{ github\.run_id \}\}/);
   assert.equal((workflow.match(/ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/g) || []).length, 2);
 });
+
+test('connection diagnostics expose safe pairing evidence and require credential readback', () => {
+  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  assert.match(activity, /val actor = hubArrival\?\.actor \?: "NOT_CONNECTED"/);
+  assert.match(activity, /val eligibleWorks = hubArrival\?\.observatoryWorks\?\.size\?\.toString\(\) \?: "NOT_CHECKED"/);
+  assert.match(activity, /val pairState = pair\?\.let \{ "PAIRED · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "MISSING"/);
+  assert.match(activity, /Hub: \$actor · Observatory Work \(read\): \$eligibleWorks · Station pairing: \$pairState · Latest: \$lastConnectionStatus/);
+  assert.match(activity, /safeConnectionCode\(/);
+  assert.match(activity, /saved == null \|\| saved\.workId != work\.workId/);
+  assert.match(activity, /saved\.deviceId != pair\.deviceId/);
+  assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
+  assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
+});
