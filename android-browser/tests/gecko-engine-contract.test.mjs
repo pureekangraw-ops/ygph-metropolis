@@ -56,7 +56,7 @@ test('GO OAuth callback is intercepted before Gecko loads the non-page callback 
   assert.match(engine, /AllowOrDeny\.DENY/);
   assert.match(client, /HUB_OAUTH_STATE_MISMATCH/);
   assert.match(client, /\/oauth\/observatory-callback/);
-  assert.match(activity, /metropolis\.pairObservatory\(""\)/);
+  assert.match(activity, /pairObservatory\(\)/);
   assert.match(activity, /engine\.navigate\(BrowserSettings\.OBSERVATORY_HOME_URL\)/);
 });
 
@@ -102,7 +102,7 @@ test('connection diagnostics expose safe pairing evidence and require credential
   assert.match(activity, /Hub: \$actor · Work หอดูดาวที่อ่านได้: \$eligibleWorks · การจับคู่: \$pairState · ผลล่าสุด:/);
   assert.match(activity, /safeConnectionCode\(/);
   assert.match(activity, /saved == null \\|\\| saved\\.deviceId != pair\\.deviceId/);
-  assert.match(activity, /metropolis\\.pairObservatory\\(""\\)/);
+  assert.match(activity, /metropolis\.pairObservatory\(""\)/);
   assert.match(activity, /saved\.deviceId != pair\.deviceId/);
   assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
   assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
