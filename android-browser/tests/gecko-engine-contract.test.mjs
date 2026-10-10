@@ -56,7 +56,7 @@ test('GO OAuth callback is intercepted before Gecko loads the non-page callback 
   assert.match(engine, /AllowOrDeny\.DENY/);
   assert.match(client, /HUB_OAUTH_STATE_MISMATCH/);
   assert.match(client, /\/oauth\/observatory-callback/);
-  assert.match(activity, /pairObservatory\(\)/);
+  assert.match(activity, /metropolis\.pairObservatory\(""\)/);
   assert.match(activity, /engine\.navigate\(BrowserSettings\.OBSERVATORY_HOME_URL\)/);
 });
 
