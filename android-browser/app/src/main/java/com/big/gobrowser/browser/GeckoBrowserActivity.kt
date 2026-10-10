@@ -195,39 +195,28 @@ class GeckoBrowserActivity : Activity() {
     private fun pairObservatory() {
         val arrival = hubArrival
         if (arrival?.actor != "GO") { lastConnectionStatus = "GO_SESSION_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO กับ Metropolis ก่อน"); return }
-        val works = arrival.observatoryWorks
-        if (works.isEmpty()) { lastConnectionStatus = "NO_AUTHORIZED_OBSERVATORY_WORK"; updateConnectionDiagnostics(); say("ยังไม่มี Observatory Work ที่ GO มีสิทธิ์อ่าน"); return }
-        fun pair(work: MetropolisMcpClient.HubWork) {
-            lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
-            metropolis.pairObservatory(work.workId) { result ->
-                runOnUiThread {
-                    if (destroyed || isFinishing) return@runOnUiThread
-                    result.onSuccess { pair ->
-                        val saved = metropolis.pairedObservatory()
-                        if (saved == null || saved.workId != work.workId || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
-                            lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
-                            updateSharingStatus()
-                            say("Hub ตอบรับการจับคู่ แต่ตรวจข้อมูลที่บันทึกในเครื่องไม่ผ่าน")
-                            return@onSuccess
-                        }
-                        lastConnectionStatus = "PAIR_READBACK_OK"
-                        stopSharing()
-                        say("จับคู่หอดูดาวสำเร็จ · ตรวจข้อมูลที่บันทึกแล้ว · พร้อมแชร์")
+        lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
+        metropolis.pairObservatory("") { result ->
+            runOnUiThread {
+                if (destroyed || isFinishing) return@runOnUiThread
+                result.onSuccess { pair ->
+                    val saved = metropolis.pairedObservatory()
+                    if (saved == null || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
+                        lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
                         updateSharingStatus()
-                    }.onFailure { error ->
-                        lastConnectionStatus = safeConnectionCode(error)
-                        updateSharingStatus()
-                        say("จับคู่หอดูดาวไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
+                        say("Hub รับการจับคู่ แต่ข้อมูลเครื่องมืออ่านกลับไม่ตรง")
+                        return@onSuccess
                     }
+                    lastConnectionStatus = "PAIR_READBACK_OK"
+                    stopSharing()
+                    say("จับคู่หอดูดาวในฐานะเครื่องมือสำเร็จ · ไม่ต้องสร้าง Work")
+                    updateSharingStatus()
+                }.onFailure { error ->
+                    lastConnectionStatus = safeConnectionCode(error)
+                    updateSharingStatus()
+                    say("จับคู่หอดูดาวไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
                 }
             }
-        }
-        if (works.size == 1) {
-            pair(works.single())
-        } else {
-            AlertDialog.Builder(this).setTitle("เลือก Work ของหอดูดาว")
-                .setItems(works.map { it.workId }.toTypedArray()) { _, index -> pair(works[index]) }
-                .setNegativeButton("ยกเลิก", null).show()
         }
     }
     private fun connectHub() {
