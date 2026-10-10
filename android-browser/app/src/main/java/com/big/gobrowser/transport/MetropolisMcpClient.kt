@@ -108,8 +108,8 @@ class MetropolisMcpClient(context: Context) {
     fun pairObservatory(workId: String, onComplete: (Result<ObservatoryPair>) -> Unit) {
         io.execute {
             val result = runCatching {
-                require(workId.isNotBlank()) { "WORK_ID_REQUIRED" }
-                val body = JSONObject().put("workId", workId).toString()
+                // Pair the tool identity; Work selection happens later for authorized commands.
+                val body = JSONObject().toString()
                 val paired = JSONObject(protectedRequest("$ISSUER/observatory/pair", body))
                 val deviceId = paired.getString("deviceId")
                 val endpoint = paired.getString("publishSnapshot")
@@ -117,7 +117,7 @@ class MetropolisMcpClient(context: Context) {
                 require(paired.getString("token").isNotBlank()) { "STATION_CREDENTIAL_MISSING" }
                 // Never report pairing success until the device credential can be read back.
                 // Persist the requested Work identity explicitly; do not rely on a server echo.
-                paired.put("workId", workId)
+                paired.put("workId", "")
                 stationCredential.save(paired.toString())
                 val readback = stationCredential.load()?.let { JSONObject(it) }
                     ?: throw IllegalStateException("PAIR_CREDENTIAL_READBACK_MISSING")
