@@ -101,7 +101,7 @@ test('connection diagnostics expose safe pairing evidence and require credential
   assert.match(activity, /val pairState = pair\?\.let \{ "จับคู่แล้ว · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "ยังไม่จับคู่"/);
   assert.match(activity, /Hub: \$actor · Work หอดูดาวที่อ่านได้: \$eligibleWorks · การจับคู่: \$pairState · ผลล่าสุด:/);
   assert.match(activity, /safeConnectionCode\(/);
-  assert.match(activity, /saved == null \\|\\| saved\\.deviceId != pair\\.deviceId/);
+  assert.match(activity, /saved == null \|\| saved\.deviceId != pair\.deviceId/);
   assert.match(activity, /metropolis\.pairObservatory\(""\)/);
   assert.match(activity, /saved\.deviceId != pair\.deviceId/);
   assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
