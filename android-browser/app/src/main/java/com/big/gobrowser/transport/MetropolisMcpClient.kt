@@ -115,7 +115,16 @@ class MetropolisMcpClient(context: Context) {
                 val endpoint = paired.getString("publishSnapshot")
                 require(endpoint.startsWith("$ISSUER/observatory/device/$deviceId/")) { "STATION_ENDPOINT_INVALID" }
                 require(paired.getString("token").isNotBlank()) { "STATION_CREDENTIAL_MISSING" }
+                // Never report pairing success until the device credential can be read back.
+                // Persist the requested Work identity explicitly; do not rely on a server echo.
+                paired.put("workId", workId)
                 stationCredential.save(paired.toString())
+                val readback = stationCredential.load()?.let { JSONObject(it) }
+                    ?: throw IllegalStateException("PAIR_CREDENTIAL_READBACK_MISSING")
+                require(readback.optString("deviceId") == deviceId) { "PAIR_DEVICE_READBACK_MISMATCH" }
+                require(readback.optString("workId") == workId) { "PAIR_WORK_READBACK_MISMATCH" }
+                require(readback.optString("publishSnapshot") == endpoint) { "PAIR_ENDPOINT_READBACK_MISMATCH" }
+                require(readback.optString("token") == paired.getString("token")) { "PAIR_TOKEN_READBACK_MISMATCH" }
                 ObservatoryPair(deviceId, workId, endpoint)
             }
             post(onComplete, result)
