@@ -65,7 +65,8 @@ class GeckoBrowserE2ETest {
                 instrumentation.runOnMainSync {
                     val capture = currentCapture()
                     actual = "active=${engine().active()?.requestedUrl}, DOM=${capture?.url}, title=${capture?.title}, text=${capture?.text?.take(160)}"
-                    loaded = capture != null && android.net.Uri.parse(capture.url).host == host && capture.text.contains("Example Domain")
+                    loaded = capture != null && android.net.Uri.parse(capture.url).host == host
+                        && capture.title == "Example Domain" && capture.text.isNotBlank()
                 }
                 if (!loaded) Thread.sleep(100)
             }
