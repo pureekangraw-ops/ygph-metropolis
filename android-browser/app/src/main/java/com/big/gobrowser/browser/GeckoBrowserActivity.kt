@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
 class GeckoBrowserActivity : Activity() {
     private lateinit var engine: GeckoBrowserEngine
     private lateinit var address: EditText
-    private lateinit var shareButton: Button
+    private lateinit var tabsButton: Button
     private lateinit var sharingStatus: TextView
     private lateinit var eyeStatus: TextView
     private lateinit var connectionDiagnostics: TextView
@@ -64,21 +64,55 @@ class GeckoBrowserActivity : Activity() {
         metropolis = MetropolisMcpClient(this)
         observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ObservatoryTheme.title(this, "หอดูดาว · Gecko Browser"))
-        root.addView(ObservatoryBuildStamp.view(this))
-        val addressRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(8, 4, 8, 4) }
-        address = EditText(this).apply { hint = "https://example.com"; setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_GO; layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true } }
-        ObservatoryTheme.address(address); addressRow.addView(address); addressRow.addView(button("ไป") { navigateFromAddress() })
+        val addressRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(4), dp(8), 0)
+        }
+        address = EditText(this).apply {
+            hint = "ชื่อเว็บ หรือ https://…"
+            contentDescription = "ที่อยู่เว็บไซต์"
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            imeOptions = EditorInfo.IME_ACTION_GO
+            layoutParams = LinearLayout.LayoutParams(0, dp(48), 1f)
+            setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
+        }
+        ObservatoryTheme.address(address)
+        addressRow.addView(address)
+        addressRow.addView(button("ไป") { navigateFromAddress() }.apply {
+            contentDescription = "เปิดเว็บไซต์"
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply { leftMargin = dp(6) }
+        })
         root.addView(addressRow)
-        val navigation = scrollRow(button("ย้อนกลับ") { engine.back() }, button("ถัดไป") { engine.forward() }, button("รีโหลด") { engine.reload() }, button("แท็บ") { showTabs() }, button("+") { engine.open(); renderActive() })
-        val share = button("GO / Share") { toggleShare() }
-        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เก็บช่วงนี้") { com.big.gobrowser.ui.ObservatoryMemoryDialog.preserve(this, metropolis, "browser") }, button("ที่เก็บไว้") { com.big.gobrowser.ui.ObservatoryMemoryDialog.saved(this, metropolis) }, button("เชื่อม GO") { if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub() })
-        root.addView(navigation); root.addView(controls)
-        shareButton = share
-        sharingStatus = ObservatoryTheme.status(this); root.addView(sharingStatus)
-        eyeStatus = ObservatoryTheme.status(this); root.addView(eyeStatus)
-        connectionDiagnostics = ObservatoryTheme.status(this).apply { maxLines = 2 }
-        root.addView(connectionDiagnostics)
+        val navigation = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(5), 0, dp(5), 0)
+        }
+        navigation.addView(chromeButton("‹", "ย้อนกลับ") { engine.back() })
+        navigation.addView(chromeButton("›", "ถัดไป") { engine.forward() })
+        navigation.addView(chromeButton("↻", "รีโหลด") { engine.reload() })
+        tabsButton = chromeButton("แท็บ 1", "แท็บที่เปิดอยู่") { showTabs() }.apply { textSize = 14f }
+        navigation.addView(tabsButton)
+        navigation.addView(chromeButton("⋮", "เมนูหอดูดาว") { showBrowserMenu() })
+        root.addView(navigation)
+        sharingStatus = ObservatoryTheme.status(this).apply {
+            textSize = 14f
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            minHeight = dp(48)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(12), 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showBrowserDetails() }
+            tooltipText = "แตะดูสถานะ GO และข้อมูลรุ่น"
+        }
+        root.addView(sharingStatus)
+        // Detailed evidence stays available in the dialog without consuming the webpage.
+        eyeStatus = ObservatoryTheme.status(this)
+        connectionDiagnostics = ObservatoryTheme.status(this)
         val browserContainer = FrameLayout(this).apply { setBackgroundColor(0xff07101b.toInt()) }
         root.addView(browserContainer, LinearLayout.LayoutParams(-1, 0, 1f))
         ObservatoryTheme.apply(this, root); PhoneLayout.fitSystemBars(root); setContentView(root)
@@ -113,10 +147,52 @@ class GeckoBrowserActivity : Activity() {
         engine.attach(geckoView); updateSharingStatus()
     }
 
-    private fun scrollRow(vararg views: View): HorizontalScrollView {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(6, 2, 6, 2) }
-        views.forEach { it.layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(3, 0, 3, 0) }; row.addView(it) }
-        return HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row, ViewGroup.LayoutParams(-2, -2)); layoutParams = LinearLayout.LayoutParams(-1, -2) }
+    private fun dp(value: Int) = ObservatoryTheme.dp(this, value)
+    private fun chromeButton(symbol: String, label: String, action: () -> Unit) = button(symbol, action).apply {
+        contentDescription = label
+        tooltipText = label
+        textSize = 24f
+        setPadding(0, 0, 0, 0)
+        layoutParams = LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+            setMargins(dp(3), dp(3), dp(3), dp(3))
+        }
+    }
+    private fun showBrowserMenu() {
+        val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
+        AlertDialog.Builder(this).setTitle("หอดูดาว")
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น")) { _, choice ->
+                when (choice) {
+                    0 -> { engine.open(); renderActive() }
+                    1 -> toggleShare()
+                    2 -> startActivity(Intent(this, OutsideViewActivity::class.java))
+                    3 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
+                    4 -> ObservatoryMemoryDialog.preserve(this, metropolis, "browser")
+                    5 -> ObservatoryMemoryDialog.saved(this, metropolis)
+                    6 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
+                    7 -> showBrowserDetails()
+                }
+            }.setNegativeButton("ปิด", null).show()
+    }
+    private fun showBrowserDetails() {
+        updateSharingStatus()
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        root.addView(ObservatoryBuildStamp.view(this))
+        for (label in listOf(sharingStatus.text, eyeStatus.text, connectionDiagnostics.text)) {
+            root.addView(ObservatoryTheme.status(this).apply {
+                text = label
+                textSize = 15f
+                setTextIsSelectable(true)
+            })
+        }
+        root.addView(ObservatoryTheme.status(this).apply {
+            text = "อ่านทุก 5 วินาที · ประวัติสด 15 วินาที\nหยุดอ่านเมื่อออกจากแอป · ล้างประวัติสดใน 30 วินาที\nช่วงที่เลือกเก็บถาวร เปิดได้จากเมนู"
+            textSize = 15f
+        })
+        val scroll = ScrollView(this).apply { addView(root) }
+        AlertDialog.Builder(this).setTitle("สถานะหอดูดาว").setView(scroll).setPositiveButton("ปิด", null).show()
     }
     private fun button(label: String, action: () -> Unit) = ObservatoryTheme.button(this, label, action)
     private fun renderActive() { engine.active()?.let { address.setText(it.requestedUrl) }; updateSharingStatus() }
@@ -135,7 +211,7 @@ class GeckoBrowserActivity : Activity() {
         val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }; val now = System.currentTimeMillis()
         val fresh = latest != null && now - latest.capturedAtEpochMs in 0..14_999 && latest.captureId == acknowledgedCapture
         val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, metropolis.pairedObservatory() != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
-        sharingStatus.text = state.label; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
+        sharingStatus.text = "GO · ${state.label}  ›"; sharingStatus.contentDescription = "${state.label} แตะดูรายละเอียด"; tabsButton.text = "แท็บ ${engine.list().size}"; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
         updateConnectionDiagnostics()
@@ -145,20 +221,19 @@ class GeckoBrowserActivity : Activity() {
         val tab = engine.active() ?: return
         if (!observerSession.isSharing(tab.id)) {
             observerSession.start(tab.id)
-            shareButton.text = "หยุดอ่าน"
         }
     }
     private fun toggleShare() {
         val tab = engine.active() ?: return
         if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO และจับคู่หอดูดาวก่อน"); showConnectionMenu(); return }
         if (observerSession.isSharing(tab.id)) { pausedByOwner = true; stopSharing(); say("หยุดแชร์แท็บแล้ว") }
-        else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureIfShared(tab, true); updateSharingStatus() }
+        else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); captureIfShared(tab, true); updateSharingStatus() }
     }
     private fun stopSharing() {
         generation += 1
         engine.active()?.let { tab -> observerSession.stop(tab.id); metropolis.stopObservation("browser", permissions.epoch(tab.id)); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
         latestDom = null; domReceivedAt = 0L
-        shareButton.text = "GO / Share"; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
+        lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
     }
     private fun onCapture(tab: GeckoBrowserEngine.GeckoTab, capture: DomCapture) {
         if (destroyed || !foreground || engine.active()?.id != tab.id) return
@@ -309,7 +384,11 @@ class GeckoBrowserActivity : Activity() {
     private fun navigateFromAddress() {
         val url = UrlPolicy.resolveAddress(address.text.toString())
         if (url == null) { say("ใส่ชื่อเว็บ เช่น example.com หรือ URL https://..."); return }
-        if (foreground && lifecycleInteractive() && engine.navigate(url)) address.setText(url)
+        if (foreground && lifecycleInteractive() && engine.navigate(url)) {
+            address.setText(url)
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.hideSoftInputFromWindow(address.windowToken, 0)
+            address.clearFocus()
+        }
     }
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)

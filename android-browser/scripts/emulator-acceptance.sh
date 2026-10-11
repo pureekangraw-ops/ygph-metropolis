@@ -2,7 +2,13 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p app/build/emulator-evidence
+# Match a compact phone: 360dp wide, 800dp tall.
+adb shell wm size 720x1600
+adb shell wm density 320
 collect_evidence() {
+  for name in observatory-gecko-browser observatory-gecko-menu observatory-gecko-details; do
+    timeout 15 adb pull "/data/local/tmp/$name.png" app/build/emulator-evidence/ || true
+  done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png app/build/emulator-evidence/ || true
@@ -29,3 +35,4 @@ if [ "$status" -ne 0 ]; then
   done
 fi
 exit "$status"
+
