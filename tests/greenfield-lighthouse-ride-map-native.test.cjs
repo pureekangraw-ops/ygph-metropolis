@@ -38,14 +38,17 @@ test('Ride map bridge forwards only current Ride job geography to native plugin'
   }]);
 });
 
-test('Ride map bridge fails closed when owner job has no geography', async () => {
+test('Ride map bridge opens local map without job geography so rider can use current location', async () => {
   const { openRideMap } = await import(moduleUrl);
+  const calls = [];
   const capacitor = {
     isNativePlatform:()=>true,
     isPluginAvailable:()=>true,
-    Plugins:{ LighthouseRideMap:{ openMap(){ throw new Error('must not call'); } } },
+    Plugins:{ LighthouseRideMap:{ async openMap(value){ calls.push(value); return {status:'OPENED'}; } } },
   };
-  await assert.rejects(openRideMap({ capacitor, job:{recordId:'OLD'} }), /LIGHTHOUSE_RIDE_MAP_GEOGRAPHY_REQUIRED/);
+  const result = await openRideMap({ capacitor, job:{recordId:'OLD'} });
+  assert.equal(result.status, 'OPENED');
+  assert.deepEqual(calls, [{jobId:'OLD',pickup:null,dropoff:null}]);
 });
 
 
