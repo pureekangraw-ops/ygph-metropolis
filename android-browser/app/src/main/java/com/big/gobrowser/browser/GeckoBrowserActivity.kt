@@ -306,7 +306,11 @@ class GeckoBrowserActivity : Activity() {
         }
     }
 
-    private fun navigateFromAddress() { val raw = address.text.toString().trim(); if (!BrowserSettings.isAllowedUrl(raw)) { say("เปิดได้เฉพาะ HTTPS"); return }; if (foreground && lifecycleInteractive()) engine.navigate(raw) }
+    private fun navigateFromAddress() {
+        val url = UrlPolicy.resolveAddress(address.text.toString())
+        if (url == null) { say("ใส่ชื่อเว็บ เช่น example.com หรือ URL https://..."); return }
+        if (foreground && lifecycleInteractive() && engine.navigate(url)) address.setText(url)
+    }
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

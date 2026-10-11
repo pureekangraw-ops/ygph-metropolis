@@ -5,6 +5,7 @@ Standalone Android GeckoView browser for the GO Observer. The Gecko implementati
 ## Implemented in this slice
 
 - One application-level GeckoRuntime with one GeckoSession per tab; HTTPS-only navigation and fail-closed external URL policy.
+- The address bar accepts a bare website (such as `www.google.co.th`) and adds `https://` before validation. Explicit non-HTTPS schemes remain blocked; remote command and relay URLs still require absolute HTTPS URLs.
 - URL bar with back, forward, reload, and new-tab controls.
 - Tab store with active-tab selection, encrypted Gecko SessionState restore, crash recovery, popup/session lifecycle hooks, and URL fallback.
 - Session restore does not grant control or observer permission.
@@ -27,3 +28,4 @@ gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
 Run `node --test tests/*.test.mjs` for DOM regression tests. CI checks JVM tests, Android lint, instrumentation compilation, and debug APK build. Android build requires a working SDK and dependency access; instrumentation execution requires an emulator/device. See [relay contract](integration/relay-contract.md) for setup and the [verification boundary](integration-verification.md) for limitations.
+

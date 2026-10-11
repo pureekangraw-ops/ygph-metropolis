@@ -348,9 +348,12 @@ class BrowserActivity : Activity() {
     }
 
     private fun navigateFromAddress() {
-        val raw = address.text.toString().trim()
-        if (!BrowserSettings.isAllowedUrl(raw)) { say("เปิดได้เฉพาะ HTTPS"); return }
-        if (foreground && lifecycle.isInteractive()) tabStore.active()?.webView?.loadUrl(raw)
+        val url = UrlPolicy.resolveAddress(address.text.toString())
+        if (url == null) { say("ใส่ชื่อเว็บ เช่น example.com หรือ URL https://..."); return }
+        if (foreground && lifecycle.isInteractive()) {
+            address.setText(url)
+            tabStore.active()?.webView?.loadUrl(url)
+        }
     }
     private fun say(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
@@ -366,3 +369,4 @@ class BrowserActivity : Activity() {
         if (active?.canGoBack() == true) active.goBack() else super.onBackPressed()
     }
 }
+
