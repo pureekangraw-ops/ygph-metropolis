@@ -50,7 +50,12 @@ class GeckoBrowserActivity : Activity() {
     private val tick = object : Runnable {
         override fun run() {
             if (!foreground || destroyed) return
-            engine.active()?.let { captureIfShared(it) }
+            engine.active()?.let { tab ->
+                if (metropolis.pairedObservatory() != null && !observerSession.isSharing(tab.id)) {
+                    observerSession.start(tab.id)
+                    shareButton.text = "หยุดแชร์"
+                }
+            }
             syncActive(); updateSharingStatus(); handler.postDelayed(this, 5_000L)
         }
     }
@@ -292,7 +297,7 @@ class GeckoBrowserActivity : Activity() {
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    override fun onResume() { super.onResume(); foreground = true; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
+    override fun onResume() { super.onResume(); foreground = true; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.removeCallbacks(tick); handler.post(tick); updateSharingStatus() }
     override fun onPause() { foreground = false; engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
     override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdownNow(); metropolis.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
