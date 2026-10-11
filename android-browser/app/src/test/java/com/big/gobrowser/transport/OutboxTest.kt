@@ -5,6 +5,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class OutboxTest {
+    @Test fun temporaryCapturesExpireAtFifteenSeconds() {
+        var now = 1000L
+        val observer = DomObserver("d", "v") { now }
+        val outbox = Outbox(maxAgeMs = 15_000L, clock = { now })
+        outbox.enqueue(observer.capture("tab", "https://owner", "", "before", emptyList()))
+        now += 5000L
+        outbox.enqueue(observer.capture("tab", "https://owner", "", "after", emptyList()))
+        assertEquals(2, outbox.pending().size)
+        now += 10000L
+        assertEquals(1, outbox.pending().size)
+    }
+
     @Test fun stopShareClearsPendingTab() {
         val snapshot = DomObserver("d", "0.1.0") { 1L }.capture("tab", "https://example.com", "", "text", emptyList())
         val outbox = Outbox()
@@ -30,3 +42,4 @@ class OutboxTest {
         assertEquals(1L, outbox.droppedCount)
     }
 }
+

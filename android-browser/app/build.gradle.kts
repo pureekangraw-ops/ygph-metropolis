@@ -21,8 +21,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.2"
+        versionCode = 6
+        versionName = "0.5.0"
         buildConfigField("String", "SOURCE_COMMIT", "\"$sourceRevision\"")
         buildConfigField("String", "BUILD_RUN_ID", "\"$buildRunId\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -57,3 +57,4 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.test:rules:1.6.1")
 }
+

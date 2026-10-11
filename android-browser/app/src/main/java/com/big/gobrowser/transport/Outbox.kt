@@ -31,7 +31,7 @@ class Outbox(
 
     private fun prune(): Unit {
         val cutoff = clock() - maxAgeMs
-        entries.entries.removeIf { it.value.capturedAtEpochMs < cutoff }
+        entries.entries.removeIf { it.value.capturedAtEpochMs <= cutoff }
     }
 
     // Six bytes per UTF-16 unit bounds JSON escaping; include targets and all metadata.
@@ -43,3 +43,4 @@ class Outbox(
         }
     }
 }
+
