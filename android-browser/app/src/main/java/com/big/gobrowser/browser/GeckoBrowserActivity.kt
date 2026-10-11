@@ -186,7 +186,7 @@ class GeckoBrowserActivity : Activity() {
         if (now - snapshot.capturedAtEpochMs !in 0..14_999) { lastConnectionStatus = "CAPTURE_STALE"; deliveryFailed = true; updateSharingStatus(); return }
         syncBusy = true; lastConnectionStatus = "SNAPSHOT_REQUESTED"; updateConnectionDiagnostics(); val epoch = generation; network.execute {
             val result = runCatching {
-                val wire = HttpRelayClient.snapshotJson(snapshot).apply { remove("deviceId") }
+                val wire = ObservatorySnapshotWire.bounded(HttpRelayClient.snapshotJson(snapshot))
                 metropolis.publishSnapshot("browser", wire)
             }
             runOnUiThread {
