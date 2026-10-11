@@ -22,6 +22,7 @@ class GeckoBrowserE2ETest {
     private fun find(view: View): View? = if (view is org.mozilla.geckoview.GeckoView) view else if (view is ViewGroup) (0 until view.childCount).asSequence().mapNotNull { find(view.getChildAt(it)) }.firstOrNull() else null
     @Test fun activityAttachesRealGeckoViewSession() {
         val view = find(rule.activity.window.decorView)
+        instrumentation.runOnMainSync { assertNotNull("WebAuthn provider activity delegate must be attached", engine().runtime().activityDelegate) }
         assertNotNull("GeckoView must be attached to the Observatory activity", view)
         assertTrue("Gecko browser activity remains usable", !rule.activity.isFinishing)
     }
