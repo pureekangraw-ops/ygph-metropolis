@@ -72,6 +72,52 @@ class GeckoBrowserE2ETest {
             }
             assertTrue("Real Gecko DOM must load from $host after keyboard Go: $actual", loaded)
         }
+        verifyReadableChromeAndMenu()
+    }
+
+    private fun verifyReadableChromeAndMenu() {
+        instrumentation.waitForIdleSync()
+        instrumentation.runOnMainSync {
+            val decor = rule.activity.window.decorView
+            val content = rule.activity.findViewById<ViewGroup>(android.R.id.content)
+            val root = content.getChildAt(0)
+            val usableHeight = root.height - root.paddingTop - root.paddingBottom
+            val gecko = find(decor)!!
+            assertTrue("Webpage must occupy at least 70% of the usable portrait screen", gecko.height >= usableHeight * 0.70)
+            val minimumTouch = (48 * rule.activity.resources.displayMetrics.density).toInt()
+            for (control in views(decor).filterIsInstance<Button>()) {
+                assertTrue("Primary buttons need a 48dp touch target: ${control.contentDescription}", control.width >= minimumTouch && control.height >= minimumTouch)
+                val bounds = android.graphics.Rect()
+                assertTrue("Every primary button must be fully visible", control.getGlobalVisibleRect(bounds) && bounds.width() == control.width && bounds.height() == control.height)
+            }
+            android.util.Log.i("ObservatoryChrome", "viewport=${gecko.height}/$usableHeight width=${root.width}")
+        }
+        screenshot("observatory-gecko-browser.png")
+        instrumentation.runOnMainSync {
+            views(rule.activity.window.decorView).filterIsInstance<Button>().single { it.contentDescription == "เมนูหอดูดาว" }.performClick()
+        }
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("เก็บช่วงนี้ถาวร"))
+            .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("ช่วงที่เก็บไว้"))
+            .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
+        screenshot("observatory-gecko-menu.png")
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("รายละเอียดและข้อมูลรุ่น")).perform(androidx.test.espresso.action.ViewActions.click())
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("สถานะหอดูดาว"))
+            .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
+        screenshot("observatory-gecko-details.png")
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("ปิด")).perform(androidx.test.espresso.action.ViewActions.click())
+    }
+
+    private fun screenshot(name: String) {
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        assertNotNull("Actual device screenshot must be available", bitmap)
+        val file = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), name)
+        file.outputStream().use { bitmap!!.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap!!.recycle()
+        // Gradle removes the test app afterwards; keep evidence outside its data directory.
+        instrumentation.uiAutomation.executeShellCommand("cp ${file.absolutePath} /data/local/tmp/$name").use {
+            java.io.FileInputStream(it.fileDescriptor).use { stream -> stream.readBytes() }
+        }
     }
 
     private fun currentCapture(): DomCapture? {
