@@ -36,7 +36,10 @@ class GeckoBrowserActivity : Activity() {
         check(prefs.edit().putLong("gecko", seed).commit())
         PermissionStore(seed, deviceScope = true)
     }
-    private val outbox = Outbox()
+    private val outbox = Outbox(maxAgeMs = 15_000L)
+    private var latestDom: Pair<String, DomCapture>? = null
+    private var domReceivedAt = 0L
+    private var pausedByOwner = false
     private var foreground = false
     private var destroyed = false
     private var captureBusy = false
@@ -50,6 +53,7 @@ class GeckoBrowserActivity : Activity() {
     private val tick = object : Runnable {
         override fun run() {
             if (!foreground || destroyed) return
+            startAutomaticObservation()
             engine.active()?.let { captureIfShared(it) }
             syncActive(); updateSharingStatus(); handler.postDelayed(this, 5_000L)
         }
@@ -68,7 +72,7 @@ class GeckoBrowserActivity : Activity() {
         root.addView(addressRow)
         val navigation = scrollRow(button("ย้อนกลับ") { engine.back() }, button("ถัดไป") { engine.forward() }, button("รีโหลด") { engine.reload() }, button("แท็บ") { showTabs() }, button("+") { engine.open(); renderActive() })
         val share = button("GO / Share") { toggleShare() }
-        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เชื่อม GO") { if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub() })
+        val controls = scrollRow(share, button("แผนที่") { startActivity(Intent(this, OutsideViewActivity::class.java)) }, button("ไลร่า") { LyraDialog.show(this, "INSIDE") { lyraContext() } }, button("เก็บช่วงนี้") { com.big.gobrowser.ui.ObservatoryMemoryDialog.preserve(this, metropolis, "browser") }, button("ที่เก็บไว้") { com.big.gobrowser.ui.ObservatoryMemoryDialog.saved(this, metropolis) }, button("เชื่อม GO") { if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub() })
         root.addView(navigation); root.addView(controls)
         shareButton = share
         sharingStatus = ObservatoryTheme.status(this); root.addView(sharingStatus)
@@ -123,42 +127,54 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
-            .setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "จับคู่ Observatory กับ Work ที่อ่านได้", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
+            .setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "จับคู่หอดูดาว", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
                 when (choice) { 0 -> connectHub(); 1 -> pairObservatory(); 2 -> disconnect() }
             }.show()
     }
     private fun updateSharingStatus() {
         val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }; val now = System.currentTimeMillis()
-        val fresh = latest != null && now - latest.capturedAtEpochMs in 0..30_000 && latest.captureId == acknowledgedCapture
+        val fresh = latest != null && now - latest.capturedAtEpochMs in 0..14_999 && latest.captureId == acknowledgedCapture
         val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, metropolis.pairedObservatory() != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
         sharingStatus.text = state.label; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
         updateConnectionDiagnostics()
     }
+    private fun startAutomaticObservation() {
+        if (!foreground || pausedByOwner || metropolis.pairedObservatory() == null) return
+        val tab = engine.active() ?: return
+        if (!observerSession.isSharing(tab.id)) {
+            observerSession.start(tab.id)
+            shareButton.text = "หยุดอ่าน"
+        }
+    }
     private fun toggleShare() {
         val tab = engine.active() ?: return
-        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม Hub และจับคู่ Work ของ Observatory ก่อน"); showConnectionMenu(); return }
-        if (observerSession.isSharing(tab.id)) { stopSharing(); say("หยุดแชร์แท็บแล้ว") }
-        else { lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureIfShared(tab, true); updateSharingStatus() }
+        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO และจับคู่หอดูดาวก่อน"); showConnectionMenu(); return }
+        if (observerSession.isSharing(tab.id)) { pausedByOwner = true; stopSharing(); say("หยุดแชร์แท็บแล้ว") }
+        else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); shareButton.text = "หยุดแชร์"; captureIfShared(tab, true); updateSharingStatus() }
     }
     private fun stopSharing() {
         generation += 1
-        engine.active()?.let { tab -> observerSession.stop(tab.id); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
+        engine.active()?.let { tab -> observerSession.stop(tab.id); metropolis.stopObservation("browser", permissions.epoch(tab.id)); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
+        latestDom = null; domReceivedAt = 0L
         shareButton.text = "GO / Share"; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
     }
     private fun onCapture(tab: GeckoBrowserEngine.GeckoTab, capture: DomCapture) {
-        if (destroyed || !foreground || engine.active()?.id != tab.id || !observerSession.isSharing(tab.id)) return
-        if (captureBusy) return
-        captureBusy = true; val epoch = generation
-        val snapshot = observerSession.capture(tab.id, capture.url, capture.title, capture.text, capture.targets, capture.captureId, force = false)
-        if (snapshot != null && metropolis.pairedObservatory() != null) outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
-        captureBusy = false
-        if (epoch == generation && snapshot != null) eyeStatus.text = "Observer · ${snapshot.targets.size} targets · ${snapshot.targets.count { it.frameId != "frame-0" }} iframe targets · ${snapshot.captureId.take(8)}"
+        if (destroyed || !foreground || engine.active()?.id != tab.id) return
+        latestDom = tab.id to capture
+        domReceivedAt = System.currentTimeMillis()
     }
     private fun captureIfShared(tab: GeckoBrowserEngine.GeckoTab, notify: Boolean = false) {
-        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) { if (notify) say("กด Share ขณะเปิดหน้าเว็บก่อน"); return }
-        if (notify) eyeStatus.text = "Observer · waiting for Gecko content snapshot"
+        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) return
+        val latest = latestDom?.takeIf { it.first == tab.id }?.second ?: return
+        if (System.currentTimeMillis() - domReceivedAt !in 0..5_000L) return
+        if (latest.url.startsWith("${MetropolisMcpClient.ISSUER}/oauth/")) return
+        // Sample a freshly observed DOM every five seconds, including unchanged pages.
+        // Snapshot IDs identify history samples; DOM target IDs remain in the target metadata.
+        val snapshot = observerSession.capture(tab.id, latest.url, latest.title, latest.text, latest.targets, force = true) ?: return
+        outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
+        eyeStatus.text = "อ่านทุก 5 วินาที · ประวัติ 15 วินาที · ${snapshot.targets.size} จุด"
     }
     private fun syncActive() {
         val tab = engine.active() ?: return
@@ -167,7 +183,7 @@ class GeckoBrowserActivity : Activity() {
             ?: observerSession.latest(tab.id)?.takeIf { it.captureId != acknowledgedCapture }
             ?: return
         val now = System.currentTimeMillis()
-        if (now - snapshot.capturedAtEpochMs !in 0..30_000) { lastConnectionStatus = "CAPTURE_STALE"; deliveryFailed = true; updateSharingStatus(); return }
+        if (now - snapshot.capturedAtEpochMs !in 0..14_999) { lastConnectionStatus = "CAPTURE_STALE"; deliveryFailed = true; updateSharingStatus(); return }
         syncBusy = true; lastConnectionStatus = "SNAPSHOT_REQUESTED"; updateConnectionDiagnostics(); val epoch = generation; network.execute {
             val result = runCatching {
                 val wire = HttpRelayClient.snapshotJson(snapshot).apply { remove("deviceId") }
@@ -209,6 +225,8 @@ class GeckoBrowserActivity : Activity() {
                     }
                     lastConnectionStatus = "PAIR_READBACK_OK"
                     stopSharing()
+                    pausedByOwner = false
+                    startAutomaticObservation()
                     say("จับคู่หอดูดาวในฐานะเครื่องมือสำเร็จ · ไม่ต้องสร้าง Work")
                     updateSharingStatus()
                 }.onFailure { error ->
@@ -292,8 +310,9 @@ class GeckoBrowserActivity : Activity() {
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    override fun onResume() { super.onResume(); foreground = true; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
-    override fun onPause() { foreground = false; engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
-    override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdownNow(); metropolis.close(); super.onDestroy() }
+    override fun onResume() { super.onResume(); foreground = true; pausedByOwner = false; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
+    override fun onPause() { foreground = false; stopSharing(); engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
+    override fun onDestroy() { destroyed = true; stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdown(); metropolis.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
+

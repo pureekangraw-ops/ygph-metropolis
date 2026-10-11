@@ -51,7 +51,7 @@ class ObservatoryMapShare(
     fun start(): Boolean {
         if (sharing) return true
         if (!isPaired()) {
-            report("เชื่อม GO และจับคู่ Observatory Work จากหน้าบราวเซอร์ก่อน")
+            report("เชื่อม GO และจับคู่หอดูดาวจากหน้าบราวเซอร์ก่อน")
             return false
         }
         val next = maxOf(System.currentTimeMillis(), prefs.getLong("epoch", 0L) + 1L)
@@ -72,6 +72,7 @@ class ObservatoryMapShare(
     }
 
     fun stop() {
+        if (sharing) client.stopObservation("map", epoch)
         sharing = false
         generation += 1L
         handler.removeCallbacks(loop)
@@ -83,7 +84,7 @@ class ObservatoryMapShare(
     fun close() {
         stop()
         closed = true
-        io.shutdownNow()
+        io.shutdown()
         client.close()
     }
 
@@ -141,3 +142,4 @@ class ObservatoryMapShare(
         }
     }
 }
+

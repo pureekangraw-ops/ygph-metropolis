@@ -149,6 +149,25 @@ class MetropolisMcpClient(context: Context) {
         return JSONObject(request(endpoint, "POST", body, token))
     }
 
+    fun stopObservation(view: String, epoch: Long) {
+        val raw = stationCredential.load() ?: return
+        val pair = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        val endpoint = "$ISSUER/observatory/device/${pair.getString("deviceId")}/stop"
+        val token = pair.getString("token")
+        io.execute { runCatching { request(endpoint, "POST", JSONObject().put("view", view).put("epoch", epoch).toString(), token) } }
+    }
+
+    fun memory(body: JSONObject, onComplete: (Result<JSONObject>) -> Unit) {
+        io.execute {
+            val result = runCatching {
+                val pair = stationCredential.load()?.let { JSONObject(it) } ?: error("OBSERVATORY_NOT_PAIRED")
+                val endpoint = "$ISSUER/observatory/device/${pair.getString("deviceId")}/memory"
+                JSONObject(request(endpoint, "POST", body.toString(), pair.getString("token")))
+            }
+            post(onComplete, result)
+        }
+    }
+
     fun disconnect() {
         pending = null
         val station = stationCredential.load()?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -161,7 +180,7 @@ class MetropolisMcpClient(context: Context) {
         }
     }
 
-    fun close() = io.shutdownNow()
+    fun close() = io.shutdown()
 
     private fun exchangeCode(code: String, verifier: String): JSONObject =
         formRequest("$ISSUER/oauth/token", mapOf(
@@ -259,3 +278,4 @@ class MetropolisMcpClient(context: Context) {
         const val REDIRECT_URI = "$ISSUER/oauth/observatory-callback"
     }
 }
+
