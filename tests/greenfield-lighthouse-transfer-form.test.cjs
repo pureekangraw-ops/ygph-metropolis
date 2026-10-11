@@ -114,3 +114,56 @@ test("current Android candidate has a monotonic upgrade baseline", () => {
   assert.equal(version.versionCode, version.baselineVersionCode + 1);
   assert.match(version.versionName, /^1\.0\.0-owner\.\d+$/);
 });
+
+
+test("transfer form can bind when root is a real element without createElement", async () => {
+  const mod = await import(moduleUrl + "?element-root=" + Date.now());
+  let createdOptions = 0;
+  const element = () => ({
+    dataset:{},
+    hidden:true,
+    value:"",
+    textContent:"",
+    disabled:false,
+    files:[],
+    append(){},
+    addEventListener(){},
+    focus(){},
+    click(){},
+    querySelector(){ return { disabled:false }; },
+  });
+  const ids = [
+    "lighthouse-transfer-toggle",
+    "lighthouse-transfer-form",
+    "lighthouse-transfer-request",
+    "lighthouse-transfer-capability",
+    "lighthouse-transfer-payload",
+    "lighthouse-transfer-owner",
+    "lighthouse-transfer-action",
+    "lighthouse-transfer-readback",
+    "lighthouse-transfer-guard",
+    "lighthouse-transfer-import",
+    "lighthouse-transfer-export",
+    "lighthouse-transfer-file",
+    "lighthouse-transfer-status",
+  ];
+  const nodes = Object.fromEntries(ids.map(id => [`#${id}`, element()]));
+  const rootElement = {
+    ownerDocument:{
+      createElement(tag) {
+        assert.equal(tag, "option");
+        createdOptions += 1;
+        return element();
+      },
+    },
+    querySelector(selector) { return nodes[selector] || null; },
+  };
+  const runtime = {
+    receive(){},
+    async process(){ return { status:"COMPLETE" }; },
+  };
+
+  assert.equal(typeof rootElement.createElement, "undefined");
+  assert.equal(mod.installLighthouseTransferForm({ root:rootElement, runtime }), true);
+  assert.equal(createdOptions > 0, true);
+});
