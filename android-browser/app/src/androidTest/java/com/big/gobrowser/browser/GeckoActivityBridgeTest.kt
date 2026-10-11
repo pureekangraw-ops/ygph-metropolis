@@ -54,7 +54,7 @@ class GeckoActivityBridgeTest {
             var launches = 0
             val bridge = GeckoActivityBridge({ true }) { _, _ -> launches++ }
             fun collect(result: org.mozilla.geckoview.GeckoResult<Intent>) {
-                result.accept({ done.countDown() }, { errors.add(it.message.orEmpty()); done.countDown() })
+                result.accept({ done.countDown() }, { errors.add(it?.message.orEmpty()); done.countDown() })
             }
             collect(bridge.onStartActivityForResult(intent()))
             collect(bridge.onStartActivityForResult(intent()))
