@@ -23,7 +23,7 @@ class BrowserAssistPolicyTest {
     }
 
     @Test fun refusesImpactfulAndUnsafeClicks() {
-        assertEquals("HIGH_IMPACT_REQUIRES_OWNER", BrowserAssistPolicy.rejection(target(tag = "button", type = "submit", label = "Pay"), "CLICK"))
+        assertEquals("SUBMIT_REQUIRES_OWNER", BrowserAssistPolicy.rejection(target(tag = "button", type = "submit", label = "Pay"), "CLICK"))
         assertEquals("SUBMIT_REQUIRES_OWNER", BrowserAssistPolicy.rejection(target(tag = "button", type = "submit", label = "Next"), "CLICK"))
         assertEquals("HIGH_IMPACT_REQUIRES_OWNER", BrowserAssistPolicy.rejection(target(tag = "button", type = "button", label = "Delete account"), "CLICK"))
         assertEquals("UNSAFE_LINK", BrowserAssistPolicy.rejection(target(tag = "a", type = "a", label = "Open link", href = "http://example.com"), "CLICK"))
