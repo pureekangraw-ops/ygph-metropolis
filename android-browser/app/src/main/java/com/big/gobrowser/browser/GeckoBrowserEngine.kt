@@ -47,7 +47,11 @@ class GeckoBrowserEngine(
         require(BrowserSettings.isAllowedUrl(url)) { "HTTPS_URL_REQUIRED" }
         val tabId = id ?: java.util.UUID.randomUUID().toString(); val session = GeckoSession(); val tab = GeckoTab(tabId, session, url)
         bind(tab); tabs[tabId] = tab; select(tabId); session.open(runtime)
-        if (state != null) session.restoreState(state) else session.loadUri(url)
+        // Do not begin the first load until the native bridge is registered. A reload after
+        // an early document_idle can still miss the initial observation on GeckoView.
+        observer.bind(session) {
+            if (state != null) session.restoreState(state) else session.loadUri(url)
+        }
         persist(); return tabId
     }
     fun restore() {
@@ -70,7 +74,6 @@ class GeckoBrowserEngine(
     fun updateVisibility(visible: Boolean) { tabs.values.forEach { tab -> val selected = visible && tab.id == activeId; runCatching { tab.session.setFocused(selected); tab.session.setActive(selected) } } }
     fun isOpen(tab: GeckoTab): Boolean = runCatching { tab.session.isOpen }.getOrDefault(false)
     private fun bind(tab: GeckoTab) {
-        observer.bind(tab.session)
         tab.session.setContentDelegate(object : GeckoSession.ContentDelegate {
             override fun onCrash(session: GeckoSession) { recover(tab) }
             override fun onKill(session: GeckoSession) { recover(tab) }
@@ -90,7 +93,7 @@ class GeckoBrowserEngine(
             }
         })
     }
-    private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl); if (tab.id == activeId && attached == null) persist() } }
+    private fun recover(tab: GeckoTab) { val state = recovery.read(tab.id); runCatching { if (attached?.session === tab.session) { attached?.releaseSession(); attached = null }; tab.session.open(runtime); observer.bind(tab.session) { if (state != null) tab.session.restoreState(state) else tab.session.loadUri(tab.requestedUrl) }; if (tab.id == activeId && attached == null) persist() } }
     private fun persist() { val records = JSONArray(); tabs.values.forEach { records.put(JSONObject().put("id", it.id).put("url", it.requestedUrl)) }; prefs.edit().putString("tabs", records.toString()).putString("active", activeId).apply() }
     private object RuntimeHolder { private var value: GeckoRuntime? = null; fun runtime(context: Context): GeckoRuntime = value ?: GeckoRuntime.create(context).also { value = it } }
 }
