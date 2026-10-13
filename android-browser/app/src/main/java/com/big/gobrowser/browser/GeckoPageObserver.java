@@ -23,10 +23,17 @@ public final class GeckoPageObserver {
   GeckoPageObserver(Context context, Listener listener) { this.context = context.getApplicationContext(); this.listener = listener; }
   void install(GeckoRuntime runtime) {
     runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/observatory-observer/", "observatory-native-observer@yggmetro.com")
-      .accept(extension -> { this.extension = extension; for (GeckoSession session : pending) bindInstalled(session); pending.clear(); }, error -> this.extension = null);
+      .accept(extension -> {
+        this.extension = extension;
+        for (GeckoSession session : pending) bindInstalled(session, true);
+        pending.clear();
+      }, error -> this.extension = null);
   }
   void bind(GeckoSession session) { if (extension == null) { if (!pending.contains(session)) pending.add(session); return; } bindInstalled(session); }
   private void bindInstalled(GeckoSession session) {
+    bindInstalled(session, false);
+  }
+  private void bindInstalled(GeckoSession session, boolean reloadForLateInstall) {
     WebExtension current = extension; if (current == null) return;
     session.getWebExtensionController().setMessageDelegate(current, new WebExtension.MessageDelegate() {
       @Override public GeckoResult<Object> onMessage(String nativeApp, Object message, WebExtension.MessageSender sender) {
@@ -50,6 +57,9 @@ public final class GeckoPageObserver {
         });
       }
     }, "observatory_observer");
+    // If extension installation completed after the tab's initial navigation began,
+    // reload the open session so document_idle runs with the newly registered observer.
+    if (reloadForLateInstall && session.isOpen()) session.reload();
   }
   void dispatch(GeckoSession session, JSONObject command, CommandCallback callback) {
     WebExtension.Port port = ports.get(session); if (port == null) { callback.onResult(false, "OBSERVER_PORT_UNAVAILABLE"); return; }

@@ -138,6 +138,13 @@ test('Work Inbox refreshes the Hub readback and stays read-only', () => {
   assert.match(parser, /"read" in authorized/);
 });
 
+test('late Gecko observer installation reloads already-open tabs for initial capture', () => {
+  const observer = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoPageObserver.java');
+  assert.match(observer, /for \(GeckoSession session : pending\) bindInstalled\(session, true\)/);
+  assert.match(observer, /reloadForLateInstall && session\.isOpen\(\)/);
+  assert.match(observer, /session\.reload\(\)/);
+});
+
 
 test('Gecko browser connects Android activity results for WebAuthn', () => {
   const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
