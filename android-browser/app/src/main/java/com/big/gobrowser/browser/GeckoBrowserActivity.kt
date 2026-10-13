@@ -110,7 +110,7 @@ class GeckoBrowserActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
             isClickable = true
             isFocusable = true
-            setOnClickListener { showBrowserDetails() }
+            setOnClickListener { if (metropolis.pairedObservatory() == null) connectHub() else showBrowserDetails() }
             tooltipText = "แตะดูสถานะ GO และข้อมูลรุ่น"
         }
         root.addView(sharingStatus)
@@ -164,7 +164,7 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "ส่งเข้า PANTHEON")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
@@ -172,10 +172,11 @@ class GeckoBrowserActivity : Activity() {
                     3 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
                     4 -> ObservatoryMemoryDialog.preserve(this, metropolis, "browser")
                     5 -> ObservatoryMemoryDialog.saved(this, metropolis)
-                    6 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
+                    6 -> if (metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
                     7 -> showBrowserDetails()
                     8 -> shareCurrentPageToGo()
                     9 -> showOwnerAssist()
+                    10 -> sendWebToPantheon()
                 }
             }.setNegativeButton("ปิด", null).show()
     }
@@ -209,8 +210,8 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
-            .setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "จับคู่หอดูดาว", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
-                when (choice) { 0 -> connectHub(); 1 -> pairObservatory(); 2 -> disconnect() }
+            .setItems(arrayOf("เชื่อมต่อใหม่", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
+                when (choice) { 0 -> connectHub(); 1 -> disconnect() }
             }.show()
     }
     private fun updateSharingStatus() {
@@ -231,7 +232,7 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun toggleShare() {
         val tab = engine.active() ?: return
-        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO และจับคู่หอดูดาวก่อน"); showConnectionMenu(); return }
+        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("กรุณาเชื่อมต่อก่อน"); connectHub(); return }
         if (observerSession.isSharing(tab.id)) { pausedByOwner = true; stopSharing(); say("หยุดแชร์แท็บแล้ว") }
         else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); captureIfShared(tab, true); updateSharingStatus() }
     }
@@ -408,15 +409,19 @@ class GeckoBrowserActivity : Activity() {
         return tab to capture
     }
 
-    private fun shareCurrentPageToGo() {
-        val capture = currentAssistEvidence()?.second ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
+    private fun currentWebHandoff(): String? {
+        val capture = currentAssistEvidence()?.second ?: return null
         val controls = capture.targets.filter { it.label?.isNotBlank() == true }
             .take(40).joinToString("\n") { "[${it.tag}] ${it.label.orEmpty().take(100)}" }
-        val handoff = "YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
+        return "YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
             "URL: ${sanitizeUrl(capture.url)}\nTitle: ${capture.title.take(200)}\n" +
             "Read-only webpage text (may be truncated):\n${capture.text.take(12000)}\n" +
             "Visible controls (labels only; no input values):\n$controls\n" +
             "Do not assume these controls were clicked or forms submitted."
+    }
+
+    private fun shareCurrentPageToGo() {
+        val handoff = currentWebHandoff() ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
         AlertDialog.Builder(this).setTitle("ส่งข้อมูลหน้าเว็บให้ GO")
             .setMessage("ส่งข้อความหน้าเว็บและชื่อปุ่มผ่าน Android แชร์ บิ๊กจะเลือกปลายทางเอง\nข้อมูลบนหน้าเว็บอาจเป็นข้อมูลส่วนตัว ตรวจสอบก่อนแชร์")
             .setNegativeButton("ยกเลิก", null)
@@ -426,6 +431,11 @@ class GeckoBrowserActivity : Activity() {
                     putExtra(Intent.EXTRA_TEXT, handoff)
                 }, "แชร์ข้อมูลให้ GO"))
             }.show()
+    }
+
+    private fun sendWebToPantheon() {
+        val handoff = currentWebHandoff() ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
+        PantheonWorkHubHandoff.present(this, "WEB", handoff)
     }
 
     /** Owner approves each action locally. The existing Gecko port performs a second target/signature check. */
