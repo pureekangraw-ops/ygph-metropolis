@@ -119,6 +119,21 @@ test('new Observatory connection diagnostics are Thai and keep safe status codes
   assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
 });
 
+test('Work Inbox refreshes the Hub readback and stays read-only', () => {
+  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const client = readAndroid('app/src/main/java/com/big/gobrowser/transport/MetropolisMcpClient.kt');
+  const parser = readAndroid('app/src/main/java/com/big/gobrowser/transport/HubArrivalParser.kt');
+  assert.match(activity, /"Work Inbox"/);
+  assert.match(activity, /metropolis\.refreshArrival/);
+  assert.match(activity, /Work Inbox is a read-only view/);
+  assert.match(activity, /Observed at: \$observedAt/);
+  assert.match(activity, /Work ID: \$\{work\.workId\}/);
+  assert.match(activity, /Project ID: ยังไม่มีในข้อมูลที่แอปอ่านได้/);
+  assert.match(client, /fun refreshArrival\(onComplete: \(Result<HubArrival>\) -> Unit\)/);
+  assert.match(parser, /"OBSERVATORY"/);
+  assert.match(parser, /"read" in authorized/);
+});
+
 
 test('Gecko browser connects Android activity results for WebAuthn', () => {
   const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');

@@ -25,14 +25,6 @@ import java.util.concurrent.atomic.AtomicLong
  * snapshots use the separate, revocable Station credential.
  */
 class MetropolisMcpClient(context: Context) {
-    data class HubWork(val workId: String, val ownerSystem: String, val authorizedActions: Set<String>)
-    data class HubArrival(
-        val actor: String,
-        val nickname: String,
-        val sourceSha: String,
-        val observedAt: String,
-        val observatoryWorks: List<HubWork>
-    )
     data class ObservatoryPair(val deviceId: String, val workId: String, val publishSnapshot: String)
 
     private data class Pending(val verifier: String, val state: String)
@@ -78,30 +70,19 @@ class MetropolisMcpClient(context: Context) {
             val result = runCatching {
                 val tokens = exchangeCode(code, expected.verifier)
                 credential.save(tokens.toString())
-                val identity = callTool("metropolis_identity", JSONObject())
-                val arrival = callTool("metropolis_arrive", JSONObject())
-                val profile = identity.optJSONObject("structuredContent") ?: identity.optJSONObject("content") ?: JSONObject()
-                val actor = profile.optString("name", "GO")
-                val nickname = profile.optString("nickname", "GO — Metropolis")
-                val current = arrival.optJSONObject("structuredContent") ?: arrival
-                val works = current.optJSONObject("current")?.optJSONArray("works")
-                val observatoryWorks = (0 until (works?.length() ?: 0)).mapNotNull { index ->
-                    val work = works?.optJSONObject(index) ?: return@mapNotNull null
-                    val actions = work.optJSONArray("authorizedActions")
-                    val authorized = (0 until (actions?.length() ?: 0))
-                        .mapNotNull { actionIndex -> actions?.optString(actionIndex)?.takeIf(String::isNotBlank) }
-                        .toSet()
-                    if (work.optBoolean("present")
-                        && work.optString("ownerSystem") == "OBSERVATORY"
-                        && "read" in authorized) {
-                        HubWork(work.optString("workId"), "OBSERVATORY", authorized)
-                    } else null
-                }.filter { it.workId.isNotBlank() }
-                HubArrival(actor, nickname, current.optString("sourceSha"), current.optString("observedAt"), observatoryWorks)
+                readHubArrival()
             }
             post(onComplete, result)
         }
         return true
+    }
+
+    /** Refresh the current Hub identity/Work readback without starting a new OAuth flow. */
+    fun refreshArrival(onComplete: (Result<HubArrival>) -> Unit) {
+        io.execute {
+            val result = runCatching { readHubArrival() }
+            post(onComplete, result)
+        }
     }
 
     /** Pair only after the existing GO OAuth identity and an authorized OBSERVATORY Work were read from Hub. */
@@ -264,6 +245,10 @@ class MetropolisMcpClient(context: Context) {
     }
 
     private fun readTokens(): JSONObject? = credential.load()?.let { runCatching { JSONObject(it) }.getOrNull() }
+    private fun readHubArrival(): HubArrival = HubArrivalParser.parse(
+        callTool("metropolis_identity", JSONObject()),
+        callTool("metropolis_arrive", JSONObject())
+    )
     private fun <T> post(callback: (Result<T>) -> Unit, result: Result<T>) = main.post { callback(result) }
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
     private fun randomToken(bytes: Int): String = ByteArray(bytes).also(SecureRandom()::nextBytes).let(::base64Url)

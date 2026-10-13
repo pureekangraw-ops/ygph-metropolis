@@ -164,18 +164,80 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "Work Inbox", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
-                    2 -> startActivity(Intent(this, OutsideViewActivity::class.java))
-                    3 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
-                    4 -> ObservatoryMemoryDialog.preserve(this, metropolis, "browser")
-                    5 -> ObservatoryMemoryDialog.saved(this, metropolis)
-                    6 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
-                    7 -> showBrowserDetails()
+                    2 -> openWorkInbox()
+                    3 -> startActivity(Intent(this, OutsideViewActivity::class.java))
+                    4 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
+                    5 -> ObservatoryMemoryDialog.preserve(this, metropolis, "browser")
+                    6 -> ObservatoryMemoryDialog.saved(this, metropolis)
+                    7 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
+                    8 -> showBrowserDetails()
                 }
             }.setNegativeButton("ปิด", null).show()
+    }
+
+    /** Work Inbox is a read-only view of a fresh GO-authenticated Hub arrival. */
+    private fun openWorkInbox() {
+        if (hubArrival?.actor != "GO") {
+            say("เชื่อม GO กับ Metropolis ก่อนเพื่ออ่าน Work")
+            connectHub()
+            return
+        }
+        lastConnectionStatus = "WORK_READBACK_REQUESTED"
+        updateSharingStatus()
+        metropolis.refreshArrival { result ->
+            if (destroyed || isFinishing) return@refreshArrival
+            result.onSuccess { arrival ->
+                hubArrival = arrival
+                lastConnectionStatus = "WORK_READBACK_OK"
+                updateSharingStatus()
+                showWorkInbox(arrival)
+            }.onFailure { error ->
+                lastConnectionStatus = safeConnectionCode(error)
+                updateSharingStatus()
+                say("อ่าน Work ล่าสุดไม่ได้ · ${connectionStatusLabel(lastConnectionStatus)}")
+            }
+        }
+    }
+
+    private fun showWorkInbox(arrival: HubArrival) {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        val sourceSha = arrival.sourceSha.ifBlank { "UNKNOWN" }
+        val observedAt = arrival.observedAt.ifBlank { "UNKNOWN" }
+        column.addView(ObservatoryTheme.status(this).apply {
+            text = "Read-only · ${arrival.nickname}\nObserved at: $observedAt\nSource SHA: $sourceSha\nProject ID: ยังไม่มีในข้อมูลที่แอปอ่านได้"
+            textSize = 14f
+            setTextIsSelectable(true)
+        })
+        if (arrival.observatoryWorks.isEmpty()) {
+            column.addView(ObservatoryTheme.status(this).apply {
+                text = "ไม่พบ Work ของ OBSERVATORY ที่ GO มีสิทธิ์ read"
+                textSize = 15f
+                setPadding(0, dp(16), 0, dp(8))
+            })
+        } else {
+            arrival.observatoryWorks.forEach { work ->
+                column.addView(ObservatoryTheme.status(this).apply {
+                    text = "Work ID: ${work.workId}\nOwner System: ${work.ownerSystem}\nAuthorized actions: ${work.authorizedActions.sorted().joinToString()}"
+                    textSize = 15f
+                    setTextIsSelectable(true)
+                    setPadding(0, dp(12), 0, dp(12))
+                })
+            }
+        }
+        val scroll = ScrollView(this).apply { addView(column) }
+        AlertDialog.Builder(this)
+            .setTitle("Work Inbox · ${arrival.observatoryWorks.size}")
+            .setView(scroll)
+            .setNeutralButton("รีเฟรช") { _, _ -> openWorkInbox() }
+            .setPositiveButton("ปิด", null)
+            .show()
     }
     private fun showBrowserDetails() {
         updateSharingStatus()
