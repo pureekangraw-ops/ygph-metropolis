@@ -78,7 +78,7 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   const browser = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
   const workflow = readRepo('.github/workflows/android-browser.yml');
-  assert.match(gradle, /versionName = "0\\.6\\.0"/);
+  assert.match(gradle, /versionName = "0\.6\.0"/);
   assert.match(gradle, /versionCode = 10/);
   assert.match(gradle, /buildConfigField\("String", "SOURCE_COMMIT"/);
   assert.match(gradle, /buildConfigField\("String", "BUILD_RUN_ID"/);
