@@ -13,7 +13,7 @@ The Observatory launcher now uses `GeckoBrowserActivity`. The former `BrowserAct
 
 ## Work Inbox
 
-The Work Inbox refreshes the GO-authenticated Hub identity and arrival, then displays only present `OBSERVATORY` Works whose returned `authorizedActions` include `read`. It is a read-only view of Hub data, not a local Work registry and not an execution path. The current client model exposes Work ID, owner system, allowed actions, `observedAt`, and `sourceSha`; it does not expose a Project ID. Do not synthesize one. Alerts and decisions remain out of scope until an owner-provided event/readback contract exists.
+The Work Inbox refreshes the GO-authenticated Hub identity and arrival, then displays only present `OBSERVATORY` Works whose returned `authorizedActions` include `read`. It is a read-only view of Hub data, not a local Work registry and not an execution path. The current client model exposes Work ID, Checkpoint ID, reported state, `updatedAt`, owner system, allowed actions, `observedAt`, and `sourceSha`; it does not expose a Project ID. Do not synthesize one. Alerts and decisions remain out of scope until an owner-provided event/readback contract exists.
 
 A browser action is not business success. Receipts keep `EXECUTED`, `READBACK`, `REJECTED`, and `UNKNOWN` separate; `BusinessOutcome` remains `UNKNOWN` unless the owner system supplies business evidence.
 

@@ -224,7 +224,7 @@ class GeckoBrowserActivity : Activity() {
         } else {
             arrival.observatoryWorks.forEach { work ->
                 column.addView(ObservatoryTheme.status(this).apply {
-                    text = "Work ID: ${work.workId}\nOwner System: ${work.ownerSystem}\nAuthorized actions: ${work.authorizedActions.sorted().joinToString()}"
+                    text = "Work ID: ${work.workId}\nCheckpoint ID: ${work.checkpointId ?: "UNKNOWN"}\nReported state: ${work.state ?: "UNKNOWN"}\nUpdated at: ${work.updatedAt ?: "UNKNOWN"}\nOwner System: ${work.ownerSystem}\nAuthorized actions: ${work.authorizedActions.sorted().joinToString()}"
                     textSize = 15f
                     setTextIsSelectable(true)
                     setPadding(0, dp(12), 0, dp(12))

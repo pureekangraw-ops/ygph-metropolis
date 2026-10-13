@@ -5,7 +5,10 @@ import org.json.JSONObject
 data class HubWork(
     val workId: String,
     val ownerSystem: String,
-    val authorizedActions: Set<String>
+    val authorizedActions: Set<String>,
+    val checkpointId: String?,
+    val state: String?,
+    val updatedAt: String?
 )
 
 data class HubArrival(
@@ -30,15 +33,25 @@ object HubArrivalParser {
             val actions = work.optJSONArray("authorizedActions")
             val authorized = (0 until (actions?.length() ?: 0))
                 .mapNotNull { actionIndex ->
-                    actions?.optString(actionIndex)?.takeIf(String::isNotBlank)
+                    actions?.optString(actionIndex)?.takeUnless { it == "null" }?.takeIf(String::isNotBlank)
                 }
                 .toSet()
             if (work.optBoolean("present")
                 && work.optString("ownerSystem") == "OBSERVATORY"
                 && "read" in authorized) {
                 work.optString("workId")
+                    .takeUnless { it == "null" }
                     .takeIf(String::isNotBlank)
-                    ?.let { HubWork(it, "OBSERVATORY", authorized) }
+                    ?.let {
+                        HubWork(
+                            workId = it,
+                            ownerSystem = "OBSERVATORY",
+                            authorizedActions = authorized,
+                            checkpointId = optionalText(work, "checkpointId"),
+                            state = optionalText(work, "state"),
+                            updatedAt = optionalText(work, "updatedAt")
+                        )
+                    }
             } else null
         }
 
@@ -50,4 +63,7 @@ object HubArrivalParser {
             observatoryWorks = observatoryWorks
         )
     }
+
+    private fun optionalText(json: JSONObject, key: String): String? =
+        json.optString(key).takeUnless { it.isBlank() || it == "null" }
 }
