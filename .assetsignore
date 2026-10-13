@@ -1,5 +1,0 @@
-# Root publication is retired.
-# Production assets MUST be generated into .lighthouse-production by
-# scripts/stage-lighthouse-next-bundle.mjs and deployed from wrangler.jsonc.
-# Fail closed if anyone accidentally points Wrangler back at the repository root.
-*
