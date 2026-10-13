@@ -99,7 +99,7 @@ data class DomCapture(val captureId: String, val frameId: String, val url: Strin
     companion object {
         fun from(page: JSONObject): DomCapture {
             val targets = mutableListOf<Target>(); val array = page.optJSONArray("targets") ?: JSONArray()
-            for (i in 0 until array.length()) { val t = array.optJSONObject(i) ?: continue; targets += Target(t.optString("targetId"), t.optString("role").ifBlank { null }, t.optString("label").ifBlank { null }, t.optString("type"), t.optInt("left"), t.optInt("top"), t.optInt("right"), t.optInt("bottom"), t.optString("frameId", page.optString("frameId", "frame-0")), t.optString("tag"), t.optString("type"), t.optString("href").ifBlank { null }, t.optString("visibility", "visible"), t.optBoolean("disabled"), t.optString("signature")) }
+            for (i in 0 until array.length()) { val t = array.optJSONObject(i) ?: continue; targets += Target(t.optString("targetId"), t.optString("role").ifBlank { null }, t.optString("label").ifBlank { null }, t.optString("type"), t.optInt("left"), t.optInt("top"), t.optInt("right"), t.optInt("bottom"), t.optString("frameId", page.optString("frameId", "frame-0")), t.optString("tag"), t.optString("type"), t.optString("href").ifBlank { null }, t.optString("visibility", "visible"), t.optBoolean("disabled"), t.optString("signature"), t.optString("autocomplete")) }
             return DomCapture(page.optString("captureId"), page.optString("frameId", "frame-0"), page.optString("url"), page.optString("title"), page.optString("text"), targets)
         }
     }
