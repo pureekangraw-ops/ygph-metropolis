@@ -17,6 +17,14 @@ Standalone Android GeckoView browser for the GO Observer. The Gecko implementati
 - Explicit owner route/WorkContext configuration and local confirmation; no default live connection.
 - JVM/Node regression tests and offline WebView/Keystore instrumentation fixtures.
 
+## GO-assisted reading and supervised browser actions (October 2026)
+
+The menu now includes **ส่งหน้าเว็บให้ GO** (owner-approved Android Sharesheet with sanitized URL, visible text and labelled controls) and **ช่วยกรอก / ช่วยกด** (local owner-confirmed fill/click on fresh top-frame Gecko DOM targets). Form values, passwords and authentication codes are never exported by this handoff. The browser validates freshness, exact DOM capture identity and target signature again before execution. Clicking submits **a dispatch**, not proof of a completed business operation. Payments, form submissions, deletions, sending, consent and other high-impact controls are blocked.
+
+The native map now provides **ส่งแผนที่ให้ GO** with owner-confirmed sharing of camera center/zoom and up to 100 saved pins. Active Station map snapshots include a current viewport report alongside the stored map state, not an image of all rendered tiles or a GPS verification.
+
+Sharing via Android sends to the app the owner chooses; it is **not automatic delivery to this ChatGPT conversation**. Existing Metropolis Station pairings publish observation snapshots in read-only mode. No remote GO-command poller or server-side action authority is enabled by this change. Browser action UI works locally on the handset even without GO OAuth pairing. Device installation and actual ChatGPT-to-device handoff require separate verification.
+
 ## Not claimed yet
 
 The relay adapter is deliberately route-configurable: no MCP endpoint, Work ID, credential, or owner-specific route is invented here. Live MCP readback, real-handset installation, Xiaomi 15T acceptance, and production signing remain unverified until the owner route, permissions, and a real Android device are available.
