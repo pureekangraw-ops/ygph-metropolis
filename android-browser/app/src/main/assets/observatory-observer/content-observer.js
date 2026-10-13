@@ -13,6 +13,11 @@
     try { const u = new URL(node.href); if (!['http:', 'https:'].includes(u.protocol)) return null; u.username = ''; u.password = ''; u.hash = ''; return u.href.slice(0, 800); } catch { return null; }
   };
   const signature = (node) => [node.tagName, node.getAttribute('type') || '', node.getAttribute('role') || '', node.getAttribute('href') || '', label(node)].join('\u001f');
+  // Second safety boundary: native approval cannot override protected fields or high-impact buttons.
+  const sensitive = (node) => /password|passcode|otp|verification|credit.card|card.number|cvc|cvv|เลขบัตร|รหัสผ่าน|รหัสยืนยัน/i
+    .test([label(node), node.getAttribute('name'), node.getAttribute('autocomplete'), node.getAttribute('type')].join(' '));
+  const highImpact = (node) => /pay(?:ment)?|purchase|buy.now|checkout|place.order|transfer|withdraw|delete|remove|erase|discard|submit|send|publish|post|confirm|approve|authorize|accept|consent|ชำระ|จ่ายเงิน|ซื้อ|โอน|ถอน|ลบ|ส่ง|เผยแพร่|ยืนยัน|อนุมัติ/i.test(label(node));
+
   const nativePort = browser.runtime.connectNative('observatory_observer');
   nativePort.onMessage.addListener((message) => {
     if (!message || message.type !== 'EXECUTE') return;
@@ -28,10 +33,23 @@
         const style = node && getComputedStyle(node), rect = node && node.getBoundingClientRect();
         if (!node || !document.contains(node)) result = {ok:false, reason:'TARGET_NOT_FOUND'};
         else if (style.display === 'none' || style.visibility === 'hidden' || rect.width <= 0 || rect.height <= 0 || node.disabled || node.getAttribute('aria-disabled') === 'true') result = {ok:false, reason:'TARGET_NOT_VISIBLE'};
-        else if ((node.type || '').toLowerCase() === 'password' || /password|passcode|otp|verification/i.test(node.getAttribute('autocomplete') || '')) result = {ok:false, reason:'PASSWORD_TARGET_REJECTED'};
+        else if (sensitive(node) || /one.time.code|current.password|new.password|cc-|webauthn/i.test(node.getAttribute('autocomplete') || '')) result = {ok:false, reason:'SENSITIVE_TARGET'};
         else if (saved.signatures[index] !== [node.tagName, node.getAttribute('type') || '', node.getAttribute('role') || '', node.getAttribute('href') || '', label(node)].join('\u001f') || (p.signature && p.signature !== saved.signatures[index])) result = {ok:false, reason:'TARGET_CHANGED'};
+        else if (command.action === 'CLICK' && (
+          highImpact(node) || /^(submit|reset)$/i.test(node.type || '')
+          || (node.tagName === 'BUTTON' && node.closest('form') && !/^button$/i.test(node.type || ''))
+          || (node.tagName === 'A' && (!href(node) || !href(node).startsWith('https://')))
+        )) result = {ok:false, reason:'HIGH_IMPACT_REQUIRES_OWNER'};
         else if (command.action === 'CLICK') { node.click(); result = {ok:true, reason:'CLICK_DISPATCHED'}; publish(); }
-        else if (command.action === 'FILL' && ['INPUT','TEXTAREA','SELECT'].includes(node.tagName)) { const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value')?.set; if (setter) setter.call(node, p.value || ''); else node.value = p.value || ''; node.dispatchEvent(new Event('input', {bubbles:true})); node.dispatchEvent(new Event('change', {bubbles:true})); result = {ok:true, reason:'FILL_DISPATCHED'}; publish(); }
+        else if (command.action === 'FILL' && ['INPUT','TEXTAREA','SELECT'].includes(node.tagName)) {
+          if (typeof p.value !== 'string' || p.value.length > 2000 || /^(file|hidden|checkbox|radio|password|submit|reset|button)$/i.test(node.type || '')) result = {ok:false, reason:'UNSAFE_FIELD'};
+          else {
+            const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(node), 'value')?.set;
+            if (setter) setter.call(node, p.value); else node.value = p.value;
+            node.dispatchEvent(new Event('input', {bubbles:true})); node.dispatchEvent(new Event('change', {bubbles:true}));
+            result = {ok:true, reason:'FILL_DISPATCHED'}; publish();
+          }
+        }
         else result = {ok:false, reason: command.action === 'FILL' ? 'NON_FORM_TARGET' : 'UNSUPPORTED_ACTION'};
       }
     }
@@ -55,7 +73,7 @@
       return {
         targetId: `${frameId}::target-${index}`, frameId, tag, type: String(node.getAttribute('type') || (tag === 'select' ? 'select' : tag)),
         role: node.getAttribute('role') || null, label: label(node), text: clean(node.innerText || node.textContent, 300), href: href(node),
-        visibility: 'visible', disabled: Boolean(node.disabled || node.getAttribute('aria-disabled') === 'true'), signature: signature(node),
+        visibility: 'visible', disabled: Boolean(node.disabled || node.getAttribute('aria-disabled') === 'true'), signature: signature(node), autocomplete: clean(node.getAttribute('autocomplete') || '', 100),
         left: Math.round(rect.left), top: Math.round(rect.top), right: Math.round(rect.right), bottom: Math.round(rect.bottom)
       };
     });
