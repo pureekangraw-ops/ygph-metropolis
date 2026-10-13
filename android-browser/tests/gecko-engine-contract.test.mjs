@@ -138,11 +138,13 @@ test('Work Inbox refreshes the Hub readback and stays read-only', () => {
   assert.match(parser, /"read" in authorized/);
 });
 
-test('late Gecko observer installation reloads already-open tabs for initial capture', () => {
+test('initial Gecko navigation waits for native observer registration', () => {
   const observer = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoPageObserver.java');
-  assert.match(observer, /for \(GeckoSession session : pending\) bindInstalled\(session, true\)/);
-  assert.match(observer, /reloadForLateInstall && session\.isOpen\(\)/);
-  assert.match(observer, /session\.reload\(\)/);
+  const engine = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserEngine.kt');
+  assert.match(observer, /Map<GeckoSession, Runnable> pending/);
+  assert.match(observer, /bindInstalled\(entry\.getKey\(\)\);\s*entry\.getValue\(\)\.run\(\)/);
+  assert.match(engine, /observer\.bind\(session\)\s*\{\s*if \(state != null\) session\.restoreState\(state\) else session\.loadUri\(url\)\s*\}/);
+  assert.doesNotMatch(observer, /session\.reload\(\)/);
 });
 
 
