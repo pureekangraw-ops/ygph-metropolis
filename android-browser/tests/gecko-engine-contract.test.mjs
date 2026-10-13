@@ -125,3 +125,18 @@ test('Gecko browser connects Android activity results for WebAuthn', () => {
   assert.match(activity, /setActivityDelegate\(activityBridge\)/);
   assert.match(activity, /activityBridge\.onActivityResult/);
 });
+
+test('map image sharing uses MapLibre snapshot and private cache FileProvider',()=>{
+  const renderer=readAndroid('app/src/main/java/com/big/gobrowser/outsideview/MapLibreOutsideRenderer.kt');
+  const map=readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
+  const manifest=readAndroid('app/src/main/AndroidManifest.xml');
+  const paths=readAndroid('app/src/main/res/xml/observatory_share_paths.xml');
+  assert.match(renderer,/fun snapshotBitmap/);
+  assert.match(renderer,/current\.snapshot/);
+  assert.match(map,/shareVisibleMapImage\(\)/);
+  assert.match(map,/Intent\.ACTION_SEND/);
+  assert.match(map,/FLAG_GRANT_READ_URI_PERMISSION/);
+  assert.match(manifest,/androidx\.core\.content\.FileProvider/);
+  assert.match(paths,/<cache-path/);
+  assert.doesNotMatch(paths,/<external-path/);
+});
