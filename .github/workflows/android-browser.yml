@@ -2,14 +2,8 @@ name: Android Browser Foundation
 
 on:
   pull_request:
-    paths:
-      - "android-browser/**"
-      - ".github/workflows/android-browser.yml"
   push:
     branches: [main]
-    paths:
-      - "android-browser/**"
-      - ".github/workflows/android-browser.yml"
 
 permissions:
   contents: read

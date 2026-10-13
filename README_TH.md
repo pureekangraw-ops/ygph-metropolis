@@ -1,38 +1,29 @@
-# PRISM — Single Android Release Route
+# YGG Observatory — Android GeckoView & Web Map
 
-**Repository:** `pureekangraw-ops/ygph-metropolis`
+This repository contains **Observatory only**.
 
-## เส้นทางเดียว
+## Components
 
-`.github/workflows/prism-owner-build.yml` เป็น workflow เดียวสำหรับตรวจและสร้าง Android release:
+- `android-browser/` — standalone Android GeckoView Observatory app, including tests, docs, and build scripts.
+- `observatory-web/worker.mjs` — local-first Observatory map Cloudflare Worker.
+- `tests/greenfield-observatory-web.test.cjs` — Observatory Web regression tests.
+- `.github/workflows/android-browser.yml` — Android CI and emulator acceptance.
+- `.github/workflows/observatory-web.yml` — Web smoke tests.
+- `docs/superpowers/*observatory*` — Observatory engineering design history.
 
-1. Checkout SHA ของ PR/event แบบตรงตัว และตรวจ SHA กลับ
-2. ตรวจ syntax, repository contracts และ PRISM native contracts
-3. ตรวจ Android shell contracts
-4. Stage PRISM ด้วย `scripts/stage-prism-native.mjs` และปฏิเสธ legacy parent
-5. Generate Android, apply version/icon/map/password/browser/security และตรวจ merged manifest
-6. Build release แล้ว sign ด้วย canonical PRISM signer
-7. ตรวจ final APK package/version/signer พร้อม hash และ source provenance
-8. Upload `prism-release.apk` พร้อม identity/security evidence และ IP notice
+## Test
 
-ไม่มี Native Gate แยก ไม่มี debug/unsigned APK ให้ดาวน์โหลด และไม่มี LIGHTHOUSE build/deploy/updater route บน branch นี้
-Unsigned APK ระหว่าง build เป็นไฟล์ชั่วคราวก่อน sign ภายใน job เดียว
+Run `npm test` for local Node-based tests. Run `cd android-browser && gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` with Android SDK and Gradle installed. Android emulator acceptance runs in CI.
 
-Workflow รันสำหรับ PR ที่เปลี่ยนส่วนเกี่ยวข้อง, push เข้า main และ manual dispatch โดยใช้ SHA ของ event ไม่ checkout ปลาย branch ที่เคลื่อนต่อไป
+## Deploy
 
-## ตรวจในเครื่อง
+The Android app is built independently from `android-browser/`. Web Map may be deployed manually using `npx wrangler deploy --config wrangler.observatory.jsonc` after confirming Cloudflare account and target. This repository does not automatically deploy a Worker.
 
-```bash
-npm run prism:gate
-npm --prefix android-shell install --no-audit --no-fund
-npm --prefix android-shell test
-```
+## Previous PRISM and LIGHTHOUSE source
 
-Source ของระบบเดิมและ regression tests บางส่วนยังอยู่เพื่ออ้างอิง แต่ไม่ใช่เส้น build/deploy ของ PRISM ตัว packager LIGHTHOUSE เดิมปฏิเสธการเรียก CLI
-การถอด workflow ไม่ได้ลบหรือเปลี่ยน Worker ที่เคย deploy ไปแล้ว
+The original snapshot is preserved as Git branch `archive/pre-observatory-only-20261014` at commit `cef421d77c428aa0c55590e3982126b55aadc41c`.
+Source ZIP archives verified against Git blob hashes are stored in Google Drive:
+- PRISM: https://drive.google.com/file/d/1qmmSHwS7wLKwg3AzeNbIWC1f40CbbMKO/view
+- LIGHTHOUSE: https://drive.google.com/file/d/1ePWmmNa1bHyWiI87yH-7dNyp9K69jSJ2/view
 
-## Acceptance
-
-CI ที่ผ่านพิสูจน์การ build และ identity/provenance ของ signed APK เท่านั้น
-ยังต้องตรวจ Android เครื่องจริง: install-over owner.20, password setup/unlock, Browser launch, Factory Eye boot/pair, inactive watch observation และ GO Hub readback
-ก่อนยืนยัน install-over ต้องอ่าน package/version/signer ของ baseline จริงกลับมาได้
+Previous PRISM and LIGHTHOUSE build/deploy workflows are intentionally absent from the active source tree. Removing these files does **not** uninstall already deployed services or APKs.
