@@ -40,8 +40,7 @@ object HubArrivalParser {
                 && work.optString("ownerSystem") == "OBSERVATORY"
                 && "read" in authorized) {
                 work.optString("workId")
-                    .takeUnless { it == "null" }
-                    .takeIf(String::isNotBlank)
+                    .takeIf { it.isNotBlank() && it != "null" }
                     ?.let {
                         HubWork(
                             workId = it,
