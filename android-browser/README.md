@@ -25,6 +25,14 @@ The native map now provides **ส่งแผนที่ให้ GO** with own
 
 Sharing via Android sends to the app the owner chooses; it is **not automatic delivery to this ChatGPT conversation**. Existing Metropolis Station pairings publish observation snapshots in read-only mode. No remote GO-command poller or server-side action authority is enabled by this change. Browser action UI works locally on the handset even without GO OAuth pairing. Device installation and actual ChatGPT-to-device handoff require separate verification.
 
+## PANTHEON WorkHub owner handoff (0.6.1)
+
+The browser connection menu displays **เชื่อมต่อ**. Owner GO OAuth still uses Metropolis Hub and automatically pairs the Observatory Station after successful authorization. A disconnected GO status is labeled simply **เชื่อมต่อ**; separate internal Hub/Station states remain visible in diagnostics.
+
+The browser and native map each offer **ส่งเข้า PANTHEON**. The app previews bounded, owner-selected observation text and asks for the PANTHEON owner's `WORKHUB_TOKEN` for **this one request**. The app does not persist the token or package it into the APK. Over HTTPS it posts `CREATE_TASK` to the existing `phatheon-workhub` `/v1/intent` API and then requests `SHOW_TASK` to verify the queued task readback. The exact WorkHub task ID is displayed. It **does not** invoke `/run`, dispatch a remote browser action, or claim work completion; unknown request outcomes must not be retried blindly.
+
+This temporary owner-token flow is intended for controlled previews, not unattended device-to-cloud operations. `WORKHUB_TOKEN` currently grants broader WorkHub owner rights, so it should never be embedded in an app, logged, transmitted in an Android Intent, or shared in a chat. For a permanent always-on integration, introduce a separate narrowly scoped Observatory ingestion credential/server API before enabling automatic sync. The owner must configure/rotate the WorkHub secret separately in Cloudflare before handoff can be tested on-device. WorkHub's existing D1 backend only queues text-artifact tasks; it does not yet support remote Observatory runners.
+
 ## Not claimed yet
 
 The relay adapter is deliberately route-configurable: no MCP endpoint, Work ID, credential, or owner-specific route is invented here. Live MCP readback, real-handset installation, Xiaomi 15T acceptance, and production signing remain unverified until the owner route, permissions, and a real Android device are available.
