@@ -51,6 +51,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
         tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
+        tools.addView(button("ส่งภาพแผนที่"){shareVisibleMapImage()})
         shareButton=button("แชร์ให้โก"){if(mapShare.sharing){mapShare.stop();shareButton.text="แชร์ให้โก"}else if(mapShare.start())shareButton.text="หยุดแชร์";updateSharingStatus()}
         tools.addView(shareButton)
         tools.addView(button("เก็บช่วงนี้"){ObservatoryMemoryDialog.preserve(this,memoryClient,"map")})
@@ -123,6 +124,43 @@ class OutsideViewActivity : Activity() {
         sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
     }
     /** Shares explicit map evidence with the Android chooser; no background or secret transfer. */
+    /** Real, owner-confirmed map-image handoff. Nothing is posted to a server automatically. */
+    private fun shareVisibleMapImage() {
+        if (!foreground || !renderer.foregroundReady) { status.text = "ภาพแผนที่ยังไม่พร้อม"; return }
+        AlertDialog.Builder(this).setTitle("ส่งภาพแผนที่ให้ GO")
+            .setMessage("ส่งภาพแผนที่ที่กำลังแสดง รวมถึงรายละเอียดตำแหน่งที่มองเห็น ผ่านแอปที่บิ๊กเลือกเท่านั้น")
+            .setNegativeButton("ยกเลิก", null)
+            .setPositiveButton("ถ่ายภาพและเลือกแอป") { _, _ ->
+                renderer.snapshotBitmap { bitmap ->
+                    if (bitmap == null) { status.text = "ยังจับภาพแผนที่ไม่ได้"; return@snapshotBitmap }
+                    worker.execute {
+                        val result = runCatching {
+                            val folder = java.io.File(cacheDir, "observatory_share").apply { mkdirs() }
+                            val file = java.io.File(folder, "observatory-map.png")
+                            java.io.FileOutputStream(file).use { output ->
+                                check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)) { "PNG_WRITE_FAILED" }
+                            }
+                            androidx.core.content.FileProvider.getUriForFile(
+                                this, "${packageName}.fileprovider", file
+                            )
+                        }
+                        handler.post {
+                            if (!destroyed && foreground) result.onSuccess { uri ->
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/png"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_TEXT, "YGG Observatory map snapshot · © OpenStreetMap contributors")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    clipData = android.content.ClipData.newUri(contentResolver, "Observatory map", uri)
+                                }
+                                startActivity(Intent.createChooser(send, "แชร์ภาพแผนที่ให้ GO"))
+                            }.onFailure { status.text = "เตรียมภาพแผนที่ไม่สำเร็จ" }
+                        }
+                    }
+                }
+            }.show()
+    }
+
     private fun shareMapToGo() {
         if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
         val journal = store.load()
