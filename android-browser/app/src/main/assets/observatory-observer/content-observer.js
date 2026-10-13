@@ -37,7 +37,7 @@
         else if (saved.signatures[index] !== [node.tagName, node.getAttribute('type') || '', node.getAttribute('role') || '', node.getAttribute('href') || '', label(node)].join('\u001f') || (p.signature && p.signature !== saved.signatures[index])) result = {ok:false, reason:'TARGET_CHANGED'};
         else if (command.action === 'CLICK' && (
           highImpact(node) || /^(submit|reset)$/i.test(node.type || '')
-          || (node.tagName === 'BUTTON' && node.closest('form') && !/^button$/i.test(node.type || ''))
+          || (node.tagName === 'BUTTON' && node.closest?.('form') && !/^button$/i.test(node.type || ''))
           || (node.tagName === 'A' && (!href(node) || !href(node).startsWith('https://')))
         )) result = {ok:false, reason:'HIGH_IMPACT_REQUIRES_OWNER'};
         else if (command.action === 'CLICK') { node.click(); result = {ok:true, reason:'CLICK_DISPATCHED'}; publish(); }
