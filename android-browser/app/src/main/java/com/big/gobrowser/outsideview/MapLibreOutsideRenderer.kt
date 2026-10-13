@@ -133,6 +133,16 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         return true
     }
     fun center():Point?=map?.cameraPosition?.target?.let {Point(it.longitude,it.latitude)}
+    /** Current viewport summary: coordinates are camera state, not proof that map tiles loaded. */
+    fun cameraSnapshot():JSONObject {
+        val position = map?.cameraPosition
+        val target = position?.target
+        return JSONObject().put("center", target?.let {
+            JSONObject().put("latitude", it.latitude).put("longitude", it.longitude)
+        } ?: JSONObject.NULL).put("zoom", position?.zoom ?: JSONObject.NULL)
+            .put("frameReady", foregroundReady)
+    }
+
     override fun cancel(){generation++;pending=null;handler.removeCallbacks(timeout);updatesComplete=false;frameStarted=false;map?.cancelTransitions()}
     fun onStart()=mapView.onStart()
     fun onResume(){resumed=true;mapView.onResume();if(map?.style?.isFullyLoaded==true)onReady()}
