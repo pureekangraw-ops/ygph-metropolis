@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import com.big.gobrowser.lyra.LyraDialog
 import com.big.gobrowser.ui.*
 import com.big.gobrowser.transport.MetropolisMcpClient
+import com.big.gobrowser.transport.PantheonWorkHubHandoff
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -51,6 +52,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
         tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
+        tools.addView(button("ส่งเข้า PANTHEON"){sendMapToPantheon()})
         tools.addView(button("ส่งภาพแผนที่"){shareVisibleMapImage()})
         shareButton=button("แชร์ให้โก"){if(mapShare.sharing){mapShare.stop();shareButton.text="แชร์ให้โก"}else if(mapShare.start())shareButton.text="หยุดแชร์";updateSharingStatus()}
         tools.addView(shareButton)
@@ -161,8 +163,7 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
 
-    private fun shareMapToGo() {
-        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
+    private fun currentMapHandoff(): String {
         val journal = store.load()
         val state = journal.state
         val pins = JSONArray()
@@ -180,7 +181,12 @@ class OutsideViewActivity : Activity() {
             .put("pins", pins)
             .put("truncated", state.pins.size > 100)
             .put("note", "Camera and saved pins only; not a live map image or GPS proof")
-        val handoff = "YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\\n" + evidence.toString(2)
+        return "YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\\n" + evidence.toString(2)
+    }
+
+    private fun shareMapToGo() {
+        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
+        val handoff = currentMapHandoff()
         AlertDialog.Builder(this).setTitle("ส่งแผนที่ให้ GO")
             .setMessage("แชร์ตำแหน่งกล้องแผนที่และหมุดที่บันทึกไว้ (สูงสุด 100 จุด) ผ่านเมนูแชร์ของ Android\\nพิกัดอาจเป็นข้อมูลส่วนตัว")
             .setNegativeButton("ยกเลิก", null)
@@ -189,6 +195,11 @@ class OutsideViewActivity : Activity() {
                     type = "text/plain"; putExtra(Intent.EXTRA_TEXT, handoff)
                 }, "แชร์แผนที่ให้ GO"))
             }.show()
+    }
+
+    private fun sendMapToPantheon() {
+        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนส่ง"; return }
+        PantheonWorkHubHandoff.present(this, "MAP", currentMapHandoff())
     }
 
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
