@@ -130,6 +130,8 @@ test('Work Inbox refreshes the Hub readback and stays read-only', () => {
   assert.match(activity, /Work ID: \$\{work\.workId\}/);
   assert.match(activity, /Checkpoint ID: \$\{work\.checkpointId/);
   assert.match(activity, /Reported state: \$\{work\.state/);
+  assert.match(activity, /private var hubArrival: HubArrival\? = null/);
+  assert.doesNotMatch(activity, /MetropolisMcpClient\.HubArrival/);
   assert.match(activity, /Project ID: ยังไม่มีในข้อมูลที่แอปอ่านได้/);
   assert.match(client, /fun refreshArrival\(onComplete: \(Result<HubArrival>\) -> Unit\)/);
   assert.match(parser, /"OBSERVATORY"/);

@@ -53,7 +53,7 @@ class GeckoBrowserActivity : Activity() {
     private var acknowledgedCapture: String? = null
     private var deliveryFailed = false
     private var lastConnectionStatus = "NOT_ATTEMPTED"
-    private var hubArrival: MetropolisMcpClient.HubArrival? = null
+    private var hubArrival: HubArrival? = null
     private val tick = object : Runnable {
         override fun run() {
             if (!foreground || destroyed) return
