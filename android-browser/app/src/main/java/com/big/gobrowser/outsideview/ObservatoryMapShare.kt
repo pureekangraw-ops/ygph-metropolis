@@ -18,7 +18,8 @@ class ObservatoryMapShare(
     context: Context,
     private val store: MapStateStore,
     private val ready: () -> Boolean,
-    private val report: (String) -> Unit
+    private val report: (String) -> Unit,
+    private val viewport: () -> JSONObject = { JSONObject() }
 ) {
     private val client = MetropolisMcpClient(context)
     private val prefs = context.getSharedPreferences("observatory-map-observer-v1", Context.MODE_PRIVATE)
@@ -102,6 +103,7 @@ class ObservatoryMapShare(
             .put("sequence", nextSequence)
             .put("epoch", epoch)
             .put("revision", state.revision)
+            .put("viewport", viewport())
             .put("state", JSONObject()
                 .put("zones", JSONArray().apply {
                     state.zones.values.forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_ZONE, zone = it)).getJSONObject("zone")) }
