@@ -164,7 +164,7 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
@@ -174,6 +174,8 @@ class GeckoBrowserActivity : Activity() {
                     5 -> ObservatoryMemoryDialog.saved(this, metropolis)
                     6 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
                     7 -> showBrowserDetails()
+                    8 -> shareCurrentPageToGo()
+                    9 -> showOwnerAssist()
                 }
             }.setNegativeButton("ปิด", null).show()
     }
@@ -241,6 +243,7 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun onCapture(tab: GeckoBrowserEngine.GeckoTab, capture: DomCapture) {
         if (destroyed || !foreground || engine.active()?.id != tab.id) return
+        if (capture.frameId != "frame-0" || sanitizeUrl(capture.url) != sanitizeUrl(tab.requestedUrl)) return
         latestDom = tab.id to capture
         domReceivedAt = System.currentTimeMillis()
     }
@@ -394,6 +397,103 @@ class GeckoBrowserActivity : Activity() {
             address.clearFocus()
         }
     }
+    /** Explicit Android Sharesheet handoff: this does NOT assume a live ChatGPT connector. */
+    private fun currentAssistEvidence(): Pair<GeckoBrowserEngine.GeckoTab, DomCapture>? {
+        val tab = engine.active() ?: return null
+        val pair = latestDom ?: return null
+        if (!foreground || !lifecycleInteractive() || pair.first != tab.id) return null
+        if (System.currentTimeMillis() - domReceivedAt !in 0..4_999L) return null
+        val capture = pair.second
+        if (capture.frameId != "frame-0" || sanitizeUrl(capture.url) != sanitizeUrl(tab.requestedUrl)) return null
+        return tab to capture
+    }
+
+    private fun shareCurrentPageToGo() {
+        val capture = currentAssistEvidence()?.second ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
+        val controls = capture.targets.filter { it.label?.isNotBlank() == true }
+            .take(40).joinToString("\n") { "[${it.tag}] ${it.label.orEmpty().take(100)}" }
+        val handoff = "YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
+            "URL: ${sanitizeUrl(capture.url)}\nTitle: ${capture.title.take(200)}\n" +
+            "Read-only webpage text (may be truncated):\n${capture.text.take(12000)}\n" +
+            "Visible controls (labels only; no input values):\n$controls\n" +
+            "Do not assume these controls were clicked or forms submitted."
+        AlertDialog.Builder(this).setTitle("ส่งข้อมูลหน้าเว็บให้ GO")
+            .setMessage("ส่งข้อความหน้าเว็บและชื่อปุ่มผ่าน Android แชร์ บิ๊กจะเลือกปลายทางเอง\nข้อมูลบนหน้าเว็บอาจเป็นข้อมูลส่วนตัว ตรวจสอบก่อนแชร์")
+            .setNegativeButton("ยกเลิก", null)
+            .setPositiveButton("เลือกแอปเพื่อแชร์") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, handoff)
+                }, "แชร์ข้อมูลให้ GO"))
+            }.show()
+    }
+
+    /** Owner approves each action locally. The existing Gecko port performs a second target/signature check. */
+    private fun showOwnerAssist() {
+        val (_, capture) = currentAssistEvidence() ?: run { say("รอข้อมูลหน้าเว็บสดก่อน · ลองเปิดหน้าใหม่"); return }
+        val candidates = capture.targets.mapNotNull { target ->
+            val action = if (target.tag.lowercase() in setOf("input", "textarea", "select")) "FILL" else "CLICK"
+            if (BrowserAssistPolicy.rejection(target, action) != null) null else target to action
+        }.take(100)
+        if (candidates.isEmpty()) { say("ไม่พบช่องกรอกหรือปุ่มที่ปลอดภัยบนหน้านี้"); return }
+        val labels = candidates.map { (target, action) ->
+            "${if (action == "FILL") "กรอก" else "กด"} · ${target.label?.take(65).orEmpty().ifBlank { target.type.ifBlank { target.tag } }}"
+        }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("ช่วยกรอก / ช่วยกด · ${capture.title.take(40)}")
+            .setItems(labels) { _, selected ->
+                val (target, action) = candidates[selected]
+                if (action == "FILL") {
+                    val field = EditText(this).apply {
+                        hint = target.label ?: "ข้อความที่ต้องการกรอก"
+                        setSingleLine(target.tag.lowercase() != "textarea")
+                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    }
+                    AlertDialog.Builder(this).setTitle("กรอก: ${target.label.orEmpty().take(80)}")
+                        .setView(field).setNegativeButton("ยกเลิก", null)
+                        .setPositiveButton("อนุญาตให้กรอก") { _, _ ->
+                            executeOwnerAssist(capture, target, "FILL", field.text.toString())
+                        }.show()
+                } else {
+                    AlertDialog.Builder(this).setTitle("ยืนยันการกด")
+                        .setMessage("กด ${target.label.orEmpty().take(120)} บน ${sanitizeUrl(capture.url)}?\nไม่ใช่การยืนยันผลลัพธ์บนเว็บไซต์")
+                        .setNegativeButton("ยกเลิก", null)
+                        .setPositiveButton("อนุญาตให้กด") { _, _ -> executeOwnerAssist(capture, target, "CLICK") }.show()
+                }
+            }.setNegativeButton("ปิด", null).show()
+    }
+
+    private fun executeOwnerAssist(capture: DomCapture, target: com.big.gobrowser.observer.Target, action: String, value: String = "") {
+        val (tab, current) = currentAssistEvidence() ?: run { say("ข้อมูลหน้าเว็บหมดอายุ · กรุณาเลือกใหม่"); return }
+        if (current.captureId != capture.captureId ||
+            current.targets.none { it.id == target.id && it.signature == target.signature }) {
+            say("หน้าเว็บเปลี่ยนแล้ว · กรุณาเลือกปุ่มใหม่"); return
+        }
+        BrowserAssistPolicy.rejection(target, action, value)?.let { say("ไม่อนุญาต: $it"); return }
+        val now = System.currentTimeMillis()
+        val epoch = permissions.epoch(tab.id)
+        val command = Command(
+            commandId = java.util.UUID.randomUUID().toString(),
+            actor = "OWNER_LOCAL", workId = "LOCAL_OWNER", checkpointId = "MANUAL_CONFIRM",
+            tabId = tab.id, deviceId = "local-device", captureId = capture.captureId,
+            revision = 0L, epoch = epoch, issuedAtEpochMs = now, expiresAtEpochMs = now + 5_000L,
+            action = if (action == "FILL") BrowserAction.FILL else BrowserAction.CLICK,
+            authority = if (action == "FILL") "browser.fill" else "browser.click",
+            parameters = mapOf("frameId" to target.frameId, "targetId" to target.id,
+                "signature" to target.signature, "value" to value), frameId = target.frameId
+        )
+        val guard = CommandGuard.check(command, ControlState(
+            foreground = foreground, interactive = lifecycleInteractive(), deviceId = "local-device",
+            tabId = tab.id, captureId = current.captureId, revision = 0L, epoch = permissions.epoch(tab.id),
+            frameId = current.frameId
+        ), now)
+        if (!guard.accepted) { say("ไม่อนุญาต: ${guard.reason}"); return }
+        engine.dispatch(tab, command) { result ->
+            runOnUiThread {
+                if (!destroyed) say(if (result.accepted) "ส่งคำสั่ง${if (action == "FILL") "กรอก" else "กด"}แล้ว · ตรวจผลบนหน้าเว็บ" else "ทำรายการไม่ได้: ${result.reason}")
+            }
+        }
+    }
+
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

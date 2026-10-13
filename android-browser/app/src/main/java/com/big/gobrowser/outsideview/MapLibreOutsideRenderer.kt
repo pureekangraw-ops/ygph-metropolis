@@ -127,12 +127,30 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
             style.addLayer(CircleLayer("device-location-dot","device-location").withProperties(circleColor("#78bfff"),circleRadius(8f),circleStrokeColor("#101516"),circleStrokeWidth(3f)))
         }else source.setGeoJson(json)
     }
+    /** MapLibre screenshot of the CURRENT rendered camera. Never treat this as live GPS proof. */
+    fun snapshotBitmap(done:(android.graphics.Bitmap?)->Unit) {
+        val current=map
+        if(!foregroundReady||current==null){done(null);return}
+        current.snapshot(object:MapLibreMap.SnapshotReadyCallback {
+            override fun onSnapshotReady(bitmap:android.graphics.Bitmap) { done(bitmap) }
+        })
+    }
     fun centerOnLocation(point:Point):Boolean {
         if(!foregroundReady || pending!=null)return false
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude,point.longitude),15.0))?:return false
         return true
     }
     fun center():Point?=map?.cameraPosition?.target?.let {Point(it.longitude,it.latitude)}
+    /** Current viewport summary: coordinates are camera state, not proof that map tiles loaded. */
+    fun cameraSnapshot():JSONObject {
+        val position = map?.cameraPosition
+        val target = position?.target
+        return JSONObject().put("center", target?.let {
+            JSONObject().put("latitude", it.latitude).put("longitude", it.longitude)
+        } ?: JSONObject.NULL).put("zoom", position?.zoom ?: JSONObject.NULL)
+            .put("frameReady", foregroundReady)
+    }
+
     override fun cancel(){generation++;pending=null;handler.removeCallbacks(timeout);updatesComplete=false;frameStarted=false;map?.cancelTransitions()}
     fun onStart()=mapView.onStart()
     fun onResume(){resumed=true;mapView.onResume();if(map?.style?.isFullyLoaded==true)onReady()}

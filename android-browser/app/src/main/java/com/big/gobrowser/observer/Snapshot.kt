@@ -21,7 +21,8 @@ data class Target(
     val href: String? = null,
     val visibility: String = "visible",
     val disabled: Boolean = false,
-    val signature: String = ""
+    val signature: String = "",
+    val autocomplete: String = ""
 )
 
 data class Snapshot(
