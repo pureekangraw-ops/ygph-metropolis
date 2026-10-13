@@ -140,3 +140,21 @@ test('map image sharing uses MapLibre snapshot and private cache FileProvider',(
   assert.match(paths,/<cache-path/);
   assert.doesNotMatch(paths,/<external-path/);
 });
+
+test('PANTHEON WorkHub bridge uses explicit owner approval and verifies queue readback', () => {
+  const handoff = readAndroid('app/src/main/java/com/big/gobrowser/transport/PantheonWorkHubHandoff.kt');
+  const browser = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
+  assert.match(handoff, /phatheon-workhub\.pureekangraw\.workers\.dev\/v1\/intent/);
+  assert.match(handoff, /setPositiveButton\("ส่งเข้าคิว", null\)/);
+  assert.match(handoff, /"CREATE_TASK"/);
+  assert.match(handoff, /"SHOW_TASK"/);
+  assert.match(handoff, /"QUEUED"/);
+  assert.match(handoff, /readback\.optString\("request_text"\) == request/);
+  assert.match(handoff, /tokenInput\.text\.clear\(\)/);
+  assert.doesNotMatch(handoff, /putExtra\([^\n]*token|SharedPreferences|credential\.save/);
+  assert.match(browser, /"ส่งเข้า PANTHEON"/);
+  assert.match(browser, /PantheonWorkHubHandoff\.present\(this, "WEB"/);
+  assert.match(map, /PantheonWorkHubHandoff\.present\(this, "MAP"/);
+  assert.match(browser, /"เชื่อมต่อใหม่", "ยกเลิกการเชื่อมต่อ"/);
+});
