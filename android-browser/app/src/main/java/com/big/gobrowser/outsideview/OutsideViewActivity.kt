@@ -50,6 +50,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ไลร่า"){LyraDialog.show(this,"OUTSIDE"){context()}})
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
+        tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
         shareButton=button("แชร์ให้โก"){if(mapShare.sharing){mapShare.stop();shareButton.text="แชร์ให้โก"}else if(mapShare.start())shareButton.text="หยุดแชร์";updateSharingStatus()}
         tools.addView(shareButton)
         tools.addView(button("เก็บช่วงนี้"){ObservatoryMemoryDialog.preserve(this,memoryClient,"map")})
@@ -70,7 +71,7 @@ class OutsideViewActivity : Activity() {
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
-        mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()})
+        mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
         location.onCenter={point->if(!renderer.centerOnLocation(point))gpsStatus.text="แผนที่กำลังทำงาน · กดตำแหน่งฉันอีกครั้งเมื่อพร้อม"}
         renderer.onSelect=::pinDialog
@@ -121,6 +122,37 @@ class OutsideViewActivity : Activity() {
         sharingStatus.text=state.label
         sharingStatus.setTextColor(if(state==SharingState.LIVE)ObservatoryTheme.lime else ObservatoryTheme.muted)
     }
+    /** Shares explicit map evidence with the Android chooser; no background or secret transfer. */
+    private fun shareMapToGo() {
+        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
+        val journal = store.load()
+        val state = journal.state
+        val pins = JSONArray()
+        state.pins.values.take(100).forEach { pin ->
+            pins.put(JSONObject().put("name", pin.label.take(100))
+                .put("latitude", pin.point.latitude).put("longitude", pin.point.longitude)
+                .put("source", pin.evidence.source ?: JSONObject.NULL))
+        }
+        val evidence = JSONObject()
+            .put("schema", "observatory.map.handoff.v1")
+            .put("viewport", renderer.cameraSnapshot())
+            .put("revision", state.revision)
+            .put("renderedRevision", journal.renderedRevision)
+            .put("pinCount", state.pins.size)
+            .put("pins", pins)
+            .put("truncated", state.pins.size > 100)
+            .put("note", "Camera and saved pins only; not a live map image or GPS proof")
+        val handoff = "YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\\n" + evidence.toString(2)
+        AlertDialog.Builder(this).setTitle("ส่งแผนที่ให้ GO")
+            .setMessage("แชร์ตำแหน่งกล้องแผนที่และหมุดที่บันทึกไว้ (สูงสุด 100 จุด) ผ่านเมนูแชร์ของ Android\\nพิกัดอาจเป็นข้อมูลส่วนตัว")
+            .setNegativeButton("ยกเลิก", null)
+            .setPositiveButton("เลือกแอปเพื่อแชร์") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, handoff)
+                }, "แชร์แผนที่ให้ GO"))
+            }.show()
+    }
+
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==ForegroundLocationController.REQUEST_CODE)location.permissionResult()}
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
