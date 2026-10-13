@@ -39,3 +39,20 @@ test('executed click emits fresh readback even before the periodic heartbeat',()
   assert.equal(p.node.innerText,'Saved');
   const after=p.observations().at(-1);assert.notEqual(after.captureId,before.captureId);assert.equal(after.targets[0].label,'Saved');
 });
+
+test('payment-like click remains rejected even after a fresh capture',()=>{
+  const p=page(); p.node.innerText='Pay now'; p.node.textContent='Pay now'; p.heartbeat();
+  const capture=p.observations().at(-1);
+  p.execute({type:'EXECUTE',commandId:'click-payment',captureId:capture.captureId,frameId:capture.frameId,action:'CLICK',
+    parameters:{targetId:capture.targets[0].targetId,signature:capture.targets[0].signature}});
+  assert.equal(p.messages.at(-1).reason,'HIGH_IMPACT_REQUIRES_OWNER');
+  assert.equal(p.node.innerText,'Pay now');
+});
+test('sensitive input and invalid fill values are blocked inside the WebExtension',()=>{
+  const p=page();p.node.tagName='INPUT';p.node.type='text';
+  p.node.getAttribute=(key)=>key==='autocomplete'?'one-time-code':null;p.heartbeat();
+  const capture=p.observations().at(-1);
+  p.execute({type:'EXECUTE',commandId:'fill-otp',captureId:capture.captureId,frameId:capture.frameId,action:'FILL',
+    parameters:{targetId:capture.targets[0].targetId,signature:capture.targets[0].signature,value:'123456'}});
+  assert.equal(p.messages.at(-1).reason,'SENSITIVE_TARGET');
+});
