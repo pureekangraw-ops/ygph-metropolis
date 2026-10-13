@@ -67,7 +67,7 @@ test('Gecko starts at Observatory map while API origin remains only for GO OAuth
   assert.match(engine, /fun open\(url: String = BrowserSettings\.OBSERVATORY_HOME_URL/);
   assert.match(settings, /https:\/\/observatory-web\.pureekangraw\.workers\.dev\//);
   assert.match(activity, /restored == MetropolisMcpClient\.ISSUER/);
-  assert.match(activity, /"เชื่อม GO"/);
+  assert.match(activity, /"เชื่อมต่อ"/);
   assert.doesNotMatch(activity, /GeckoView .*\$\{if \(foreground\) "LIVE"/);
 });
 
@@ -78,8 +78,8 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   const browser = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
   const workflow = readRepo('.github/workflows/android-browser.yml');
-  assert.match(gradle, /versionName = "0\.6\.0"/);
-  assert.match(gradle, /versionCode = 10/);
+  assert.match(gradle, /versionName = "0\.6\.1"/);
+  assert.match(gradle, /versionCode = 11/);
   assert.match(gradle, /buildConfigField\("String", "SOURCE_COMMIT"/);
   assert.match(gradle, /buildConfigField\("String", "BUILD_RUN_ID"/);
   assert.match(stamp, /BuildConfig\.VERSION_NAME/);
