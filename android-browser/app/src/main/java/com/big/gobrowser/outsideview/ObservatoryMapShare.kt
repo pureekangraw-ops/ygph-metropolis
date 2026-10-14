@@ -106,16 +106,16 @@ class ObservatoryMapShare(
             .put("viewport", viewport())
             .put("state", JSONObject()
                 .put("zones", JSONArray().apply {
-                    state.zones.values.take(32).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_ZONE, zone = it)).getJSONObject("zone")) }
+                    state.zones.values.take(12).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_ZONE, zone = it)).getJSONObject("zone")) }
                 })
                 .put("grids", JSONArray().apply {
-                    state.grids.values.take(32).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_GRID, grid = it)).getJSONObject("grid")) }
+                    state.grids.values.take(12).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_GRID, grid = it)).getJSONObject("grid")) }
                 })
                 .put("pins", JSONArray().apply {
-                    state.pins.values.take(80).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_PIN, pin = it)).getJSONObject("pin")) }
+                    state.pins.values.take(40).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_PIN, pin = it)).getJSONObject("pin")) }
                 })
                 .put("notes", JSONArray().apply {
-                    state.notes.entries.take(40).forEach { (id, value) -> put(JSONObject().put("id", id).put("value", value)) }
+                    state.notes.entries.take(12).forEach { (id, value) -> put(JSONObject().put("id", id).put("value", value.take(400))) }
                 })
             )
         val current = generation
