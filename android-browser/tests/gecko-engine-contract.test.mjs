@@ -44,13 +44,19 @@ test('direct PANTHEON token is scoped and encrypted; Metro OAuth is not invoked'
   assert.doesNotMatch(map,/MetropolisMcpClient/);
 });
 
-test('only foreground loop schedules 5-second samples; pause always stops',()=>{
+test('PANTHEON uploads happen only after owner tap; pause always stops',()=>{
   const app=file('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   const map=file('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
-  assert.match(app,/handler\.postDelayed\(this, 5_000L\)/);
-  assert.match(app,/if \(!foreground \|\| destroyed\) return/);
+  const share=file('app/src/main/java/com/big/gobrowser/outsideview/ObservatoryMapShare.kt');
+  assert.match(app,/button\("ส่งหน้าเว็บเข้า PANTHEON"\) \{ sendSnapshotManually\(\) \}/);
+  assert.match(app,/private fun sendSnapshotManually\(\)/);
+  assert.doesNotMatch(app,/handler\.postDelayed\(this, 5_000L\)|startAutomaticObservation|handler\.post\(tick\)/);
   assert.match(app,/override fun onPause\(\).*stopSharing\(\)/);
+  assert.match(map,/mapShare\.captureOnce\(\)/);
+  assert.doesNotMatch(map,/mapShare\.start\(\)/);
   assert.match(map,/mapShare\.stop\(\)/);
+  assert.match(share,/fun captureOnce\(\): Boolean/);
+  assert.doesNotMatch(share,/postDelayed|handler\.post\(loop\)/);
 });
 
 test('saved evidence is encrypted separately from ephemeral cloud snapshots',()=>{
