@@ -35,6 +35,8 @@ public final class EvidenceRedactor {
     }
 
     private static String redactFragments(String raw, boolean decode) {
+        raw = PRIVATE_KEY.matcher(raw).replaceAll(Matcher.quoteReplacement(HIDDEN));
+        raw = COOKIE.matcher(raw).replaceAll(Matcher.quoteReplacement("Cookie: " + HIDDEN));
         Matcher urls = URL.matcher(raw);
         StringBuilder result = new StringBuilder();
         int end = 0;

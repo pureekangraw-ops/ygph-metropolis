@@ -28,6 +28,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     private var map:MapLibreMap?=null
     private var locationFix:Point?=null
     private var generation=0L
+    private var styleRequest=0L
     private var resumed=false
     private var pending:Pair<RenderRequest,(RenderConfirmation)->Unit>?=null
     private val handler=Handler(Looper.getMainLooper())
@@ -57,15 +58,15 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     override val styleGeneration:Long get()=generation
     fun reloadStyle(online:Boolean=true) {
         cancel()
-        val requestedGeneration=generation
+        val requestedStyle=++styleRequest
         map?.setStyle(Style.Builder().fromJson(MapStyleFactory.style(packageStore?.active(),online))) {style->
-            if(requestedGeneration!=generation)return@setStyle
+            if(requestedStyle!=styleRequest)return@setStyle
             sourceIds.forEach {style.addSource(GeoJsonSource(it,"{\"type\":\"FeatureCollection\",\"features\":[]}",GeoJsonOptions().withSynchronousUpdate(true)))}
             style.addLayer(FillLayer("zone-fill",sourceIds[0]).withProperties(fillColor(color("#73b4d4")),fillOpacity(.25f)))
             style.addLayer(LineLayer("grid-lines",sourceIds[1]).withProperties(lineColor(color("#315f8e")),lineWidth(size(2,5,4))))
             style.addLayer(CircleLayer("pin-dots",sourceIds[2]).withProperties(circleColor(color("#cf476a")),circleRadius(size(7,12,10)),circleStrokeColor("#ffffff"),circleStrokeWidth(2f)))
             drawLocation()
-            onReady()
+            if(resumed)onReady()
         }
     }
     private fun color(normal:String)=Expression.switchCase(Expression.get("_highlighted"),Expression.literal("#f0b429"),Expression.get("_recommended"),Expression.literal("#20ad78"),Expression.literal(normal))
@@ -158,7 +159,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     fun onResume(){resumed=true;mapView.onResume();if(map?.style?.isFullyLoaded==true)onReady()}
     fun onPause(){resumed=false;cancel();mapView.onPause()}
     fun onStop()=mapView.onStop()
-    fun onDestroy(){cancel();mapView.onDestroy()}
+    fun onDestroy(){styleRequest++;cancel();mapView.onDestroy()}
     fun onLowMemory()=mapView.onLowMemory()
     fun onSaveInstanceState(bundle:Bundle)=mapView.onSaveInstanceState(bundle)
 }

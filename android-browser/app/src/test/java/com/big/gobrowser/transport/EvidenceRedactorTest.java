@@ -4,6 +4,7 @@ public final class EvidenceRedactorTest {
     @org.junit.Test public void exportRules() { main(new String[0]); }
     public static void main(String[] args) {
         String[] bad = {
+            "Cookie: landing=https://example.com; session=canary",
             "Cookie: csrf=ok; session=canary", "Set-Cookie: session=canary; Secure; HttpOnly",
             "token=canary", "API_KEY: canary", "\"access_token\": \"canary\"",
             "Authorization: Bearer canary", "PASSWORD = 'canary'", "token:\ncanary",
