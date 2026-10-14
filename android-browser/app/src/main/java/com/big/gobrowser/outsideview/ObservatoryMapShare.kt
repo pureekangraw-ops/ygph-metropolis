@@ -39,21 +39,22 @@ class ObservatoryMapShare(
     var acknowledgedRevision: Long? = null
         private set
 
-    private val loop = object : Runnable {
-        override fun run() {
-            if (!sharing || closed) return
-            publishIfRendered()
-            handler.postDelayed(this, 5_000L)
-        }
-    }
-
     fun isPaired(): Boolean = client.isPaired()
 
-    fun start(): Boolean {
-        if (sharing) return true
+    /** One owner tap publishes one current rendered frame. No polling or background uploads. */
+    fun captureOnce(): Boolean {
+        if (closed || !ready() || store.load().let { it.pending != null || it.renderedRevision != it.state.revision }) {
+            report("แผนที่ยังไม่พร้อม · รอแสดงผลแล้วกดส่งอีกครั้ง")
+            return false
+        }
         if (!isPaired()) {
             report("เชื่อม PANTHEON จากหน้าบราวเซอร์ก่อน")
             return false
+        }
+        if (sharing) {
+            if (inFlight) { report("กำลังส่งแผนที่ · กรุณารอผลตอบรับ"); return false }
+            publishIfRendered()
+            return true
         }
         val next = maxOf(System.currentTimeMillis(), prefs.getLong("epoch", 0L) + 1L)
         if (!prefs.edit().putLong("epoch", next).commit()) {
@@ -67,8 +68,8 @@ class ObservatoryMapShare(
         lastAck = null
         deliveryFailed = false
         acknowledgedRevision = null
-        report("ส่งแผนที่เข้า PANTHEON แบบอ่านอย่างเดียวเมื่อเฟรมพร้อม")
-        handler.post(loop)
+        report("บิ๊กกดส่งแผนที่เข้า PANTHEON แล้ว")
+        publishIfRendered()
         return true
     }
 
@@ -76,7 +77,6 @@ class ObservatoryMapShare(
         if (sharing) client.stopObservation("map", epoch)
         sharing = false
         generation += 1L
-        handler.removeCallbacks(loop)
         inFlight = false
         lastAck = null
         acknowledgedRevision = null

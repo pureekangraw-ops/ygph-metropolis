@@ -34,7 +34,6 @@ class GeckoBrowserActivity : Activity() {
     private lateinit var connectionDiagnostics: TextView
     private lateinit var observerSession: ObserverSession
     private lateinit var pantheon: PantheonObservatoryClient
-    private val handler = Handler(Looper.getMainLooper())
     private val network = Executors.newSingleThreadExecutor()
     private val permissions by lazy {
         val prefs = getSharedPreferences("observatory-epochs", MODE_PRIVATE)
@@ -45,7 +44,6 @@ class GeckoBrowserActivity : Activity() {
     private val outbox = Outbox(maxAgeMs = 15_000L)
     private var latestDom: Pair<String, DomCapture>? = null
     private var domReceivedAt = 0L
-    private var pausedByOwner = false
     private var foreground = false
     private var destroyed = false
     private var captureBusy = false
@@ -56,14 +54,6 @@ class GeckoBrowserActivity : Activity() {
     private var deliveryFailed = false
     private var lastConnectionStatus = "NOT_ATTEMPTED"
     private var pantheonDeviceId: String? = null
-    private val tick = object : Runnable {
-        override fun run() {
-            if (!foreground || destroyed) return
-            startAutomaticObservation()
-            engine.active()?.let { captureIfShared(it) }
-            syncActive(); updateSharingStatus(); handler.postDelayed(this, 5_000L)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,6 +117,9 @@ class GeckoBrowserActivity : Activity() {
             tooltipText = "แตะดูสถานะ PANTHEON และข้อมูลรุ่น"
         }
         root.addView(sharingStatus)
+        root.addView(button("ส่งหน้าเว็บเข้า PANTHEON") { sendSnapshotManually() }.apply {
+            contentDescription = "กดส่งข้อมูลหน้าเว็บเข้า PANTHEON ครั้งเดียว"
+        })
         // Detailed evidence stays available in the dialog without consuming the webpage.
         eyeStatus = ObservatoryTheme.status(this)
         connectionDiagnostics = ObservatoryTheme.status(this)
@@ -156,10 +149,10 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดส่งเข้า PANTHEON" else "เริ่มส่งเข้า PANTHEON", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "พาสคีย์ / เปิดในเบราว์เซอร์ระบบ")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", "ส่งหน้าเว็บเข้า PANTHEON (กดเอง)", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "พาสคีย์ / เปิดในเบราว์เซอร์ระบบ")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
-                    1 -> toggleShare()
+                    1 -> sendSnapshotManually()
                     2 -> startActivity(Intent(this, OutsideViewActivity::class.java))
                     3 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
                     4 -> ObservatoryMemoryDialog.preserve(this, "browser", currentWebHandoff())
@@ -187,7 +180,7 @@ class GeckoBrowserActivity : Activity() {
             })
         }
         root.addView(ObservatoryTheme.status(this).apply {
-            text = "อ่านทุก 5 วินาทีเมื่อเปิดแอป · ข้อมูลบน PANTHEON หมดอายุ 30 วินาที\nหยุดอ่านเมื่อออกจากแอป · ช่วงที่เลือกเก็บไว้จะเข้ารหัสบนเครื่อง"
+            text = "ส่งเข้า PANTHEON เฉพาะเมื่อบิ๊กกดเอง · ข้อมูลบน PANTHEON หมดอายุ 30 วินาที\nไม่มีการส่งอัตโนมัติ · ช่วงที่เลือกเก็บไว้จะเข้ารหัสบนเครื่อง"
             textSize = 15f
         })
         val scroll = ScrollView(this).apply { addView(root) }
@@ -253,18 +246,23 @@ class GeckoBrowserActivity : Activity() {
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
         updateConnectionDiagnostics()
     }
-    private fun startAutomaticObservation() {
-        if (!foreground || pausedByOwner || !pantheon.isPaired()) return
+    /** A manual tap creates exactly one fresh browser snapshot for the owner-scoped PANTHEON rail. */
+    private fun sendSnapshotManually() {
         val tab = engine.active() ?: return
-        if (!observerSession.isSharing(tab.id)) {
-            observerSession.start(tab.id)
+        if (!pantheon.isPaired()) {
+            lastConnectionStatus = "STATION_PAIRING_REQUIRED"
+            updateConnectionDiagnostics()
+            say("กรุณาเชื่อมต่อ PANTHEON ก่อน")
+            connectHub()
+            return
         }
-    }
-    private fun toggleShare() {
-        val tab = engine.active() ?: return
-        if (!pantheon.isPaired()) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("กรุณาเชื่อมต่อก่อน"); connectHub(); return }
-        if (observerSession.isSharing(tab.id)) { pausedByOwner = true; stopSharing(); say("หยุดแชร์แท็บแล้ว") }
-        else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); captureIfShared(tab, true); updateSharingStatus() }
+        if (syncBusy) { say("กำลังส่งข้อมูล กรุณารอผลตอบรับ"); return }
+        if (!observerSession.isSharing(tab.id)) observerSession.start(tab.id)
+        if (!captureIfShared(tab)) {
+            say("หน้าเว็บยังไม่มีข้อมูลสด · รอสักครู่แล้วกดส่งอีกครั้ง")
+            return
+        }
+        syncActive()
     }
     private fun stopSharing() {
         generation += 1
@@ -278,16 +276,16 @@ class GeckoBrowserActivity : Activity() {
         latestDom = tab.id to capture
         domReceivedAt = System.currentTimeMillis()
     }
-    private fun captureIfShared(tab: GeckoBrowserEngine.GeckoTab, notify: Boolean = false) {
-        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) return
-        val latest = latestDom?.takeIf { it.first == tab.id }?.second ?: return
-        if (System.currentTimeMillis() - domReceivedAt !in 0..5_000L) return
-        if (android.net.Uri.parse(latest.url).host == "metropolis.pureekangraw.workers.dev") return
-        // Sample a freshly observed DOM every five seconds, including unchanged pages.
-        // Snapshot IDs identify history samples; DOM target IDs remain in the target metadata.
-        val snapshot = observerSession.capture(tab.id, latest.url, latest.title, latest.text, latest.targets, force = true) ?: return
+    private fun captureIfShared(tab: GeckoBrowserEngine.GeckoTab): Boolean {
+        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) return false
+        val latest = latestDom?.takeIf { it.first == tab.id }?.second ?: return false
+        if (System.currentTimeMillis() - domReceivedAt !in 0..5_000L) return false
+        if (android.net.Uri.parse(latest.url).host == "metropolis.pureekangraw.workers.dev") return false
+        // Only an owner tap queues a sample; never publish on a timer or resume.
+        val snapshot = observerSession.capture(tab.id, latest.url, latest.title, latest.text, latest.targets, force = true) ?: return false
         outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
-        eyeStatus.text = "อ่านทุก 5 วินาที · ประวัติ 15 วินาที · ${snapshot.targets.size} จุด"
+        eyeStatus.text = "บิ๊กกดส่งข้อมูลหน้าเว็บแล้ว · ${snapshot.targets.size} จุด"
+        return true
     }
     private fun syncActive() {
         val tab = engine.active() ?: return
@@ -329,7 +327,7 @@ class GeckoBrowserActivity : Activity() {
             setSingleLine()
         }
         AlertDialog.Builder(this).setTitle("เชื่อมต่อ PANTHEON")
-            .setMessage("ยืนยันเจ้าของครั้งเดียว แอปจะเก็บเฉพาะรหัสอุปกรณ์แบบเข้ารหัส ส่งข้อมูลสดเมื่อเปิดแอปเท่านั้น")
+            .setMessage("ยืนยันเจ้าของครั้งเดียว แอปจะเก็บเฉพาะรหัสอุปกรณ์แบบเข้ารหัส และส่งข้อมูลเมื่อบิ๊กกดปุ่มเองเท่านั้น")
             .setView(entry).setNegativeButton("ยกเลิก", null)
             .setPositiveButton("ยืนยันและจับคู่") { _, _ ->
                 val ownerToken = entry.text.toString()
@@ -340,8 +338,6 @@ class GeckoBrowserActivity : Activity() {
                     result.onSuccess { id ->
                         pantheonDeviceId = id
                         lastConnectionStatus = "PAIR_READBACK_OK"
-                        pausedByOwner = false
-                        startAutomaticObservation()
                         say("จับคู่ PANTHEON สำเร็จ")
                     }.onFailure {
                         lastConnectionStatus = safeConnectionCode(it)
@@ -500,15 +496,15 @@ class GeckoBrowserActivity : Activity() {
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    override fun onResume() { super.onResume(); foreground = true; engine.runtime().setActivityDelegate(activityBridge); pausedByOwner = false; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
-    override fun onPause() { foreground = false; stopSharing(); engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
+    override fun onResume() { super.onResume(); foreground = true; engine.runtime().setActivityDelegate(activityBridge); engine.updateVisibility(true); GeckoObserverService.mark(this, true); updateSharingStatus() }
+    override fun onPause() { foreground = false; stopSharing(); engine.updateVisibility(false); GeckoObserverService.mark(this, false); updateSharingStatus(); super.onPause() }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (!activityBridge.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
     override fun onDestroy() { destroyed = true;
         activityBridge.cancel()
         if (engine.runtime().activityDelegate === activityBridge) engine.runtime().setActivityDelegate(null)
- stopSharing(); engine.shutdown(); handler.removeCallbacks(tick); network.shutdown(); pantheon.close(); super.onDestroy() }
+ stopSharing(); engine.shutdown(); network.shutdown(); pantheon.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
 
