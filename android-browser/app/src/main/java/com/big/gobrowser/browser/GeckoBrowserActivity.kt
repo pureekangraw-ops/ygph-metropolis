@@ -112,7 +112,7 @@ class GeckoBrowserActivity : Activity() {
             isClickable = true
             isFocusable = true
             setOnClickListener { if (!pantheon.isPaired()) connectHub() else showBrowserDetails() }
-            tooltipText = "แตะดูสถานะ GO และข้อมูลรุ่น"
+            tooltipText = "แตะดูสถานะ PANTHEON และข้อมูลรุ่น"
         }
         root.addView(sharingStatus)
         // Detailed evidence stays available in the dialog without consuming the webpage.
@@ -143,7 +143,7 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดส่งเข้า PANTHEON" else "เริ่มส่งเข้า PANTHEON", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
@@ -173,7 +173,7 @@ class GeckoBrowserActivity : Activity() {
             })
         }
         root.addView(ObservatoryTheme.status(this).apply {
-            text = "อ่านทุก 5 วินาที · ประวัติสด 15 วินาที\nหยุดอ่านเมื่อออกจากแอป · ล้างประวัติสดใน 30 วินาที\nช่วงที่เลือกเก็บถาวร เปิดได้จากเมนู"
+            text = "อ่านทุก 5 วินาทีเมื่อเปิดแอป · ข้อมูลบน PANTHEON หมดอายุ 30 วินาที\nหยุดอ่านเมื่อออกจากแอป · ช่วงที่เลือกเก็บไว้จะเข้ารหัสบนเครื่อง"
             textSize = 15f
         })
         val scroll = ScrollView(this).apply { addView(root) }
@@ -196,7 +196,7 @@ class GeckoBrowserActivity : Activity() {
         val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }; val now = System.currentTimeMillis()
         val fresh = latest != null && now - latest.capturedAtEpochMs in 0..14_999 && latest.captureId == acknowledgedCapture
         val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, pantheon.isPaired(), foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
-        sharingStatus.text = "GO · ${state.label}  ›"; sharingStatus.contentDescription = "${state.label} แตะดูรายละเอียด"; tabsButton.text = "แท็บ ${engine.list().size}"; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
+        sharingStatus.text = "PANTHEON · ${state.label}  ›"; sharingStatus.contentDescription = "${state.label} แตะดูรายละเอียด"; tabsButton.text = "แท็บ ${engine.list().size}"; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
         val hub = if (pantheon.isPaired()) " · PANTHEON" else ""
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
         updateConnectionDiagnostics()
