@@ -136,6 +136,8 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun killedSessionRecoveryReattachesTheExistingView() {
+        instrumentation.runOnMainSync { engine().navigate("https://example.com") }
+        awaitPage("example.com")
         var previousCaptureId: String? = null
         instrumentation.runOnMainSync {
             previousCaptureId = currentCapture()?.captureId
@@ -145,7 +147,6 @@ class GeckoBrowserE2ETest {
             tab.session.contentDelegate!!.onKill(tab.session)
             assertTrue("Recovered session must be open", tab.session.isOpen)
             org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
-            engine().navigate("https://example.com")
         }
         awaitPage("example.com", previousCaptureId)
     }
