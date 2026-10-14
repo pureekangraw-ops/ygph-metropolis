@@ -185,7 +185,15 @@ class GeckoBrowserE2ETest {
             rule.finishActivity()
             assertTrue("Original Activity must reach DESTROYED",destroyed.await(5,java.util.concurrent.TimeUnit.SECONDS))
         } finally {instrumentation.runOnMainSync {monitor.removeLifecycleCallback(callback)}}
-        instrumentation.runOnMainSync { originalTabs.forEach { assertTrue("Destroyed Activity must release all sessions", !it.session.isOpen) } }
+        // The lifecycle monitor signals DESTROYED before the framework finishes onDestroy.
+        // Await actual session disposal rather than racing that notification.
+        val closeDeadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        var closed=false
+        while(!closed&&System.nanoTime()<closeDeadline){
+            instrumentation.runOnMainSync {closed=originalTabs.all {!it.session.isOpen}}
+            if(!closed)Thread.sleep(50)
+        }
+        assertTrue("Destroyed Activity must release all sessions",closed)
         rule.launchActivity(android.content.Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java))
         instrumentation.runOnMainSync { assertEquals("Restore must retain selected tab, not last record", selectedId, engine().active()!!.id) }
         awaitPage("example.org")
@@ -203,7 +211,12 @@ class GeckoBrowserE2ETest {
             }
             if (!loaded) Thread.sleep(100)
         }
-        assertTrue("Actual DOM must load from $host", loaded)
+        var diagnostic=""
+        if(!loaded)instrumentation.runOnMainSync {
+            val capture=currentCapture()
+            diagnostic="phase=${if(previousCaptureId==null) "initial" else "recovery"}, sessionOpen=${engine().active()?.session?.isOpen}, requested=${engine().active()?.requestedUrl}, captured=${capture?.url}, title=${capture?.title}, captureChanged=${capture?.captureId!=previousCaptureId}"
+        }
+        assertTrue("Actual DOM must load from $host ($diagnostic)", loaded)
     }
 }
 

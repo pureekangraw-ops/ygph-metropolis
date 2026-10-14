@@ -13,8 +13,8 @@ public final class EvidenceRedactor {
     private static final Pattern URL = Pattern.compile("(?i)https?://[^\\s\\u0000-\\u001f<>\\\"']+");
     private static final Pattern ASSIGNMENT = Pattern.compile(
         "(?iu)([\\\"']?(?:access[_ -]?token|refresh[_ -]?token|id[_ -]?token|device[_ -]?token|owner[_ -]?token|token|api[_ -]?key|secret|client[_ -]?secret|password|passcode|authorization|cookie|รหัสผ่าน)[\\\"']?\\s*[:=]\\s*)"
-        + "(?:[\\\"][^\\\"]*[\\\"]|'[^']*'|(?:Bearer\\s+|Basic\\s+)?[^\\s,;\\u001f}\\]]+)");
-    private static final Pattern COOKIE = Pattern.compile("(?im)(?:set-cookie|cookie)\\s*[:=][^\\r\\n\\u001f]*");
+        + "(?:\\[REDACTED\\]|[\\\"][^\\\"]*[\\\"]|'[^']*'|(?:Bearer\\s+|Basic\\s+)?[^\\s,;\\u001f}\\]]+)");
+    private static final Pattern COOKIE = Pattern.compile("(?im)((?:set-cookie|cookie)\\s*[:=]\\s*)[^\\r\\n\\u001f]+" );
     private static final Pattern BEARER = Pattern.compile("(?i)\\b(?:Bearer|Basic)\\s+[A-Za-z0-9._~+/=-]+");
     private static final Pattern TOKEN = Pattern.compile(
         "(?i)\\b(?:eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+|[0-9a-f]{64}|(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]{8,})\\b");
@@ -31,27 +31,26 @@ public final class EvidenceRedactor {
     }
 
     public static String redact(String raw) {
-        return redactFragments(raw == null ? "" : raw, true);
+        return redactFragment(raw == null ? "" : raw, true);
     }
 
-    private static String redactFragments(String raw, boolean decode) {
-        raw = PRIVATE_KEY.matcher(raw).replaceAll(Matcher.quoteReplacement(HIDDEN));
-        raw = COOKIE.matcher(raw).replaceAll(Matcher.quoteReplacement("Cookie: " + HIDDEN));
-        Matcher urls = URL.matcher(raw);
+    private static String redactFragment(String raw, boolean decode) {
+        String text = PRIVATE_KEY.matcher(raw).replaceAll(Matcher.quoteReplacement(HIDDEN));
+        Matcher urls = URL.matcher(text);
         StringBuilder result = new StringBuilder();
         int end = 0;
         while (urls.find()) {
-            result.append(cleanPlain(raw.substring(end, urls.start()), decode));
+            result.append(cleanPlain(text.substring(end, urls.start()), decode));
+            // Retain URL path escapes; remove userinfo, query and fragment before text processing.
             result.append(cleanPlain(sanitizeUrl(urls.group()), false));
             end = urls.end();
         }
-        result.append(cleanPlain(raw.substring(end), decode));
+        result.append(cleanPlain(text.substring(end), decode));
         return result.toString();
     }
 
     private static String cleanPlain(String raw, boolean decode) {
         String text = raw;
-        // Decode encoded credential labels outside URLs; preserve normal URL path encoding.
         if (decode) {
             for (int i = 0; i < 3 && text.indexOf('%') >= 0; i++) {
                 try {
@@ -60,10 +59,9 @@ public final class EvidenceRedactor {
                     text = decoded;
                 } catch (Exception ignored) { break; }
             }
-            if (!text.equals(raw)) return redactFragments(text, false);
+            if (!text.equals(raw)) return redactFragment(text, false);
         }
-        text = PRIVATE_KEY.matcher(text).replaceAll(Matcher.quoteReplacement(HIDDEN));
-        text = COOKIE.matcher(text).replaceAll(Matcher.quoteReplacement("Cookie: " + HIDDEN));
+        text = COOKIE.matcher(text).replaceAll("$1" + HIDDEN);
         text = ASSIGNMENT.matcher(text).replaceAll("$1" + HIDDEN);
         text = BEARER.matcher(text).replaceAll(Matcher.quoteReplacement(HIDDEN));
         return TOKEN.matcher(text).replaceAll(Matcher.quoteReplacement(HIDDEN));

@@ -128,8 +128,12 @@ class GeckoBrowserEngine(
             if (view?.session === tab.session) view.releaseSession()
             if (tab.session.isOpen) tab.session.close()
             tab.session.open(runtime)
+            observer.bind(tab.session)
             if (state != null) {
-                runCatching { tab.session.restoreState(state) }.onFailure { tab.session.loadUri(tab.requestedUrl) }
+                runCatching { tab.session.restoreState(state) }
+                // Session-state callbacks may lag the last observed navigation.
+                // Reload the current destination after restoring history, not an older document.
+                tab.session.loadUri(tab.requestedUrl)
             } else tab.session.loadUri(tab.requestedUrl)
             if (tab.id == activeId && view != null) {
                 if (view.session !== tab.session) { view.releaseSession(); view.setSession(tab.session) }
@@ -153,3 +157,4 @@ data class DomCapture(val captureId: String, val frameId: String, val url: Strin
         }
     }
 }
+
