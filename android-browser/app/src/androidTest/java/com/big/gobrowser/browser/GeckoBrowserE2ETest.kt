@@ -174,8 +174,17 @@ class GeckoBrowserE2ETest {
             originalTabs = engine().list()
         }
         awaitPage("example.org")
-        rule.finishActivity()
-        instrumentation.waitForIdleSync()
+        val originalActivity=rule.activity
+        val destroyed=java.util.concurrent.CountDownLatch(1)
+        val monitor=androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+        val callback=androidx.test.runner.lifecycle.ActivityLifecycleCallback { activity, stage ->
+            if(activity===originalActivity&&stage==androidx.test.runner.lifecycle.Stage.DESTROYED)destroyed.countDown()
+        }
+        instrumentation.runOnMainSync {monitor.addLifecycleCallback(callback)}
+        try {
+            rule.finishActivity()
+            assertTrue("Original Activity must reach DESTROYED",destroyed.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        } finally {instrumentation.runOnMainSync {monitor.removeLifecycleCallback(callback)}}
         instrumentation.runOnMainSync { originalTabs.forEach { assertTrue("Destroyed Activity must release all sessions", !it.session.isOpen) } }
         rule.launchActivity(android.content.Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java))
         instrumentation.runOnMainSync { assertEquals("Restore must retain selected tab, not last record", selectedId, engine().active()!!.id) }
@@ -197,4 +206,5 @@ class GeckoBrowserE2ETest {
         assertTrue("Actual DOM must load from $host", loaded)
     }
 }
+
 
