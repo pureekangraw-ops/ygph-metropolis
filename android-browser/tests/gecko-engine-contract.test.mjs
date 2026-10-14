@@ -47,30 +47,22 @@ test('CI builds, tests, runs emulator acceptance and uploads named Gecko APK', (
 });
 
 
-test('GO OAuth callback is intercepted before Gecko loads the non-page callback URL', () => {
-  const engine = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserEngine.kt');
-  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  const client = readAndroid('app/src/main/java/com/big/gobrowser/transport/MetropolisMcpClient.kt');
-  assert.match(engine, /override fun onLoadRequest/);
-  assert.match(engine, /onNavigationIntercept\(tab, request\.uri\)/);
-  assert.match(engine, /AllowOrDeny\.DENY/);
-  assert.match(client, /HUB_OAUTH_STATE_MISMATCH/);
-  assert.match(client, /\/oauth\/observatory-callback/);
-  assert.match(activity, /pairObservatory\(\)/);
-  assert.match(activity, /engine\.navigate\(BrowserSettings\.OBSERVATORY_HOME_URL\)/);
+test('PANTHEON device pairing is direct and the old OAuth client is not used by the Gecko launcher', () => {
+  const activity=readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const client=readAndroid('app/src/main/java/com/big/gobrowser/transport/PantheonObservatoryClient.kt');
+  const map=readAndroid('app/src/main/java/com/big/gobrowser/outsideview/ObservatoryMapShare.kt');
+  const settings=readAndroid('app/src/main/java/com/big/gobrowser/browser/BrowserSettings.kt');
+  assert.match(settings,/observatory-web\\.pureekangraw\\.workers\\.dev/);
+  assert.match(client,/phatheon-workhub\\.pureekangraw\\.workers\\.dev\\/v1\\/observatory/);
+  assert.match(client,/AndroidDeviceCredentialStore/);
+  assert.match(client,/credentials\\.load\\(\\) == token/);
+  assert.match(client,/scope/);
+  assert.match(activity,/pantheon\\.pair\\(ownerToken\\)/);
+  assert.match(activity,/pantheon\\.publishSnapshot\\("browser", wire\\)/);
+  assert.match(map,/client\\.publishSnapshot\\("map", snapshot\\)/);
+  assert.doesNotMatch(activity,/metropolis\\.authorizationUrl|metropolis\\.publishSnapshot|metropolis\\.pairObservatory/);
+  assert.doesNotMatch(map,/MetropolisMcpClient/);
 });
-
-test('Gecko starts at Observatory map while API origin remains only for GO OAuth', () => {
-  const engine = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserEngine.kt');
-  const settings = readAndroid('app/src/main/java/com/big/gobrowser/browser/BrowserSettings.kt');
-  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  assert.match(engine, /fun open\(url: String = BrowserSettings\.OBSERVATORY_HOME_URL/);
-  assert.match(settings, /https:\/\/observatory-web\.pureekangraw\.workers\.dev\//);
-  assert.match(activity, /restored == MetropolisMcpClient\.ISSUER/);
-  assert.match(activity, /"เชื่อมต่อ"/);
-  assert.doesNotMatch(activity, /GeckoView .*\$\{if \(foreground\) "LIVE"/);
-});
-
 
 test('Observatory version stamp appears on browser and map and is sourced from CI checkout', () => {
   const gradle = readAndroid('app/build.gradle.kts');
@@ -79,7 +71,7 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
   const workflow = readRepo('.github/workflows/android-browser.yml');
   assert.match(gradle, /versionName = "0\.6\.1"/);
-  assert.match(gradle, /versionCode = 11/);
+  assert.match(gradle, /versionCode = 12/);
   assert.match(gradle, /buildConfigField\("String", "SOURCE_COMMIT"/);
   assert.match(gradle, /buildConfigField\("String", "BUILD_RUN_ID"/);
   assert.match(stamp, /BuildConfig\.VERSION_NAME/);
@@ -94,31 +86,13 @@ test('Observatory version stamp appears on browser and map and is sourced from C
   assert.equal((workflow.match(/ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/g) || []).length, 2);
 });
 
-test('connection diagnostics expose safe pairing evidence and require credential readback', () => {
-  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  assert.match(activity, /val actor = hubArrival\?\.actor \?: "ยังไม่เชื่อมต่อ"/);
-  assert.match(activity, /val eligibleWorks = hubArrival\?\.observatoryWorks\?\.size\?\.toString\(\) \?: "ยังไม่ตรวจ"/);
-  assert.match(activity, /val pairState = pair\?\.let \{ "จับคู่แล้ว · …\$\{it\.workId\.takeLast\(8\)\}" \} \?: "ยังไม่จับคู่"/);
-  assert.match(activity, /Hub: \$actor · Work หอดูดาวที่อ่านได้: \$eligibleWorks · การจับคู่: \$pairState · ผลล่าสุด:/);
-  assert.match(activity, /safeConnectionCode\(/);
-  assert.match(activity, /saved == null \|\| saved\.deviceId != pair\.deviceId/);
-  assert.match(activity, /metropolis\.pairObservatory\(""\)/);
-  assert.match(activity, /saved\.deviceId != pair\.deviceId/);
-  assert.match(activity, /saved\.publishSnapshot != pair\.publishSnapshot/);
-  assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
+test('connection diagnostics show safe PANTHEON status and never reveal credentials', () => {
+  const activity=readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  assert.match(activity,/connectionDiagnostics\\.text = "PANTHEON/);
+  assert.match(activity,/PAIR_READBACK_OK/);
+  assert.match(activity,/PANTHEON รับข้อมูลแล้ว/);
+  assert.doesNotMatch(activity,/connectionDiagnostics\\.text\\s*=\\s*.*(?:token|response\\.body)/i);
 });
-
-
-test('new Observatory connection diagnostics are Thai and keep safe status codes', () => {
-  const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  assert.match(activity, /Work หอดูดาวที่อ่านได้:/);
-  assert.match(activity, /การจับคู่: \$pairState · ผลล่าสุด:/);
-  assert.match(activity, /private fun connectionStatusLabel\(code: String\)/);
-  assert.match(activity, /"HTTP_406_ACCEPT_REQUIRED" -> "Hub ปฏิเสธรูปแบบคำขอ \(406\)"/);
-  assert.match(activity, /return "\$message \[\$code\]"/);
-  assert.doesNotMatch(activity, /connectionDiagnostics\.text\s*=\s*.*(?:token|response\.body)/i);
-});
-
 
 test('Gecko browser connects Android activity results for WebAuthn', () => {
   const activity = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
@@ -141,18 +115,20 @@ test('map image sharing uses MapLibre snapshot and private cache FileProvider',(
   assert.doesNotMatch(paths,/<external-path/);
 });
 
-test('PANTHEON WorkHub bridge uses explicit owner approval and verifies queue readback', () => {
-  const handoff = readAndroid('app/src/main/java/com/big/gobrowser/transport/PantheonWorkHubHandoff.kt');
-  const browser = readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
-  const map = readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
-  assert.match(handoff, /phatheon-workhub\.pureekangraw\.workers\.dev\/v1\/intent/);
-  assert.match(handoff, /setPositiveButton\("ส่งเข้าคิว", null\)/);
-  assert.match(handoff, /"CREATE_TASK"/);
-  assert.match(handoff, /"SHOW_TASK"/);
-  assert.match(handoff, /"QUEUED"/);
-  assert.match(handoff, /readback\.optString\("request_text"\) == request/);
-  assert.match(handoff, /tokenInput\.text\.clear\(\)/);
-  assert.doesNotMatch(handoff, /putExtra\([^\n]*token|SharedPreferences|credential\.save/);
+test('foreground observe-only handoff and local encrypted owner archives', () => {
+  const activity=readAndroid('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
+  const map=readAndroid('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
+  const local=readAndroid('app/src/main/java/com/big/gobrowser/ui/ObservatoryMemoryDialog.kt');
+  const client=readAndroid('app/src/main/java/com/big/gobrowser/transport/PantheonObservatoryClient.kt');
+  assert.match(activity,/handler\\.postDelayed\\(this, 5_000L\\)/);
+  assert.match(activity,/if \\(!foreground/);
+  assert.match(map,/mapShare\\.stop\\(\\)/);
+  assert.match(local,/AndroidDeviceCredentialStore/);
+  assert.match(client,/\\/disconnect/);
+  assert.doesNotMatch(activity,/PantheonWorkHubHandoff\\.present/);
+  assert.doesNotMatch(map,/PantheonWorkHubHandoff\\.present/);
+});
+\n]*token|SharedPreferences|credential\.save/);
   assert.match(browser, /"ส่งเข้า PANTHEON"/);
   assert.match(browser, /PantheonWorkHubHandoff\.present\(this, "WEB"/);
   assert.match(map, /PantheonWorkHubHandoff\.present\(this, "MAP"/);
