@@ -4,6 +4,7 @@ public final class EvidenceRedactorTest {
     @org.junit.Test public void exportRules() { main(new String[0]); }
     public static void main(String[] args) {
         String[] bad = {
+            "Cookie: csrf=ok; session=canary", "Set-Cookie: session=canary; Secure; HttpOnly",
             "token=canary", "API_KEY: canary", "\"access_token\": \"canary\"",
             "Authorization: Bearer canary", "PASSWORD = 'canary'", "token:\ncanary",
             "https://alice:canary@example.com/path?x=canary#canary",
@@ -15,7 +16,7 @@ public final class EvidenceRedactorTest {
             String clean = EvidenceRedactor.redact(input);
             if (clean.contains("canary")) throw new AssertionError("Credential leaked: " + input + " -> " + clean);
         }
-        String normal = "Open https://example.com/path and save this place · กรุงเทพ";
+        String normal = "Open https://example.com/a%20b and save this place · กรุงเทพ";
         if (!normal.equals(EvidenceRedactor.redact(normal))) throw new AssertionError("Normal evidence changed");
         if (!"https://example.com/a%20b".equals(EvidenceRedactor.sanitizeUrl("https://user:secret@example.com/a%20b?token=x#fragment")))
             throw new AssertionError("URL sanitation broke raw path");

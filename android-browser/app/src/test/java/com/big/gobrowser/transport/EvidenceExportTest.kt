@@ -22,4 +22,14 @@ class EvidenceExportTest {
         val input=JSONObject().put("text","See this unexpected device-secret-value on page")
         assertFalse(EvidenceExport.redactJson(input,"device-secret-value").toString().contains("device-secret-value"))
     }
+    @Test fun filtersNamedSecretFieldsAndContextAtTheModelBoundary() {
+        val context=JSONObject().put("browser",JSONObject().put("title","token=titleCanary")
+            .put("targets",JSONArray().put(JSONObject().put("signature","a\u001fhttps://example.com/?token=signatureCanary"))))
+            .put("api_key","fieldCanary")
+        val request=JSONObject().put("text","ordinary question").put("context",context)
+        val message=com.big.gobrowser.lyra.redactedModelMessage(request,"model-credential")
+        listOf("titleCanary","signatureCanary","fieldCanary").forEach {assertFalse(message.toString().contains(it))}
+        assertEquals("ordinary question",message.getString("text"))
+        assertTrue(context.toString().contains("signatureCanary"))
+    }
 }
