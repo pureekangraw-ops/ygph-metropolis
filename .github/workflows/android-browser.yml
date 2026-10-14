@@ -117,9 +117,17 @@ jobs:
                                compresslevel=9 if info.compress_type == ZIP_DEFLATED else None)
           PY
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f 4 "app/build/outputs/apk/debug/arm64-compressed-unsigned.apk" "app/build/outputs/apk/debug/arm64-compressed-aligned.apk"
+          # CI runners do not always use the conventional ~/.android debug keystore.
+          # Generate an explicitly ephemeral test signer; never treat as release signing.
+          signing_key="$RUNNER_TEMP/observatory-arm64-test.jks"
+          keytool -genkeypair -noprompt \
+            -keystore "$signing_key" -alias observatorydebug \
+            -keyalg RSA -keysize 3072 -validity 90 \
+            -storepass android -keypass android \
+            -dname "CN=Observatory Testing, OU=Development, O=BIG, C=TH"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
-            --ks "$HOME/.android/debug.keystore" \
-            --ks-key-alias androiddebugkey \
+            --ks "$signing_key" \
+            --ks-key-alias observatorydebug \
             --ks-pass pass:android \
             --key-pass pass:android \
             --out "$installer" "app/build/outputs/apk/debug/arm64-compressed-aligned.apk"
