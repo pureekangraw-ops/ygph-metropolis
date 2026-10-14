@@ -123,7 +123,7 @@ class GeckoBrowserActivity : Activity() {
         ObservatoryTheme.apply(this, root); PhoneLayout.fitSystemBars(root); setContentView(root)
         val geckoView = org.mozilla.geckoview.GeckoView(this); browserContainer.addView(geckoView, FrameLayout.LayoutParams(-1, -1))
         engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { address.setText(url) } }, { tab, capture -> onCapture(tab, capture) })
-                engine.restore()
+        engine.restore()
         // An earlier build persisted the Metropolis API root as a browser tab. It is not a web UI.
         val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')
         if (android.net.Uri.parse(restored).host == "metropolis.pureekangraw.workers.dev") engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
@@ -143,7 +143,7 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "ส่งเข้า PANTHEON")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
@@ -155,7 +155,6 @@ class GeckoBrowserActivity : Activity() {
                     7 -> showBrowserDetails()
                     8 -> shareCurrentPageToGo()
                     9 -> showOwnerAssist()
-                    10 -> sendWebToPantheon()
                 }
             }.setNegativeButton("ปิด", null).show()
     }
@@ -189,8 +188,8 @@ class GeckoBrowserActivity : Activity() {
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
-            .setItems(arrayOf("เชื่อมต่อใหม่", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
-                when (choice) { 0 -> connectHub(); 1 -> disconnect() }
+            .setItems(arrayOf("ดูสถานะ PANTHEON", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
+                when (choice) { 0 -> showBrowserDetails(); 1 -> disconnect() }
             }.show()
     }
     private fun updateSharingStatus() {
@@ -379,10 +378,6 @@ class GeckoBrowserActivity : Activity() {
             }.show()
     }
 
-    private fun sendWebToPantheon() {
-        val handoff = currentWebHandoff() ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
-        PantheonWorkHubHandoff.present(this, "WEB", handoff)
-    }
 
     /** Owner approves each action locally. The existing Gecko port performs a second target/signature check. */
     private fun showOwnerAssist() {
