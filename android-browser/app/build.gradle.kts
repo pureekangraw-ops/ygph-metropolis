@@ -21,8 +21,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.6.1"
+        versionCode = 12
+        versionName = "0.6.2"
         buildConfigField("String", "SOURCE_COMMIT", "\"$sourceRevision\"")
         buildConfigField("String", "BUILD_RUN_ID", "\"$buildRunId\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
