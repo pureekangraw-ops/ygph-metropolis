@@ -92,6 +92,60 @@ jobs:
             android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk.sha256
           retention-days: 14
 
+      - name: Build compact ARM64 installer
+        env:
+          OBSERVATORY_ARM64_ONLY: "true"
+        run: |
+          set -euxo pipefail
+          gradle --no-daemon :app:clean :app:assembleDebug
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk"
+          # Gradle compresses native libraries with a fast level by default;
+          # re-compress only the ARM64 APK with deflate level 9, then zipalign
+          # and sign again using this build's original debug key.
+          python3 - <<'PY'
+          from zipfile import ZipFile, ZIP_DEFLATED
+          source="app/build/outputs/apk/debug/app-debug.apk"
+          target="app/build/outputs/apk/debug/arm64-compressed-unsigned.apk"
+          with ZipFile(source) as src, ZipFile(target, "w", compression=ZIP_DEFLATED, compresslevel=9) as dst:
+              for info in src.infolist():
+                  if info.filename.startswith("META-INF/") and info.filename.endswith((".RSA",".DSA",".EC",".SF")):
+                      continue
+                  dst.writestr(info, src.read(info.filename),
+                               compress_type=info.compress_type,
+                               compresslevel=9 if info.compress_type == ZIP_DEFLATED else None)
+          PY
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f 4 "app/build/outputs/apk/debug/arm64-compressed-unsigned.apk" "app/build/outputs/apk/debug/arm64-compressed-aligned.apk"
+          # CI runners do not always use the conventional ~/.android debug keystore.
+          # Generate an explicitly ephemeral test signer; never treat as release signing.
+          signing_key="$RUNNER_TEMP/observatory-arm64-test.jks"
+          keytool -genkeypair -noprompt \
+            -keystore "$signing_key" -alias observatorydebug \
+            -keyalg RSA -keysize 3072 -validity 90 \
+            -storepass android -keypass android \
+            -dname "CN=Observatory Testing, OU=Development, O=BIG, C=TH"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --ks "$signing_key" \
+            --ks-key-alias observatorydebug \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out "$installer" "app/build/outputs/apk/debug/arm64-compressed-aligned.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$installer" | tee "$installer.signing.txt"
+          sha256sum "$installer" | tee "$installer.sha256"
+          bytes="$(stat -c %s "$installer")"
+          echo "ARM64_SIGNED_APK_BYTES=$bytes" >> "$GITHUB_STEP_SUMMARY"
+          test "$bytes" -lt 104857600
+      - name: Upload compact ARM64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YGG-Observatory-Gecko-ARM64
+          path: |
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.signing.txt
+          retention-days: 14
+
   observatory-emulator:
     needs: android-browser
     runs-on: ubuntu-latest

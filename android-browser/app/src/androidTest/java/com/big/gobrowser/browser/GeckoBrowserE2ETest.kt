@@ -43,15 +43,10 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun keyboardGoLoadsTwoExternalSitesAndObservesTheirActualDom() {
-        // The previous activity persisted a tab. Let its asynchronous Gecko restore complete
-        // before simulating the owner's next address entry, rather than racing startup.
-        val readyDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
-        var ready = false
-        while (!ready && System.nanoTime() < readyDeadline) {
-            instrumentation.runOnMainSync { ready = currentCapture() != null }
-            if (!ready) Thread.sleep(100)
-        }
-        assertTrue("Restored browser must produce its initial DOM before navigation", ready)
+        // Do not require the startup home page to be online before navigating:
+        // a restored tab may still be loading or offline on the emulator. Verify
+        // real DOM for each owner-entered destination below instead.
+        instrumentation.waitForIdleSync()
         for (host in listOf("example.com", "example.org")) {
             instrumentation.runOnMainSync {
                 val address = views(rule.activity.window.decorView).filterIsInstance<EditText>().single()
