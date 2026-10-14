@@ -26,7 +26,7 @@ class OutsideViewActivity : Activity() {
     private lateinit var gpsStatus:TextView
     private lateinit var location:ForegroundLocationController
     private var foreground=false
-    private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();handler.postDelayed(this,5_000)}}}
+    private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();handler.postDelayed(this,30_000)}}}
     private val handler=Handler(Looper.getMainLooper())
     private val worker=Executors.newSingleThreadExecutor()
     private val commands=java.util.ArrayDeque<MapCommand>()
@@ -51,7 +51,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
         tools.addView(button("เชื่อมต่อ PANTHEON"){startActivity(Intent(this,GeckoBrowserActivity::class.java))})
         tools.addView(button("ส่งภาพแผนที่"){shareVisibleMapImage()})
-        shareButton=button("เริ่มส่งข้อมูล"){if(mapShare.sharing){mapShare.stop();shareButton.text="เริ่มส่งข้อมูล"}else if(mapShare.start())shareButton.text="หยุดส่งข้อมูล";updateSharingStatus()}
+        shareButton=button("ส่งแผนที่เข้า PANTHEON"){mapShare.captureOnce();updateSharingStatus()}
         tools.addView(shareButton)
         tools.addView(button("เก็บช่วงนี้"){ObservatoryMemoryDialog.preserve(this,"map",currentMapHandoff())})
         tools.addView(button("ที่เก็บไว้"){ObservatoryMemoryDialog.saved(this)})
@@ -200,8 +200,8 @@ class OutsideViewActivity : Activity() {
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
-    override fun onResume(){super.onResume();foreground=true;busy=store.load().pending!=null;renderer.onResume();location.resume();if(mapShare.isPaired()&&mapShare.start())shareButton.text="หยุดส่งข้อมูล";handler.post(statusTick)}
-    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();shareButton.text="เริ่มส่งข้อมูล";renderer.onPause();updateSharingStatus();super.onPause()}
+    override fun onResume(){super.onResume();foreground=true;busy=store.load().pending!=null;renderer.onResume();location.resume();handler.post(statusTick);updateSharingStatus()}
+    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
     override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
