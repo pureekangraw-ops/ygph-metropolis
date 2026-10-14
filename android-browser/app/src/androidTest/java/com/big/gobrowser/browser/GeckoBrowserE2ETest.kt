@@ -136,7 +136,9 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun killedSessionRecoveryReattachesTheExistingView() {
+        var previousCaptureId: String? = null
         instrumentation.runOnMainSync {
+            previousCaptureId = currentCapture()?.captureId
             val tab = engine().active()!!
             val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
             tab.session.close()
@@ -145,7 +147,7 @@ class GeckoBrowserE2ETest {
             org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
             engine().navigate("https://example.com")
         }
-        awaitPage("example.com")
+        awaitPage("example.com", previousCaptureId)
     }
 
     @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
@@ -179,7 +181,7 @@ class GeckoBrowserE2ETest {
         awaitPage("example.org")
     }
 
-    private fun awaitPage(host: String) {
+    private fun awaitPage(host: String, previousCaptureId: String? = null) {
         val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
         var loaded = false
         while (!loaded && System.nanoTime() < deadline) {
@@ -187,6 +189,7 @@ class GeckoBrowserE2ETest {
                 val capture = currentCapture()
                 loaded = capture != null && android.net.Uri.parse(capture.url).host == host
                     && capture.title == "Example Domain" && capture.text.isNotBlank()
+                    && capture.captureId != previousCaptureId
             }
             if (!loaded) Thread.sleep(100)
         }
