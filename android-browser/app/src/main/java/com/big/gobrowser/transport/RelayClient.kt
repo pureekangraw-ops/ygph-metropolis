@@ -99,7 +99,7 @@ class HttpRelayClient(
         validateRelayAck(this, expectedId, expectedSequence)
 
     companion object {
-        internal fun snapshotJson(snapshot: Snapshot) = JSONObject().apply {
+        internal fun snapshotJson(snapshot: Snapshot) = EvidenceExport.redactJson(JSONObject().apply {
             put("deviceId", snapshot.deviceId)
             put("tabId", snapshot.tabId)
             put("captureId", snapshot.captureId)
@@ -130,7 +130,7 @@ class HttpRelayClient(
                     put("right", target.right); put("bottom", target.bottom)
                 })
             } })
-        }
+        })
 
         private fun receiptJson(receipt: Receipt) = JSONObject().apply {
             put("commandId", receipt.commandId)
@@ -180,4 +180,5 @@ internal fun validateRelayAck(json: JSONObject, expectedId: String, expectedSequ
         throw RelayProtocolException("ACK mismatch")
     return ack
 }
+
 

@@ -34,14 +34,7 @@ object ObservatoryMemoryDialog {
                 runCatching {
                     val credential = store(activity)
                     val existing = JSONArray(credential.load() ?: "[]")
-                    val records = JSONArray()
-                    records.put(JSONObject()
-                        .put("view", view)
-                        .put("savedAt", System.currentTimeMillis())
-                        .put("text", evidence.take(16000)))
-                    for (index in 0 until minOf(19, existing.length())) {
-                        records.put(existing.getJSONObject(index))
-                    }
+                    val records = SavedEvidenceArchive.prepend(existing, view, evidence, System.currentTimeMillis())
                     credential.save(records.toString())
                 }.onSuccess {
                     Toast.makeText(activity, "เก็บบนเครื่องแล้ว (เข้ารหัส)", Toast.LENGTH_SHORT).show()
@@ -70,11 +63,12 @@ object ObservatoryMemoryDialog {
             .setItems(labels) { _, index ->
                 val item = records.getJSONObject(index)
                 AlertDialog.Builder(activity).setTitle(labels[index])
-                    .setMessage(item.optString("text").take(16000))
+                    .setMessage(com.big.gobrowser.transport.EvidenceExport.redactText(item.optString("text")))
                     .setPositiveButton("คัดลอก") { _, _ ->
                         activity.getSystemService(ClipboardManager::class.java)
-                            .setPrimaryClip(ClipData.newPlainText("Observatory saved evidence", item.toString()))
+                            .setPrimaryClip(ClipData.newPlainText("Observatory saved evidence", com.big.gobrowser.transport.EvidenceExport.redactJson(item).toString()))
                     }.setNegativeButton("ปิด", null).show()
             }.setNegativeButton("ปิด", null).show()
     }
 }
+

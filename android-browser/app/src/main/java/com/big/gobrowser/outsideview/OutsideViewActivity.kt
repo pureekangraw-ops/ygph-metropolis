@@ -45,31 +45,20 @@ class OutsideViewActivity : Activity() {
         gpsStatus=ObservatoryTheme.status(this).apply {text="ตำแหน่งฉัน · กดเพื่อใช้ GPS จากเครื่อง"}
         root.addView(status)
         val tools=LinearLayout(this)
-        tools.addView(button("ไลร่า"){LyraDialog.show(this,"OUTSIDE"){context()}})
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
-        tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
-        tools.addView(button("เชื่อมต่อ PANTHEON"){startActivity(Intent(this,GeckoBrowserActivity::class.java))})
-        tools.addView(button("ส่งภาพแผนที่"){shareVisibleMapImage()})
-        shareButton=button("ส่งแผนที่เข้า PANTHEON"){mapShare.captureOnce();updateSharingStatus()}
-        tools.addView(shareButton)
-        tools.addView(button("เก็บช่วงนี้"){ObservatoryMemoryDialog.preserve(this,"map",currentMapHandoff())})
-        tools.addView(button("ที่เก็บไว้"){ObservatoryMemoryDialog.saved(this)})
-        tools.addView(button("กลับ"){finish()})
+        tools.addView(button("ตำแหน่งฉัน"){location.request()})
+        tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
-        val files=LinearLayout(this)
-        files.addView(button("นำเข้า PMTiles"){startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)})
-        files.addView(button("ลองแสดงใหม่"){renderer.reloadStyle()})
-        files.addView(button("โน้ต"){noteDialog("outside","พื้นที่นี้")})
-        files.addView(button("ตำแหน่งฉัน"){location.request()})
-        root.addView(scroll(files))
+        shareButton=button("ส่งแผนที่เข้า PANTHEON"){mapShare.captureOnce();updateSharingStatus()}
+        root.addView(shareButton)
         root.addView(gpsStatus)
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
         root.addView(TextView(this).apply {text=packageStore.active()?.attribution?:"© OpenStreetMap contributors · openstreetmap.org/copyright";textSize=12f;setOnClickListener {startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.openstreetmap.org/copyright")))}})
         ObservatoryTheme.apply(this,root)
         PhoneLayout.fitSystemBars(root)
         setContentView(root)
-        renderer=MapLibreOutsideRenderer(host,packageStore)
+        renderer=MapLibreOutsideRenderer(host,packageStore,savedInstanceState)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
         mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
@@ -77,10 +66,32 @@ class OutsideViewActivity : Activity() {
         renderer.onSelect=::pinDialog
         renderer.onError={status.text=it}
         renderer.onConfirmed={confirmation->
-            if(confirmation.commandId.startsWith("screen-"))store.confirmScreen(confirmation)
+            if(confirmation.commandId.startsWith("screen-")) {
+                store.confirmScreen(confirmation)
+                busy=false
+                if(confirmation.error==null)pump()
+                updateSharingStatus()
+            }
             else {busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";pump()}
         }
-        renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
+        renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{busy=true;renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){}}}
+    }
+    private fun showMapTools() {
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ")
+        AlertDialog.Builder(this).setTitle("เครื่องมือแผนที่").setItems(labels){_,choice->
+            when(choice){
+                0->LyraDialog.show(this,"OUTSIDE"){context()}
+                1->shareMapToGo()
+                2->shareVisibleMapImage()
+                3->startActivity(Intent(this,GeckoBrowserActivity::class.java))
+                4->ObservatoryMemoryDialog.preserve(this,"map",currentMapHandoff())
+                5->ObservatoryMemoryDialog.saved(this)
+                6->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)
+                7->renderer.reloadStyle()
+                8->noteDialog("outside","พื้นที่นี้")
+                9->finish()
+            }
+        }.setNegativeButton("ปิด",null).show()
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
     private fun pump(){
@@ -178,7 +189,7 @@ class OutsideViewActivity : Activity() {
             .put("pins", pins)
             .put("truncated", state.pins.size > 100)
             .put("note", "Camera and saved pins only; not a live map image or GPS proof")
-        return "YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\\n" + evidence.toString(2)
+        return com.big.gobrowser.transport.EvidenceExport.redactText("YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\n" + com.big.gobrowser.transport.EvidenceExport.redactJson(evidence).toString(2))
     }
 
     private fun shareMapToGo() {
@@ -207,4 +218,5 @@ class OutsideViewActivity : Activity() {
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
     override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState)}
 }
+
 

@@ -10,6 +10,7 @@ collect_evidence() {
     timeout 15 adb pull "/data/local/tmp/$name.png" app/build/emulator-evidence/ || true
   done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true
+  timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-flow.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-mobile-browser.png app/build/emulator-evidence/ || true
@@ -35,4 +36,5 @@ if [ "$status" -ne 0 ]; then
   done
 fi
 exit "$status"
+
 

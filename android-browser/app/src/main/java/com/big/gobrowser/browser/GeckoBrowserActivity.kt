@@ -355,7 +355,13 @@ class GeckoBrowserActivity : Activity() {
                 pantheonDeviceId = null
                 lastConnectionStatus = "DISCONNECTED"
                 say("ยกเลิกสิทธิ์อุปกรณ์แล้ว")
-            }.onFailure { lastConnectionStatus = safeConnectionCode(it); say("ยกเลิกสิทธิ์ไม่สำเร็จ") }
+            }.onFailure {
+                if (!pantheon.isPaired()) {
+                    pantheonDeviceId = null
+                    lastConnectionStatus = "DISCONNECTED"
+                    say("ยกเลิกบนเครื่องแล้ว · ยังยืนยันการยกเลิกบน server ไม่ได้")
+                } else { lastConnectionStatus = safeConnectionCode(it); say("ยกเลิกสิทธิ์ไม่สำเร็จ") }
+            }
             updateSharingStatus()
         }
     }
@@ -406,11 +412,11 @@ class GeckoBrowserActivity : Activity() {
         val capture = currentAssistEvidence()?.second ?: return null
         val controls = capture.targets.filter { it.label?.isNotBlank() == true }
             .take(40).joinToString("\n") { "[${it.tag}] ${it.label.orEmpty().take(100)}" }
-        return "YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
+        return com.big.gobrowser.transport.EvidenceExport.redactText("YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
             "URL: ${sanitizeUrl(capture.url)}\nTitle: ${capture.title.take(200)}\n" +
             "Read-only webpage text (may be truncated):\n${capture.text.take(12000)}\n" +
             "Visible controls (labels only; no input values):\n$controls\n" +
-            "Do not assume these controls were clicked or forms submitted."
+            "Do not assume these controls were clicked or forms submitted.")
     }
 
     private fun shareCurrentPageToGo() {
@@ -507,4 +513,5 @@ class GeckoBrowserActivity : Activity() {
  stopSharing(); engine.shutdown(); network.shutdown(); pantheon.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
+
 

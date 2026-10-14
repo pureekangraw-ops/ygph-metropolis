@@ -23,7 +23,7 @@ import okhttp3.Cache
 import java.io.File
 
 /** Actual MapLibre SDK surface. Confirmation waits for matching source revision and a fully rendered SDK frame. */
-class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStore:LocalMapPackageStore?=null):MapRenderer {
+class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStore:LocalMapPackageStore?=null,savedInstanceState:Bundle?=null):MapRenderer {
     val mapView:MapView
     private var map:MapLibreMap?=null
     private var locationFix:Point?=null
@@ -47,17 +47,19 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         val client=OkHttpClient.Builder().cache(Cache(File(host.context.cacheDir,"map-http"),64L*1024*1024))
             .addInterceptor {chain->chain.proceed(chain.request().newBuilder().header("User-Agent","YGG-Observatory/0.2 (+https://github.com/pureekangraw-ops/ygph-metropolis)").build())}.build()
         HttpRequestUtil.setOkHttpClient(client);HttpRequestUtil.setPrintRequestUrlOnFailure(false)
-        mapView=MapView(host.context);host.addView(mapView,ViewGroup.LayoutParams(-1,-1));mapView.onCreate(null)
+        mapView=MapView(host.context);host.addView(mapView,ViewGroup.LayoutParams(-1,-1));mapView.onCreate(savedInstanceState)
         mapView.addOnDidFailLoadingMapListener {_->onError("Map loading failed · retry from map tools");failPending("map-load-failed")}
         mapView.addOnWillStartRenderingFrameListener {if(updatesComplete&&cameraComplete)frameStarted=true}
         mapView.addOnDidFinishRenderingFrameListener(MapView.OnDidFinishRenderingFrameListener {fully,_,_->if(fully)confirmFrame()})
-        mapView.getMapAsync {m->map=m;m.cameraPosition=CameraPosition.Builder().target(LatLng(13.75,100.5)).zoom(11.0).build();m.addOnMapLongClickListener {p->onSelect(Point(p.longitude,p.latitude));true};reloadStyle()}
+        mapView.getMapAsync {m->map=m;if(savedInstanceState==null)m.cameraPosition=CameraPosition.Builder().target(LatLng(13.75,100.5)).zoom(11.0).build();m.addOnMapLongClickListener {p->onSelect(Point(p.longitude,p.latitude));true};reloadStyle()}
     }
     override val foregroundReady:Boolean get()=resumed && map?.style?.isFullyLoaded==true
     override val styleGeneration:Long get()=generation
     fun reloadStyle(online:Boolean=true) {
         cancel()
+        val requestedGeneration=generation
         map?.setStyle(Style.Builder().fromJson(MapStyleFactory.style(packageStore?.active(),online))) {style->
+            if(requestedGeneration!=generation)return@setStyle
             sourceIds.forEach {style.addSource(GeoJsonSource(it,"{\"type\":\"FeatureCollection\",\"features\":[]}",GeoJsonOptions().withSynchronousUpdate(true)))}
             style.addLayer(FillLayer("zone-fill",sourceIds[0]).withProperties(fillColor(color("#73b4d4")),fillOpacity(.25f)))
             style.addLayer(LineLayer("grid-lines",sourceIds[1]).withProperties(lineColor(color("#315f8e")),lineWidth(size(2,5,4))))
@@ -160,3 +162,4 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     fun onLowMemory()=mapView.onLowMemory()
     fun onSaveInstanceState(bundle:Bundle)=mapView.onSaveInstanceState(bundle)
 }
+
