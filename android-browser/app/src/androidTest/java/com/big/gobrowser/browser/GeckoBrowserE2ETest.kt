@@ -143,7 +143,9 @@ class GeckoBrowserE2ETest {
             tab.session.contentDelegate!!.onKill(tab.session)
             assertTrue("Recovered session must be open", tab.session.isOpen)
             org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
+            engine().navigate("https://example.com")
         }
+        awaitPage("example.com")
     }
 
     @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
@@ -157,6 +159,38 @@ class GeckoBrowserE2ETest {
             org.junit.Assert.assertSame(active.session, view.session)
             assertTrue(active.session.isOpen)
         }
+    }
+
+    @Test fun reopeningActivityRestoresSelectedTabAndLoadsItsPage() {
+        lateinit var originalTabs: List<GeckoBrowserEngine.GeckoTab>
+        lateinit var selectedId: String
+        instrumentation.runOnMainSync {
+            selectedId = engine().open("https://example.org")
+            engine().open("https://example.com")
+            engine().select(selectedId)
+            originalTabs = engine().list()
+        }
+        awaitPage("example.org")
+        rule.finishActivity()
+        instrumentation.waitForIdleSync()
+        instrumentation.runOnMainSync { originalTabs.forEach { assertTrue("Destroyed Activity must release all sessions", !it.session.isOpen) } }
+        rule.launchActivity(android.content.Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java))
+        instrumentation.runOnMainSync { assertEquals("Restore must retain selected tab, not last record", selectedId, engine().active()!!.id) }
+        awaitPage("example.org")
+    }
+
+    private fun awaitPage(host: String) {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
+        var loaded = false
+        while (!loaded && System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                val capture = currentCapture()
+                loaded = capture != null && android.net.Uri.parse(capture.url).host == host
+                    && capture.title == "Example Domain" && capture.text.isNotBlank()
+            }
+            if (!loaded) Thread.sleep(100)
+        }
+        assertTrue("Actual DOM must load from $host", loaded)
     }
 }
 

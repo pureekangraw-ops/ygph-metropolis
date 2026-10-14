@@ -68,18 +68,19 @@ class GeckoBrowserEngine(
         val tabId = id ?: java.util.UUID.randomUUID().toString(); val session = GeckoSession(); val tab = GeckoTab(tabId, session, url)
         check(!disposed) { "BROWSER_DESTROYED" }
         bind(tab); tabs[tabId] = tab; session.open(runtime); select(tabId)
-        if (state != null) session.restoreState(state) else session.loadUri(url)
+        if (state != null) runCatching { session.restoreState(state) }.onFailure { session.loadUri(url) } else session.loadUri(url)
         persist(); return tabId
     }
     fun restore() {
         if (tabs.isNotEmpty()) return
+        val savedActiveId = prefs.getString("active", null)
         val records = runCatching { JSONArray(prefs.getString("tabs", "[]")) }.getOrDefault(JSONArray())
         for (i in 0 until records.length()) {
             val record = records.optJSONObject(i) ?: continue; val url = record.optString("url"); val id = record.optString("id")
             if (id.isNotBlank() && BrowserSettings.isAllowedUrl(url)) open(url, id, recovery.read(id))
         }
         if (tabs.isEmpty()) open()
-        prefs.getString("active", null)?.takeIf(tabs::containsKey)?.let(::select)
+        savedActiveId?.takeIf(tabs::containsKey)?.let(::select)
     }
     fun select(id: String) {
         if (disposed || !tabs.containsKey(id)) return
