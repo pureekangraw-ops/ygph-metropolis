@@ -73,8 +73,8 @@ test('build provenance and upgrade identity remain stable',()=>{
   const workflow=root('.github/workflows/android-browser.yml');
   const browser=file('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   assert.match(gradle,/applicationId = "com\.big\.gobrowser"/);
-  assert.match(gradle,/versionName = "0\.6\.3"/);
-  assert.match(gradle,/versionCode = 13/);
+  assert.match(gradle,/versionName = "0\.6\.4"/);
+  assert.match(gradle,/versionCode = 14/);
   assert.match(stamp,/BuildConfig\.SOURCE_COMMIT/);
   assert.match(stamp,/BuildConfig\.BUILD_RUN_ID/);
   assert.match(browser,/ObserverSession\("local-device", "\$\{BuildConfig\.VERSION_NAME\}-gecko"\)/);
