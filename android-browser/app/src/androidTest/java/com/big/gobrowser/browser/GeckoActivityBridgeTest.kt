@@ -65,4 +65,20 @@ class GeckoActivityBridgeTest {
         assertTrue(done.await(5, TimeUnit.SECONDS))
         assertEquals(setOf("AUTHENTICATION_ALREADY_PENDING", "ACTIVITY_DESTROYED", "ACTIVITY_NOT_FOREGROUND"), errors.toSet())
     }
+
+    @Test fun launchFailureReportsSafeStageAndPermitsAnotherAttempt() {
+        val done = CountDownLatch(1)
+        val stages = mutableListOf<String>()
+        instrumentation.runOnMainSync {
+            val bridge = GeckoActivityBridge({ true }, onStatus = { stages.add(it) }) { _, _ ->
+                throw android.content.IntentSender.SendIntentException("provider unavailable")
+            }
+            bridge.onStartActivityForResult(intent()).accept({ done.countDown() }, { done.countDown() })
+            assertEquals(listOf("PROVIDER_REQUESTED", "PROVIDER_LAUNCH_FAILED"), stages)
+            stages.clear()
+            bridge.onStartActivityForResult(intent())
+            assertEquals(listOf("PROVIDER_REQUESTED", "PROVIDER_LAUNCH_FAILED"), stages)
+        }
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+    }
 }

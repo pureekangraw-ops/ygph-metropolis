@@ -120,5 +120,43 @@ class GeckoBrowserE2ETest {
         val field = GeckoBrowserActivity::class.java.getDeclaredField("latestDom").apply { isAccessible = true }
         return (field.get(rule.activity) as? Pair<*, *>)?.second as? DomCapture
     }
+
+    @Test fun editingAddressIsNotOverwrittenByPageNavigation() {
+        instrumentation.runOnMainSync {
+            val address = views(rule.activity.window.decorView).filterIsInstance<EditText>().single()
+            val tab = engine().active()!!
+            address.requestFocus()
+            address.setText("example.org/draft")
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/redirect", emptyList(), false)
+            assertEquals("example.org/draft", address.text.toString())
+            address.clearFocus()
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/final", emptyList(), false)
+            assertEquals("https://example.com/final", address.text.toString())
+        }
+    }
+
+    @Test fun killedSessionRecoveryReattachesTheExistingView() {
+        instrumentation.runOnMainSync {
+            val tab = engine().active()!!
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            tab.session.close()
+            tab.session.contentDelegate!!.onKill(tab.session)
+            assertTrue("Recovered session must be open", tab.session.isOpen)
+            org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
+        }
+    }
+
+    @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
+        instrumentation.runOnMainSync {
+            val previous = engine().active()!!
+            val selected = engine().open("https://example.org")
+            val active = engine().active()!!
+            engine().close(previous.id)
+            assertEquals(selected, engine().active()!!.id)
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            org.junit.Assert.assertSame(active.session, view.session)
+            assertTrue(active.session.isOpen)
+        }
+    }
 }
 
