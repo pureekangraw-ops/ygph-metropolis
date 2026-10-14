@@ -4,66 +4,77 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.widget.EditText
 import android.widget.Toast
-import com.big.gobrowser.transport.MetropolisMcpClient
+import com.big.gobrowser.transport.AndroidDeviceCredentialStore
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.DateFormat
 import java.util.Date
 
-/** Owner-selected permanent ranges, retained separately from the live 15-second history. */
+/**
+ * Explicitly saved local Observatory evidence stays separate from 30s cloud
+ * snapshots. Keystore AES-GCM protects it; no Metro/owner credentials are used.
+ * Historical Metro archives remain on their former server and are NOT erased.
+ */
 object ObservatoryMemoryDialog {
-    fun preserve(activity: Activity, client: MetropolisMcpClient, view: String) {
-        // Capture the range immediately; naming it must not race its expiration.
-        client.memory(JSONObject().put("action", "preserve").put("view", view)) { result ->
-            if (activity.isFinishing || activity.isDestroyed) return@memory
-            result.onSuccess { saved ->
-                val count = saved.optJSONArray("items")?.length() ?: 0
-                Toast.makeText(activity, "เก็บถาวรแล้ว $count รอบ · เปิดดูได้ในที่เก็บไว้", Toast.LENGTH_LONG).show()
-                show(activity, saved)
-            }.onFailure { Toast.makeText(activity, "ยังเก็บไม่ได้ · ต้องมีข้อมูลส่งถึงฮอลใน 15 วินาทีล่าสุด", Toast.LENGTH_LONG).show() }
-        }
-    }
+    private fun store(activity: Activity) = AndroidDeviceCredentialStore(
+        activity, "pantheon-observatory-saved-key", "pantheon-observatory-saved-data"
+    )
 
-    fun saved(activity: Activity, client: MetropolisMcpClient) {
-        client.memory(JSONObject().put("action", "list")) { result ->
-            if (activity.isFinishing || activity.isDestroyed) return@memory
-            result.onSuccess { response ->
-                val items = response.optJSONArray("items")
-                if (items == null || items.length() == 0) {
-                    Toast.makeText(activity, "ยังไม่มีช่วงที่เก็บไว้", Toast.LENGTH_SHORT).show()
-                    return@onSuccess
-                }
-                val records = (0 until items.length()).map { items.getJSONObject(it) }
-                val labels = records.map { item -> "${DateFormat.getDateTimeInstance().format(Date(item.optLong("savedAt")))} · ${item.optInt("count")} รอบ" }
-                AlertDialog.Builder(activity).setTitle("ช่วงที่เก็บถาวร").setItems(labels.toTypedArray()) { _, index ->
-                    client.memory(JSONObject().put("action", "read").put("savedId", records[index].getString("id"))) { read ->
-                        if (!activity.isFinishing && !activity.isDestroyed) read.onSuccess { show(activity, it) }.onFailure {
-                            Toast.makeText(activity, "อ่านช่วงที่เก็บไว้ไม่ได้", Toast.LENGTH_SHORT).show()
-                        }
+    fun preserve(activity: Activity, view: String, evidence: String?) {
+        if (view !in setOf("browser", "map") || evidence.isNullOrBlank()) {
+            Toast.makeText(activity, "ยังไม่มีข้อมูลสดให้เก็บ", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(activity)
+            .setTitle("เก็บช่วงนี้บนเครื่อง")
+            .setMessage("บันทึกหลักฐานที่เลือกอย่างเข้ารหัสไว้บนมือถือ จะแยกจากข้อมูลชั่วคราว 30 วินาที")
+            .setNegativeButton("ยกเลิก", null)
+            .setPositiveButton("เก็บถาวร") { _, _ ->
+                runCatching {
+                    val credential = store(activity)
+                    val existing = JSONArray(credential.load() ?: "[]")
+                    val records = JSONArray()
+                    records.put(JSONObject()
+                        .put("view", view)
+                        .put("savedAt", System.currentTimeMillis())
+                        .put("text", evidence.take(16000)))
+                    for (index in 0 until minOf(19, existing.length())) {
+                        records.put(existing.getJSONObject(index))
                     }
-                }.setNegativeButton("ปิด", null).show()
-            }.onFailure { Toast.makeText(activity, "โหลดที่เก็บไว้ไม่ได้", Toast.LENGTH_SHORT).show() }
-        }
+                    credential.save(records.toString())
+                }.onSuccess {
+                    Toast.makeText(activity, "เก็บบนเครื่องแล้ว (เข้ารหัส)", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                    Toast.makeText(activity, "เก็บหลักฐานไม่สำเร็จ", Toast.LENGTH_SHORT).show()
+                }
+            }.show()
     }
 
-    private fun show(activity: Activity, saved: JSONObject) {
-        val items = saved.optJSONArray("items")
-        val summary = buildString {
-            append("อ้างอิง: ${saved.optString("evidenceRef")}\n")
-            for (index in 0 until (items?.length() ?: 0)) {
-                val record = items!!.getJSONObject(index)
-                val snapshot = record.getJSONObject("snapshot")
-                append("\nรอบ ${index + 1} · ${DateFormat.getTimeInstance().format(Date(snapshot.optLong("capturedAtEpochMs")))}\n")
-                append(snapshot.optString("url")); append('\n')
-                append(if (record.optString("view") == "browser") snapshot.optString("text").take(4000) else snapshot.optJSONObject("state")?.toString(2)?.take(4000))
-                append('\n')
-            }
+    fun saved(activity: Activity) {
+        val records = runCatching { JSONArray(store(activity).load() ?: "[]") }.getOrNull()
+        if (records == null) {
+            Toast.makeText(activity, "อ่านข้อมูลที่เก็บไว้ไม่ได้", Toast.LENGTH_SHORT).show()
+            return
         }
-        AlertDialog.Builder(activity).setTitle("ข้อมูลที่เก็บถาวร").setMessage(summary)
-            .setPositiveButton("คัดลอกใช้ต่อ") { _, _ ->
-                activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Observatory", saved.toString(2)))
-                Toast.makeText(activity, "คัดลอกข้อมูลพร้อมแหล่งอ้างอิงแล้ว", Toast.LENGTH_SHORT).show()
+        if (records.length() == 0) {
+            Toast.makeText(activity, "ยังไม่มีข้อมูลที่เก็บบนเครื่อง (ข้อมูลเก่าบน Metro ยังไม่ได้ย้าย)", Toast.LENGTH_LONG).show()
+            return
+        }
+        val labels = (0 until records.length()).map { index ->
+            val item = records.getJSONObject(index)
+            "${if (item.optString("view") == "map") "แผนที่" else "เว็บ"} · " +
+                DateFormat.getDateTimeInstance().format(Date(item.optLong("savedAt")))
+        }.toTypedArray()
+        AlertDialog.Builder(activity).setTitle("ข้อมูลที่เก็บบนเครื่อง")
+            .setItems(labels) { _, index ->
+                val item = records.getJSONObject(index)
+                AlertDialog.Builder(activity).setTitle(labels[index])
+                    .setMessage(item.optString("text").take(16000))
+                    .setPositiveButton("คัดลอก") { _, _ ->
+                        activity.getSystemService(ClipboardManager::class.java)
+                            .setPrimaryClip(ClipData.newPlainText("Observatory saved evidence", item.toString()))
+                    }.setNegativeButton("ปิด", null).show()
             }.setNegativeButton("ปิด", null).show()
     }
 }
