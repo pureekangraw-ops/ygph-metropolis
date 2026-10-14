@@ -120,5 +120,81 @@ class GeckoBrowserE2ETest {
         val field = GeckoBrowserActivity::class.java.getDeclaredField("latestDom").apply { isAccessible = true }
         return (field.get(rule.activity) as? Pair<*, *>)?.second as? DomCapture
     }
+
+    @Test fun editingAddressIsNotOverwrittenByPageNavigation() {
+        instrumentation.runOnMainSync {
+            val address = views(rule.activity.window.decorView).filterIsInstance<EditText>().single()
+            val tab = engine().active()!!
+            address.requestFocus()
+            address.setText("example.org/draft")
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/redirect", emptyList(), false)
+            assertEquals("example.org/draft", address.text.toString())
+            address.clearFocus()
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/final", emptyList(), false)
+            assertEquals("https://example.com/final", address.text.toString())
+        }
+    }
+
+    @Test fun killedSessionRecoveryReattachesTheExistingView() {
+        instrumentation.runOnMainSync { engine().navigate("https://example.com") }
+        awaitPage("example.com")
+        var previousCaptureId: String? = null
+        instrumentation.runOnMainSync {
+            previousCaptureId = currentCapture()?.captureId
+            val tab = engine().active()!!
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            tab.session.close()
+            tab.session.contentDelegate!!.onKill(tab.session)
+            assertTrue("Recovered session must be open", tab.session.isOpen)
+            org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
+        }
+        awaitPage("example.com", previousCaptureId)
+    }
+
+    @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
+        instrumentation.runOnMainSync {
+            val previous = engine().active()!!
+            val selected = engine().open("https://example.org")
+            val active = engine().active()!!
+            engine().close(previous.id)
+            assertEquals(selected, engine().active()!!.id)
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            org.junit.Assert.assertSame(active.session, view.session)
+            assertTrue(active.session.isOpen)
+        }
+    }
+
+    @Test fun reopeningActivityRestoresSelectedTabAndLoadsItsPage() {
+        lateinit var originalTabs: List<GeckoBrowserEngine.GeckoTab>
+        lateinit var selectedId: String
+        instrumentation.runOnMainSync {
+            selectedId = engine().open("https://example.org")
+            engine().open("https://example.com")
+            engine().select(selectedId)
+            originalTabs = engine().list()
+        }
+        awaitPage("example.org")
+        rule.finishActivity()
+        instrumentation.waitForIdleSync()
+        instrumentation.runOnMainSync { originalTabs.forEach { assertTrue("Destroyed Activity must release all sessions", !it.session.isOpen) } }
+        rule.launchActivity(android.content.Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java))
+        instrumentation.runOnMainSync { assertEquals("Restore must retain selected tab, not last record", selectedId, engine().active()!!.id) }
+        awaitPage("example.org")
+    }
+
+    private fun awaitPage(host: String, previousCaptureId: String? = null) {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
+        var loaded = false
+        while (!loaded && System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                val capture = currentCapture()
+                loaded = capture != null && android.net.Uri.parse(capture.url).host == host
+                    && capture.title == "Example Domain" && capture.text.isNotBlank()
+                    && capture.captureId != previousCaptureId
+            }
+            if (!loaded) Thread.sleep(100)
+        }
+        assertTrue("Actual DOM must load from $host", loaded)
+    }
 }
 

@@ -22,8 +22,10 @@ import java.util.concurrent.Executors
 class GeckoBrowserActivity : Activity() {
     private val activityBridge = GeckoActivityBridge(
         { foreground && !isFinishing && !isDestroyed },
-        { intent, code -> startIntentSenderForResult(intent.intentSender, code, null, 0, 0, 0) }
+        onStatus = { code -> credentialStatus = code; if (code == "PROVIDER_LAUNCH_FAILED") say("เปิดหน้าพาสคีย์ไม่สำเร็จ · ดูเมนูพาสคีย์") },
+        launch = { intent, code -> startIntentSenderForResult(intent.intentSender, code, null, 0, 0, 0) }
     )
+    private var credentialStatus = "NOT_REQUESTED"
     private lateinit var engine: GeckoBrowserEngine
     private lateinit var address: EditText
     private lateinit var tabsButton: Button
@@ -68,7 +70,12 @@ class GeckoBrowserActivity : Activity() {
         pantheon = PantheonObservatoryClient(this)
         pantheonDeviceId = pantheon.deviceId()
         observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            // Give clearFocus() a stable destination instead of immediately
+            // returning focus to the first EditText in the Activity.
+            isFocusableInTouchMode = true
+        }
         val addressRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -80,8 +87,13 @@ class GeckoBrowserActivity : Activity() {
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
+            setSelectAllOnFocus(true)
             layoutParams = LinearLayout.LayoutParams(0, dp(48), 1f)
-            setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
+            setOnEditorActionListener { _, action, event ->
+                if (action == EditorInfo.IME_ACTION_GO || (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_UP)) {
+                    navigateFromAddress(); true
+                } else false
+            }
         }
         ObservatoryTheme.address(address)
         addressRow.addView(address)
@@ -122,7 +134,8 @@ class GeckoBrowserActivity : Activity() {
         root.addView(browserContainer, LinearLayout.LayoutParams(-1, 0, 1f))
         ObservatoryTheme.apply(this, root); PhoneLayout.fitSystemBars(root); setContentView(root)
         val geckoView = org.mozilla.geckoview.GeckoView(this); browserContainer.addView(geckoView, FrameLayout.LayoutParams(-1, -1))
-        engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { address.setText(url) } }, { tab, capture -> onCapture(tab, capture) })
+        engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { if (!address.hasFocus()) address.setText(url) } }, { tab, capture -> onCapture(tab, capture) },
+            onProblem = { code -> runOnUiThread { say(if (code == "SESSION_RECOVERY_FAILED") "กู้คืนหน้าเว็บไม่สำเร็จ · กรุณารีโหลด" else "โหลดหน้าเว็บไม่สำเร็จ · ตรวจการเชื่อมต่อแล้วรีโหลด") } })
         engine.restore()
         // An earlier build persisted the Metropolis API root as a browser tab. It is not a web UI.
         val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')
@@ -143,7 +156,7 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดส่งเข้า PANTHEON" else "เริ่มส่งเข้า PANTHEON", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดส่งเข้า PANTHEON" else "เริ่มส่งเข้า PANTHEON", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "พาสคีย์ / เปิดในเบราว์เซอร์ระบบ")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
                     1 -> toggleShare()
@@ -155,6 +168,7 @@ class GeckoBrowserActivity : Activity() {
                     7 -> showBrowserDetails()
                     8 -> shareCurrentPageToGo()
                     9 -> showOwnerAssist()
+                    10 -> showPasskeyHelp()
                 }
             }.setNegativeButton("ปิด", null).show()
     }
@@ -182,9 +196,47 @@ class GeckoBrowserActivity : Activity() {
     private fun button(label: String, action: () -> Unit) = ObservatoryTheme.button(this, label, action)
     private fun renderActive() { engine.active()?.let { address.setText(it.requestedUrl) }; updateSharingStatus() }
     private fun showTabs() {
-        val tabs = engine.list(); if (tabs.isEmpty()) return
-        AlertDialog.Builder(this).setTitle("แท็บ").setItems(tabs.map { it.requestedUrl }.toTypedArray()) { _, index -> engine.select(tabs[index].id); renderActive() }
-            .setNeutralButton("ปิดแท็บนี้") { _, _ -> engine.active()?.let { engine.close(it.id) }; renderActive() }.setNegativeButton("กลับ", null).show()
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(8), dp(8), dp(8)) }
+        val dialog = AlertDialog.Builder(this).setTitle("แท็บที่เปิดอยู่")
+            .setView(ScrollView(this).apply { addView(list) })
+            .setPositiveButton("แท็บใหม่") { _, _ -> engine.open(); renderActive() }
+            .setNegativeButton("ปิด", null).create()
+        fun renderTabs() {
+            list.removeAllViews()
+            val activeId = engine.active()?.id
+            engine.list().forEach { tab ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                row.addView(button((if (tab.id == activeId) "● " else "") + tab.requestedUrl) {
+                    address.clearFocus(); engine.select(tab.id); renderActive(); dialog.dismiss()
+                }.apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END },
+                    LinearLayout.LayoutParams(0, dp(64), 1f))
+                row.addView(button("×") {
+                    engine.close(tab.id); renderActive(); renderTabs()
+                }.apply { contentDescription = "ปิดแท็บ " + tab.requestedUrl },
+                    LinearLayout.LayoutParams(dp(48), dp(64)))
+                list.addView(row)
+            }
+        }
+        renderTabs()
+        dialog.show()
+    }
+    private fun showPasskeyHelp() {
+        val status = when (credentialStatus) {
+            "PROVIDER_REQUESTED" -> "กำลังขอเปิดตัวจัดการพาสคีย์"
+            "PROVIDER_LAUNCHED" -> "เรียกตัวจัดการพาสคีย์แล้ว"
+            "PROVIDER_RESULT_OK" -> "ตัวจัดการพาสคีย์ส่งผลกลับแล้ว"
+            "PROVIDER_CANCELLED_OR_EMPTY" -> "ยกเลิกหรือไม่ได้รับผลจากตัวจัดการพาสคีย์"
+            "PROVIDER_LAUNCH_FAILED" -> "เปิดตัวจัดการพาสคีย์ไม่สำเร็จ"
+            else -> "ยังไม่มีผลจากเส้นทาง FIDO · เส้นทาง Credential Manager อาจทำงานแยกกัน"
+        }
+        AlertDialog.Builder(this).setTitle("พาสคีย์")
+            .setMessage(status + "\n\nพาสคีย์ของเว็บไซต์อื่นขึ้นกับสิทธิ์ที่ผู้ให้บริการให้กับแอปเบราว์เซอร์ หากหน้าพาสคีย์ไม่ขึ้น เปิดเว็บไซต์นี้ในเบราว์เซอร์ระบบได้\n\nการเข้าสู่ระบบในเบราว์เซอร์อื่นจะไม่ย้ายคุกกี้กลับมาที่หอดูดาว")
+            .setPositiveButton("เปิดในเบราว์เซอร์ระบบ") { _, _ ->
+                val url = engine.active()?.requestedUrl ?: return@setPositiveButton
+                if (!BrowserSettings.isAllowedUrl(url)) return@setPositiveButton
+                try { startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)), "เปิดเว็บไซต์ในเบราว์เซอร์")) }
+                catch (_: ActivityNotFoundException) { say("ไม่พบเบราว์เซอร์ที่เปิดเว็บไซต์นี้ได้") }
+            }.setNegativeButton("ปิด", null).show()
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
@@ -456,7 +508,7 @@ class GeckoBrowserActivity : Activity() {
     override fun onDestroy() { destroyed = true;
         activityBridge.cancel()
         if (engine.runtime().activityDelegate === activityBridge) engine.runtime().setActivityDelegate(null)
- stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdown(); pantheon.close(); super.onDestroy() }
+ stopSharing(); engine.shutdown(); handler.removeCallbacks(tick); network.shutdown(); pantheon.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
 

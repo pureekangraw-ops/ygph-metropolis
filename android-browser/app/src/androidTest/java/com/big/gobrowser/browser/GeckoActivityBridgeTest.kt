@@ -14,6 +14,19 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class GeckoActivityBridgeTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    // Check installed APK permissions, including dependency manifest merging, rather than source text.
+    @Test fun installedBrowserCanSetWebsiteOriginForCredentialManager() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34)
+        assertEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,
+            instrumentation.targetContext.checkSelfPermission("android.permission.CREDENTIAL_MANAGER_SET_ORIGIN"))
+    }
+
+    @Test fun installedBrowserCanQueryPreparedPasskeyCandidates() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 34)
+        assertEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,
+            instrumentation.targetContext.checkSelfPermission("android.permission.CREDENTIAL_MANAGER_QUERY_CANDIDATE_CREDENTIALS"))
+    }
+
     private fun intent() = PendingIntent.getActivity(instrumentation.targetContext, 73,
         Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
 
@@ -64,5 +77,21 @@ class GeckoActivityBridgeTest {
         }
         assertTrue(done.await(5, TimeUnit.SECONDS))
         assertEquals(setOf("AUTHENTICATION_ALREADY_PENDING", "ACTIVITY_DESTROYED", "ACTIVITY_NOT_FOREGROUND"), errors.toSet())
+    }
+
+    @Test fun launchFailureReportsSafeStageAndPermitsAnotherAttempt() {
+        val done = CountDownLatch(1)
+        val stages = mutableListOf<String>()
+        instrumentation.runOnMainSync {
+            val bridge = GeckoActivityBridge({ true }, onStatus = { stages.add(it) }) { _, _ ->
+                throw android.content.IntentSender.SendIntentException("provider unavailable")
+            }
+            bridge.onStartActivityForResult(intent()).accept({ done.countDown() }, { done.countDown() })
+            assertEquals(listOf("PROVIDER_REQUESTED", "PROVIDER_LAUNCH_FAILED"), stages)
+            stages.clear()
+            bridge.onStartActivityForResult(intent())
+            assertEquals(listOf("PROVIDER_REQUESTED", "PROVIDER_LAUNCH_FAILED"), stages)
+        }
+        assertTrue(done.await(5, TimeUnit.SECONDS))
     }
 }
