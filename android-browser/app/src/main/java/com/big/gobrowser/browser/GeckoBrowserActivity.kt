@@ -70,7 +70,12 @@ class GeckoBrowserActivity : Activity() {
         pantheon = PantheonObservatoryClient(this)
         pantheonDeviceId = pantheon.deviceId()
         observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            // Give clearFocus() a stable destination instead of immediately
+            // returning focus to the first EditText in the Activity.
+            isFocusableInTouchMode = true
+        }
         val addressRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
