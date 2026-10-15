@@ -31,7 +31,7 @@
     if (!message || message.type !== 'EXECUTE') return;
     const command = message;
     if (!Number.isSafeInteger(command.issuedAtEpochMs) || !Number.isSafeInteger(command.expiresAtEpochMs)
-      || command.expiresAtEpochMs <= Date.now() || command.issuedAtEpochMs > Date.now()
+      || command.expiresAtEpochMs <= Date.now() || command.issuedAtEpochMs > Date.now() + 1000
       || command.expiresAtEpochMs - command.issuedAtEpochMs > 30000) {
       nativePort.postMessage({ok:false, reason:'COMMAND_EXPIRED', commandId:command.commandId}); return;
     }

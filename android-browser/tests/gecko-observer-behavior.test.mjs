@@ -33,6 +33,12 @@ test('a hidden page refuses an already queued action',()=>{
  p.execute({type:'EXECUTE',commandId:'hidden',captureId:c.captureId,frameId:c.frameId,action:'CLICK',parameters:{targetId:c.targets[0].targetId,signature:c.targets[0].signature}});
  assert.equal(p.messages.at(-1).reason,'PAGE_NOT_VISIBLE');assert.equal(p.node.innerText,'Save');
 });
+test('minor browser clock rounding does not reject a fresh native command',()=>{
+ const p=page();const now=Date.now();p.sandbox.Date=class extends Date { static now(){return now;} };
+ const c=p.observations()[0];
+ p.execute({type:'EXECUTE',commandId:'rounded-clock',captureId:c.captureId,frameId:c.frameId,action:'CLICK',issuedAtEpochMs:now+2,expiresAtEpochMs:now+5002,parameters:{targetId:c.targets[0].targetId,signature:c.targets[0].signature}});
+ assert.equal(p.messages.at(-1).ok,true);assert.equal(p.node.innerText,'Saved');
+});
 
 test('selected target identity survives an unrelated target inserted before it',()=>{
  const p=page();const selected=p.observations().at(-1).targets[0];
