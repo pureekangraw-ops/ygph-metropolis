@@ -57,6 +57,7 @@ class GeckoBrowserEngine(
         if (disposed) return
         persist()
         disposed = true
+        observer.dispose()
         updateVisibility(false)
         detach()
         tabs.values.forEach { tab -> if (tab.session.isOpen) tab.session.close() }
@@ -150,9 +151,11 @@ class GeckoBrowserEngine(
 
 data class DomCapture(val captureId: String, val frameId: String, val url: String, val title: String, val text: String, val targets: List<Target>) {
     companion object {
+        private fun nullableString(value: JSONObject, key: String): String? =
+            if (value.isNull(key)) null else value.optString(key).takeIf { it.isNotBlank() }
         fun from(page: JSONObject): DomCapture {
             val targets = mutableListOf<Target>(); val array = page.optJSONArray("targets") ?: JSONArray()
-            for (i in 0 until array.length()) { val t = array.optJSONObject(i) ?: continue; targets += Target(t.optString("targetId"), t.optString("role").ifBlank { null }, t.optString("label").ifBlank { null }, t.optString("type"), t.optInt("left"), t.optInt("top"), t.optInt("right"), t.optInt("bottom"), t.optString("frameId", page.optString("frameId", "frame-0")), t.optString("tag"), t.optString("type"), t.optString("href").ifBlank { null }, t.optString("visibility", "visible"), t.optBoolean("disabled"), t.optString("signature"), t.optString("autocomplete")) }
+            for (i in 0 until array.length()) { val t = array.optJSONObject(i) ?: continue; targets += Target(t.optString("targetId"), nullableString(t, "role"), nullableString(t, "label"), t.optString("type"), t.optInt("left"), t.optInt("top"), t.optInt("right"), t.optInt("bottom"), t.optString("frameId", page.optString("frameId", "frame-0")), t.optString("tag"), t.optString("type"), nullableString(t, "href"), t.optString("visibility", "visible"), t.optBoolean("disabled"), t.optString("signature"), t.optString("autocomplete")) }
             return DomCapture(page.optString("captureId"), page.optString("frameId", "frame-0"), page.optString("url"), page.optString("title"), page.optString("text"), targets)
         }
     }

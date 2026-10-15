@@ -7,6 +7,11 @@ import com.big.gobrowser.observer.Target
  * a fresh target, native approval and the Gecko observer's signature check are all required.
  */
 object BrowserAssistPolicy {
+    fun selectionIsCurrent(selectedTab: String, currentTab: String, selectedUrl: String, currentUrl: String,
+                           selected: Target, currentTargets: List<Target>): Boolean =
+        selectedTab == currentTab && selectedUrl == currentUrl && currentTargets.any {
+            it.id == selected.id && it.frameId == selected.frameId && it.signature == selected.signature
+        }
     private val secret = Regex("(?i)(password|passcode|one.time|otp|2fa|verification.code|security.code|credit.card|card.number|card.cvc|card.cvv|cc.number|cc.csc|cc.exp|bank.account|routing.number|pin.code|รหัสผ่าน|รหัสยืนยัน|เลขบัตร|เลขบัญชี|รหัส otp)")
     private val highImpact = Regex("(?i)(pay(?:ment)?|purchase|buy.now|checkout|place.order|transfer|withdraw|delete|remove|erase|discard|submit|send|publish|post|confirm|approve|authorize|accept|consent|unsubscribe|ชำระ|จ่ายเงิน|ซื้อ|สั่งซื้อ|โอน|ถอน|ลบ|ส่งข้อความ|ส่งคำสั่ง|เผยแพร่|ยืนยัน|อนุมัติ|ยอมรับ)")
     private val secretAuto = Regex("(?i)(one.time.code|current.password|new.password|cc.|transaction.|webauthn)")

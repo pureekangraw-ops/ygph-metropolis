@@ -48,7 +48,7 @@ test('PANTHEON uploads happen only after owner tap; pause always stops',()=>{
   const app=file('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   const map=file('app/src/main/java/com/big/gobrowser/outsideview/OutsideViewActivity.kt');
   const share=file('app/src/main/java/com/big/gobrowser/outsideview/ObservatoryMapShare.kt');
-  assert.match(app,/button\("ส่งหน้าเว็บเข้า PANTHEON"\) \{ sendSnapshotManually\(\) \}/);
+  assert.match(app,/button\("ส่งให้ GO"\) \{ sendSnapshotManually\(\) \}/);
   assert.match(app,/private fun sendSnapshotManually\(\)/);
   assert.doesNotMatch(app,/handler\.postDelayed\(this, 5_000L\)|startAutomaticObservation|handler\.post\(tick\)/);
   assert.match(app,/override fun onPause\(\).*stopSharing\(\)/);
@@ -79,8 +79,8 @@ test('build provenance and upgrade identity remain stable',()=>{
   const workflow=root('.github/workflows/android-browser.yml');
   const browser=file('app/src/main/java/com/big/gobrowser/browser/GeckoBrowserActivity.kt');
   assert.match(gradle,/applicationId = "com\.big\.gobrowser"/);
-  assert.match(gradle,/versionName = "0\.6\.4"/);
-  assert.match(gradle,/versionCode = 14/);
+  assert.match(gradle,/versionName = "0\.6\.5"/);
+  assert.match(gradle,/versionCode = 15/);
   assert.match(stamp,/BuildConfig\.SOURCE_COMMIT/);
   assert.match(stamp,/BuildConfig\.BUILD_RUN_ID/);
   assert.match(browser,/ObserverSession\("local-device", "\$\{BuildConfig\.VERSION_NAME\}-gecko"\)/);

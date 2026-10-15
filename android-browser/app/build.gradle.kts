@@ -21,8 +21,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.6.4"
+        versionCode = 15
+        versionName = "0.6.5"
         // Smaller handset build. Universal CI build and emulator remain unchanged.
         if (System.getenv("OBSERVATORY_ARM64_ONLY") == "true") {
             ndk { abiFilters += "arm64-v8a" }

@@ -1,6 +1,8 @@
 package com.big.gobrowser.browser;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,7 +21,24 @@ public final class GeckoPageObserver {
   private WebExtension extension;
   private final List<GeckoSession> pending = new ArrayList<>();
   private final Map<GeckoSession, WebExtension.Port> ports = new HashMap<>();
-  private final Map<String, CommandCallback> callbacks = new HashMap<>();
+  private final Handler handler = new Handler(Looper.getMainLooper());
+  private static final class Pending {
+    final WebExtension.Port port; final CommandCallback callback; final Runnable timeout;
+    Pending(WebExtension.Port port, CommandCallback callback, Runnable timeout) { this.port=port; this.callback=callback; this.timeout=timeout; }
+  }
+  private final Map<String, Pending> callbacks = new HashMap<>();
+  private void complete(String id, WebExtension.Port source, boolean accepted, String reason) {
+    Pending pending = callbacks.get(id);
+    if (pending == null || pending.port != source) return;
+    callbacks.remove(id); handler.removeCallbacks(pending.timeout); pending.callback.onResult(accepted, reason);
+  }
+  private void failPort(WebExtension.Port port) {
+    for (String id : new ArrayList<>(callbacks.keySet())) complete(id, port, false, "OBSERVER_DISCONNECTED");
+  }
+  void dispose() {
+    for (WebExtension.Port port : new ArrayList<>(ports.values())) failPort(port);
+    ports.clear(); pending.clear();
+  }
   GeckoPageObserver(Context context, Listener listener) { this.context = context.getApplicationContext(); this.listener = listener; }
   void install(GeckoRuntime runtime) {
     runtime.getWebExtensionController().ensureBuiltIn("resource://android/assets/observatory-observer/", "observatory-native-observer@yggmetro.com")
@@ -39,21 +58,26 @@ public final class GeckoPageObserver {
       }
       @Override public void onConnect(WebExtension.Port port) {
         if (port.sender == null || port.sender.session != session || !port.sender.isTopLevel()) return;
-        ports.put(session, port);
+        WebExtension.Port previous = ports.put(session, port);
+        if (previous != null) failPort(previous);
         port.setDelegate(new WebExtension.PortDelegate() {
           @Override public void onPortMessage(Object message, WebExtension.Port source) {
             if (!(message instanceof JSONObject)) return;
-            JSONObject result = (JSONObject) message; String id = result.optString("commandId"); CommandCallback callback = callbacks.remove(id);
-            if (callback != null) callback.onResult(result.optBoolean("ok"), result.optString("reason", "READBACK_UNAVAILABLE"));
+            JSONObject result = (JSONObject) message;
+            if (result.has("ok")) complete(result.optString("commandId"), source, result.optBoolean("ok"), result.optString("reason", "READBACK_UNAVAILABLE"));
           }
-          @Override public void onDisconnect(WebExtension.Port source) { if (ports.get(session) == source) ports.remove(session); }
+          @Override public void onDisconnect(WebExtension.Port source) { if (ports.get(session) == source) ports.remove(session); failPort(source); }
         });
       }
     }, "observatory_observer");
   }
   void dispatch(GeckoSession session, JSONObject command, CommandCallback callback) {
     WebExtension.Port port = ports.get(session); if (port == null) { callback.onResult(false, "OBSERVER_PORT_UNAVAILABLE"); return; }
-    String id = command.optString("commandId"); callbacks.put(id, callback);
-    try { port.postMessage(command); } catch (Throwable error) { callbacks.remove(id); callback.onResult(false, "OBSERVER_PORT_UNAVAILABLE"); }
+    String id = command.optString("commandId");
+    if (id.isEmpty() || callbacks.containsKey(id)) { callback.onResult(false, "INVALID_COMMAND_ID"); return; }
+    Runnable timeout = () -> complete(id, port, false, "COMMAND_TIMEOUT");
+    callbacks.put(id, new Pending(port, callback, timeout));
+    handler.postDelayed(timeout, 5000L);
+    try { port.postMessage(command); } catch (Throwable error) { complete(id, port, false, "OBSERVER_PORT_UNAVAILABLE"); }
   }
 }

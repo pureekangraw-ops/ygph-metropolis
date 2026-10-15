@@ -22,6 +22,7 @@ class GeckoCommandDispatcher(private val observer: GeckoPageObserver, private va
             else -> Unit
         }
         val payload = JSONObject().put("type", "EXECUTE").put("commandId", command.commandId)
+            .put("issuedAtEpochMs", command.issuedAtEpochMs).put("expiresAtEpochMs", command.expiresAtEpochMs)
             .put("action", command.action.name).put("captureId", command.captureId)
             .put("frameId", command.parameters["frameId"] ?: command.frameId)
             .put("targetId", command.parameters["targetId"] ?: "")
