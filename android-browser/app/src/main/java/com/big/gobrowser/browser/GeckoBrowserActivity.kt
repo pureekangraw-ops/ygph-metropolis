@@ -22,10 +22,16 @@ import java.util.concurrent.Executors
 class GeckoBrowserActivity : Activity() {
     private val activityBridge = GeckoActivityBridge(
         { foreground && !isFinishing && !isDestroyed },
-        onStatus = { code -> credentialStatus = code; if (code == "PROVIDER_LAUNCH_FAILED") say("เปิดหน้าพาสคีย์ไม่สำเร็จ · ดูเมนูพาสคีย์") },
+        onStatus = { code -> runOnUiThread {
+            credentialStatus = code
+            credentialStatusView?.text = credentialStatusLabel()
+            if (code == "PROVIDER_LAUNCH_FAILED") say("เปิดหน้าพาสคีย์ไม่สำเร็จ · ดูเมนูพาสคีย์")
+        } },
         launch = { intent, code -> startIntentSenderForResult(intent.intentSender, code, null, 0, 0, 0) }
     )
     private var credentialStatus = "NOT_REQUESTED"
+    private var credentialStatusView: TextView? = null
+    private var assistDialog: AlertDialog? = null
     private lateinit var engine: GeckoBrowserEngine
     private lateinit var address: EditText
     private lateinit var tabsButton: Button
@@ -105,21 +111,28 @@ class GeckoBrowserActivity : Activity() {
         navigation.addView(chromeButton("⋮", "เมนูหอดูดาว") { showBrowserMenu() })
         root.addView(navigation)
         sharingStatus = ObservatoryTheme.status(this).apply {
-            textSize = 14f
+            textSize = 12f
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             minHeight = dp(48)
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
+            setPadding(dp(8), 0, dp(4), 0)
             isClickable = true
             isFocusable = true
             setOnClickListener { if (!pantheon.isPaired()) connectHub() else showBrowserDetails() }
             tooltipText = "แตะดูสถานะ PANTHEON และข้อมูลรุ่น"
         }
-        root.addView(sharingStatus)
-        root.addView(button("ส่งหน้าเว็บเข้า PANTHEON") { sendSnapshotManually() }.apply {
+        val workbar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        workbar.addView(sharingStatus, LinearLayout.LayoutParams(0, dp(48), 1f))
+        workbar.addView(button("ส่งให้ GO") { sendSnapshotManually() }.apply {
             contentDescription = "กดส่งข้อมูลหน้าเว็บเข้า PANTHEON ครั้งเดียว"
+            layoutParams = LinearLayout.LayoutParams(dp(88), dp(48))
         })
+        workbar.addView(button("ช่วยทำ") { showOwnerAssist() }.apply {
+            contentDescription = "ช่วยกรอกหรือช่วยกดบนหน้าเว็บ"
+            layoutParams = LinearLayout.LayoutParams(dp(80), dp(48))
+        })
+        root.addView(workbar)
         // Detailed evidence stays available in the dialog without consuming the webpage.
         eyeStatus = ObservatoryTheme.status(this)
         connectionDiagnostics = ObservatoryTheme.status(this)
@@ -213,23 +226,38 @@ class GeckoBrowserActivity : Activity() {
         renderTabs()
         dialog.show()
     }
-    private fun showPasskeyHelp() {
-        val status = when (credentialStatus) {
+    private fun credentialStatusLabel(): String = when (credentialStatus) {
             "PROVIDER_REQUESTED" -> "กำลังขอเปิดตัวจัดการพาสคีย์"
             "PROVIDER_LAUNCHED" -> "เรียกตัวจัดการพาสคีย์แล้ว"
             "PROVIDER_RESULT_OK" -> "ตัวจัดการพาสคีย์ส่งผลกลับแล้ว"
             "PROVIDER_CANCELLED_OR_EMPTY" -> "ยกเลิกหรือไม่ได้รับผลจากตัวจัดการพาสคีย์"
             "PROVIDER_LAUNCH_FAILED" -> "เปิดตัวจัดการพาสคีย์ไม่สำเร็จ"
-            else -> "ยังไม่มีผลจากเส้นทาง FIDO · เส้นทาง Credential Manager อาจทำงานแยกกัน"
+            "ACTIVITY_NOT_FOREGROUND" -> "กลับมาที่หอดูดาวก่อนใช้พาสคีย์"
+            "AUTHENTICATION_ALREADY_PENDING" -> "มีคำขอพาสคีย์กำลังทำงานอยู่"
+            "ACTIVITY_DESTROYED" -> "คำขอพาสคีย์ถูกปิดแล้ว · ลองใหม่บนหน้าเว็บ"
+            else -> "ยังไม่ได้รับคำขอพาสคีย์ · เริ่มจากปุ่มเข้าสู่ระบบบนหน้าเว็บ"
         }
-        AlertDialog.Builder(this).setTitle("พาสคีย์")
-            .setMessage(status + "\n\nพาสคีย์ของเว็บไซต์อื่นขึ้นกับสิทธิ์ที่ผู้ให้บริการให้กับแอปเบราว์เซอร์ หากหน้าพาสคีย์ไม่ขึ้น เปิดเว็บไซต์นี้ในเบราว์เซอร์ระบบได้\n\nการเข้าสู่ระบบในเบราว์เซอร์อื่นจะไม่ย้ายคุกกี้กลับมาที่หอดูดาว")
+    private fun showPasskeyHelp() {
+        val status = ObservatoryTheme.status(this).apply { text = credentialStatusLabel(); textSize = 15f }
+        credentialStatusView = status
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(status)
+            addView(ObservatoryTheme.status(this@GeckoBrowserActivity).apply {
+                text = "ใช้ปุ่มเข้าสู่ระบบของเว็บไซต์เพื่อเรียกพาสคีย์ในแอปได้ตามที่ผู้ให้บริการรองรับ\n\nหากไม่มีหน้าพาสคีย์ขึ้น ผู้ให้บริการอาจยังไม่อนุญาตแอปนี้ เปิดเว็บไซต์เดิมในเบราว์เซอร์ระบบเพื่อลองต่อได้\n\nการเข้าสู่ระบบนอกแอปจะไม่ย้ายคุกกี้กลับมาที่หอดูดาว"
+                textSize = 14f
+            })
+        }
+        AlertDialog.Builder(this).setTitle("พาสคีย์").setView(panel)
             .setPositiveButton("เปิดในเบราว์เซอร์ระบบ") { _, _ ->
                 val url = engine.active()?.requestedUrl ?: return@setPositiveButton
                 if (!BrowserSettings.isAllowedUrl(url)) return@setPositiveButton
                 try { startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)), "เปิดเว็บไซต์ในเบราว์เซอร์")) }
                 catch (_: ActivityNotFoundException) { say("ไม่พบเบราว์เซอร์ที่เปิดเว็บไซต์นี้ได้") }
-            }.setNegativeButton("ปิด", null).show()
+            }.setNegativeButton("ปิด", null).create().apply {
+                setOnDismissListener { if (credentialStatusView === status) credentialStatusView = null }
+                show()
+            }
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
@@ -435,51 +463,96 @@ class GeckoBrowserActivity : Activity() {
 
     /** Owner approves each action locally. The existing Gecko port performs a second target/signature check. */
     private fun showOwnerAssist() {
-        val (_, capture) = currentAssistEvidence() ?: run { say("รอข้อมูลหน้าเว็บสดก่อน · ลองเปิดหน้าใหม่"); return }
+        if (assistDialog?.isShowing == true) return
+        val (tab, capture) = currentAssistEvidence() ?: run { say("รอข้อมูลหน้าเว็บสดก่อน · ลองเปิดหน้าใหม่"); return }
         val candidates = capture.targets.mapNotNull { target ->
             val action = if (target.tag.lowercase() in setOf("input", "textarea", "select")) "FILL" else "CLICK"
             if (BrowserAssistPolicy.rejection(target, action) != null) null else target to action
         }.take(100)
-        if (candidates.isEmpty()) { say("ไม่พบช่องกรอกหรือปุ่มที่ปลอดภัยบนหน้านี้"); return }
+        if (candidates.isEmpty()) { say("ไม่พบปุ่มหรือช่องที่ช่วยทำได้ · รหัสผ่าน, OTP และปุ่มยืนยันให้ใช้บนหน้าเว็บโดยตรง"); return }
         val labels = candidates.map { (target, action) ->
             "${if (action == "FILL") "กรอก" else "กด"} · ${target.label?.take(65).orEmpty().ifBlank { target.type.ifBlank { target.tag } }}"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("ช่วยกรอก / ช่วยกด · ${capture.title.take(40)}")
-            .setItems(labels) { _, selected ->
-                val (target, action) = candidates[selected]
-                if (action == "FILL") {
-                    val field = EditText(this).apply {
-                        hint = target.label ?: "ข้อความที่ต้องการกรอก"
-                        setSingleLine(target.tag.lowercase() != "textarea")
-                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(4), dp(12), dp(8)) }
+        panel.addView(ObservatoryTheme.status(this).apply {
+            text = "เลือกช่องหรือปุ่ม แล้วกดทำรายการด้านล่าง\nรหัสผ่าน, OTP และปุ่มยืนยันให้ใช้บนหน้าเว็บโดยตรง"
+            textSize = 14f
+        })
+        val choices = Spinner(this).apply {
+            contentDescription = "เลือกช่องหรือปุ่มที่ต้องการช่วยทำ"
+            adapter = ArrayAdapter(this@GeckoBrowserActivity, android.R.layout.simple_spinner_dropdown_item, labels)
+        }
+        panel.addView(choices, LinearLayout.LayoutParams(-1, dp(56)))
+        val field = EditText(this).apply {
+            contentDescription = "ข้อความสำหรับช่องที่เลือก"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            filters = arrayOf(android.text.InputFilter.LengthFilter(2000)); maxLines = 4
+        }
+        ObservatoryTheme.address(field); panel.addView(field)
+        val result = ObservatoryTheme.status(this).apply { textSize = 15f }; panel.addView(result)
+        val dialog = AlertDialog.Builder(this).setTitle("ช่วยกรอก / ช่วยกด")
+            .setView(ScrollView(this).apply { addView(panel) })
+            .setPositiveButton("ทำรายการ", null).setNeutralButton("อ่านหน้าใหม่", null).setNegativeButton("ปิด", null).create()
+        assistDialog = dialog
+        dialog.setOnDismissListener { if (assistDialog === dialog) assistDialog = null }
+        dialog.setOnShowListener {
+            val actionButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            var busy = false
+            fun selectTarget() {
+                val (target, action) = candidates[choices.selectedItemPosition]
+                field.setText(""); field.visibility = if (action == "FILL") View.VISIBLE else View.GONE
+                field.hint = target.label ?: "ข้อความที่ต้องการกรอก"
+                actionButton.text = if (action == "FILL") "กรอกช่องนี้" else "กดปุ่มนี้"
+                result.text = "${if (action == "FILL") "จะกรอก" else "จะกด"}: ${target.label.orEmpty().ifBlank { target.type }}"
+            }
+            choices.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { if (!busy) selectTarget() }
+            }
+            selectTarget()
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { if (!busy) { dialog.dismiss(); showOwnerAssist() } }
+            actionButton.setOnClickListener {
+                if (busy) return@setOnClickListener
+                val (target, action) = candidates[choices.selectedItemPosition]
+                busy = true; actionButton.isEnabled = false; choices.isEnabled = false; field.isEnabled = false
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled = false
+                result.text = "กำลัง${if (action == "FILL") "กรอก" else "กด"} · รอผลจากหน้าเว็บ…"
+                executeOwnerAssist(tab.id, capture, target, action, field.text.toString()) { outcome ->
+                    if (dialog.isShowing) {
+                        busy = false; actionButton.isEnabled = true; choices.isEnabled = true; field.isEnabled = true
+                        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled = true
+                        result.text = if (outcome.accepted) "${if (action == "FILL") "กรอก" else "ส่งการกด"}แล้ว · ตรวจผลบนหน้าเว็บ" else assistFailureMessage(outcome.reason)
                     }
-                    AlertDialog.Builder(this).setTitle("กรอก: ${target.label.orEmpty().take(80)}")
-                        .setView(field).setNegativeButton("ยกเลิก", null)
-                        .setPositiveButton("อนุญาตให้กรอก") { _, _ ->
-                            executeOwnerAssist(capture, target, "FILL", field.text.toString())
-                        }.show()
-                } else {
-                    AlertDialog.Builder(this).setTitle("ยืนยันการกด")
-                        .setMessage("กด ${target.label.orEmpty().take(120)} บน ${sanitizeUrl(capture.url)}?\nไม่ใช่การยืนยันผลลัพธ์บนเว็บไซต์")
-                        .setNegativeButton("ยกเลิก", null)
-                        .setPositiveButton("อนุญาตให้กด") { _, _ -> executeOwnerAssist(capture, target, "CLICK") }.show()
                 }
-            }.setNegativeButton("ปิด", null).show()
+            }
+        }
+        dialog.show()
     }
 
-    private fun executeOwnerAssist(capture: DomCapture, target: com.big.gobrowser.observer.Target, action: String, value: String = "") {
-        val (tab, current) = currentAssistEvidence() ?: run { say("ข้อมูลหน้าเว็บหมดอายุ · กรุณาเลือกใหม่"); return }
-        if (current.captureId != capture.captureId ||
-            current.targets.none { it.id == target.id && it.signature == target.signature }) {
-            say("หน้าเว็บเปลี่ยนแล้ว · กรุณาเลือกปุ่มใหม่"); return
+    private fun assistFailureMessage(reason: String): String = when (reason) {
+        "COMMAND_TIMEOUT" -> "หน้าเว็บยังไม่ตอบกลับ · ตรวจผลบนหน้าเว็บก่อนลองใหม่"
+        "OBSERVER_DISCONNECTED", "OBSERVER_PORT_UNAVAILABLE" -> "การเชื่อมกับหน้าเว็บขาด · ปิดแผงแล้วรีโหลดหน้าเว็บ"
+        "STALE_CAPTURE", "TARGET_CHANGED", "TARGET_NOT_FOUND", "PAGE_CHANGED" -> "หน้าเว็บหรือเป้าหมายเปลี่ยนแล้ว · กดอ่านหน้าใหม่แล้วเลือกอีกครั้ง"
+        "STALE_EVIDENCE" -> "ยังไม่มีข้อมูลหน้าเว็บสด · ปิดแผง รอสักครู่ แล้วลองใหม่"
+        "SENSITIVE_TARGET" -> "ช่องนี้เป็นข้อมูลลับ · กรุณากรอกบนหน้าเว็บโดยตรง"
+        "HIGH_IMPACT_REQUIRES_OWNER", "SUBMIT_REQUIRES_OWNER" -> "ปุ่มนี้เป็นการยืนยันรายการ · กรุณากดบนหน้าเว็บโดยตรง"
+        else -> "ทำรายการไม่ได้ · $reason"
+    }
+
+    private fun executeOwnerAssist(selectedTabId: String, capture: DomCapture, target: com.big.gobrowser.observer.Target,
+                                   action: String, value: String = "", onResult: (DispatchResult) -> Unit) {
+        val (tab, current) = currentAssistEvidence() ?: run { onResult(DispatchResult(false, "STALE_EVIDENCE")); return }
+        if (!BrowserAssistPolicy.selectionIsCurrent(selectedTabId, tab.id, capture.url, current.url, target, current.targets)) {
+            onResult(DispatchResult(false, "PAGE_CHANGED")); return
         }
-        BrowserAssistPolicy.rejection(target, action, value)?.let { say("ไม่อนุญาต: $it"); return }
+        val currentTarget = current.targets.first { it.id == target.id }
+        BrowserAssistPolicy.rejection(currentTarget, action, value)?.let { onResult(DispatchResult(false, it)); return }
         val now = System.currentTimeMillis()
         val epoch = permissions.epoch(tab.id)
         val command = Command(
             commandId = java.util.UUID.randomUUID().toString(),
             actor = "OWNER_LOCAL", workId = "LOCAL_OWNER", checkpointId = "MANUAL_CONFIRM",
-            tabId = tab.id, deviceId = "local-device", captureId = capture.captureId,
+            tabId = tab.id, deviceId = "local-device", captureId = current.captureId,
             revision = 0L, epoch = epoch, issuedAtEpochMs = now, expiresAtEpochMs = now + 5_000L,
             action = if (action == "FILL") BrowserAction.FILL else BrowserAction.CLICK,
             authority = if (action == "FILL") "browser.fill" else "browser.click",
@@ -491,10 +564,10 @@ class GeckoBrowserActivity : Activity() {
             tabId = tab.id, captureId = current.captureId, revision = 0L, epoch = permissions.epoch(tab.id),
             frameId = current.frameId
         ), now)
-        if (!guard.accepted) { say("ไม่อนุญาต: ${guard.reason}"); return }
+        if (!guard.accepted) { onResult(DispatchResult(false, guard.reason.name)); return }
         engine.dispatch(tab, command) { result ->
             runOnUiThread {
-                if (!destroyed) say(if (result.accepted) "ส่งคำสั่ง${if (action == "FILL") "กรอก" else "กด"}แล้ว · ตรวจผลบนหน้าเว็บ" else "ทำรายการไม่ได้: ${result.reason}")
+                if (!destroyed) onResult(result)
             }
         }
     }

@@ -57,6 +57,7 @@ class GeckoBrowserEngine(
         if (disposed) return
         persist()
         disposed = true
+        observer.dispose()
         updateVisibility(false)
         detach()
         tabs.values.forEach { tab -> if (tab.session.isOpen) tab.session.close() }

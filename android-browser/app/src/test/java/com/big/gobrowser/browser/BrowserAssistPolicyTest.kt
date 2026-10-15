@@ -5,6 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BrowserAssistPolicyTest {
+    @Test fun refreshesOnlyAnUnchangedTargetInTheSameTabAndDocument() {
+        val selected = target()
+        assertTrue(BrowserAssistPolicy.selectionIsCurrent("tab-a", "tab-a", "https://example.com", "https://example.com", selected, listOf(target(label = "Other").copy(id = "other"), selected)))
+        assertFalse(BrowserAssistPolicy.selectionIsCurrent("tab-a", "tab-b", "https://example.com", "https://example.com", selected, listOf(selected)))
+        assertFalse(BrowserAssistPolicy.selectionIsCurrent("tab-a", "tab-a", "https://example.com", "https://example.org", selected, listOf(selected)))
+        assertFalse(BrowserAssistPolicy.selectionIsCurrent("tab-a", "tab-a", "https://example.com", "https://example.com", selected, listOf(selected.copy(id = "new-document-target"))))
+        assertFalse(BrowserAssistPolicy.selectionIsCurrent("tab-a", "tab-a", "https://example.com", "https://example.com", selected, listOf(selected.copy(signature = "changed"))))
+    }
     private fun target(tag: String = "input", type: String = "text", label: String = "Search", autocomplete: String = "",
                        frame: String = "frame-0", href: String? = null, disabled: Boolean = false) =
         Target("frame-0::target-1", null, label, type, 0, 0, 100, 30,
