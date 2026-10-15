@@ -15,7 +15,11 @@
     if (!nodeIds.has(node)) nodeIds.set(node, `${frameId}::${documentId}::target-${++nextNodeId}`);
     return nodeIds.get(node);
   };
-  const effectiveType = (node) => String(node.type || node.getAttribute('type') || node.tagName.toLowerCase());
+  const effectiveType = (node) => {
+    const type = String(node.type || node.getAttribute('type') || node.tagName.toLowerCase());
+    // HTML's default submit type has no submission behavior without an associated form.
+    return node.tagName === 'BUTTON' && type === 'submit' && !node.form && !node.closest?.('form') ? 'button' : type;
+  };
   const href = (node) => {
     if (!(node instanceof HTMLAnchorElement) || !node.href) return null;
     try { const u = new URL(node.href); if (!['http:', 'https:'].includes(u.protocol)) return null; u.username = ''; u.password = ''; u.hash = ''; return u.href.slice(0, 800); } catch { return null; }
@@ -52,7 +56,7 @@
         else if (sensitive(node) || /one.time.code|current.password|new.password|cc-|webauthn/i.test(node.getAttribute('autocomplete') || '')) result = {ok:false, reason:'SENSITIVE_TARGET'};
         else if (saved.signatures[index] !== signature(node) || !p.signature || p.signature !== saved.signatures[index]) result = {ok:false, reason:'TARGET_CHANGED'};
         else if (command.action === 'CLICK' && (
-          highImpact(node) || /^(submit|reset)$/i.test(node.type || '')
+          highImpact(node) || /^(submit|reset)$/i.test(effectiveType(node))
           || (node.tagName === 'BUTTON' && node.closest?.('form') && !/^button$/i.test(node.type || ''))
           || (node.tagName === 'A' && (!href(node) || !href(node).startsWith('https://')))
         )) result = {ok:false, reason:'HIGH_IMPACT_REQUIRES_OWNER'};

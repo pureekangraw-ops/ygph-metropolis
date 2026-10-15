@@ -36,11 +36,19 @@ class GeckoAssistFlowTest {
         }
         assertTrue(description, ready)
     }
+    @Test fun absentButtonLinkDoesNotBecomeAnUnsafeNullString() {
+        val target = org.json.JSONObject().put("targetId", "target-test").put("tag", "button")
+            .put("type", "button").put("label", "Continue").put("signature", "signed-target")
+            .put("href", org.json.JSONObject.NULL).put("role", org.json.JSONObject.NULL)
+        val parsed = DomCapture.from(org.json.JSONObject().put("targets", org.json.JSONArray().put(target))).targets.single()
+        assertNull(parsed.href); assertNull(parsed.role)
+        assertNull("An ordinary button without a link is a valid click target", BrowserAssistPolicy.rejection(parsed, "CLICK"))
+    }
     @Test fun ownerFillsAndClicksInOnePanelDespiteUnrelatedDomInsertion() {
         val server = ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
         val html = """<!doctype html><html><body>
             <input aria-label="Search" oninput="document.getElementById('state').textContent=this.value">
-            <button type="button" onclick="document.getElementById('state').textContent='Clicked'">Continue</button>
+            <button onclick="document.getElementById('state').textContent='Clicked'">Continue</button>
             <p id="state">Ready</p>
             <script>setTimeout(()=>{const b=document.createElement('button');b.type='button';b.textContent='Other';document.body.prepend(b)},6000)</script>
             </body></html>""".toByteArray(Charsets.UTF_8)
@@ -81,7 +89,9 @@ class GeckoAssistFlowTest {
             }
             instrumentation.runOnMainSync {
                 val spinner = views(dialog.window!!.decorView).filterIsInstance<Spinner>().single()
-                val index = (0 until spinner.adapter.count).first { spinner.adapter.getItem(it).toString().contains("กด · Continue") }
+                val labels = (0 until spinner.adapter.count).map { spinner.adapter.getItem(it).toString() }
+                val index = labels.indexOfFirst { it.contains("กด · Continue") }
+                assertTrue("Continue must be available among: $labels", index >= 0)
                 spinner.setSelection(index)
             }
             instrumentation.waitForIdleSync()

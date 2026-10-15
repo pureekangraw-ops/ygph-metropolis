@@ -53,8 +53,14 @@ test('same URL and label in another document cannot reuse an old target identity
  assert.notEqual(a.observations()[0].targets[0].targetId,b.observations()[0].targets[0].targetId);
 });
 test('effective HTML button type is visible to native assist policy',()=>{
- const p=page();p.node.type='submit';p.heartbeat();
+ const p=page();p.node.type='submit';p.node.form={};p.heartbeat();
  assert.equal(p.observations().at(-1).targets[0].type,'submit');
+});
+test('a default button outside any form is clickable without granting form submission',()=>{
+ const p=page();p.node.type='submit';p.node.form=null;p.heartbeat();const c=p.observations().at(-1);
+ assert.equal(c.targets[0].type,'button');
+ p.execute({type:'EXECUTE',commandId:'ordinary-button',captureId:c.captureId,frameId:c.frameId,action:'CLICK',parameters:{targetId:c.targets[0].targetId,signature:c.targets[0].signature}});
+ assert.equal(p.messages.at(-1).ok,true);
 });
 test('a changed selected target is rejected even with a fresh capture',()=>{
  const p=page();const selected=p.observations()[0].targets[0];p.node.innerText='Different action';p.heartbeat();
