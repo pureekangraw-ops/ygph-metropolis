@@ -31,10 +31,10 @@ class AndroidDeviceCredentialStore(
             init(Cipher.ENCRYPT_MODE, key())
         }
         val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
-        preferences.edit()
+        check(preferences.edit()
             .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(DATA_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .apply()
+            .commit()) { "ENCRYPTED_DATA_WRITE_FAILED" }
     }
 
     override fun load(): String? {
@@ -48,7 +48,7 @@ class AndroidDeviceCredentialStore(
     }
 
     override fun revoke() {
-        preferences.edit().remove(IV_KEY).remove(DATA_KEY).apply()
+        check(preferences.edit().remove(IV_KEY).remove(DATA_KEY).commit()) { "CREDENTIAL_REMOVE_FAILED" }
         if (keyStore.containsAlias(keyAlias)) keyStore.deleteEntry(keyAlias)
     }
 
@@ -76,3 +76,4 @@ class AndroidDeviceCredentialStore(
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }
+

@@ -16,7 +16,7 @@ class ModelConnection(context:Context) {
     fun disconnect(){settings.edit().clear().apply();credentials.revoke()}
     fun ask(request:JSONObject):JSONObject {
         val config=configuration()?:error("MODEL_NOT_CONFIGURED");val token=credentials.load()?:error("MODEL_NOT_CONFIGURED")
-        val message=JSONObject().put("text",request.getString("text")).put("context",request.getJSONObject("context"))
+        val message=redactedModelMessage(request,token)
         val body=JSONObject().put("model",config.model).put("messages",JSONArray().put(JSONObject().put("role","system").put("content",request.getString("system"))).put(JSONObject().put("role","user").put("content",message.toString()))).put("max_tokens",500)
         require(body.toString().toByteArray().size<=64*1024)
         val c=URL(config.endpoint).openConnection() as HttpURLConnection
@@ -32,3 +32,8 @@ class ModelConnection(context:Context) {
         } finally {c.disconnect()}
     }
 }
+
+
+internal fun redactedModelMessage(request:JSONObject, credential:String):JSONObject = JSONObject()
+    .put("text",request.getString("text"))
+    .put("context",com.big.gobrowser.transport.EvidenceExport.redactJson(request.getJSONObject("context"),credential))

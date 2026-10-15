@@ -22,8 +22,10 @@ import java.util.concurrent.Executors
 class GeckoBrowserActivity : Activity() {
     private val activityBridge = GeckoActivityBridge(
         { foreground && !isFinishing && !isDestroyed },
-        { intent, code -> startIntentSenderForResult(intent.intentSender, code, null, 0, 0, 0) }
+        onStatus = { code -> credentialStatus = code; if (code == "PROVIDER_LAUNCH_FAILED") say("เปิดหน้าพาสคีย์ไม่สำเร็จ · ดูเมนูพาสคีย์") },
+        launch = { intent, code -> startIntentSenderForResult(intent.intentSender, code, null, 0, 0, 0) }
     )
+    private var credentialStatus = "NOT_REQUESTED"
     private lateinit var engine: GeckoBrowserEngine
     private lateinit var address: EditText
     private lateinit var tabsButton: Button
@@ -31,8 +33,7 @@ class GeckoBrowserActivity : Activity() {
     private lateinit var eyeStatus: TextView
     private lateinit var connectionDiagnostics: TextView
     private lateinit var observerSession: ObserverSession
-    private lateinit var metropolis: MetropolisMcpClient
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var pantheon: PantheonObservatoryClient
     private val network = Executors.newSingleThreadExecutor()
     private val permissions by lazy {
         val prefs = getSharedPreferences("observatory-epochs", MODE_PRIVATE)
@@ -43,7 +44,6 @@ class GeckoBrowserActivity : Activity() {
     private val outbox = Outbox(maxAgeMs = 15_000L)
     private var latestDom: Pair<String, DomCapture>? = null
     private var domReceivedAt = 0L
-    private var pausedByOwner = false
     private var foreground = false
     private var destroyed = false
     private var captureBusy = false
@@ -53,21 +53,19 @@ class GeckoBrowserActivity : Activity() {
     private var acknowledgedCapture: String? = null
     private var deliveryFailed = false
     private var lastConnectionStatus = "NOT_ATTEMPTED"
-    private var hubArrival: MetropolisMcpClient.HubArrival? = null
-    private val tick = object : Runnable {
-        override fun run() {
-            if (!foreground || destroyed) return
-            startAutomaticObservation()
-            engine.active()?.let { captureIfShared(it) }
-            syncActive(); updateSharingStatus(); handler.postDelayed(this, 5_000L)
-        }
-    }
+    private var pantheonDeviceId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        metropolis = MetropolisMcpClient(this)
+        pantheon = PantheonObservatoryClient(this)
+        pantheonDeviceId = pantheon.deviceId()
         observerSession = ObserverSession("local-device", "${BuildConfig.VERSION_NAME}-gecko")
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            // Give clearFocus() a stable destination instead of immediately
+            // returning focus to the first EditText in the Activity.
+            isFocusableInTouchMode = true
+        }
         val addressRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -79,8 +77,13 @@ class GeckoBrowserActivity : Activity() {
             setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
+            setSelectAllOnFocus(true)
             layoutParams = LinearLayout.LayoutParams(0, dp(48), 1f)
-            setOnEditorActionListener { _, _, _ -> navigateFromAddress(); true }
+            setOnEditorActionListener { _, action, event ->
+                if (action == EditorInfo.IME_ACTION_GO || (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_UP)) {
+                    navigateFromAddress(); true
+                } else false
+            }
         }
         ObservatoryTheme.address(address)
         addressRow.addView(address)
@@ -110,10 +113,13 @@ class GeckoBrowserActivity : Activity() {
             setPadding(dp(12), 0, dp(12), 0)
             isClickable = true
             isFocusable = true
-            setOnClickListener { showBrowserDetails() }
-            tooltipText = "แตะดูสถานะ GO และข้อมูลรุ่น"
+            setOnClickListener { if (!pantheon.isPaired()) connectHub() else showBrowserDetails() }
+            tooltipText = "แตะดูสถานะ PANTHEON และข้อมูลรุ่น"
         }
         root.addView(sharingStatus)
+        root.addView(button("ส่งหน้าเว็บเข้า PANTHEON") { sendSnapshotManually() }.apply {
+            contentDescription = "กดส่งข้อมูลหน้าเว็บเข้า PANTHEON ครั้งเดียว"
+        })
         // Detailed evidence stays available in the dialog without consuming the webpage.
         eyeStatus = ObservatoryTheme.status(this)
         connectionDiagnostics = ObservatoryTheme.status(this)
@@ -121,33 +127,12 @@ class GeckoBrowserActivity : Activity() {
         root.addView(browserContainer, LinearLayout.LayoutParams(-1, 0, 1f))
         ObservatoryTheme.apply(this, root); PhoneLayout.fitSystemBars(root); setContentView(root)
         val geckoView = org.mozilla.geckoview.GeckoView(this); browserContainer.addView(geckoView, FrameLayout.LayoutParams(-1, -1))
-        engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { address.setText(url) } }, { tab, capture -> onCapture(tab, capture) }) { _, url ->
-            metropolis.handleCallback(url) { result ->
-                result.onSuccess { arrival ->
-                    runOnUiThread {
-                        if (destroyed || isFinishing) return@runOnUiThread
-                        hubArrival = arrival
-                        lastConnectionStatus = "HUB_ARRIVE_OK"
-                        engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
-                        say("เชื่อมต่อ Hub สำเร็จ · ${arrival.actor} · กำลังจับคู่หอดูดาว")
-                        updateSharingStatus()
-                        pairObservatory()
-                    }
-                }.onFailure { error ->
-                    runOnUiThread {
-                        if (destroyed || isFinishing) return@runOnUiThread
-                        lastConnectionStatus = safeConnectionCode(error)
-                        engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
-                        say("เชื่อม Hub ไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
-                        updateSharingStatus()
-                    }
-                }
-            }
-        }
+        engine = GeckoBrowserEngine(this, browserContainer, { url -> runOnUiThread { if (!address.hasFocus()) address.setText(url) } }, { tab, capture -> onCapture(tab, capture) },
+            onProblem = { code -> runOnUiThread { say(if (code == "SESSION_RECOVERY_FAILED") "กู้คืนหน้าเว็บไม่สำเร็จ · กรุณารีโหลด" else "โหลดหน้าเว็บไม่สำเร็จ · ตรวจการเชื่อมต่อแล้วรีโหลด") } })
         engine.restore()
         // An earlier build persisted the Metropolis API root as a browser tab. It is not a web UI.
         val restored = engine.active()?.requestedUrl.orEmpty().trimEnd('/')
-        if (restored == MetropolisMcpClient.ISSUER) engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
+        if (android.net.Uri.parse(restored).host == "metropolis.pureekangraw.workers.dev") engine.navigate(BrowserSettings.OBSERVATORY_HOME_URL)
         engine.attach(geckoView); updateSharingStatus()
     }
 
@@ -164,18 +149,19 @@ class GeckoBrowserActivity : Activity() {
     private fun showBrowserMenu() {
         val reading = engine.active()?.let { observerSession.isSharing(it.id) } == true
         AlertDialog.Builder(this).setTitle("หอดูดาว")
-            .setItems(arrayOf("แท็บใหม่", if (reading) "หยุดอ่านให้ GO" else "เริ่มอ่านให้ GO", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อม GO", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด")) { _, choice ->
+            .setItems(arrayOf("แท็บใหม่", "ส่งหน้าเว็บเข้า PANTHEON (กดเอง)", "แผนที่", "ไลร่า", "เก็บช่วงนี้ถาวร", "ช่วงที่เก็บไว้", "เชื่อมต่อ", "รายละเอียดและข้อมูลรุ่น", "ส่งหน้าเว็บให้ GO", "ช่วยกรอก / ช่วยกด", "พาสคีย์ / เปิดในเบราว์เซอร์ระบบ")) { _, choice ->
                 when (choice) {
                     0 -> { engine.open(); renderActive() }
-                    1 -> toggleShare()
+                    1 -> sendSnapshotManually()
                     2 -> startActivity(Intent(this, OutsideViewActivity::class.java))
                     3 -> LyraDialog.show(this, "INSIDE") { lyraContext() }
-                    4 -> ObservatoryMemoryDialog.preserve(this, metropolis, "browser")
-                    5 -> ObservatoryMemoryDialog.saved(this, metropolis)
-                    6 -> if (hubArrival?.actor == "GO" || metropolis.pairedObservatory() != null) showConnectionMenu() else connectHub()
+                    4 -> ObservatoryMemoryDialog.preserve(this, "browser", currentWebHandoff())
+                    5 -> ObservatoryMemoryDialog.saved(this)
+                    6 -> if (pantheon.isPaired()) showConnectionMenu() else connectHub()
                     7 -> showBrowserDetails()
                     8 -> shareCurrentPageToGo()
                     9 -> showOwnerAssist()
+                    10 -> showPasskeyHelp()
                 }
             }.setNegativeButton("ปิด", null).show()
     }
@@ -194,7 +180,7 @@ class GeckoBrowserActivity : Activity() {
             })
         }
         root.addView(ObservatoryTheme.status(this).apply {
-            text = "อ่านทุก 5 วินาที · ประวัติสด 15 วินาที\nหยุดอ่านเมื่อออกจากแอป · ล้างประวัติสดใน 30 วินาที\nช่วงที่เลือกเก็บถาวร เปิดได้จากเมนู"
+            text = "ส่งเข้า PANTHEON เฉพาะเมื่อบิ๊กกดเอง · ข้อมูลบน PANTHEON หมดอายุ 30 วินาที\nไม่มีการส่งอัตโนมัติ · ช่วงที่เลือกเก็บไว้จะเข้ารหัสบนเครื่อง"
             textSize = 15f
         })
         val scroll = ScrollView(this).apply { addView(root) }
@@ -203,41 +189,84 @@ class GeckoBrowserActivity : Activity() {
     private fun button(label: String, action: () -> Unit) = ObservatoryTheme.button(this, label, action)
     private fun renderActive() { engine.active()?.let { address.setText(it.requestedUrl) }; updateSharingStatus() }
     private fun showTabs() {
-        val tabs = engine.list(); if (tabs.isEmpty()) return
-        AlertDialog.Builder(this).setTitle("แท็บ").setItems(tabs.map { it.requestedUrl }.toTypedArray()) { _, index -> engine.select(tabs[index].id); renderActive() }
-            .setNeutralButton("ปิดแท็บนี้") { _, _ -> engine.active()?.let { engine.close(it.id) }; renderActive() }.setNegativeButton("กลับ", null).show()
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(8), dp(8), dp(8)) }
+        val dialog = AlertDialog.Builder(this).setTitle("แท็บที่เปิดอยู่")
+            .setView(ScrollView(this).apply { addView(list) })
+            .setPositiveButton("แท็บใหม่") { _, _ -> engine.open(); renderActive() }
+            .setNegativeButton("ปิด", null).create()
+        fun renderTabs() {
+            list.removeAllViews()
+            val activeId = engine.active()?.id
+            engine.list().forEach { tab ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                row.addView(button((if (tab.id == activeId) "● " else "") + tab.requestedUrl) {
+                    address.clearFocus(); engine.select(tab.id); renderActive(); dialog.dismiss()
+                }.apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END },
+                    LinearLayout.LayoutParams(0, dp(64), 1f))
+                row.addView(button("×") {
+                    engine.close(tab.id); renderActive(); renderTabs()
+                }.apply { contentDescription = "ปิดแท็บ " + tab.requestedUrl },
+                    LinearLayout.LayoutParams(dp(48), dp(64)))
+                list.addView(row)
+            }
+        }
+        renderTabs()
+        dialog.show()
+    }
+    private fun showPasskeyHelp() {
+        val status = when (credentialStatus) {
+            "PROVIDER_REQUESTED" -> "กำลังขอเปิดตัวจัดการพาสคีย์"
+            "PROVIDER_LAUNCHED" -> "เรียกตัวจัดการพาสคีย์แล้ว"
+            "PROVIDER_RESULT_OK" -> "ตัวจัดการพาสคีย์ส่งผลกลับแล้ว"
+            "PROVIDER_CANCELLED_OR_EMPTY" -> "ยกเลิกหรือไม่ได้รับผลจากตัวจัดการพาสคีย์"
+            "PROVIDER_LAUNCH_FAILED" -> "เปิดตัวจัดการพาสคีย์ไม่สำเร็จ"
+            else -> "ยังไม่มีผลจากเส้นทาง FIDO · เส้นทาง Credential Manager อาจทำงานแยกกัน"
+        }
+        AlertDialog.Builder(this).setTitle("พาสคีย์")
+            .setMessage(status + "\n\nพาสคีย์ของเว็บไซต์อื่นขึ้นกับสิทธิ์ที่ผู้ให้บริการให้กับแอปเบราว์เซอร์ หากหน้าพาสคีย์ไม่ขึ้น เปิดเว็บไซต์นี้ในเบราว์เซอร์ระบบได้\n\nการเข้าสู่ระบบในเบราว์เซอร์อื่นจะไม่ย้ายคุกกี้กลับมาที่หอดูดาว")
+            .setPositiveButton("เปิดในเบราว์เซอร์ระบบ") { _, _ ->
+                val url = engine.active()?.requestedUrl ?: return@setPositiveButton
+                if (!BrowserSettings.isAllowedUrl(url)) return@setPositiveButton
+                try { startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)), "เปิดเว็บไซต์ในเบราว์เซอร์")) }
+                catch (_: ActivityNotFoundException) { say("ไม่พบเบราว์เซอร์ที่เปิดเว็บไซต์นี้ได้") }
+            }.setNegativeButton("ปิด", null).show()
     }
     private fun showConnectionMenu() {
         AlertDialog.Builder(this).setTitle("การเชื่อมต่อ")
-            .setItems(arrayOf("เชื่อม Metropolis Hub ใหม่", "จับคู่หอดูดาว", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
-                when (choice) { 0 -> connectHub(); 1 -> pairObservatory(); 2 -> disconnect() }
+            .setItems(arrayOf("ดูสถานะ PANTHEON", "ยกเลิกการเชื่อมต่อ")) { _, choice ->
+                when (choice) { 0 -> showBrowserDetails(); 1 -> disconnect() }
             }.show()
     }
     private fun updateSharingStatus() {
         val tab = engine.active(); val latest = tab?.let { observerSession.latest(it.id) }; val now = System.currentTimeMillis()
         val fresh = latest != null && now - latest.capturedAtEpochMs in 0..14_999 && latest.captureId == acknowledgedCapture
-        val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, metropolis.pairedObservatory() != null, foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
-        sharingStatus.text = "GO · ${state.label}  ›"; sharingStatus.contentDescription = "${state.label} แตะดูรายละเอียด"; tabsButton.text = "แท็บ ${engine.list().size}"; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
-        val hub = hubArrival?.let { " · Hub ${it.actor}" }.orEmpty()
+        val state = SharingStatus.resolve(tab?.let { observerSession.isSharing(it.id) } == true, pantheon.isPaired(), foreground, ObservatoryTheme.online(this), fresh, lastAck, deliveryFailed, now)
+        sharingStatus.text = "PANTHEON · ${state.label}  ›"; sharingStatus.contentDescription = "${state.label} แตะดูรายละเอียด"; tabsButton.text = "แท็บ ${engine.list().size}"; sharingStatus.setTextColor(if (state == SharingState.LIVE) ObservatoryTheme.lime else ObservatoryTheme.muted)
+        val hub = if (pantheon.isPaired()) " · PANTHEON" else ""
         eyeStatus.text = "GeckoView · ${engine.list().size} tabs · ${if (foreground) "FOREGROUND" else "BACKGROUND"} · frame-aware observer$hub"
         updateConnectionDiagnostics()
     }
-    private fun startAutomaticObservation() {
-        if (!foreground || pausedByOwner || metropolis.pairedObservatory() == null) return
+    /** A manual tap creates exactly one fresh browser snapshot for the owner-scoped PANTHEON rail. */
+    private fun sendSnapshotManually() {
         val tab = engine.active() ?: return
-        if (!observerSession.isSharing(tab.id)) {
-            observerSession.start(tab.id)
+        if (!pantheon.isPaired()) {
+            lastConnectionStatus = "STATION_PAIRING_REQUIRED"
+            updateConnectionDiagnostics()
+            say("กรุณาเชื่อมต่อ PANTHEON ก่อน")
+            connectHub()
+            return
         }
-    }
-    private fun toggleShare() {
-        val tab = engine.active() ?: return
-        if (metropolis.pairedObservatory() == null) { lastConnectionStatus = "STATION_PAIRING_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO และจับคู่หอดูดาวก่อน"); showConnectionMenu(); return }
-        if (observerSession.isSharing(tab.id)) { pausedByOwner = true; stopSharing(); say("หยุดแชร์แท็บแล้ว") }
-        else { pausedByOwner = false; lastAck = null; acknowledgedCapture = null; deliveryFailed = false; observerSession.start(tab.id); captureIfShared(tab, true); updateSharingStatus() }
+        if (syncBusy) { say("กำลังส่งข้อมูล กรุณารอผลตอบรับ"); return }
+        if (!observerSession.isSharing(tab.id)) observerSession.start(tab.id)
+        if (!captureIfShared(tab)) {
+            say("หน้าเว็บยังไม่มีข้อมูลสด · รอสักครู่แล้วกดส่งอีกครั้ง")
+            return
+        }
+        syncActive()
     }
     private fun stopSharing() {
         generation += 1
-        engine.active()?.let { tab -> observerSession.stop(tab.id); metropolis.stopObservation("browser", permissions.epoch(tab.id)); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
+        engine.active()?.let { tab -> observerSession.stop(tab.id); pantheon.stopObservation("browser", permissions.epoch(tab.id)); val epoch = permissions.revoke(tab.id); getSharedPreferences("observatory-epochs", MODE_PRIVATE).edit().putLong("gecko", epoch).commit(); outbox.clearTab(tab.id) }
         latestDom = null; domReceivedAt = 0L
         lastAck = null; acknowledgedCapture = null; deliveryFailed = false; updateSharingStatus()
     }
@@ -247,20 +276,20 @@ class GeckoBrowserActivity : Activity() {
         latestDom = tab.id to capture
         domReceivedAt = System.currentTimeMillis()
     }
-    private fun captureIfShared(tab: GeckoBrowserEngine.GeckoTab, notify: Boolean = false) {
-        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) return
-        val latest = latestDom?.takeIf { it.first == tab.id }?.second ?: return
-        if (System.currentTimeMillis() - domReceivedAt !in 0..5_000L) return
-        if (latest.url.startsWith("${MetropolisMcpClient.ISSUER}/oauth/")) return
-        // Sample a freshly observed DOM every five seconds, including unchanged pages.
-        // Snapshot IDs identify history samples; DOM target IDs remain in the target metadata.
-        val snapshot = observerSession.capture(tab.id, latest.url, latest.title, latest.text, latest.targets, force = true) ?: return
+    private fun captureIfShared(tab: GeckoBrowserEngine.GeckoTab): Boolean {
+        if (!foreground || !engine.isOpen(tab) || !observerSession.isSharing(tab.id)) return false
+        val latest = latestDom?.takeIf { it.first == tab.id }?.second ?: return false
+        if (System.currentTimeMillis() - domReceivedAt !in 0..5_000L) return false
+        if (android.net.Uri.parse(latest.url).host == "metropolis.pureekangraw.workers.dev") return false
+        // Only an owner tap queues a sample; never publish on a timer or resume.
+        val snapshot = observerSession.capture(tab.id, latest.url, latest.title, latest.text, latest.targets, force = true) ?: return false
         outbox.enqueue(snapshot.copy(epoch = permissions.epoch(tab.id)))
-        eyeStatus.text = "อ่านทุก 5 วินาที · ประวัติ 15 วินาที · ${snapshot.targets.size} จุด"
+        eyeStatus.text = "บิ๊กกดส่งข้อมูลหน้าเว็บแล้ว · ${snapshot.targets.size} จุด"
+        return true
     }
     private fun syncActive() {
         val tab = engine.active() ?: return
-        if (syncBusy || !foreground || !observerSession.isSharing(tab.id) || metropolis.pairedObservatory() == null) return
+        if (syncBusy || !foreground || !observerSession.isSharing(tab.id) || !pantheon.isPaired()) return
         val snapshot = outbox.pending().lastOrNull()
             ?: observerSession.latest(tab.id)?.takeIf { it.captureId != acknowledgedCapture }
             ?: return
@@ -269,7 +298,7 @@ class GeckoBrowserActivity : Activity() {
         syncBusy = true; lastConnectionStatus = "SNAPSHOT_REQUESTED"; updateConnectionDiagnostics(); val epoch = generation; network.execute {
             val result = runCatching {
                 val wire = ObservatorySnapshotWire.bounded(HttpRelayClient.snapshotJson(snapshot))
-                metropolis.publishSnapshot("browser", wire)
+                pantheon.publishSnapshot("browser", wire)
             }
             runOnUiThread {
                 syncBusy = false
@@ -290,102 +319,73 @@ class GeckoBrowserActivity : Activity() {
             }
         }
     }
-    private fun pairObservatory() {
-        val arrival = hubArrival
-        if (arrival?.actor != "GO") { lastConnectionStatus = "GO_SESSION_REQUIRED"; updateConnectionDiagnostics(); say("เชื่อม GO กับ Metropolis ก่อน"); return }
-        lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
-        metropolis.pairObservatory("") { result ->
-            runOnUiThread {
-                if (destroyed || isFinishing) return@runOnUiThread
-                result.onSuccess { pair ->
-                    val saved = metropolis.pairedObservatory()
-                    if (saved == null || saved.deviceId != pair.deviceId || saved.publishSnapshot != pair.publishSnapshot) {
-                        lastConnectionStatus = "PAIR_SAVE_READBACK_MISMATCH"
-                        updateSharingStatus()
-                        say("Hub รับการจับคู่ แต่ข้อมูลเครื่องมืออ่านกลับไม่ตรง")
-                        return@onSuccess
+    private fun connectHub() {
+        if (pantheon.isPaired()) { showConnectionMenu(); return }
+        val entry = EditText(this).apply {
+            hint = "รหัสเจ้าของ PANTHEON (ใช้ครั้งเดียว)"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine()
+        }
+        AlertDialog.Builder(this).setTitle("เชื่อมต่อ PANTHEON")
+            .setMessage("ยืนยันเจ้าของครั้งเดียว แอปจะเก็บเฉพาะรหัสอุปกรณ์แบบเข้ารหัส และส่งข้อมูลเมื่อบิ๊กกดปุ่มเองเท่านั้น")
+            .setView(entry).setNegativeButton("ยกเลิก", null)
+            .setPositiveButton("ยืนยันและจับคู่") { _, _ ->
+                val ownerToken = entry.text.toString()
+                entry.text.clear()
+                lastConnectionStatus = "PAIR_REQUESTED"; updateConnectionDiagnostics()
+                pantheon.pair(ownerToken) { result ->
+                    if (destroyed || isFinishing) return@pair
+                    result.onSuccess { id ->
+                        pantheonDeviceId = id
+                        lastConnectionStatus = "PAIR_READBACK_OK"
+                        say("จับคู่ PANTHEON สำเร็จ")
+                    }.onFailure {
+                        lastConnectionStatus = safeConnectionCode(it)
+                        say("เชื่อมต่อ PANTHEON ไม่สำเร็จ")
                     }
-                    lastConnectionStatus = "PAIR_READBACK_OK"
-                    stopSharing()
-                    pausedByOwner = false
-                    startAutomaticObservation()
-                    say("จับคู่หอดูดาวในฐานะเครื่องมือสำเร็จ · ไม่ต้องสร้าง Work")
                     updateSharingStatus()
-                }.onFailure { error ->
-                    lastConnectionStatus = safeConnectionCode(error)
-                    updateSharingStatus()
-                    say("จับคู่หอดูดาวไม่สำเร็จ · ${connectionStatusLabel(lastConnectionStatus)}")
                 }
+            }.show()
+    }
+    private fun disconnect() {
+        stopSharing()
+        pantheon.disconnect { result ->
+            if (destroyed) return@disconnect
+            result.onSuccess {
+                pantheonDeviceId = null
+                lastConnectionStatus = "DISCONNECTED"
+                say("ยกเลิกสิทธิ์อุปกรณ์แล้ว")
+            }.onFailure {
+                if (!pantheon.isPaired()) {
+                    pantheonDeviceId = null
+                    lastConnectionStatus = "DISCONNECTED"
+                    say("ยกเลิกบนเครื่องแล้ว · ยังยืนยันการยกเลิกบน server ไม่ได้")
+                } else { lastConnectionStatus = safeConnectionCode(it); say("ยกเลิกสิทธิ์ไม่สำเร็จ") }
             }
+            updateSharingStatus()
         }
     }
-    private fun connectHub() {
-        lastConnectionStatus = "OAUTH_STARTED"
-        updateConnectionDiagnostics()
-        say("เปิดหน้า Metropolis Hub เพื่อยืนยันตัวตนเจ้าของ")
-        engine.navigate(metropolis.authorizationUrl())
-    }
-    private fun disconnect() { lastConnectionStatus = "DISCONNECTED"; stopSharing(); hubArrival = null; metropolis.disconnect(); updateSharingStatus() }
     private fun updateConnectionDiagnostics() {
         if (!::connectionDiagnostics.isInitialized) return
-        val actor = hubArrival?.actor ?: "ยังไม่เชื่อมต่อ"
-        val eligibleWorks = hubArrival?.observatoryWorks?.size?.toString() ?: "ยังไม่ตรวจ"
-        val pair = metropolis.pairedObservatory()
-        val pairState = pair?.let { "จับคู่แล้ว · …${it.workId.takeLast(8)}" } ?: "ยังไม่จับคู่"
-        connectionDiagnostics.text = "Hub: $actor · Work หอดูดาวที่อ่านได้: $eligibleWorks · การจับคู่: $pairState · ผลล่าสุด: ${connectionStatusLabel(lastConnectionStatus)}"
+        connectionDiagnostics.text = "PANTHEON · " + (if (pantheon.isPaired()) "จับคู่แล้ว" else "ยังไม่จับคู่") + " · " + connectionStatusLabel(lastConnectionStatus)
     }
-
-    private fun connectionStatusLabel(code: String): String {
-        val message = when (code) {
-            "NOT_ATTEMPTED" -> "ยังไม่ได้เริ่มตรวจ"
-            "OAUTH_STARTED" -> "กำลังเชื่อม Hub"
-            "HUB_ARRIVE_OK" -> "Hub ยืนยันตัวตนแล้ว"
-            "GO_SESSION_REQUIRED" -> "ต้องเชื่อมต่อด้วยบัญชี GO ก่อน"
-            "NO_AUTHORIZED_OBSERVATORY_WORK" -> "ไม่พบ Work หอดูดาวที่ GO มีสิทธิ์อ่าน"
-            "STATION_PAIRING_REQUIRED", "PAIRING_MISSING" -> "ยังไม่ได้จับคู่หอดูดาว"
-            "PAIR_REQUESTED" -> "กำลังส่งคำขอจับคู่"
-            "PAIR_READBACK_OK" -> "จับคู่และตรวจข้อมูลที่บันทึกแล้ว"
-            "PAIR_SAVE_READBACK_MISMATCH" -> "ข้อมูลจับคู่ที่บันทึกไม่ตรงกับคำตอบจาก Hub"
-            "SNAPSHOT_REQUESTED" -> "กำลังส่งข้อมูลอ่านกลับ"
-            "SNAPSHOT_ACK_OK" -> "ระบบเจ้าของยืนยันรับข้อมูลแล้ว"
-            "ACK_MISMATCH" -> "คำยืนยันรับข้อมูลไม่ตรงกัน"
-            "CAPTURE_STALE" -> "ข้อมูลอ่านกลับหมดอายุแล้ว"
-            "DISCONNECTED" -> "ยกเลิกการเชื่อมต่อแล้ว"
-            "OAUTH_STATE_MISMATCH" -> "ข้อมูลยืนยันการเชื่อมต่อไม่ตรงกัน"
-            "HUB_NOT_CONNECTED" -> "ยังไม่ได้เชื่อม Hub"
-            "HTTP_401_AUTH" -> "Hub ไม่ยืนยันตัวตน (401)"
-            "HTTP_403_DENIED" -> "Hub ไม่อนุญาต (403)"
-            "HTTP_406_ACCEPT_REQUIRED" -> "Hub ปฏิเสธรูปแบบคำขอ (406)"
-            "HTTP_5XX" -> "Hub เกิดข้อผิดพลาดภายใน (5xx)"
-            "STATION_ENDPOINT_INVALID" -> "ที่อยู่ปลายทางหอดูดาวไม่ถูกต้อง"
-            "STATION_CREDENTIAL_MISSING" -> "ไม่พบข้อมูลยืนยันตัวตนของหอดูดาว"
-            "HUB_RPC_ERROR" -> "Hub ตอบกลับข้อผิดพลาด"
-            "REQUEST_FAILED" -> "คำขอไม่สำเร็จ"
-            else -> if (code.startsWith("HTTP_")) "Hub ตอบกลับข้อผิดพลาด (${code.removePrefix("HTTP_")})" else "สถานะอื่น ($code)"
-        }
-        return "$message [$code]"
+    private fun connectionStatusLabel(code: String): String = when (code) {
+        "NOT_ATTEMPTED" -> "ยังไม่ได้เชื่อม"
+        "PAIR_REQUESTED" -> "กำลังตรวจสิทธิ์เจ้าของ"
+        "PAIR_READBACK_OK" -> "จับคู่สำเร็จ"
+        "SNAPSHOT_REQUESTED" -> "กำลังส่งข้อมูลสด"
+        "SNAPSHOT_ACK_OK" -> "PANTHEON รับข้อมูลแล้ว"
+        "ACK_MISMATCH" -> "การตอบรับไม่ตรงกัน"
+        "CAPTURE_STALE" -> "ข้อมูลสดหมดอายุ"
+        "DISCONNECTED" -> "ยกเลิกการเชื่อมต่อแล้ว"
+        "HTTP_401_AUTH" -> "สิทธิ์ไม่ถูกต้องหรือหมดอายุ"
+        "HTTP_404" -> "PANTHEON ยังไม่เปิด API"
+        "HTTP_503" -> "PANTHEON ไม่พร้อม"
+        else -> "เชื่อมต่อไม่สำเร็จ"
     }
-
-    /** Render only allowlisted status codes; never surface response bodies or credentials. */
     private fun safeConnectionCode(error: Throwable): String {
-        val message = error.message.orEmpty()
-        val httpStatus = Regex("HUB_HTTP_(\\d{3})").find(message)?.groupValues?.getOrNull(1)
-        if (httpStatus != null) return when (httpStatus) {
-            "401" -> "HTTP_401_AUTH"
-            "403" -> "HTTP_403_DENIED"
-            "406" -> "HTTP_406_ACCEPT_REQUIRED"
-            else -> if (httpStatus.startsWith("5")) "HTTP_5XX" else "HTTP_$httpStatus"
-        }
-        return when {
-            "HUB_OAUTH_STATE_MISMATCH" in message -> "OAUTH_STATE_MISMATCH"
-            "HUB_NOT_CONNECTED" in message -> "HUB_NOT_CONNECTED"
-            "NO_AUTHORIZED_OBSERVATORY_WORK" in message -> "NO_AUTHORIZED_OBSERVATORY_WORK"
-            "STATION_ENDPOINT_INVALID" in message -> "STATION_ENDPOINT_INVALID"
-            "STATION_CREDENTIAL_MISSING" in message -> "STATION_CREDENTIAL_MISSING"
-            "OBSERVATORY_NOT_PAIRED" in message -> "PAIRING_MISSING"
-            "HUB_RPC_" in message -> "HUB_RPC_ERROR"
-            else -> "REQUEST_FAILED"
-        }
+        val status = Regex("STATION_HTTP_(\\d{3})").find(error.message.orEmpty())?.groupValues?.getOrNull(1)
+        return when (status) { "401" -> "HTTP_401_AUTH"; "404" -> "HTTP_404"; "503" -> "HTTP_503"; null -> "REQUEST_FAILED"; else -> "HTTP_$status" }
     }
 
     private fun navigateFromAddress() {
@@ -408,15 +408,19 @@ class GeckoBrowserActivity : Activity() {
         return tab to capture
     }
 
-    private fun shareCurrentPageToGo() {
-        val capture = currentAssistEvidence()?.second ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
+    private fun currentWebHandoff(): String? {
+        val capture = currentAssistEvidence()?.second ?: return null
         val controls = capture.targets.filter { it.label?.isNotBlank() == true }
             .take(40).joinToString("\n") { "[${it.tag}] ${it.label.orEmpty().take(100)}" }
-        val handoff = "YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
+        return com.big.gobrowser.transport.EvidenceExport.redactText("YGG OBSERVATORY — WEB EVIDENCE (owner-shared)\n" +
             "URL: ${sanitizeUrl(capture.url)}\nTitle: ${capture.title.take(200)}\n" +
             "Read-only webpage text (may be truncated):\n${capture.text.take(12000)}\n" +
             "Visible controls (labels only; no input values):\n$controls\n" +
-            "Do not assume these controls were clicked or forms submitted."
+            "Do not assume these controls were clicked or forms submitted.")
+    }
+
+    private fun shareCurrentPageToGo() {
+        val handoff = currentWebHandoff() ?: run { say("ยังไม่มีข้อมูลเว็บสด · เปิดเว็บแล้วลองอีกครั้ง"); return }
         AlertDialog.Builder(this).setTitle("ส่งข้อมูลหน้าเว็บให้ GO")
             .setMessage("ส่งข้อความหน้าเว็บและชื่อปุ่มผ่าน Android แชร์ บิ๊กจะเลือกปลายทางเอง\nข้อมูลบนหน้าเว็บอาจเป็นข้อมูลส่วนตัว ตรวจสอบก่อนแชร์")
             .setNegativeButton("ยกเลิก", null)
@@ -427,6 +431,7 @@ class GeckoBrowserActivity : Activity() {
                 }, "แชร์ข้อมูลให้ GO"))
             }.show()
     }
+
 
     /** Owner approves each action locally. The existing Gecko port performs a second target/signature check. */
     private fun showOwnerAssist() {
@@ -497,15 +502,16 @@ class GeckoBrowserActivity : Activity() {
     private fun lyraContext(): JSONObject { val tab = engine.active() ?: return JSONObject(); val snap = observerSession.latest(tab.id) ?: return JSONObject(); val targets = JSONArray(); snap.targets.take(64).forEach { targets.put(JSONObject().put("targetId", it.id).put("frameId", it.frameId).put("label", it.label).put("tag", it.tag).put("signature", it.signature)) }; return JSONObject().put("browser", JSONObject().put("deviceId", snap.deviceId).put("tabId", snap.tabId).put("captureId", snap.captureId).put("revision", snap.revision).put("epoch", permissions.epoch(tab.id)).put("url", snap.url).put("title", snap.title).put("targets", targets)) }
     private fun lifecycleInteractive() = !isFinishing && !isDestroyed && (getSystemService(PowerManager::class.java)?.isInteractive != false)
     private fun say(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-    override fun onResume() { super.onResume(); foreground = true; engine.runtime().setActivityDelegate(activityBridge); pausedByOwner = false; engine.updateVisibility(true); GeckoObserverService.mark(this, true); handler.post(tick); updateSharingStatus() }
-    override fun onPause() { foreground = false; stopSharing(); engine.updateVisibility(false); GeckoObserverService.mark(this, false); handler.removeCallbacks(tick); updateSharingStatus(); super.onPause() }
+    override fun onResume() { super.onResume(); foreground = true; engine.runtime().setActivityDelegate(activityBridge); engine.updateVisibility(true); GeckoObserverService.mark(this, true); updateSharingStatus() }
+    override fun onPause() { foreground = false; stopSharing(); engine.updateVisibility(false); GeckoObserverService.mark(this, false); updateSharingStatus(); super.onPause() }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (!activityBridge.onActivityResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
     override fun onDestroy() { destroyed = true;
         activityBridge.cancel()
         if (engine.runtime().activityDelegate === activityBridge) engine.runtime().setActivityDelegate(null)
- stopSharing(); engine.detach(); handler.removeCallbacks(tick); network.shutdown(); metropolis.close(); super.onDestroy() }
+ stopSharing(); engine.shutdown(); network.shutdown(); pantheon.close(); super.onDestroy() }
     override fun onBackPressed() { engine.back() }
 }
+
 

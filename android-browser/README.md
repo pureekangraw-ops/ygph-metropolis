@@ -23,7 +23,17 @@ The menu now includes **ส่งหน้าเว็บให้ GO** (owner-a
 
 The native map now provides **ส่งแผนที่ให้ GO** with owner-confirmed sharing of camera center/zoom and up to 100 saved pins. It also provides **ส่งภาพแผนที่** using a real MapLibre bitmap and an Android chooser backed by a private cache-only FileProvider (temporary read permission). Active Station map snapshots include a current viewport report alongside the stored map state, not an image of all rendered tiles or a GPS verification.
 
-Sharing via Android sends to the app the owner chooses; it is **not automatic delivery to this ChatGPT conversation**. Existing Metropolis Station pairings publish observation snapshots in read-only mode. No remote GO-command poller or server-side action authority is enabled by this change. Browser action UI works locally on the handset even without GO OAuth pairing. Device installation and actual ChatGPT-to-device handoff require separate verification.
+Android Sharesheet sharing sends only to apps selected by the owner; it is **not automatic delivery to this ChatGPT conversation**. Foreground device snapshots travel to PANTHEON only after an owner-approved pair. They do not grant GO or LIGHT MCP access, remote browser actions, or business execution. Real-device handoff requires separate end-to-end verification.
+
+## Direct PANTHEON device observation (0.6.2 — draft)
+
+The Gecko launcher and Outside View map use `PantheonObservatoryClient` for observe-only device transport. To pair a handset, the owner opens **เชื่อมต่อ**, enters their PANTHEON owner token **once**, and explicitly confirms. The token is used for one HTTPS request to `/v1/observatory/pair` and never saved on the phone. Only the PANTHEON-issued 64-hex device credential is stored with Android Keystore AES-GCM under the app's package identity.
+
+While paired and foreground, browser DOM observations and rendered map-state observations are sent every **5 seconds** as non-executable snapshots. PANTHEON validates an increasing epoch/sequence and provides receipt ACKs; the `/v1/observatory/latest` owner read endpoint hides each sample after **30 seconds**. Physical deletion happens on subsequent writes/reads and a separately configured cleanup schedule; it is **not guaranteed to occur at the exact 30-second mark when idle**. The Android activity stops observation when paused. Pairing, stop, and disconnect APIs cannot run browser commands.
+
+Owner-selected permanent evidence is saved **locally** via Android Keystore-backed `ObservatoryMemoryDialog` and is explicitly separate from ephemeral server data. Old previously saved Metropolis records are **not migrated or deleted** by this change; the retired source/credential should not be purged until an owner-approved recovery procedure exists. Saved map pins and settings remain untouched.
+
+**Not yet ready for unattended use:** the matching backend is in draft [Pantheon-WorkHub PR #4](https://github.com/pureekangraw-ops/Pantheon-WorkHub/pull/4), not deployed to production. This APK should only be used for source/CI validation until a staged PANTHEON readback confirms pairing, snapshot, expiry, and revocation end-to-end. The Android CI builds development-signed debug APKs; subsequent builds may use different signing keys. Android will not install over a differently signed app, and uninstalling can destroy owner data. Never uninstall an existing Observatory copy before backup/migration approval.
 
 ## Not claimed yet
 

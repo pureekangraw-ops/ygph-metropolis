@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class ObservatoryMobileTest {
-    @get:Rule val rule=ActivityTestRule(BrowserActivity::class.java)
+    @get:Rule val rule=ActivityTestRule(GeckoBrowserActivity::class.java)
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private fun views(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap {views(v.getChildAt(it))}else emptyList()
     @Test fun primaryPhoneControlsFitWithoutSidewaysScrolling() {
@@ -27,15 +27,15 @@ class ObservatoryMobileTest {
         instrumentation.runOnMainSync {
             val root=rule.activity.window.decorView
             val buttons=views(root).filterIsInstance<Button>()
-            for(label in listOf("ไลร่า","แผนที่","แชร์ให้โก")) {
+            for(label in listOf("ไป","‹","›","↻")) {
                 val button=buttons.single {it.text.toString()==label}
                 val position=IntArray(2);button.getLocationOnScreen(position)
                 assertTrue("$label left edge",position[0]>=0)
                 assertTrue("$label right edge",position[0]+button.width<=root.width)
                 assertTrue("$label touch target",button.height>=ObservatoryTheme.dp(rule.activity,48))
             }
-            assertTrue(buttons.any {it.contentDescription=="ตั้งค่าการเชื่อมต่อ"})
-            assertTrue(views(root).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("ยังไม่เชื่อมเมโทร")})
+            assertTrue(buttons.any {it.contentDescription=="เมนูหอดูดาว"})
+            assertTrue(views(root).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("เชื่อมต่อ")})
         }
         instrumentation.uiAutomation.takeScreenshot()?.let {bitmap->
             java.io.File(instrumentation.targetContext.getExternalFilesDir(null),"observatory-mobile-browser.png").outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}

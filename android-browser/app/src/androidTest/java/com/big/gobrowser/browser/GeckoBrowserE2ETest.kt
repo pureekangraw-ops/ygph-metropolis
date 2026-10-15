@@ -43,15 +43,10 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun keyboardGoLoadsTwoExternalSitesAndObservesTheirActualDom() {
-        // The previous activity persisted a tab. Let its asynchronous Gecko restore complete
-        // before simulating the owner's next address entry, rather than racing startup.
-        val readyDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
-        var ready = false
-        while (!ready && System.nanoTime() < readyDeadline) {
-            instrumentation.runOnMainSync { ready = currentCapture() != null }
-            if (!ready) Thread.sleep(100)
-        }
-        assertTrue("Restored browser must produce its initial DOM before navigation", ready)
+        // Do not require the startup home page to be online before navigating:
+        // a restored tab may still be loading or offline on the emulator. Verify
+        // real DOM for each owner-entered destination below instead.
+        instrumentation.waitForIdleSync()
         for (host in listOf("example.com", "example.org")) {
             instrumentation.runOnMainSync {
                 val address = views(rule.activity.window.decorView).filterIsInstance<EditText>().single()
@@ -125,5 +120,104 @@ class GeckoBrowserE2ETest {
         val field = GeckoBrowserActivity::class.java.getDeclaredField("latestDom").apply { isAccessible = true }
         return (field.get(rule.activity) as? Pair<*, *>)?.second as? DomCapture
     }
+
+    @Test fun editingAddressIsNotOverwrittenByPageNavigation() {
+        instrumentation.runOnMainSync {
+            val address = views(rule.activity.window.decorView).filterIsInstance<EditText>().single()
+            val tab = engine().active()!!
+            address.requestFocus()
+            address.setText("example.org/draft")
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/redirect", emptyList(), false)
+            assertEquals("example.org/draft", address.text.toString())
+            address.clearFocus()
+            tab.session.navigationDelegate!!.onLocationChange(tab.session, "https://example.com/final", emptyList(), false)
+            assertEquals("https://example.com/final", address.text.toString())
+        }
+    }
+
+    @Test fun killedSessionRecoveryReattachesTheExistingView() {
+        instrumentation.runOnMainSync { engine().navigate("https://example.com") }
+        awaitPage("example.com")
+        var previousCaptureId: String? = null
+        instrumentation.runOnMainSync {
+            previousCaptureId = currentCapture()?.captureId
+            val tab = engine().active()!!
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            tab.session.close()
+            tab.session.contentDelegate!!.onKill(tab.session)
+            assertTrue("Recovered session must be open", tab.session.isOpen)
+            org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
+        }
+        awaitPage("example.com", previousCaptureId)
+    }
+
+    @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
+        instrumentation.runOnMainSync {
+            val previous = engine().active()!!
+            val selected = engine().open("https://example.org")
+            val active = engine().active()!!
+            engine().close(previous.id)
+            assertEquals(selected, engine().active()!!.id)
+            val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            org.junit.Assert.assertSame(active.session, view.session)
+            assertTrue(active.session.isOpen)
+        }
+    }
+
+    @Test fun reopeningActivityRestoresSelectedTabAndLoadsItsPage() {
+        lateinit var originalTabs: List<GeckoBrowserEngine.GeckoTab>
+        lateinit var selectedId: String
+        instrumentation.runOnMainSync {
+            selectedId = engine().open("https://example.org")
+            engine().open("https://example.com")
+            engine().select(selectedId)
+            originalTabs = engine().list()
+        }
+        awaitPage("example.org")
+        val originalActivity=rule.activity
+        val destroyed=java.util.concurrent.CountDownLatch(1)
+        val monitor=androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+        val callback=androidx.test.runner.lifecycle.ActivityLifecycleCallback { activity, stage ->
+            if(activity===originalActivity&&stage==androidx.test.runner.lifecycle.Stage.DESTROYED)destroyed.countDown()
+        }
+        instrumentation.runOnMainSync {monitor.addLifecycleCallback(callback)}
+        try {
+            rule.finishActivity()
+            assertTrue("Original Activity must reach DESTROYED",destroyed.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        } finally {instrumentation.runOnMainSync {monitor.removeLifecycleCallback(callback)}}
+        // The lifecycle monitor signals DESTROYED before the framework finishes onDestroy.
+        // Await actual session disposal rather than racing that notification.
+        val closeDeadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+        var closed=false
+        while(!closed&&System.nanoTime()<closeDeadline){
+            instrumentation.runOnMainSync {closed=originalTabs.all {!it.session.isOpen}}
+            if(!closed)Thread.sleep(50)
+        }
+        assertTrue("Destroyed Activity must release all sessions",closed)
+        rule.launchActivity(android.content.Intent(instrumentation.targetContext, GeckoBrowserActivity::class.java))
+        instrumentation.runOnMainSync { assertEquals("Restore must retain selected tab, not last record", selectedId, engine().active()!!.id) }
+        awaitPage("example.org")
+    }
+
+    private fun awaitPage(host: String, previousCaptureId: String? = null) {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
+        var loaded = false
+        while (!loaded && System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                val capture = currentCapture()
+                loaded = capture != null && android.net.Uri.parse(capture.url).host == host
+                    && capture.title == "Example Domain" && capture.text.isNotBlank()
+                    && capture.captureId != previousCaptureId
+            }
+            if (!loaded) Thread.sleep(100)
+        }
+        var diagnostic=""
+        if(!loaded)instrumentation.runOnMainSync {
+            val capture=currentCapture()
+            diagnostic="phase=${if(previousCaptureId==null) "initial" else "recovery"}, sessionOpen=${engine().active()?.session?.isOpen}, requested=${engine().active()?.requestedUrl}, captured=${capture?.url}, title=${capture?.title}, captureChanged=${capture?.captureId!=previousCaptureId}"
+        }
+        assertTrue("Actual DOM must load from $host ($diagnostic)", loaded)
+    }
 }
+
 

@@ -19,4 +19,22 @@ class DomObserverTest {
         assertTrue(truncated)
         assertTrue(value.toByteArray().size <= 10)
     }
+    @Test fun removesCredentialsFromUrlAuthority() {
+        assertEquals("https://example.com/a", sanitizeUrl("https://alice:password@example.com/a?token=secret#access_token=hidden"))
+    }
+
+    @Test fun exportedSnapshotRedactsTextAndEveryTargetCopy() {
+        val target = Target("target-1", "token=roleSecret", "token=labelSecret", "link", 0, 0, 20, 20,
+            href="https://example.com/a?token=hrefSecret", signature="a\u001fhttps://example.com/?token=signatureSecret")
+        val sample = DomObserver("device", "test").capture("tab", "https://example.com", "token=titleSecret",
+            "Authorization: Bearer bearerSecret\napi_key=bodySecret", listOf(target))
+        val wire = com.big.gobrowser.transport.HttpRelayClient.snapshotJson(sample).toString()
+        listOf("roleSecret", "labelSecret", "hrefSecret", "signatureSecret", "titleSecret", "bearerSecret", "bodySecret").forEach {
+            assertTrue("Leaked $it", !wire.contains(it))
+        }
+        assertEquals("target-1", sample.targets.single().id)
+        assertEquals("https://example.com/a", org.json.JSONObject(wire).getJSONArray("targets").getJSONObject(0).getString("href"))
+        assertTrue(sample.targets.single().signature.contains("signatureSecret"))
+    }
 }
+

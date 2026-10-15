@@ -3,15 +3,15 @@ package com.big.gobrowser.outsideview
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.big.gobrowser.transport.MetropolisMcpClient
+import com.big.gobrowser.transport.PantheonObservatoryClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
- * Explicit foreground-only map observation using the deployed Metropolis OAuth Station.
- * No remote map commands are accepted here: the currently deployed Station is read-only.
+ * Foreground-only map observation through PANTHEON's scoped device token.
+ * No remote map commands are accepted: this rail is observe-only.
  * An ACK is transport/readback evidence, not proof that GO has viewed the map.
  */
 class ObservatoryMapShare(
@@ -21,7 +21,7 @@ class ObservatoryMapShare(
     private val report: (String) -> Unit,
     private val viewport: () -> JSONObject = { JSONObject() }
 ) {
-    private val client = MetropolisMcpClient(context)
+    private val client = PantheonObservatoryClient(context)
     private val prefs = context.getSharedPreferences("observatory-map-observer-v1", Context.MODE_PRIVATE)
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -39,21 +39,22 @@ class ObservatoryMapShare(
     var acknowledgedRevision: Long? = null
         private set
 
-    private val loop = object : Runnable {
-        override fun run() {
-            if (!sharing || closed) return
-            publishIfRendered()
-            handler.postDelayed(this, 5_000L)
-        }
-    }
+    fun isPaired(): Boolean = client.isPaired()
 
-    fun isPaired(): Boolean = client.pairedObservatory() != null
-
-    fun start(): Boolean {
-        if (sharing) return true
-        if (!isPaired()) {
-            report("เชื่อม GO และจับคู่หอดูดาวจากหน้าบราวเซอร์ก่อน")
+    /** One owner tap publishes one current rendered frame. No polling or background uploads. */
+    fun captureOnce(): Boolean {
+        if (closed || !ready() || store.load().let { it.pending != null || it.renderedRevision != it.state.revision }) {
+            report("แผนที่ยังไม่พร้อม · รอแสดงผลแล้วกดส่งอีกครั้ง")
             return false
+        }
+        if (!isPaired()) {
+            report("เชื่อม PANTHEON จากหน้าบราวเซอร์ก่อน")
+            return false
+        }
+        if (sharing) {
+            if (inFlight) { report("กำลังส่งแผนที่ · กรุณารอผลตอบรับ"); return false }
+            publishIfRendered()
+            return true
         }
         val next = maxOf(System.currentTimeMillis(), prefs.getLong("epoch", 0L) + 1L)
         if (!prefs.edit().putLong("epoch", next).commit()) {
@@ -67,8 +68,8 @@ class ObservatoryMapShare(
         lastAck = null
         deliveryFailed = false
         acknowledgedRevision = null
-        report("แชร์แผนที่ให้ GO แบบอ่านอย่างเดียวเมื่อเฟรมพร้อม")
-        handler.post(loop)
+        report("บิ๊กกดส่งแผนที่เข้า PANTHEON แล้ว")
+        publishIfRendered()
         return true
     }
 
@@ -76,7 +77,6 @@ class ObservatoryMapShare(
         if (sharing) client.stopObservation("map", epoch)
         sharing = false
         generation += 1L
-        handler.removeCallbacks(loop)
         inFlight = false
         lastAck = null
         acknowledgedRevision = null
@@ -106,16 +106,16 @@ class ObservatoryMapShare(
             .put("viewport", viewport())
             .put("state", JSONObject()
                 .put("zones", JSONArray().apply {
-                    state.zones.values.forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_ZONE, zone = it)).getJSONObject("zone")) }
+                    state.zones.values.take(12).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_ZONE, zone = it)).getJSONObject("zone")) }
                 })
                 .put("grids", JSONArray().apply {
-                    state.grids.values.forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_GRID, grid = it)).getJSONObject("grid")) }
+                    state.grids.values.take(12).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_GRID, grid = it)).getJSONObject("grid")) }
                 })
                 .put("pins", JSONArray().apply {
-                    state.pins.values.forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_PIN, pin = it)).getJSONObject("pin")) }
+                    state.pins.values.take(40).forEach { put(MapCommandCodec.encode(MapCommand("_", MapAction.UPSERT_PIN, pin = it)).getJSONObject("pin")) }
                 })
                 .put("notes", JSONArray().apply {
-                    state.notes.forEach { (id, value) -> put(JSONObject().put("id", id).put("value", value)) }
+                    state.notes.entries.take(12).forEach { (id, value) -> put(JSONObject().put("id", id).put("value", value.take(400))) }
                 })
             )
         val current = generation
@@ -134,7 +134,7 @@ class ObservatoryMapShare(
                     if (confirmed) {
                         acknowledgedRevision = state.revision
                         lastAck = System.currentTimeMillis()
-                        report("Metropolis รับ snapshot แผนที่แล้ว · revision ${state.revision}")
+                        report("PANTHEON รับ snapshot แผนที่แล้ว · revision ${state.revision}")
                     } else report("ข้อมูลตอบรับแผนที่ไม่ตรงกับที่ส่ง")
                 }.onFailure {
                     deliveryFailed = true

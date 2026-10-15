@@ -42,10 +42,7 @@ data class Snapshot(
     val epoch: Long = 0
 )
 
-fun sanitizeUrl(raw: String): String = runCatching {
-    val uri = URI(raw)
-    URI(uri.scheme, uri.authority, uri.path, null, null).toString()
-}.getOrDefault("")
+fun sanitizeUrl(raw: String): String = com.big.gobrowser.transport.EvidenceRedactor.sanitizeUrl(raw)
 
 fun truncateUtf8(raw: String, maxBytes: Int = SNAPSHOT_TEXT_LIMIT_BYTES): Pair<String, Boolean> {
     require(maxBytes > 0)
@@ -64,3 +61,4 @@ fun truncateUtf8(raw: String, maxBytes: Int = SNAPSHOT_TEXT_LIMIT_BYTES): Pair<S
     }
     return result.toString() to true
 }
+

@@ -10,7 +10,7 @@ import android.widget.*
 import android.view.ViewGroup
 import com.big.gobrowser.lyra.LyraDialog
 import com.big.gobrowser.ui.*
-import com.big.gobrowser.transport.MetropolisMcpClient
+import com.big.gobrowser.browser.GeckoBrowserActivity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -25,9 +25,8 @@ class OutsideViewActivity : Activity() {
     private lateinit var sharingStatus:TextView
     private lateinit var gpsStatus:TextView
     private lateinit var location:ForegroundLocationController
-    private lateinit var memoryClient:MetropolisMcpClient
     private var foreground=false
-    private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();handler.postDelayed(this,5_000)}}}
+    private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();handler.postDelayed(this,30_000)}}}
     private val handler=Handler(Looper.getMainLooper())
     private val worker=Executors.newSingleThreadExecutor()
     private val commands=java.util.ArrayDeque<MapCommand>()
@@ -37,7 +36,6 @@ class OutsideViewActivity : Activity() {
     private var destroyed=false
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
-        memoryClient=MetropolisMcpClient(this)
         store=MapStateStore(this);packageStore=LocalMapPackageStore(this)
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         root.addView(ObservatoryTheme.title(this,"หอดูดาว · แผนที่"))
@@ -47,30 +45,20 @@ class OutsideViewActivity : Activity() {
         gpsStatus=ObservatoryTheme.status(this).apply {text="ตำแหน่งฉัน · กดเพื่อใช้ GPS จากเครื่อง"}
         root.addView(status)
         val tools=LinearLayout(this)
-        tools.addView(button("ไลร่า"){LyraDialog.show(this,"OUTSIDE"){context()}})
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
-        tools.addView(button("ส่งแผนที่ให้ GO"){shareMapToGo()})
-        tools.addView(button("ส่งภาพแผนที่"){shareVisibleMapImage()})
-        shareButton=button("แชร์ให้โก"){if(mapShare.sharing){mapShare.stop();shareButton.text="แชร์ให้โก"}else if(mapShare.start())shareButton.text="หยุดแชร์";updateSharingStatus()}
-        tools.addView(shareButton)
-        tools.addView(button("เก็บช่วงนี้"){ObservatoryMemoryDialog.preserve(this,memoryClient,"map")})
-        tools.addView(button("ที่เก็บไว้"){ObservatoryMemoryDialog.saved(this,memoryClient)})
-        tools.addView(button("กลับ"){finish()})
+        tools.addView(button("ตำแหน่งฉัน"){location.request()})
+        tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
-        val files=LinearLayout(this)
-        files.addView(button("นำเข้า PMTiles"){startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)})
-        files.addView(button("ลองแสดงใหม่"){renderer.reloadStyle()})
-        files.addView(button("โน้ต"){noteDialog("outside","พื้นที่นี้")})
-        files.addView(button("ตำแหน่งฉัน"){location.request()})
-        root.addView(scroll(files))
+        shareButton=button("ส่งแผนที่เข้า PANTHEON"){mapShare.captureOnce();updateSharingStatus()}
+        root.addView(shareButton)
         root.addView(gpsStatus)
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
         root.addView(TextView(this).apply {text=packageStore.active()?.attribution?:"© OpenStreetMap contributors · openstreetmap.org/copyright";textSize=12f;setOnClickListener {startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.openstreetmap.org/copyright")))}})
         ObservatoryTheme.apply(this,root)
         PhoneLayout.fitSystemBars(root)
         setContentView(root)
-        renderer=MapLibreOutsideRenderer(host,packageStore)
+        renderer=MapLibreOutsideRenderer(host,packageStore,savedInstanceState)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
         mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
@@ -78,10 +66,32 @@ class OutsideViewActivity : Activity() {
         renderer.onSelect=::pinDialog
         renderer.onError={status.text=it}
         renderer.onConfirmed={confirmation->
-            if(confirmation.commandId.startsWith("screen-"))store.confirmScreen(confirmation)
+            if(confirmation.commandId.startsWith("screen-")) {
+                store.confirmScreen(confirmation)
+                busy=false
+                if(confirmation.error==null)pump()
+                updateSharingStatus()
+            }
             else {busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";pump()}
         }
-        renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){};pump()}}
+        renderer.onReady={val journal=store.load();store.commit(journal.copy(renderedRevision=-1));if(store.load().pending!=null){busy=true;executor.resume()}else{busy=true;renderer.render(RenderRequest("screen-${UUID.randomUUID()}",store.load().state.revision,renderer.styleGeneration,"screen",store.load().state)){}}}
+    }
+    private fun showMapTools() {
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ")
+        AlertDialog.Builder(this).setTitle("เครื่องมือแผนที่").setItems(labels){_,choice->
+            when(choice){
+                0->LyraDialog.show(this,"OUTSIDE"){context()}
+                1->shareMapToGo()
+                2->shareVisibleMapImage()
+                3->startActivity(Intent(this,GeckoBrowserActivity::class.java))
+                4->ObservatoryMemoryDialog.preserve(this,"map",currentMapHandoff())
+                5->ObservatoryMemoryDialog.saved(this)
+                6->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)
+                7->renderer.reloadStyle()
+                8->noteDialog("outside","พื้นที่นี้")
+                9->finish()
+            }
+        }.setNegativeButton("ปิด",null).show()
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
     private fun pump(){
@@ -161,8 +171,7 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
 
-    private fun shareMapToGo() {
-        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
+    private fun currentMapHandoff(): String {
         val journal = store.load()
         val state = journal.state
         val pins = JSONArray()
@@ -180,7 +189,12 @@ class OutsideViewActivity : Activity() {
             .put("pins", pins)
             .put("truncated", state.pins.size > 100)
             .put("note", "Camera and saved pins only; not a live map image or GPS proof")
-        val handoff = "YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\\n" + evidence.toString(2)
+        return com.big.gobrowser.transport.EvidenceExport.redactText("YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\n" + com.big.gobrowser.transport.EvidenceExport.redactJson(evidence).toString(2))
+    }
+
+    private fun shareMapToGo() {
+        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
+        val handoff = currentMapHandoff()
         AlertDialog.Builder(this).setTitle("ส่งแผนที่ให้ GO")
             .setMessage("แชร์ตำแหน่งกล้องแผนที่และหมุดที่บันทึกไว้ (สูงสุด 100 จุด) ผ่านเมนูแชร์ของ Android\\nพิกัดอาจเป็นข้อมูลส่วนตัว")
             .setNegativeButton("ยกเลิก", null)
@@ -191,16 +205,18 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
 
+
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label,action)
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==ForegroundLocationController.REQUEST_CODE)location.permissionResult()}
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
-    override fun onResume(){super.onResume();foreground=true;busy=store.load().pending!=null;renderer.onResume();location.resume();if(mapShare.isPaired()&&mapShare.start())shareButton.text="หยุดแชร์";handler.post(statusTick)}
-    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();shareButton.text="แชร์ให้โก";renderer.onPause();updateSharingStatus();super.onPause()}
+    override fun onResume(){super.onResume();foreground=true;busy=store.load().pending!=null;renderer.onResume();location.resume();handler.post(statusTick);updateSharingStatus()}
+    override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
-    override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();memoryClient.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdownNow();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
     override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState)}
 }
+
 
