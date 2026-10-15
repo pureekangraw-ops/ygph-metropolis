@@ -30,6 +30,14 @@
   nativePort.onMessage.addListener((message) => {
     if (!message || message.type !== 'EXECUTE') return;
     const command = message;
+    if (!Number.isSafeInteger(command.issuedAtEpochMs) || !Number.isSafeInteger(command.expiresAtEpochMs)
+      || command.expiresAtEpochMs <= Date.now() || command.issuedAtEpochMs > Date.now()
+      || command.expiresAtEpochMs - command.issuedAtEpochMs > 30000) {
+      nativePort.postMessage({ok:false, reason:'COMMAND_EXPIRED', commandId:command.commandId}); return;
+    }
+    if (document.visibilityState !== 'visible') {
+      nativePort.postMessage({ok:false, reason:'PAGE_NOT_VISIBLE', commandId:command.commandId}); return;
+    }
     const saved = window.__observatoryTargets;
     const p = command.parameters || {};
     let result = {ok: false, reason: 'STALE_CAPTURE'};

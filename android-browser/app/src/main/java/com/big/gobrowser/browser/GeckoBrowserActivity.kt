@@ -531,6 +531,8 @@ class GeckoBrowserActivity : Activity() {
 
     private fun assistFailureMessage(reason: String): String = when (reason) {
         "COMMAND_TIMEOUT" -> "หน้าเว็บยังไม่ตอบกลับ · ตรวจผลบนหน้าเว็บก่อนลองใหม่"
+        "COMMAND_EXPIRED" -> "คำสั่งหมดอายุแล้ว · ตรวจหน้าเว็บก่อนลองใหม่"
+        "PAGE_NOT_VISIBLE" -> "กลับไปที่หน้าเว็บก่อนทำรายการอีกครั้ง"
         "OBSERVER_DISCONNECTED", "OBSERVER_PORT_UNAVAILABLE" -> "การเชื่อมกับหน้าเว็บขาด · ปิดแผงแล้วรีโหลดหน้าเว็บ"
         "STALE_CAPTURE", "TARGET_CHANGED", "TARGET_NOT_FOUND", "PAGE_CHANGED" -> "หน้าเว็บหรือเป้าหมายเปลี่ยนแล้ว · กดอ่านหน้าใหม่แล้วเลือกอีกครั้ง"
         "STALE_EVIDENCE" -> "ยังไม่มีข้อมูลหน้าเว็บสด · ปิดแผง รอสักครู่ แล้วลองใหม่"

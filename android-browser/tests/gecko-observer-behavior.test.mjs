@@ -21,8 +21,18 @@ function page({subframe = false, name = ''} = {}) {
     browser:{runtime:{connectNative:()=>({onMessage:{addListener(fn){execute=fn;}},postMessage(m){messages.push(m);}}),sendNativeMessage:(_app,m)=>{messages.push(m);return Promise.resolve();}}},
     MutationObserver:class {observe(){}},setTimeout:fn=>fn(),clearTimeout(){},setInterval:fn=>{heartbeat=fn;},Event:class {}};
   vm.runInNewContext(script,sandbox);
-  return {sandbox,window,node,messages,heartbeat:()=>heartbeat(),execute:c=>execute(c),observations:()=>messages.filter(m=>m.type==='OBSERVATION').map(m=>m.page)};
+  return {sandbox,window,node,messages,heartbeat:()=>heartbeat(),execute:c=>execute({issuedAtEpochMs:Date.now(),expiresAtEpochMs:Date.now()+5000,...c}),observations:()=>messages.filter(m=>m.type==='OBSERVATION').map(m=>m.page)};
 }
+test('a command delayed past expiry cannot execute after native waiting ends',()=>{
+ const p=page();const c=p.observations()[0];
+ p.execute({type:'EXECUTE',commandId:'expired',captureId:c.captureId,frameId:c.frameId,action:'CLICK',expiresAtEpochMs:Date.now()-1,parameters:{targetId:c.targets[0].targetId,signature:c.targets[0].signature}});
+ assert.equal(p.messages.at(-1).reason,'COMMAND_EXPIRED');assert.equal(p.node.innerText,'Save');
+});
+test('a hidden page refuses an already queued action',()=>{
+ const p=page();const c=p.observations()[0];p.sandbox.document.visibilityState='hidden';
+ p.execute({type:'EXECUTE',commandId:'hidden',captureId:c.captureId,frameId:c.frameId,action:'CLICK',parameters:{targetId:c.targets[0].targetId,signature:c.targets[0].signature}});
+ assert.equal(p.messages.at(-1).reason,'PAGE_NOT_VISIBLE');assert.equal(p.node.innerText,'Save');
+});
 
 test('selected target identity survives an unrelated target inserted before it',()=>{
  const p=page();const selected=p.observations().at(-1).targets[0];
