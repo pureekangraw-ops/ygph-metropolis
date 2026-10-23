@@ -80,16 +80,16 @@ jobs:
         run: |
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
-          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Remote.apk"
           cp "$apk" "$installer"
           sha256sum "$installer" | tee "$installer.sha256"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: YGG-Observatory-Gecko
+          name: YGG-Observatory-Remote
           path: |
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.sha256
           retention-days: 14
 
       - name: Build compact ARM64 installer
@@ -100,7 +100,7 @@ jobs:
           gradle --no-daemon :app:clean :app:assembleDebug
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
-          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64.apk"
           # Gradle compresses native libraries with a fast level by default;
           # re-compress only the ARM64 APK with deflate level 9, then zipalign
           # and sign again using this build's original debug key.
@@ -139,11 +139,11 @@ jobs:
       - name: Upload compact ARM64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: YGG-Observatory-Gecko-ARM64
+          name: YGG-Observatory-Remote-ARM64
           path: |
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.sha256
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.signing.txt
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64.apk.signing.txt
           retention-days: 14
 
   observatory-emulator:
