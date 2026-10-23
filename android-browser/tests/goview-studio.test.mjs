@@ -69,3 +69,25 @@ test("reject package that claims unsupported future version",()=>{
   const map=G.demo();map.schema=2;
   assert.throws(()=>G.pack(map),/unsupported map schema/);
 });
+
+test("GeoJSON LineString + Polygon becomes editable roads, area and routeable shared vertices",()=>{
+  const fc={type:"FeatureCollection",name:"GO imported drawing",features:[
+    {type:"Feature",properties:{name:"Two road segments"},geometry:{type:"LineString",coordinates:[[100.501,13.751],[100.502,13.751],[100.503,13.752]]}},
+    {type:"Feature",properties:{name:"Linked POI"},geometry:{type:"Point",coordinates:[100.503,13.752]}},
+    {type:"Feature",properties:{name:"Park"},geometry:{type:"Polygon",coordinates:[[[100.502,13.75],[100.503,13.75],[100.503,13.751],[100.502,13.75]]]}}
+  ]};
+  const map=G.fromGeoJson(fc);
+  assert.equal(map.roads.length,2);
+  assert.equal(map.areas.length,1);
+  assert.equal(map.areas[0].points.length,3);
+  assert.equal(map.pois.length,1);
+  assert.ok(G.route(map,"n1","n3").meters>0);
+  assert.deepEqual(G.unpack(G.pack(map)),map);
+});
+test("GeoJSON polygon holes are rejected rather than silently disappearing",()=>{
+  assert.throws(()=>G.fromGeoJson({type:"FeatureCollection",features:[
+    {type:"Feature",properties:{name:"hole"},geometry:{type:"Polygon",coordinates:[
+      [[0,0],[1,0],[1,1],[0,0]],[[.2,.2],[.3,.2],[.2,.3],[.2,.2]]
+    ]}}
+  ]}),/Polygon needs exactly one outer ring/);
+});
