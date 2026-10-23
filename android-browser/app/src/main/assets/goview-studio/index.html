@@ -254,7 +254,7 @@ window.GoviewStudio={
  },
  nativeStatus:status
 };
-if(native){window.GoviewHost.readState();}else{
+if(native){render();window.GoviewHost.readState();}else{
  try{const raw=localStorage.getItem(LOCAL_KEY);if(raw)map=G.unpack(raw);ready=true;}catch(e){status("อ่านไฟล์ที่เก็บไว้ไม่ได้: "+e.message);}render();
 }
 })();
