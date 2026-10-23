@@ -211,11 +211,18 @@ class GoviewStudioActivity : Activity() {
                         storage.failWrite(out)
                         throw error
                     }
+                    // Do not promote a save until a real filesystem readback matches what was written.
+                    val readback = storage.openRead().use { readLimited(it) }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    check(MessageDigest.isEqual(digest.digest(bytes), digest.digest(readback))) {
+                        "Committed bytes do not match file readback"
+                    }
                     check(preferences.edit().putString("activeMap", id).commit()) { "could not store active map id" }
+                    digest.digest(readback).joinToString("") { "%02x".format(it.toInt() and 255) }
                 }
             }
-            if (result.isFailure) callback("nativeStatus", "บันทึกลงเครื่องไม่สำเร็จ: เก็บไฟล์เดิมไว้")
-            else callback("nativeStatus", "บันทึกแพ็กเกจลงเครื่องแล้ว")
+            if (result.isFailure) callback("nativeStatus", "บันทึกข้อมูลอาจสำเร็จแต่ตรวจอ่านกลับไม่ได้ · ตรวจไฟล์ก่อนกดซ้ำ")
+            else callback("nativePersisted", id, JSONObject(text).getJSONObject("map").getInt("version"), result.getOrThrow())
         }
 
         @JavascriptInterface fun listMaps() {
