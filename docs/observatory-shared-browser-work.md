@@ -20,7 +20,7 @@ In remote-browser:
 6. Provision a **real GO tool integration** that sends scoped calls to GET /v1/observe, GET /v1/session, POST /v1/action using GO_TOKEN. Without tool registration, pressing "ให้ GO ทำ" merely delegates controller permission; it does not cause this ChatGPT GO to navigate automatically.
 
 ## API (Bearer OWNER_TOKEN except specified GET/GO endpoints)
-POST /v1/session {url} owner only; GET /v1/session owner/GO; GET /v1/observe owner/GO only after explicit owner invitation; POST /v1/observe-access {allow:true|false} owner only; GET /v1/view owner only; POST /v1/control {controller:"BIG"|"GO"} owner only; POST /v1/action {type:"navigate"|"back"|"forward"|"reload"|"scroll"|"click"|"type",...} owner/GO when controller owns it; POST /v1/run {steps:[max 10 safe actions]} owner/GO only after delegated controller grant; POST /v1/audit {urls:[...]} owner only; GET /v1/job owner/GO; POST /v1/stop owner only.
+POST /v1/session {url} owner only; GET /v1/session owner/GO; GET /v1/observe owner/GO only after explicit owner invitation; POST /v1/observe-access {allow:true|false} owner only; GET /v1/view owner only; POST /v1/control {controller:"BIG"|"GO"} owner only; POST /v1/action {type:"navigate"|"back"|"forward"|"reload"|"scroll"|"click"|"type",...} owner/GO when controller owns it; POST /v1/run {steps:[max 10 safe actions]} owner/GO only after delegated controller grant; POST /v1/audit {urls:[...]} owner only; GET /v1/job owner/GO; POST /v1/stop owner only; POST /v1/close owner only (explicit browser shutdown to limit usage).
 
 The worker never executes arbitrary JavaScript from client requests; GO actions require explicit host allowlist, and blocks forms and risky controls by default. Browser page content is untrusted and **must not** be interpreted as authorization. A signed Live View link is a capability credential; never log or forward it. Headless audit is bounded and checkpoints results; waitUntil is not a durable Workflows engine.
 
@@ -32,3 +32,5 @@ Current GOVIEW PR #245 is deliberately not merged as part of this implementation
 GO observation access is denied by default and revoked when BIG takes back the controller. The **เรียก GO** button grants read-only API access but does not automatically notify a particular ChatGPT conversation.
 
 Headless GO_SCRIPT is bounded to 10 owner-authorized actions with per-step dispatch receipts and businessOutcome=UNKNOWN. STOP prevents later steps but cannot undo an already dispatched click; interrupted jobs are UNKNOWN and never silently replayed.
+
+Sessions should be explicitly closed by BIG to stop Browser Run billing; background mode intentionally does not auto-close the browser until its finite job ends. When an active job is RUNNING, close is refused until it has stopped or completed.

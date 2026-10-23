@@ -139,6 +139,21 @@ export class BrowserWorkspace {
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
+  async closeSession(state) {
+    if(state.job?.status==="RUNNING")throw new Error("STOP_JOB_BEFORE_CLOSING");
+    if(state.browserSessionId){
+      try {
+        const browser=await puppeteer.connect(this.env.BROWSER,state.browserSessionId);
+        await browser.close();
+      } catch(e){
+        if(!/session.*(?:closed|not found|does not exist)|browser.*disconnect|Target closed/i.test(String(e)))
+          throw e;
+      }
+    }
+    state.browserSessionId=null;state.targetId=null;state.controller="BIG";
+    state.allowGoRead=false;state.grantedHost=null;state.mode="IDLE";state.status="CLOSED";
+    await this.save(state);return summarize(state);
+  }
   async view(state) {
     const url=await this.withPage(state,async page => {
       const cdp=await page.createCDPSession();
@@ -262,6 +277,11 @@ export class BrowserWorkspace {
         const urls=Array.isArray(body.urls) ? body.urls.slice(0,4).map(validPageUrl) : [validPageUrl(state.url)];
         if(urls.some(x=>!x || !mayGoAct(x,this.env.GO_ALLOWED_HOSTS)))return reply({error:"URL_NOT_ALLOWED"},422);
         return reply(await this.audit(state,urls),202);
+      }
+      if(path==="/v1/close" && role==="BIG") {
+        if(this.inFlight)return reply({error:"BUSY"},409);
+        this.inFlight=true;
+        try{return reply(await this.closeSession(state));}finally{this.inFlight=false;}
       }
       if(path==="/v1/stop" && role==="BIG") {
         this.cancelAudit=true;const st=await this.state();st.allowGoRead=false;

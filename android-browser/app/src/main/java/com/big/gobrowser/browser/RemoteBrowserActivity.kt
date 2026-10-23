@@ -131,6 +131,7 @@ class RemoteBrowserActivity : Activity() {
         val evidence = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         evidence.addView(action("▶ ดูสด") { viewLive() }, weighted())
         evidence.addView(action("☷ ผลงาน") { showJob() }, weighted())
+        evidence.addView(action("⏹ ปิด") { closeSession() }, weighted())
         toolbar.addView(evidence)
         root.addView(toolbar)
         ObservatoryTheme.apply(this, root)
@@ -291,6 +292,17 @@ class RemoteBrowserActivity : Activity() {
                 query("POST","/v1/audit",JSONObject().put("urls",JSONArray().put(url))){result->
                     result.onSuccess {jobId=it.optString("jobId");status.text="เริ่มงานบนคลาวด์แล้ว · ดูผลงานเพื่อติดตาม"}
                         .onFailure {status.text="เริ่มไม่ได้ · "+readableError(it)}
+                }
+            }.setNegativeButton("ยกเลิก",null).show()
+    }
+    private fun closeSession() {
+        if(!session){status.text="ไม่มีเซสชันที่เปิดอยู่";return}
+        AlertDialog.Builder(this).setTitle("ปิด Browser Run?")
+            .setMessage("ปิดเบราว์เซอร์บน Cloudflare เพื่อหยุดใช้เวลาเซสชัน หากงานกำลังทำอยู่ให้หยุดงานก่อน")
+            .setPositiveButton("ปิดเซสชัน"){_,_->
+                query("POST","/v1/close",JSONObject()){result->
+                    result.onSuccess { renderSession(it);page.loadUrl("about:blank");status.text="ปิด Cloudflare Browser แล้ว" }
+                        .onFailure { status.text="ปิดไม่ได้ · "+readableError(it) }
                 }
             }.setNegativeButton("ยกเลิก",null).show()
     }
