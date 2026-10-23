@@ -27,6 +27,7 @@
     }
   ],
   "vars": {
-    "GO_ALLOWED_HOSTS": "*.yggmetro.com,greenhouse-owner.pages.dev,observatory-web.pureekangraw.workers.dev"
+    "GO_ALLOWED_HOSTS": "*.yggmetro.com,greenhouse-owner.pages.dev,observatory-web.pureekangraw.workers.dev",
+    "PUBLIC_ASSET_HOSTS": "cdn.jsdelivr.net,fonts.googleapis.com,fonts.gstatic.com,static.cloudflareinsights.com,unpkg.com"
   }
 }

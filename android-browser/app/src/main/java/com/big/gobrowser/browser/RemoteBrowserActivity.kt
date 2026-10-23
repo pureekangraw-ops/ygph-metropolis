@@ -158,7 +158,8 @@ class RemoteBrowserActivity : Activity() {
         val host = uri.host?.lowercase() ?: return null
         if (uri.scheme != "https" || uri.userInfo != null || uri.port != -1 || uri.rawQuery != null ||
             uri.fragment != null || uri.path.orEmpty().trimEnd('/').isNotEmpty() ||
-            !(host.endsWith(".workers.dev") || host == "yggmetro.com" || host.endsWith(".yggmetro.com"))) return null
+            !(host == "observatory-shared-browser.pureekangraw.workers.dev" ||
+              host == "yggmetro.com" || host.endsWith(".yggmetro.com"))) return null
         "https://" + host
     }.getOrNull()
     private fun allowedViewerUrl(url: String): Boolean = runCatching {

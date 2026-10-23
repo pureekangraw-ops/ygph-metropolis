@@ -152,14 +152,26 @@ export class BrowserWorkspace {
     const url=validPageUrl(raw.url || "https://shop.yggmetro.com/");
     if (!url) throw new Error("HTTPS_PUBLIC_URL_REQUIRED");
     let state=await this.state();
+    if (state.browserSessionId && state.url && new URL(state.url).hostname!==new URL(url).hostname) {
+      // Restrict a Browser Run session to its original domain; a new site receives a fresh session
+      // with host-specific network guardrails, so redirects cannot reach internal hosts.
+      await this.closeSession(state);
+      state=await this.state();
+    }
     if (state.browserSessionId) {
       try {
-        const result=await this.withPage(state,page=>page.goto(url,{waitUntil:"domcontentloaded",timeout:20000}).then(()=>({ok:true})));
+        await this.withPage(state,page=>page.goto(url,{waitUntil:"domcontentloaded",timeout:20000}).then(()=>({ok:true})));
         state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
         return summarize(state);
       } catch { state.browserSessionId=null; }
     }
-    const browser=await puppeteer.launch(this.env.BROWSER,{keep_alive:600000});
+    const host=new URL(url).hostname;
+    const extras=String(this.env.PUBLIC_ASSET_HOSTS || "").split(",")
+      .map(s=>s.trim().toLowerCase()).filter(s=>/^[a-z0-9.-]+$/.test(s) && s.includes("."));
+    const browser=await puppeteer.launch(this.env.BROWSER,{
+      keep_alive:600000,
+      guardrails:{allowedDomains:[host,`*.${host}`,...extras]}
+    });
     try {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
@@ -201,7 +213,8 @@ export class BrowserWorkspace {
   async enqueue(state,kind,items,requestId) {
     const repeat=state.recentRequests?.find(r=>r.requestId===requestId);
     if(repeat) return {jobId:repeat.jobId,status:"ALREADY_ACCEPTED",duplicate:true};
-    if(state.job?.status==="RUNNING" || state.mode==="HEADLESS")throw new Error("JOB_ALREADY_RUNNING");
+    if(["RUNNING","STOP_REQUESTED"].includes(state.job?.status) || state.mode==="HEADLESS")
+      throw new Error("JOB_ALREADY_RUNNING");
     const job={id:crypto.randomUUID(),kind,status:"RUNNING",startedAt:new Date().toISOString(),
       progress:0,total:items.length,results:[],requestId,originRole:kind==="GO_SCRIPT"?"GO":"BIG"};
     state.job=job;state.mode="HEADLESS";state.status="RUNNING";
@@ -321,11 +334,16 @@ export class BrowserWorkspace {
         await this.save(state);return reply({saved:true,version:state.version});
       }
       if(path==="/v1/session" && role==="BIG") {
-        if(this.inFlight || state.job?.status==="RUNNING")return reply({error:"BUSY"},409);this.inFlight=true;
+        if(this.inFlight || ["RUNNING","STOP_REQUESTED"].includes(state.job?.status))
+          return reply({error:"BUSY"},409);
+        this.inFlight=true;
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
       }
       if(path==="/v1/observe-access" && role==="BIG") {
-        if(typeof body.allow !== "boolean" || !state.browserSessionId) return reply({error:"INVALID_OBSERVE_GRANT"},422);
+        if(typeof body.allow !== "boolean" || !state.browserSessionId)
+          return reply({error:"INVALID_OBSERVE_GRANT"},422);
+        if(body.allow && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS))
+          return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.allowGoRead=body.allow;state.grantedHost=body.allow?new URL(state.url).hostname:null;
         if(!body.allow && state.controller==="GO") {state.controller="BIG";state.mode="OBSERVE";}
         await this.save(state);return reply(summarize(state));
@@ -365,7 +383,8 @@ export class BrowserWorkspace {
         finally{this.inFlight=false;}
       }
       if(path==="/v1/audit" && role==="BIG") {
-        if(this.inFlight || state.mode==="HEADLESS" || !state.browserSessionId)return reply({error:"BUSY_OR_NO_SESSION"},409);
+        if(this.inFlight || ["RUNNING","STOP_REQUESTED"].includes(state.job?.status) ||
+          state.mode==="HEADLESS" || !state.browserSessionId)return reply({error:"BUSY_OR_NO_SESSION"},409);
         const urls=Array.isArray(body.urls) ? body.urls.slice(0,4).map(validPageUrl) : [validPageUrl(state.url)];
         if(urls.some(x=>!x || !mayGoAct(x,this.env.GO_ALLOWED_HOSTS)))return reply({error:"URL_NOT_ALLOWED"},422);
         if(this.inFlight)return reply({error:"BUSY"},409);
