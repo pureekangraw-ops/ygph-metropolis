@@ -238,8 +238,7 @@ class RemoteBrowserActivity : Activity() {
     private fun inviteGo() {
         if(!session) {status.text="เปิดเว็บไซต์ก่อน";return}
         AlertDialog.Builder(this).setTitle("เชิญ GO ดูหน้าเว็บ")
-            .setMessage("อนุญาตให้ GO ที่ถือคีย์แบบอ่านอย่างเดียวอ่านหน้าเว็บเซสชันนี้ผ่านช่องเครื่องมือที่เชื่อมแล้ว
-\nไม่อนุญาตให้กดหรือเปลี่ยนข้อมูล")
+            .setMessage("อนุญาตให้ GO ที่ถือคีย์แบบอ่านอย่างเดียวอ่านหน้าเว็บเซสชันนี้ผ่านช่องเครื่องมือที่เชื่อมแล้ว\n\nไม่อนุญาตให้กดหรือเปลี่ยนข้อมูล")
             .setPositiveButton("เชิญ GO") { _,_->
                 query("POST","/v1/observe-access",JSONObject().put("allow",true)){result->
                     result.onSuccess {renderSession(it);readPage()}
