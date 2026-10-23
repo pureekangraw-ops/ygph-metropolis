@@ -7,4 +7,5 @@ interface JournalBackend {
     fun read():String?
     fun initialize(payload:String,revision:Long,legacy:File?)
     fun write(payload:String,revision:Long)
+    fun recover(payload:String,revision:Long){write(payload,revision)}
 }

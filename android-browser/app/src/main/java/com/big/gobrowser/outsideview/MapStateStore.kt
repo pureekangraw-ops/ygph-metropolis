@@ -94,6 +94,7 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         val name="backup-${java.util.UUID.randomUUID()}.json"
         val payload=encode(journal).toString()
         val envelope=JSONObject().put("schemaVersion",1).put("sha256",checksum(payload)).put("payload",payload).toString()
+        require(envelope.toByteArray(Charsets.UTF_8).size<=33_554_432){"Backup exceeds validated local envelope limit; existing data retained"}
         val temp=File(directory,"$name.tmp")
         java.io.FileOutputStream(temp).use {it.write(envelope.toByteArray(Charsets.UTF_8));it.fd.sync()}
         Files.move(temp.toPath(),File(directory,name).toPath(),StandardCopyOption.ATOMIC_MOVE)
@@ -124,9 +125,42 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         val rollback=writeBackup(current)
         val revision=current.state.revision+1
         val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),preview.name,1,"RESTORED",revision,
-            error="Rollback copy: $rollback",operation="STORAGE",readbackVerified=true)
+            error="Rollback copy: $rollback",operation="STORAGE",readbackVerified=false)
         val restored=withReceipt(backup.copy(state=backup.state.copy(revision=revision),renderedRevision=-1,updates=current.updates),receipt)
-        commit(restored);check(readStrict()==restored){"Restore readback failed; inspect rollback copy"};receipt
+        commit(restored)
+        verifyCommittedRestore(restored,receipt)
+    }
+    private fun verifyCommittedRestore(restored:MapJournal,receipt:MapUpdateReceipt):MapUpdateReceipt {
+        return try {
+            check(readStrict()==restored){"Restore readback mismatch"}
+            val verified=receipt.copy(readbackVerified=true)
+            commit(restored.copy(updates=restored.updates.dropLast(1)+verified));verified
+        }catch(error:Exception){receipt.copy(status="COMMITTED_READBACK_UNAVAILABLE",error="${receipt.error}; inspect originals before retry: ${error.message}")}
+    }
+    private fun primaryFingerprint():String = checksum(root.listFiles()?.filter {it.isFile}?.sortedBy {it.name}?.joinToString("|"){it.name+":"+java.security.MessageDigest.getInstance("SHA-256").digest(it.readBytes()).joinToString(""){b->"%02x".format(b)}}.orEmpty())
+    /** Recovery preview reads the verified backup independently of primary readability. */
+    fun previewRecovery(name:String):BackupPreview = synchronized(transactionLock) {
+        val (backup,hash)=readBackup(name);require(backup.pending==null){"Backup has pending command"}
+        BackupPreview(name,-1,backup.state.pins.size,hash,primaryFingerprint())
+    }
+    fun approveRecovery(preview:BackupPreview):MapUpdateReceipt = synchronized(transactionLock) {
+        require(preview.expectedRevision == -1L && preview.primaryFingerprint==primaryFingerprint()){"Primary changed; review recovery again"}
+        val (backup,hash)=readBackup(preview.name);require(hash==preview.checksum){"Backup changed since review"}
+        val preserved=File(root,"preserved-primary-${java.util.UUID.randomUUID()}");check(preserved.mkdirs())
+        root.listFiles()?.filter {it.isFile}?.forEach {source->
+            java.io.FileOutputStream(File(preserved,source.name)).use {out->source.inputStream().use {it.copyTo(out)};out.fd.sync()}
+        }
+        val revision=maxOf(backup.state.revision+1,System.currentTimeMillis())
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),preview.name,1,"RECOVERED",revision,
+            error="Preserved primary: ${preserved.name}",operation="STORAGE",readbackVerified=false)
+        val restored=withReceipt(backup.copy(state=backup.state.copy(revision=revision),renderedRevision=-1),receipt)
+        if(backend!=null)backend.recover(encode(restored).toString(),revision)
+        else {
+            val temp=File(root,"journal.recovery.tmp")
+            java.io.FileOutputStream(temp).use {it.write(encode(restored).toString().toByteArray(Charsets.UTF_8));it.fd.sync()}
+            Files.move(temp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)
+        }
+        verifyCommittedRestore(restored,receipt)
     }
     private fun readStrict():MapJournal {
         backend?.read()?.let {return decode(JSONObject(it))}

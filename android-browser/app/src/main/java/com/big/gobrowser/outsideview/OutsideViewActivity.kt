@@ -40,7 +40,7 @@ class OutsideViewActivity : Activity() {
     private var pendingExportPath:String?=null
     private fun storageFailure() {
         storageUnavailable=true
-        handler.post {if(!destroyed){busy=false;status.text="อ่านที่เก็บข้อมูลไม่ได้ · หยุดการบันทึกและแชร์ · ไฟล์เดิมยังอยู่ · กดลองแสดงใหม่หลังแก้ไขที่เก็บข้อมูล";if(::shareButton.isInitialized)shareButton.isEnabled=false}}
+        handler.post {if(!destroyed){busy=false;status.text="อ่านที่เก็บข้อมูลไม่ได้ · หยุดการบันทึกและแชร์ · ไฟล์เดิมยังอยู่ · แตะข้อความนี้เพื่อตรวจสำเนากู้คืน";if(::shareButton.isInitialized)shareButton.isEnabled=false}}
     }
     private fun readJournal():MapJournal?=try {store.load()}catch(error:Exception){storageFailure();null}
 
@@ -51,7 +51,7 @@ class OutsideViewActivity : Activity() {
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         root.addView(ObservatoryTheme.title(this,"หอดูดาว · GOVIEW"))
         root.addView(ObservatoryBuildStamp.view(this))
-        status=ObservatoryTheme.status(this).apply {text="กดค้างบนแผนที่เพื่อบันทึกจุด"}
+        status=ObservatoryTheme.status(this).apply {text="กดค้างบนแผนที่เพื่อบันทึกจุด";setOnClickListener {if(storageUnavailable)showRecoveryTools()}}
         sharingStatus=ObservatoryTheme.status(this);root.addView(sharingStatus)
         gpsStatus=ObservatoryTheme.status(this).apply {text="ตำแหน่งฉัน · กดเพื่อใช้ GPS จากเครื่อง"}
         root.addView(status)
@@ -200,16 +200,17 @@ class OutsideViewActivity : Activity() {
             handler.post {
                 if(destroyed)return@post
                 prepared.onSuccess {preview->
-                    AlertDialog.Builder(this).setTitle("GOVIEW · ตรวจแล้วรออนุมัติ")
-                        .setMessage("อ่านไฟล์แล้ว แต่ยังไม่บันทึกหมุด\nเพิ่ม ${preview.added} · ซ้ำ ${preview.duplicates} · ไม่แทนข้อมูลที่ขัดแย้ง\npackage v${preview.packageVersion} · base ${preview.expectedRevision} · capture ${preview.batch.sourceCaptureId?:"local-file"}\ncorrelation ${preview.correlationId}\nอนุมัติเพื่อบันทึกและตรวจอ่านกลับ")
+                    val recenter=CheckBox(this).apply {text="เลื่อนไปหมุดที่นำเข้า · แผนที่ออนไลน์อาจขอภาพถนนบริเวณนั้นจากผู้ให้บริการ";isChecked=false}
+                    AlertDialog.Builder(this).setTitle("GOVIEW · ตรวจแล้วรออนุมัติ").setView(recenter)
+                        .setMessage("อ่านไฟล์แล้ว แต่ยังไม่บันทึกหมุด\nเพิ่ม ${preview.added} · ซ้ำ ${preview.duplicates} · ไม่แทนข้อมูลที่ขัดแย้ง\npackage v${preview.packageVersion} · base ${preview.expectedRevision} · capture ${preview.batch.sourceCaptureId?:"local-file"}\ncorrelation ${preview.correlationId}\nข้อมูลไฟล์ยังไม่ใช่การยืนยันหน้างาน\n${preview.batch.pins.joinToString("\n") {"${it.id} · ${it.label} · ${it.point.longitude}, ${it.point.latitude}"}}\nอนุมัติเพื่อบันทึกและตรวจอ่านกลับ")
                         .setNegativeButton("ยกเลิก"){_,_->importing=false;busy=false;pump()}
                         .setOnCancelListener {importing=false;busy=false;pump()}
-                        .setPositiveButton("อนุมัติ Update"){_,_->approveUpdate(preview)}.show()
+                        .setPositiveButton("อนุมัติ Update"){_,_->approveUpdate(preview,recenter.isChecked)}.show()
                 }.onFailure {importing=false;busy=false;status.text="ไม่อัปเดต · ${it.message}";readJournal()}
             }
         }
     }
-    private fun approveUpdate(preview:MapUpdatePreview) {
+    private fun approveUpdate(preview:MapUpdatePreview,recenter:Boolean) {
         worker.execute {
             val saved=runCatching {store.approveUpdate(preview)}
             if(saved.isFailure)runCatching {store.recordPhaseFailure("UPDATE",preview.correlationId,saved.exceptionOrNull()?.message?:"Update failed")}
@@ -217,7 +218,7 @@ class OutsideViewActivity : Activity() {
                 if(destroyed)return@post
                 importing=false;busy=false
                 saved.onSuccess {receipt->
-                    val shown=GeoJsonImport.present({renderer.fitPoints(preview.batch.pins.map {it.point})},{renderer.reloadStyle()})
+                    val shown=GeoJsonImport.present({if(recenter)renderer.fitPoints(preview.batch.pins.map {it.point})},{renderer.reloadStyle()})
                     status.text="UPDATE ${receipt.status} · readback ${receipt.readbackVerified} · receipt ${receipt.id}"+if(shown)" · กำลังแสดง" else " · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
                 }.onFailure {status.text="Update ไม่สำเร็จ · ${it.message}";readJournal()}
             }
@@ -255,6 +256,27 @@ class OutsideViewActivity : Activity() {
             }
         }
     }
+    private fun showRecoveryTools() {
+        worker.execute {
+            val names=store.backups()
+            handler.post {if(!destroyed)AlertDialog.Builder(this).setTitle("กู้คืนที่เก็บเสียหาย · สำเนาที่มี").setItems(names.toTypedArray()){_,i->
+                worker.execute {
+                    val checked=runCatching {store.previewRecovery(names[i])}
+                    handler.post {if(!destroyed)checked.onSuccess {preview->
+                        AlertDialog.Builder(this).setTitle("อนุมัติกู้คืนจากสำเนาที่ตรวจแล้ว?")
+                            .setMessage("${preview.name} · ${preview.pins} หมุด\nเก็บไฟล์หลักเดิมทั้งหมดก่อนกู้คืน ไม่ลบสำเนาเดิม ไม่มีการส่งข้อมูลออก")
+                            .setNegativeButton("ยกเลิก",null).setPositiveButton("อนุมัติกู้คืน"){_,_->worker.execute {
+                                val result=runCatching {store.approveRecovery(preview)}
+                                handler.post {if(!destroyed)result.onSuccess {receipt->
+                                    status.text="STORAGE ${receipt.status} · readback ${receipt.readbackVerified} · ${receipt.id}"
+                                    if(receipt.readbackVerified){storageUnavailable=false;shareButton.isEnabled=true;renderer.reloadStyle()}
+                                }.onFailure {status.text="กู้คืนไม่ได้ · เก็บต้นฉบับเดิมไว้ · ${it.message}"}}
+                            }}.show()
+                    }.onFailure {status.text="สำเนาไม่ผ่านตรวจ · ไม่เปลี่ยนต้นฉบับ · ${it.message}"}}
+                }
+            }.setNegativeButton("ปิด",null).show()}
+        }
+    }
     private fun showStorageTools() {
         AlertDialog.Builder(this).setTitle("GOVIEW · ที่เก็บบนเครื่อง").setItems(arrayOf("สร้างสำเนาสำรอง", "ตรวจและกู้คืนสำเนา")){_,choice->
             worker.execute {
@@ -271,7 +293,7 @@ class OutsideViewActivity : Activity() {
                                     .setMessage("${preview.name} · ${preview.pins} หมุด\nแทนสถานะแผนที่ปัจจุบันด้วยสำเนานี้ และเก็บสำเนาปัจจุบันเพื่อย้อนกลับก่อนบันทึก")
                                     .setNegativeButton("ยกเลิก",null).setPositiveButton("อนุมัติกู้คืน"){_,_->worker.execute {
                                         val restored=runCatching {store.approveRestore(preview)}
-                                        handler.post {if(!destroyed)restored.onSuccess {status.text="STORAGE RESTORED · readback ${it.readbackVerified} · ${it.id}";renderer.reloadStyle()}.onFailure {status.text="กู้คืนไม่ได้ · ${it.message}"}}
+                                        handler.post {if(!destroyed)restored.onSuccess {status.text="STORAGE ${it.status} · readback ${it.readbackVerified} · ${it.id}";renderer.reloadStyle()}.onFailure {status.text="กู้คืนไม่ได้ · ${it.message}"}}
                                     }}.show()
                             }.onFailure {status.text="สำเนาไม่ผ่านตรวจ · ${it.message}"}}
                         }

@@ -88,4 +88,43 @@ class GoviewSqliteTest {
         assertArrayEquals(legacy,File(root,"journal.pre-sqlite-v1.json").readBytes())
     }
 
+    @Test fun delayedOldScreenParseAndRecreatedScreenWriteRetainBothRecords()=isolated {root->
+        seed(root)
+        val old=MapStateStore(root,SqliteJournalBackend(root));val recreated=MapStateStore(root,SqliteJournalBackend(root))
+        val started=java.util.concurrent.CountDownLatch(1);val resume=java.util.concurrent.CountDownLatch(1)
+        val failure=java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val raw="""{"type":"FeatureCollection","features":[{"type":"Feature","id":"delayed","geometry":{"type":"Point","coordinates":[11,21]},"properties":{"name":"Synthetic delayed"}}]}""".toByteArray()
+        val input=object:java.io.ByteArrayInputStream(raw) {
+            var first=true
+            override fun read(buffer:ByteArray,offset:Int,length:Int):Int {
+                if(first){first=false;started.countDown();check(resume.await(5,java.util.concurrent.TimeUnit.SECONDS))}
+                return super.read(buffer,offset,length)
+            }
+        }
+        val worker=Thread {try {val batch=GeoJsonImport.parse(input);old.approveUpdate(old.previewUpdate(batch,"synthetic-old-screen"))}catch(t:Throwable){failure.set(t)}}
+        worker.start();assertTrue(started.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        recreated.prepareScreen()
+        synchronized(recreated.transactionLock){val j=recreated.load();recreated.commit(j.copy(state=j.state.copy(notes=j.state.notes+("recreated" to "retained"),revision=j.state.revision+1)))}
+        resume.countDown();worker.join(10000);assertFalse(worker.isAlive);assertNull(failure.get())
+        val readback=MapStateStore(root,SqliteJournalBackend(root)).load()
+        assertEquals(2,readback.state.pins.size);assertEquals("retained",readback.state.notes["recreated"])
+        assertEquals("preserve",readback.state.notes["unrelated"])
+    }
+
+    @Test fun explicitRecoveryFromBrokenDatabasePreservesOriginalAndSurvivesInterruptedAttempt()=isolated {root->
+        val original=seed(root);val store=MapStateStore(root,SqliteJournalBackend(root));store.load()
+        val backup=store.createBackup();val backupBytes=File(root,"backups/$backup").readBytes()
+        val database=File(root,"goview.sqlite");database.writeText("damaged synthetic sqlite header")
+        fails {store.load()}
+        val failing=MapStateStore(root,SqliteJournalBackend(root){error("interrupted synthetic recovery")})
+        fails {failing.approveRecovery(failing.previewRecovery(backup))}
+        assertEquals("damaged synthetic sqlite header",database.readText());assertFalse(File(root,"goview.current").exists())
+        assertArrayEquals(backupBytes,File(root,"backups/$backup").readBytes())
+        val receipt=store.approveRecovery(store.previewRecovery(backup))
+        assertEquals("RECOVERED",receipt.status);assertTrue(receipt.readbackVerified)
+        assertEquals("damaged synthetic sqlite header",database.readText())
+        assertEquals(original.state.pins,MapStateStore(root,SqliteJournalBackend(root)).load().state.pins)
+        assertArrayEquals(backupBytes,File(root,"backups/$backup").readBytes())
+    }
+
 }

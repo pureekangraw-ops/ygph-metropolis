@@ -8,7 +8,7 @@ class MapUpdatePreview internal constructor(
     val added:Int,val duplicates:Int,internal val batch:GeoJsonBatch
 )
 data class SelectedSnapshot(val captureId:String,val version:Long,val json:String,val receipt:MapUpdateReceipt)
-class BackupPreview internal constructor(val name:String,val expectedRevision:Long,val pins:Int,internal val checksum:String)
+class BackupPreview internal constructor(val name:String,val expectedRevision:Long,val pins:Int,internal val checksum:String,internal val primaryFingerprint:String?=null)
 
 /** Additive contract proposal only. No URL, credential or network implementation. */
 object GoviewSandboxContract {

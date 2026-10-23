@@ -9,11 +9,32 @@ import java.nio.file.StandardCopyOption
 
 /** Android platform SQLite, schema v1. No network or new dependency. Legacy files are never deleted. */
 class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Unit={}) : JournalBackend {
-    private val file get()=File(root,"goview.sqlite")
+    private val file:File get() {
+        val pointer=File(root,"goview.current")
+        if(!pointer.exists())return File(root,"goview.sqlite")
+        val name=pointer.readText()
+        require(name.matches(Regex("goview-recovered-[a-f0-9-]+\\.sqlite"))){"Invalid database recovery pointer"}
+        return File(root,name)
+    }
+    override fun recover(payload:String,revision:Long) {
+        // Build a new database beside the damaged one, then switch a tiny atomic pointer.
+        // The previous database and its sidecars remain untouched for forensic recovery.
+        val id=java.util.UUID.randomUUID().toString()
+        val staging=File(root,"recovery-build-$id")
+        SqliteJournalBackend(staging,beforeCommit).initialize(payload,revision,null)
+        val target=File(root,"goview-recovered-$id.sqlite")
+        Files.move(File(staging,"goview.sqlite").toPath(),target.toPath(),StandardCopyOption.ATOMIC_MOVE)
+        val pointer=File(root,"goview.current.tmp")
+        java.io.FileOutputStream(pointer).use {it.write(target.name.toByteArray(Charsets.UTF_8));it.fd.sync()}
+        Files.move(pointer.toPath(),File(root,"goview.current").toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)
+    }
     private fun hash(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString(""){"%02x".format(it)}
     private fun open():SQLiteDatabase {
         check(root.isDirectory || root.mkdirs())
-        val db=SQLiteDatabase.openOrCreateDatabase(file,null)
+        val db=SQLiteDatabase.openOrCreateDatabase(file.path,null,android.database.DatabaseErrorHandler {
+            // Android default corruption handling may delete the database; never use it for owner data.
+            throw android.database.sqlite.SQLiteDatabaseCorruptException("GOVIEW database corrupt; original retained for explicit recovery")
+        })
         try {
             db.execSQL("PRAGMA synchronous=FULL")
             require(db.version in 0..1){"Unsupported GOVIEW database schema; legacy data retained"}

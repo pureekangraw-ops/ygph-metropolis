@@ -112,4 +112,40 @@ class GoviewWorkspaceTest {
         }finally{root.deleteRecursively()}
     }
 
+    @Test fun corruptPrimaryRecoveryPreservesOriginalAndRejectsInvalidBackup() {
+        val root=Files.createTempDirectory("goview-corrupt-recovery").toFile()
+        try {
+            val store=MapStateStore(root);store.importGeoJson(fixture());val original=store.load();val name=store.createBackup()
+            val backup=java.io.File(root,"backups/$name").readBytes()
+            val primary=java.io.File(root,"journal.json");primary.writeText("damaged synthetic primary")
+            assertTrue(runCatching {store.load()}.isFailure)
+            val preview=store.previewRecovery(name)
+            java.io.File(root,"backups/$name").writeText("invalid backup")
+            assertTrue(runCatching {store.approveRecovery(preview)}.isFailure)
+            assertEquals("damaged synthetic primary",primary.readText())
+            java.io.File(root,"backups/$name").writeBytes(backup)
+            val receipt=store.approveRecovery(store.previewRecovery(name))
+            assertEquals("RECOVERED",receipt.status);assertTrue(receipt.readbackVerified)
+            assertEquals(original.state.pins,store.load().state.pins)
+            val preserved=root.listFiles()!!.single {it.name.startsWith("preserved-primary-")}
+            assertEquals("damaged synthetic primary",java.io.File(preserved,"journal.json").readText())
+            assertArrayEquals(backup,java.io.File(root,"backups/$name").readBytes())
+        }finally{root.deleteRecursively()}
+    }
+    @Test fun restorePostCommitReadFailureDoesNotPersistFalseVerification() {
+        val root=Files.createTempDirectory("goview-restore-readback").toFile()
+        var value:String?=null;var failRead=false;var failAfterWrite=false
+        val backend=object:JournalBackend {
+            override fun read():String?{if(failRead)error("synthetic restore read failure");return value}
+            override fun initialize(payload:String,revision:Long,legacy:java.io.File?){value=payload}
+            override fun write(payload:String,revision:Long){value=payload;if(failAfterWrite)failRead=true}
+        }
+        try {val store=MapStateStore(root,backend);store.importGeoJson(fixture());val backup=store.createBackup()
+            val preview=store.previewRestore(backup);failAfterWrite=true
+            val receipt=store.approveRestore(preview)
+            assertEquals("COMMITTED_READBACK_UNAVAILABLE",receipt.status);assertFalse(receipt.readbackVerified)
+            failRead=false;assertEquals(1,store.load().state.pins.size);assertFalse(store.load().updates.last().readbackVerified)
+        }finally{root.deleteRecursively()}
+    }
+
 }
