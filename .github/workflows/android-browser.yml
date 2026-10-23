@@ -37,7 +37,7 @@ jobs:
       - name: DOM targeting regression tests
         run: |
           set -o pipefail
-          node --test tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
+          node --test tests/*.test.mjs ../remote-browser/tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
       - name: Publish DOM test diagnostics
         if: ${{ failure() }}
         run: cat "$RUNNER_TEMP/android-browser-dom-tests.log" >> "$GITHUB_STEP_SUMMARY"

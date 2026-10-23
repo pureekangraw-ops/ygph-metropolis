@@ -121,7 +121,7 @@ class RemoteBrowserActivity : Activity() {
         root.addView(host, LinearLayout.LayoutParams(-1, 0, 1f))
         toolbar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val assist = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        assist.addView(action("👁 อ่านหน้า") { readPage() }, weighted())
+        assist.addView(action("👁 เรียก GO") { inviteGo() }, weighted())
         assist.addView(action("🖐 ให้ GO ทำ") { grantGo() }, weighted())
         toolbar.addView(assist)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -235,6 +235,18 @@ class RemoteBrowserActivity : Activity() {
             }.onFailure {status.text="เปิด Live View ไม่ได้ · " + readableError(it)}
         }
     }
+    private fun inviteGo() {
+        if(!session) {status.text="เปิดเว็บไซต์ก่อน";return}
+        AlertDialog.Builder(this).setTitle("เชิญ GO ดูหน้าเว็บ")
+            .setMessage("อนุญาตให้ GO ที่ถือคีย์แบบอ่านอย่างเดียวอ่านหน้าเว็บเซสชันนี้ผ่านช่องเครื่องมือที่เชื่อมแล้ว
+\nไม่อนุญาตให้กดหรือเปลี่ยนข้อมูล")
+            .setPositiveButton("เชิญ GO") { _,_->
+                query("POST","/v1/observe-access",JSONObject().put("allow",true)){result->
+                    result.onSuccess {renderSession(it);readPage()}
+                        .onFailure {status.text="เชิญ GO ไม่สำเร็จ · "+readableError(it)}
+                }
+            }.setNegativeButton("ยกเลิก",null).show()
+    }
     private fun readPage() {
         if(!session){status.text="เปิดเว็บไซต์ก่อน";return}
         query("GET", "/v1/observe", null){result->
@@ -304,7 +316,7 @@ class RemoteBrowserActivity : Activity() {
         goControls=data.optString("controller")=="GO"
         touchBlock.visibility=if(goControls)View.VISIBLE else View.GONE
         controller.text="ผู้ควบคุม: "+(if(goControls)"GO" else "BIG")+" · "+
-            data.optString("mode","IDLE")+" · "+data.optString("status","IDLE")
+            data.optString("mode","IDLE")+" · "+data.optString("status","IDLE")+" · GO อ่าน: "+(if(data.optBoolean("goCanObserve"))"อนุญาต" else "ปิด")
         if(url!=null && !address.hasFocus())address.setText(url)
     }
     private fun readableError(t: Throwable): String = (t.message ?: "ไม่ทราบสาเหตุ").take(120)

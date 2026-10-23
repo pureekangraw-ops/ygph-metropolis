@@ -11,7 +11,7 @@ async function bodyOf(request) {
 }
 function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
-    controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE",
+    controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:!!s.allowGoRead,
     version:s.version || 0, updatedAt:s.updatedAt || null, job:s.job || null };
 }
 export default {
@@ -26,8 +26,8 @@ export default {
     if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
     if (go && !["/v1/session","/v1/observe","/v1/action","/v1/job"].includes(path)) return reply({error:"OWNER_ONLY"},403);
     const id=env.SESSIONS.idFromName("owner-browser-v1");
-    const upstream=new Request(request);
-    const result=await env.SESSIONS.get(id).fetch(upstream, { cf:{}, headers:{ "x-observatory-role":owner?"BIG":"GO" }});
+    const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json"}});
+    const result=await env.SESSIONS.get(id).fetch(upstream);
     // A DO receives role from a trusted internal request, never a client-supplied header.
     return result;
   }
@@ -35,7 +35,15 @@ export default {
 
 export class BrowserWorkspace {
   constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; }
-  async state() { return (await this.ctx.storage.get("browser")) || {controller:"BIG", mode:"IDLE", status:"IDLE",version:0}; }
+  async state() {
+    const state=(await this.ctx.storage.get("browser")) || {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false};
+    if(state.job?.status==="RUNNING" && state.updatedAt && Date.now()-Date.parse(state.updatedAt)>180000) {
+      state.job.status="UNKNOWN";state.job.error="RUN_INTERRUPTED_NO_AUTOREPLAY";
+      state.controller="BIG";state.status="UNKNOWN";state.mode="OBSERVE";
+      await this.save(state);
+    }
+    return state;
+  }
   async save(state) { state.version=(state.version || 0)+1;state.updatedAt=new Date().toISOString();await this.ctx.storage.put("browser",state);return state; }
   async withPage(state, work) {
     if (!state.browserSessionId) throw new Error("SESSION_NOT_STARTED");
@@ -119,7 +127,7 @@ export class BrowserWorkspace {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
       state={browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
-        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,version:state.version || 0,job:null};
+        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,version:state.version || 0,allowGoRead:false,job:null};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
@@ -134,7 +142,7 @@ export class BrowserWorkspace {
   }
   async audit(state, urls) {
     const job={id:crypto.randomUUID(),status:"RUNNING",kind:"PAGE_AUDIT",startedAt:new Date().toISOString(),results:[]};
-    state.job=job;state.mode="HEADLESS";state.status="RUNNING";state.controller="GO";await this.save(state);
+    state.job=job;state.mode="HEADLESS";state.allowGoRead=false;state.status="RUNNING";state.controller="GO";await this.save(state);
     this.cancelAudit=false;
     this.ctx.waitUntil((async()=>{
       for(const url of urls) {
@@ -161,6 +169,8 @@ export class BrowserWorkspace {
     const role=request.headers.get("x-observatory-role") === "BIG" ? "BIG" : "GO";
     const method=request.method,path=new URL(request.url).pathname;
     try {
+      const access=await this.state();
+      if(role==="GO" && !access.allowGoRead) return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
       if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
@@ -172,12 +182,18 @@ export class BrowserWorkspace {
         if(this.inFlight)return reply({error:"BUSY"},409);this.inFlight=true;
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
       }
+      if(path==="/v1/observe-access" && role==="BIG") {
+        if(typeof body.allow !== "boolean" || !state.browserSessionId) return reply({error:"INVALID_OBSERVE_GRANT"},422);
+        state.allowGoRead=body.allow;
+        if(!body.allow && state.controller==="GO") {state.controller="BIG";state.mode="OBSERVE";}
+        await this.save(state);return reply(summarize(state));
+      }
       if(path==="/v1/control" && role==="BIG") {
         if(this.inFlight)return reply({error:"BUSY"},409);
         const next=body.controller;
         if(!["BIG","GO"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
         if(next==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
-        state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";await this.save(state);return reply(summarize(state));
+        state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/action") {
         if(this.inFlight || state.mode==="HEADLESS")return reply({error:"BUSY"},409);
@@ -192,7 +208,7 @@ export class BrowserWorkspace {
         return reply(await this.audit(state,urls),202);
       }
       if(path==="/v1/stop" && role==="BIG") {
-        this.cancelAudit=true;const st=await this.state();
+        this.cancelAudit=true;const st=await this.state();st.allowGoRead=false;
         st.controller="BIG";st.mode="OBSERVE";st.status="STOP_REQUESTED";await this.save(st);
         return reply(summarize(st));
       }
