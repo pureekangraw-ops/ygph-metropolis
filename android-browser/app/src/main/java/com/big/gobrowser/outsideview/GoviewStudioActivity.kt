@@ -24,6 +24,10 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.net.URI
+import java.util.concurrent.TimeUnit
 
 /**
  * Offline GO Map Studio. The WebView loads ONLY bundled, trusted application assets.
@@ -288,6 +292,43 @@ class GoviewStudioActivity : Activity() {
                 }
                 startActivityForResult(intent, 702)
             }
+        }
+
+        @JavascriptInterface fun downloadLatest(endpoint: String, mapId: String, token: String) {
+            // GO access is optional. No token is embedded in the APK, preference file, or map package.
+            // A redirect must never forward a bearer credential to another host.
+            val uri = runCatching { URI(endpoint.trim()) }.getOrNull()
+            val host = uri?.host?.lowercase()
+            val approvedHost = host == "goview.yggmetro.com" ||
+                (host != null && host.endsWith(".workers.dev"))
+            if (uri == null || uri.scheme != "https" || !approvedHost ||
+                uri.userInfo != null || uri.query != null || uri.fragment != null ||
+                uri.port != -1 || (uri.path != null && uri.path != "" && uri.path != "/") ||
+                !mapIdPattern.matches(mapId) || token.length !in 20..512 ||
+                token.any { it <= ' ' || it == '\u007f' }) {
+                callback("nativeStatus", "เชื่อม GO ไม่ได้: ตรวจ HTTPS, Worker domain, Map ID และคีย์")
+                return
+            }
+            val client = OkHttpClient.Builder()
+                .followRedirects(false).followSslRedirects(false)
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS).build()
+            val url = endpoint.trim().trimEnd('/') + "/v1/maps/" + mapId + "/packages/latest"
+            Thread {
+                val result = runCatching {
+                    val request = Request.Builder().url(url)
+                        .header("Authorization", "Bearer " + token).get().build()
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            error("GO HTTP " + response.code)
+                        }
+                        val stream = response.body?.byteStream() ?: error("GO returned empty response")
+                        String(stream.use { readLimited(it) }, StandardCharsets.UTF_8)
+                    }
+                }
+                result.onSuccess { callback("receiveImport", it) }
+                    .onFailure { callback("nativeStatus", "GO Download ไม่สำเร็จ: " + (it.message ?: "network error")) }
+            }.start()
         }
 
         @JavascriptInterface fun locate() { runOnUiThread { showLocation() } }
