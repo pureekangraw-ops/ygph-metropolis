@@ -2,6 +2,8 @@ import puppeteer from "@cloudflare/puppeteer";
 import { validPageUrl, allowedAction, mayGoAct, cleanStep } from "./policy.mjs";
 import { mcpResponse } from "./mcp.mjs";
 import { consoleHtml } from "./console.mjs";
+import { WorkerEntrypoint } from "cloudflare:workers";
+import { invokeObservatoryGo } from "./go-bridge.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -428,5 +430,15 @@ export class BrowserWorkspace {
       }
       return reply({error:"NOT_FOUND"},404);
     }catch(error) {return reply({error:String(error?.message || error).slice(0,160)},400);}
+  }
+}
+
+
+// Private RPC entrypoint: Cloudflare Service Bindings only. NOT an HTTP endpoint.
+// GO Brain authenticates the owner's existing OAuth session, then calls this.
+// The owner additionally grants page observation/control in BrowserWorkspace.
+export class ObservatoryGoBridge extends WorkerEntrypoint {
+  async invoke(name,args={}) {
+    return invokeObservatoryGo(this.env,name,args);
   }
 }
