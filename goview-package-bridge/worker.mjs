@@ -54,12 +54,27 @@ async function fetchMap(bucket, id, version) {
     return reply(503, {error:"STORAGE_CORRUPTION"});
   }
 }
+async function readBoundedBody(request) {
+  const reader = request.body?.getReader();
+  if (!reader) return "";
+  const chunks=[]; let length=0;
+  while (true) {
+    const part=await reader.read();
+    if (part.done) break;
+    length+=part.value.byteLength;
+    if (length>LIMIT) { await reader.cancel(); return null; }
+    chunks.push(part.value);
+  }
+  const combined=new Uint8Array(length);
+  let offset=0;
+  for (const value of chunks){combined.set(value,offset);offset+=value.byteLength;}
+  return new TextDecoder("utf-8",{fatal:true}).decode(combined);
+}
 async function saveMap(bucket, id, version, request) {
   if (request.headers.get("content-length") && Number(request.headers.get("content-length")) > LIMIT)
     return reply(413, {error:"PACKAGE_TOO_LARGE"});
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > LIMIT) return reply(413, {error:"PACKAGE_TOO_LARGE"});
-  const raw = new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+  const raw = await readBoundedBody(request);
+  if (raw === null) return reply(413, {error:"PACKAGE_TOO_LARGE"});
   let map;
   try {
     map = Engine.unpack(raw.trim());
@@ -103,7 +118,8 @@ async function saveMap(bucket, id, version, request) {
 /** Private package exchange only; unauthenticated clients cannot discover map IDs. */
 export default {
   async fetch(request, env) {
-    if (!env?.PACKAGES || !env?.GO_WRITE_TOKEN || !env?.ANDROID_READ_TOKEN) return notConfigured();
+    if (!env?.PACKAGES || !env?.GO_WRITE_TOKEN || !env?.ANDROID_READ_TOKEN ||
+        env.GO_WRITE_TOKEN === env.ANDROID_READ_TOKEN) return notConfigured();
     const url = new URL(request.url);
     if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1")
       return reply(400,{error:"HTTPS_REQUIRED"});
@@ -118,7 +134,8 @@ export default {
         (pieces[4] === "latest" || validVersion(pieces[4]))) {
       if(!allowed(request,env.ANDROID_READ_TOKEN) && !allowed(request,env.GO_WRITE_TOKEN))
         return reply(401,{error:"UNAUTHORIZED"});
-      return fetchMap(env.PACKAGES,id,pieces[4]);
+      try { return await fetchMap(env.PACKAGES,id,pieces[4]); }
+      catch { return reply(503,{error:"STORAGE_UNAVAILABLE"}); }
     }
     if(request.method === "PUT" && pieces.length === 5 && validVersion(pieces[4])) {
       if(!allowed(request,env.GO_WRITE_TOKEN)) return reply(401,{error:"UNAUTHORIZED"});
