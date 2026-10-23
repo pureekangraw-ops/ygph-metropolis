@@ -9,9 +9,13 @@ async function bodyOf(request) {
   if (text.length > 12000) throw new Error("BODY_TOO_LARGE");
   return text ? JSON.parse(text) : {};
 }
+function sameGrant(s,url=s.url) {
+  try {return s.allowGoRead===true && !!s.grantedHost && new URL(url).hostname===s.grantedHost;}
+  catch {return false;}
+}
 function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
-    controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:!!s.allowGoRead,
+    controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:sameGrant(s),
     version:s.version || 0, updatedAt:s.updatedAt || null, job:s.job || null };
 }
 export default {
@@ -61,8 +65,9 @@ export class BrowserWorkspace {
       throw error;
     } finally { if (browser) await browser.disconnect().catch(()=>{}); }
   }
-  async observe(state) {
+  async observe(state,role) {
     return this.withPage(state, async page => {
+      if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
       const snapshot=await page.evaluate(() => ({
         title:document.title,
         url:location.href,
@@ -82,9 +87,11 @@ export class BrowserWorkspace {
   async action(state, raw, role) {
     const step=cleanStep(raw);
     if (state.controller!==role) throw new Error("CONTROLLER_MISMATCH");
-    if (role==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) throw new Error("GO_DOMAIN_NOT_ALLOWED");
+    if (role==="GO" && (!mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS) || !sameGrant(state))) throw new Error("GO_DOMAIN_NOT_ALLOWED");
     if (step.type==="navigate" && role==="GO" && !mayGoAct(step.url,this.env.GO_ALLOWED_HOSTS)) throw new Error("GO_DOMAIN_NOT_ALLOWED");
     return this.withPage(state, async page => {
+      if(role==="GO" && (!sameGrant(state,page.url()) ||
+        (step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost)))throw new Error("GO_GRANT_ORIGIN_MISMATCH");
       switch(step.type) {
         case "navigate": await page.goto(step.url,{waitUntil:"domcontentloaded",timeout:20000});break;
         case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
@@ -107,6 +114,7 @@ export class BrowserWorkspace {
         }
       }
       state.url=validPageUrl(page.url()) || state.url;
+      if(!sameGrant(state)) {state.allowGoRead=false;state.grantedHost=null;}
       await this.save(state);
       return {ok:true,type:step.type,url:state.url,version:state.version,at:new Date().toISOString()};
     });
@@ -118,7 +126,7 @@ export class BrowserWorkspace {
     if (state.browserSessionId) {
       try {
         const result=await this.withPage(state,page=>page.goto(url,{waitUntil:"domcontentloaded",timeout:20000}).then(()=>({ok:true})));
-        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;await this.save(state);
+        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;state.allowGoRead=false;state.grantedHost=null;await this.save(state);
         return summarize(state);
       } catch { state.browserSessionId=null; }
     }
@@ -127,7 +135,7 @@ export class BrowserWorkspace {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
       state={browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
-        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,version:state.version || 0,allowGoRead:false,job:null};
+        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,version:state.version || 0,allowGoRead:false,grantedHost:null,job:null};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
@@ -165,7 +173,7 @@ export class BrowserWorkspace {
       const latest=await this.state();
       if(latest.job?.id===job.id) {
         latest.job=job;latest.status=job.status;latest.mode="OBSERVE";latest.controller="BIG";
-        latest.allowGoRead=false;await this.save(latest);
+        latest.allowGoRead=false;st.grantedHost=null;await this.save(latest);
       }
     })().catch(async e=>{
       const latest=await this.state();
@@ -179,7 +187,7 @@ export class BrowserWorkspace {
   }
   async audit(state, urls) {
     const job={id:crypto.randomUUID(),status:"RUNNING",kind:"PAGE_AUDIT",startedAt:new Date().toISOString(),results:[]};
-    state.job=job;state.mode="HEADLESS";state.allowGoRead=false;state.status="RUNNING";state.controller="GO";await this.save(state);
+    state.job=job;state.mode="HEADLESS";state.allowGoRead=false;state.grantedHost=null;state.status="RUNNING";state.controller="GO";await this.save(state);
     this.cancelAudit=false;
     this.ctx.waitUntil((async()=>{
       for(const url of urls) {
@@ -207,21 +215,21 @@ export class BrowserWorkspace {
     const method=request.method,path=new URL(request.url).pathname;
     try {
       const access=await this.state();
-      if(role==="GO" && !access.allowGoRead) return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
+      if(role==="GO" && !sameGrant(access)) return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
       if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
-      if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state()));
+      if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
       if (method==="GET" && path==="/v1/view" && role==="BIG") return reply(await this.view(await this.state()));
       if(method!=="POST")return reply({error:"NOT_FOUND"},404);
       const body=await bodyOf(request),state=await this.state();
       if(path==="/v1/session" && role==="BIG") {
-        if(this.inFlight)return reply({error:"BUSY"},409);this.inFlight=true;
+        if(this.inFlight || state.job?.status==="RUNNING")return reply({error:"BUSY"},409);this.inFlight=true;
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
       }
       if(path==="/v1/observe-access" && role==="BIG") {
         if(typeof body.allow !== "boolean" || !state.browserSessionId) return reply({error:"INVALID_OBSERVE_GRANT"},422);
-        state.allowGoRead=body.allow;
+        state.allowGoRead=body.allow;state.grantedHost=body.allow?new URL(state.url).hostname:null;
         if(!body.allow && state.controller==="GO") {state.controller="BIG";state.mode="OBSERVE";}
         await this.save(state);return reply(summarize(state));
       }
@@ -233,7 +241,7 @@ export class BrowserWorkspace {
           this.cancelAudit=true;state.status="STOP_REQUESTED";
         }
         if(next==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
-        state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";await this.save(state);return reply(summarize(state));
+        state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";state.grantedHost=next==="GO"?new URL(state.url).hostname:null;await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/action") {
         if(this.inFlight || state.mode==="HEADLESS")return reply({error:"BUSY"},409);
