@@ -110,7 +110,7 @@ small{font-size:11px;color:#9bb6ce}
 "use strict";
 const G=window.GoviewEngine,$=id=>document.getElementById(id),svg=$("map");
 const NS="http://www.w3.org/2000/svg",native=typeof window.GoviewHost!=="undefined",LOCAL_KEY="goview-studio-drawn-map-v1";
-let map=G.fresh(),mode="pan",selected=null,start=null,finish=null,path=null,poly=[],undoStack=[],view={x:0,y:0,w:800,h:520},pointer=null,ready=false;
+let map=G.fresh(),mode="pan",selected=null,start=null,finish=null,path=null,poly=[],undoStack=[],view={x:0,y:0,w:800,h:520},pointer=null,ready=false,gpsPoint=null;
 const status=t=>{$("message").textContent=t;};
 function showDialog(title,text,inputValue,okLabel,callback) {
  $("modalTitle").textContent=title;$("modalText").textContent=text||"";
@@ -129,9 +129,8 @@ function snap(){undoStack.push(JSON.stringify(map));if(undoStack.length>35)undoS
 function persist() {
  try{
   const payload=G.pack(map);
-  if(native)window.GoviewHost.savePackage(payload);
-  else {localStorage.setItem(LOCAL_KEY,payload);localStorage.setItem(LOCAL_KEY+":"+map.mapId,payload);}
-  status("บันทึกแผนที่เวอร์ชัน "+map.version+" แล้ว");
+  if(native){window.GoviewHost.savePackage(payload);status("ส่งคำขอบันทึกแล้ว · รอผลยืนยันจากเครื่อง");}
+  else {localStorage.setItem(LOCAL_KEY,payload);localStorage.setItem(LOCAL_KEY+":"+map.mapId,payload);status("บันทึกแผนที่เวอร์ชัน "+map.version+" แล้ว");}
  }catch(e){status("บันทึกไม่ได้: "+e.message);}
 }
 function commit(){map.version++;selected=null;path=null;persist();render();}
@@ -145,6 +144,7 @@ function draw(){svg.replaceChildren();svg.setAttribute("viewBox",[view.x,view.y,
  if($("roadsLayer").checked)map.roads.forEach(r=>{const a=nodes.get(r.from),b=nodes.get(r.to);svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#172738","stroke-width":14,"stroke-linecap":"round"}));svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#b6d6ed","stroke-width":7,"stroke-linecap":"round"}));});
  if(path)for(let i=1;i<path.nodeIds.length;i++){const a=nodes.get(path.nodeIds[i-1]),b=nodes.get(path.nodeIds[i]);svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#f8bb57","stroke-width":9,"stroke-linecap":"round"}));}
  if(poly.length){svg.append(el("polyline",{points:poly.map(p=>p.x+","+p.y).join(" "),fill:"none",stroke:"#75efc3","stroke-width":3,"stroke-dasharray":"6 5"}));}
+ if(gpsPoint)svg.append(el("circle",{cx:gpsPoint.x,cy:gpsPoint.y,r:12,fill:"#28ffba","fill-opacity":".9",stroke:"#fff","stroke-width":3}));
  map.nodes.forEach(n=>{svg.append(el("circle",{cx:n.x,cy:n.y,r:mode==="route"?9:6,fill:n.id===start||n.id===finish?"#ffcc67":"#72dfe3",stroke:"#123545","stroke-width":2}));});
  if($("poisLayer").checked)map.pois.forEach(p=>{const n=nodes.get(p.nodeId);svg.append(el("circle",{cx:n.x,cy:n.y-18,r:8,fill:"#f5aee9"}));svg.append(el("text",{x:n.x+12,y:n.y-15,fill:"#fff","font-size":"14","paint-order":"stroke",stroke:"#0b1822","stroke-width":"3"},p.name));});
  $("counts").textContent="โครงข่าย: "+map.nodes.length+" จุด · "+map.roads.length+" ถนน · "+map.areas.length+" พื้นที่ · "+map.pois.length+" สถานที่";
@@ -333,7 +333,7 @@ window.GoviewStudio={
   $("gps").textContent=text;
   if(typeof lat==="number"&&typeof lng==="number"&&Number.isFinite(lat)&&Number.isFinite(lng)){
    const x=(lng-map.origin.lng)*111320*Math.cos(map.origin.lat*Math.PI/180),y=(lat-map.origin.lat)*110540;
-   $("gps").textContent=text+" · บนแผนที่วาด x="+Math.round(x)+", y="+Math.round(y);
+   gpsPoint={x,y};$("gps").textContent=text+" · บนแผนที่วาด x="+Math.round(x)+", y="+Math.round(y);draw();
   }
  },
  nativeStatus:status
