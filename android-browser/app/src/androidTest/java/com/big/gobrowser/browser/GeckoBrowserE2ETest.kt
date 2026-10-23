@@ -136,13 +136,18 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun killedSessionRecoveryReattachesTheExistingView() {
-        instrumentation.runOnMainSync { engine().navigate("https://example.com") }
+        instrumentation.runOnMainSync {
+            traceRecoveryNavigation()
+            assertTrue("Initial navigation must be accepted", engine().navigate("https://example.com"))
+            trace("navigate-return requested=${engine().active()?.requestedUrl}")
+        }
         awaitPage("example.com")
         var previousCaptureId: String? = null
         instrumentation.runOnMainSync {
             previousCaptureId = currentCapture()?.captureId
             val tab = engine().active()!!
             val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            trace("explicit-kill requested=${tab.requestedUrl}")
             tab.session.close()
             tab.session.contentDelegate!!.onKill(tab.session)
             assertTrue("Recovered session must be open", tab.session.isOpen)
@@ -199,12 +204,45 @@ class GeckoBrowserE2ETest {
         awaitPage("example.org")
     }
 
+    // Diagnostics retain original delegates and assertions; URLs are synthetic test destinations.
+    private fun trace(event: String) = android.util.Log.i("GeckoRecoveryTrace", event)
+    private fun traceRecoveryNavigation() {
+        val tab=engine().active()!!
+        trace("begin tab=${tab.id} requested=${tab.requestedUrl} open=${tab.session.isOpen}")
+        val navigation=tab.session.navigationDelegate!!
+        tab.session.navigationDelegate=object : org.mozilla.geckoview.GeckoSession.NavigationDelegate by navigation {
+            override fun onLoadRequest(session: org.mozilla.geckoview.GeckoSession, request: org.mozilla.geckoview.GeckoSession.NavigationDelegate.LoadRequest): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
+                trace("load-request uri=${request.uri} requested=${tab.requestedUrl}")
+                return navigation.onLoadRequest(session,request)
+            }
+            override fun onLocationChange(session: org.mozilla.geckoview.GeckoSession, url: String?, permissions: List<org.mozilla.geckoview.GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
+                trace("location before=${tab.requestedUrl} incoming=$url")
+                navigation.onLocationChange(session,url,permissions,hasUserGesture)
+                trace("location after=${tab.requestedUrl}")
+            }
+        }
+        val progress=tab.session.progressDelegate!!
+        tab.session.progressDelegate=object : org.mozilla.geckoview.GeckoSession.ProgressDelegate by progress {
+            override fun onPageStop(session: org.mozilla.geckoview.GeckoSession, success: Boolean) {
+                trace("page-stop success=$success requested=${tab.requestedUrl}")
+                progress.onPageStop(session,success)
+            }
+            override fun onSessionStateChange(session: org.mozilla.geckoview.GeckoSession, state: org.mozilla.geckoview.GeckoSession.SessionState) {
+                trace("session-state requested=${tab.requestedUrl}")
+                progress.onSessionStateChange(session,state)
+            }
+        }
+    }
+
     private fun awaitPage(host: String, previousCaptureId: String? = null) {
         val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
         var loaded = false
+        var previousDiagnostic=""
         while (!loaded && System.nanoTime() < deadline) {
             instrumentation.runOnMainSync {
                 val capture = currentCapture()
+                val diagnostic="await=$host requested=${engine().active()?.requestedUrl} captured=${capture?.url} title=${capture?.title}"
+                if(diagnostic!=previousDiagnostic){trace(diagnostic);previousDiagnostic=diagnostic}
                 loaded = capture != null && android.net.Uri.parse(capture.url).host == host
                     && capture.title == "Example Domain" && capture.text.isNotBlank()
                     && capture.captureId != previousCaptureId
