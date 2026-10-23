@@ -239,7 +239,7 @@
         const nodeId=ensureNode(g.coordinates);
         map.pois.push({id:"poi"+(map.pois.length+1),name,nodeId});
       }else if(g.type==="Polygon"){
-        const ring=g.coordinates,first=ring[0],last=ring[ring.length-1];
+        const ring=g.coordinates[0],first=ring[0],last=ring[ring.length-1];
         assert(first[0]===last[0]&&first[1]===last[1],"Polygon ring must be closed");
         const points=ring.slice(0,-1).map(local);
         map.areas.push({id:"a"+(map.areas.length+1),name:name.slice(0,100),points});
