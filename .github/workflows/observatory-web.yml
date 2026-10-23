@@ -18,3 +18,20 @@ jobs:
           node-version: '22'
       - run: node --check observatory-web/worker.mjs
       - run: npm test
+
+  remote-browser-bundle:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: remote-browser
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test worker policy
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: Bundle Cloudflare Worker without deploying
+        run: npx wrangler deploy --config wrangler.jsonc --dry-run --outdir dist

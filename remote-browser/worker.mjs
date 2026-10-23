@@ -24,7 +24,7 @@ export default {
     const go=!!env.GO_TOKEN && env.GO_TOKEN!==env.OWNER_TOKEN && authorization==="Bearer "+env.GO_TOKEN;
     if (!owner && !go) return reply({ error:"UNAUTHORIZED" },401);
     if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
-    if (go && !["/v1/session","/v1/observe","/v1/action","/v1/job"].includes(path)) return reply({error:"OWNER_ONLY"},403);
+    if (go && !["/v1/session","/v1/observe","/v1/action","/v1/job","/v1/run"].includes(path)) return reply({error:"OWNER_ONLY"},403);
     const id=env.SESSIONS.idFromName("owner-browser-v1");
     const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json"}});
     const result=await env.SESSIONS.get(id).fetch(upstream);
@@ -140,6 +140,43 @@ export class BrowserWorkspace {
     if (!url || !url.startsWith("https://live.browser.run/")) throw new Error("LIVE_VIEW_UNAVAILABLE");
     return {url,validForStartMs:300000,warning:"View URL grants access. Never log or share it."};
   }
+
+  async runScript(state,steps) {
+    const job={id:crypto.randomUUID(),status:"RUNNING",kind:"GO_SCRIPT",startedAt:new Date().toISOString(),
+      progress:0,total:steps.length,results:[]};
+    state.job=job;state.mode="HEADLESS";state.status="RUNNING";await this.save(state);
+    this.cancelAudit=false;
+    this.ctx.waitUntil((async()=>{
+      for(let i=0;i<steps.length;i++) {
+        const latest=await this.state();
+        if(this.cancelAudit || latest.job?.id!==job.id || latest.controller!=="GO" || !latest.allowGoRead ||
+          latest.mode!=="HEADLESS") { job.status="STOPPED";break; }
+        try {
+          const receipt=await this.action(latest,steps[i],"GO");
+          job.results.push({...receipt,step:i+1,dispatched:true,businessOutcome:"UNKNOWN"});
+          job.progress=i+1;latest.job=job;await this.save(latest);
+        } catch(e) {
+          job.results.push({step:i+1,error:String(e.message||e).slice(0,140)});
+          job.status="FAILED";break;
+        }
+      }
+      if(job.status==="RUNNING")job.status="COMPLETED";
+      job.finishedAt=new Date().toISOString();
+      const latest=await this.state();
+      if(latest.job?.id===job.id) {
+        latest.job=job;latest.status=job.status;latest.mode="OBSERVE";latest.controller="BIG";
+        latest.allowGoRead=false;await this.save(latest);
+      }
+    })().catch(async e=>{
+      const latest=await this.state();
+      if(latest.job?.id===job.id){
+        job.status="UNKNOWN";job.error=String(e.message||e).slice(0,140);
+        latest.job=job;latest.status="UNKNOWN";latest.mode="OBSERVE";latest.controller="BIG";
+        latest.allowGoRead=false;await this.save(latest);
+      }
+    }));
+    return {jobId:job.id,status:"RUNNING",steps:steps.length};
+  }
   async audit(state, urls) {
     const job={id:crypto.randomUUID(),status:"RUNNING",kind:"PAGE_AUDIT",startedAt:new Date().toISOString(),results:[]};
     state.job=job;state.mode="HEADLESS";state.allowGoRead=false;state.status="RUNNING";state.controller="GO";await this.save(state);
@@ -192,6 +229,9 @@ export class BrowserWorkspace {
         if(this.inFlight)return reply({error:"BUSY"},409);
         const next=body.controller;
         if(!["BIG","GO"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
+        if(state.mode==="HEADLESS" && next==="BIG"){
+          this.cancelAudit=true;state.status="STOP_REQUESTED";
+        }
         if(next==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";await this.save(state);return reply(summarize(state));
       }
@@ -200,6 +240,14 @@ export class BrowserWorkspace {
         if(!allowedAction(body))return reply({error:"ACTION_NOT_ALLOWED"},422);
         this.inFlight=true;
         try {return reply(await this.action(state,body,role));}finally{this.inFlight=false;}
+      }
+      if(path==="/v1/run" && (role==="BIG" || role==="GO")) {
+        if(this.inFlight || state.mode==="HEADLESS" || state.controller!=="GO" || !state.allowGoRead)
+          return reply({error:"OWNER_GO_GRANT_REQUIRED"},403);
+        if(!Array.isArray(body.steps) || body.steps.length===0 || body.steps.length>10 ||
+          !body.steps.every(allowedAction))return reply({error:"INVALID_STEPS"},422);
+        if(!mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS))return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
+        return reply(await this.runScript(state,body.steps.map(cleanStep)),202);
       }
       if(path==="/v1/audit" && role==="BIG") {
         if(this.inFlight || state.mode==="HEADLESS" || !state.browserSessionId)return reply({error:"BUSY_OR_NO_SESSION"},409);
