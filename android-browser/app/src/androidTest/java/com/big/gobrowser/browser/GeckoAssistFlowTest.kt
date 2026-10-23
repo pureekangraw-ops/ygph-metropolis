@@ -52,18 +52,28 @@ class GeckoAssistFlowTest {
             <p id="state">Ready</p>
             <script>setTimeout(()=>{const b=document.createElement('button');b.type='button';b.textContent='Other';document.body.prepend(b)},6000)</script>
             </body></html>""".toByteArray(Charsets.UTF_8)
+        val servedResponses = java.util.concurrent.atomic.AtomicInteger(0)
+        val droppedConnections = java.util.concurrent.atomic.AtomicInteger(0)
         val thread = Thread {
-            try {
-                while (!server.isClosed) server.accept().use { socket ->
-                    socket.soTimeout = 5000
-                    val reader = socket.getInputStream().bufferedReader()
-                    while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break }
-                    socket.getOutputStream().apply {
-                        write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${html.size}\r\nConnection: close\r\n\r\n".toByteArray())
-                        write(html); flush()
+            // Gecko can abort a speculative connection while navigating. A per-socket
+            // timeout or disconnect must not kill the fixture server for the real GET.
+            while (!server.isClosed) {
+                val client = try { server.accept() } catch (_: java.io.IOException) { break }
+                try {
+                    client.use { socket ->
+                        socket.soTimeout = 5000
+                        val reader = socket.getInputStream().bufferedReader()
+                        while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break }
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${html.size}\r\nConnection: close\r\n\r\n".toByteArray())
+                            write(html); flush()
+                        }
+                        servedResponses.incrementAndGet()
                     }
+                } catch (_: java.io.IOException) {
+                    droppedConnections.incrementAndGet()
                 }
-            } catch (_: java.io.IOException) { /* Server is closed by the test. */ }
+            }
         }.apply { isDaemon = true; start() }
         try {
             // ensureBuiltIn is asynchronous. Loading the fixture before the native delegate
@@ -80,6 +90,8 @@ class GeckoAssistFlowTest {
                 val tab = field<GeckoBrowserEngine>("engine").active()!!
                 tab.requestedUrl = url; tab.session.loadUri(url)
             }
+            await("Fixture HTTP response must finish before observing DOM") { servedResponses.get() > 0 }
+            assertTrue("Fixture server must stay alive despite aborted sockets: ${droppedConnections.get()}", thread.isAlive)
             await("Gecko must observe the real fixture input") { capture()?.targets?.any { it.label == "Search" } == true }
             instrumentation.runOnMainSync {
                 views(rule.activity.window.decorView).single { it.contentDescription == "ช่วยกรอกหรือช่วยกดบนหน้าเว็บ" }.performClick()

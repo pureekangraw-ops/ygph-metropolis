@@ -11,7 +11,12 @@ collect_evidence() {
   done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true
   # Keep focused synthetic navigation diagnostics accessible in job logs as well as ZIP evidence.
-  grep 'GeckoRecoveryTrace' app/build/emulator-evidence/logcat.txt || true
+  grep -E 'GeckoRecoveryTrace|FocusFailureEvidence' app/build/emulator-evidence/logcat.txt || true
+  while IFS= read -r file; do
+    file="${file//$'\r'/}"
+    [[ "$file" =~ ^/data/local/tmp/focus-[0-9]+-[0-9]+\.(txt|png)$ ]] || continue
+    timeout 15 adb pull "$file" app/build/emulator-evidence/ || true
+  done < <(adb shell 'ls /data/local/tmp/focus-* 2>/dev/null' || true)
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-flow.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png app/build/emulator-evidence/ || true
@@ -21,7 +26,7 @@ collect_evidence() {
 trap collect_evidence EXIT
 set +e
 set -o pipefail
-gradle --no-daemon :app:connectedDebugAndroidTest 2>&1 | tee app/build/emulator-evidence/emulator-test.log
+gradle --no-daemon -Pandroid.testInstrumentationRunnerArguments.focusDiagnostics=true :app:connectedDebugAndroidTest 2>&1 | tee app/build/emulator-evidence/emulator-test.log
 status=${PIPESTATUS[0]}
 if [ "$status" -eq 0 ]; then
   bash scripts/goview-b2e-emulator.sh

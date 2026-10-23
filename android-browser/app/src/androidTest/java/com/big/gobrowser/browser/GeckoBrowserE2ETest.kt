@@ -18,7 +18,8 @@ import org.junit.runner.RunWith
 /** Starts the installable Observatory activity and proves a real GeckoView/GeckoSession is attached. */
 @RunWith(AndroidJUnit4::class)
 class GeckoBrowserE2ETest {
-    @get:Rule val rule = ActivityTestRule(GeckoBrowserActivity::class.java)
+    val rule = ActivityTestRule(GeckoBrowserActivity::class.java)
+    @get:Rule val diagnosticRules:org.junit.rules.RuleChain=org.junit.rules.RuleChain.outerRule(FocusFailureDiagnostics()).around(rule)
     private fun find(view: View): View? = if (view is org.mozilla.geckoview.GeckoView) view else if (view is ViewGroup) (0 until view.childCount).asSequence().mapNotNull { find(view.getChildAt(it)) }.firstOrNull() else null
     @Test fun activityAttachesRealGeckoViewSession() {
         val view = find(rule.activity.window.decorView)
