@@ -1,297 +1,69 @@
-# GOVIEW round-one candidate
+# GOVIEW candidate in Observatory
 
-GOVIEW is the owned map system inside the existing Observatory app. GO prepares,
-analyzes and updates map data; GOVIEW reads, renders and supports interaction with
-that data while keeping its primary storage on the device. This name does not
-introduce a new graphics engine, application, database or backend. Existing
-MapLibre implementation and internal APIs remain unchanged.
+GOVIEW is the map workspace inside the existing Observatory Android app. GO prepares and analyzes data; GOVIEW reads, displays and edits owner-approved local map data. The candidate reuses MapLibre, the existing command/receipt model and GeckoView app entry. It does not build another app, routing engine or backend.
 
-Base main: `6aba0f5f7465af06e4202b8206614319ad1c69b1` (read back from GitHub 2026-10-23).
-Separate scratch copy; original checkout and all original tracked files preserved. No worktree, new app, database, backend, dependency, manifest change, destructive migration, workflow dispatch, deployment, or paid service. Authorized Draft PR #241 now runs the existing PR-triggered validation; nothing is merged or deployed.
+Base main: `6aba0f5f7465af06e4202b8206614319ad1c69b1`. Work is in a separate scratch copy, not a Git worktree. Original checkout and user data are preserved. Draft PR: https://github.com/pureekangraw-ops/ygph-metropolis/pull/241 . No merge, production deployment, credential/signing changes, installation or new paid service.
 
-## Existing implementation inspected
+## Source inventory and architecture
 
-`android-browser/app/src/main/java/com/big/gobrowser/outsideview/`:
-OutsideViewActivity, MapLibreOutsideRenderer, MapFeatureBuilder, MapModels,
-MapStateStore, MapCommandCodec/Executor, LocalMapPackageStore,
-ForegroundLocationController, LocationFixPolicy, MapStyleFactory, PinNavigation.
-Browser entry: GeckoBrowserActivity opens OutsideViewActivity. GeckoBrowserEngine
-owns GeckoView sessions and existing tab storage. Native map data never needs to
-pass through GeckoView, HTML, or JavaScript.
+Existing source lives under `android-browser/app/src/main/java/com/big/gobrowser/outsideview/`: OutsideViewActivity, MapLibreOutsideRenderer, MapFeatureBuilder, MapModels, MapStateStore, MapCommandCodec/Executor, LocalMapPackageStore, ForegroundLocationController, LocationFixPolicy, MapStyleFactory and PinNavigation. GeckoBrowserActivity opens the native map; map imports do not execute through GeckoView or JavaScript. No repository AGENTS.md was found. Historical open map/browser PRs were inspected without merging them.
 
-No AGENTS.md found. Open PRs include stacked historical map/browser changes
-(#213–215, #235–237) and unrelated fixes. They were inspected read-only and not
-merged into this candidate; current main already contains the native map stack.
+The existing map renderer and native editing primitives are retained. Platform SQLite is the chosen local database: it adds no dependency, preserves the existing version1 journal representation and uses transactions with SHA-256 readback. The Context constructor now selects this backend after the staged platform suite passed at c68eff5. The File-only constructor remains available for legacy/synthetic copies. This activation still requires its own full app CI run; no actual phone migration has occurred.
 
-## Candidate behavior
+All store instances use one process-wide lock per canonical journal path. Command, import, screen and owner-edit read/modify/write transactions coordinate across Activity recreation. IO runs on the existing serialized worker; MapLibre and UI updates stay on main. An old Activity can finish accepted work after destruction, but cannot update its destroyed UI. Foreground refresh detects a later committed revision and reloads an idle recreated screen. This is not cross-process file locking; the app declares no separate map process.
 
-Open existing Observatory → map → More → Import GeoJSON. Android's existing
-OPEN_DOCUMENT pattern reads the selected stream on the existing worker. Parse
-all features before one journal transaction; then reload the existing renderer
-and fit the imported coordinates. Search name/properties through More → Search.
-Pin source properties are available in the pin menu as native plain text.
-More → Layers toggles zones/grids/pins and retains preferences across restart.
-Existing MapLibre gestures provide pan/zoom.
+## Local workspace and exchange
 
-Uses the original `outside-view/journal.json`, journal version 1 and Pin codec.
-No records or fields are migrated. Imports carry UNKNOWN coordinate evidence;
-field-confirmed/app-confirmed/candidate labels remain original source properties,
-not app verification. Existing remote command evidence checks remain unchanged.
+Open Observatory → GOVIEW → More → Import GeoJSON. The selected stream is bounded and parsed before a local file receipt is recorded. Receiving a file does not change pins. A preview lists IDs, names, coordinates, revision, added/duplicate counts and conflicts. Only explicit owner approval commits Update; intervening edits invalidate the preview. Cancelling/rotating before approval leaves pins unchanged. A committed import and a failed camera/style refresh have distinct outcomes; retrying the display cannot duplicate records.
 
-Stable identity is `geojson:v1:<SHA256(collection name)>:<feature id>`.
-Collection `name` defaults to `owner-import`; feature `id` (or properties.id)
-is mandatory. Keep collection name and feature IDs stable for future exchanges.
-Exact duplicates add nothing; same coordinate with different IDs stays separate.
-Any conflicting ID aborts the entire batch without overwriting existing records.
-Updates/deletions need a future explicit conflict-review flow. Renaming a dataset
-creates a different namespace; do not rename during an update exchange.
+Native gestures provide pan/zoom. Existing pin add/delete/focus plus label/coordinate/category editing, search and persistent layer visibility form the workspace. Imported text is native plain text, never HTML or executable code. The field-confirmation checkbox starts unchecked; changing either coordinate clears it. Imported authority strings cannot confer local VERIFIED evidence. Ordinary same-point edits preserve prior evidence; changed coordinates require fresh explicit field confirmation.
 
-Limits: 1 MiB UTF-8 input, depth 16, 1–1000 Point features/import, numeric finite
-WGS84 coordinates, 2D-only Point coordinates (altitude rejected), 128-character IDs, 256-character
-names, 8192-character properties, 10,000 total stored pins and 8 Mi characters
-of stored pin text. Unsupported geometry, duplicate IDs, trailing JSON and
-unsupported schemaVersion fail. The optional schemaVersion must be numeric and exactly 1 (not a fractional or string value). Properties must be an object or null; property object keys are recursively canonicalized for stable reimport comparison. This is a 2D Point import subset, not a generic lossless GeoJSON archive. Persisted
-unknown properties survive as JSON text in Pin.note; separate owner notes remain.
-Journal commits fsync and atomically replace the original file. Corrupt journals
-now block replacement rather than being overwritten with an empty fallback.
+Five operations have separate evidence:
 
-GPS remains foreground-only, with accuracy, local last-fix date/time, stale
-(after 30 seconds), denied/revoked and unavailable states. Device fixes remain
-an ephemeral renderer overlay and never become saved pins. Original GPS and NETWORK_PROVIDER availability/fallback behavior is preserved;
-there are no new permissions or provider services. Original map reload default
-remains online=true: existing PMTiles is preferred; otherwise existing OSM road
-tiles load. No bundled PMTiles was found in this repository/workspace; actual
-phone package availability is UNKNOWN. New users see OSM roads with connectivity,
-not an offline blank canvas. Explicit existing offline mode still works.
-GPS recenter now asks before changing the viewport and discloses that without
-PMTiles the existing tile provider may learn that area. Cancel keeps the viewport;
-confirm is an explicit user action. The current fix remains an ephemeral overlay.
-The existing OS network provider may use device/network location services under
-existing settings; this candidate does not claim that Android location acquisition
-is wholly offline. No GPS acquisition or external location transmission occurred
-in this environment. Existing explicit sharing controls remain unused.
+| Operation | Candidate behavior | Boundary |
+| --- | --- | --- |
+| Snapshot | Explicit selection, preview, Capture ID/version and local capture receipt; fsynced selected file | No preselected pins; excludes live GPS, history, viewport, raw properties, notes and unrelated pins |
+| Upload | Narrow adapter ships BLOCKED/NOT_CONFIGURED | Synthetic in-memory tests are not live delivery |
+| Download | Owner-selected file gets DOWNLOAD/FILE_RECEIVED; proposed transport adapter is separate | Reception never implies Update |
+| Update | Validate, detect duplicates/conflicts, preview, owner approve, commit, verify readback, own receipt | No remote commit authority; uncertain post-commit readback is explicit |
+| Local Storage | Atomic journal or staged transactional SQLite; local backup, rollback and explicit corrupt-primary recovery | No silent empty fallback or original deletion |
 
-The import parse/transaction/fsync run on the existing single worker. Main-thread
-importing/busy gates pause commands and lifecycle rendering during the transaction.
-Command submit/confirm, screen preparation/confirmation, loads and imports use a process-wide lock keyed by the canonical journal path (shared by all store instances) so stale pre-import
-reads cannot overwrite newly saved pins. Lifecycle screen-load/commit and screen
-confirmation also run on that worker. Persistence success is separate from
-presentation: a camera failure still attempts style reload, and a later presentation
-failure says saved-but-display-needs-retry. Exact reimport remains idempotent.
+Snapshot file export is not a full backup. Native GeoJSON export preserves stable pin IDs, source properties/evidence and owner notes within the supported envelope, preflighting its own importer before output. Zones/grids/deletion intents are not part of this additive pin exchange. Existing field-confirmed records cannot be silently replaced by unverified research; conflicting IDs abort the batch. Editing existing conflicting records through a remote proposal is not implemented.
 
-## Evidence and limits
+Generic stable identity is `geojson:v1:<SHA256(collection name)>:<feature id>`; default collection name is `owner-import`. Keep names/IDs stable between exchanges. Equal coordinates with different IDs remain separate. Exact duplicates add nothing. Renaming a collection creates a different namespace.
 
-- VERIFIED local: 26 Kotlin/JUnit tests (10 new import tests plus existing model,
-  feature-builder, GPS policy, style-factory and command-executor tests). Initial new tests
-  failed compilation because GeoJsonImport/importGeoJson did not exist; final
-  tests pass. Disk-write failure, corrupt journal, pending render, unrelated
-  records/notes, duplicate and conflicting import, invalid coordinates and byte
-  limits, malformed version/properties/altitude, reordered property keys, camera/style failure after commit, and command/import coordination are covered. Tests use synthetic data only.
-- VERIFIED local: Node tests 41/41 (3 web + 38 Android source/DOM tests), including five new contracts for unchanged renderer/provider defaults, explicit GPS recenter confirmation and worker/main-thread import boundaries. These contracts are source checks, not device behavior evidence. The default-preservation checks failed before the review fixes and pass afterwards.
-- VERIFIED local: modified map renderer, GPS controller, importer and store
-  compile against Android 16 Robolectric API jar and actual MapLibre 13.6.1
-  classes using Kotlin 2.2.10. This is targeted API compilation, not an APK build;
-  OutsideViewActivity and whole-app Android integration still need Gradle.
-- VERIFIED local private file: exact SHA-256
-  `f580b1a4a30ff950bf093779cddd23cd7dea2c5e733d121aa48343a0965268bb`,
-  19,043 bytes. Actual parser imports 39 pins. A second JVM process reloads all
-  39 exactly, including properties; feature builder produces 39 records;
-  reimport adds zero. IDs 9 and 17 retain distinct identity at shared coordinates.
-  Source properties including the two reported corrections are retained exactly.
-  The recovered export is model-generated data, not verified station truth.
-  Neither the file nor its coordinates are committed or included in deliverables.
-- UNKNOWN: Android process restart, actual rendered screen, all-pin viewport,
-  search/layer gestures, on-device SAF and GPS on Xiaomi 15T / Android 16.
-- BLOCKED here: complete Gradle build/lint/APK and emulator instrumentation:
-  Gradle distribution/wrapper, Android SDK and emulator/device are unavailable.
-  No APK, emulator screenshot, physical-phone screenshot or full CI result is
-  claimed. No GitHub workflow was triggered.
+Limits: 1MiB UTF-8 input, depth16, 1–1000 Point features per import, finite numeric WGS84 coordinates, 2D Points only (altitude rejected), 128-character IDs, 256-character names, 8192-character properties, 10000 stored pins and 8Mi characters of stored pin text. Fractional/string/unsupported schema versions, nonobject properties except null, duplicate IDs, unsupported geometry and trailing data reject. Property keys are recursively canonicalized for stable duplicate comparison. This is a bounded 2D Point subset, not a generic lossless GeoJSON archive.
 
-## Required handset acceptance
+Receipts retain operation, ID, correlation, package/version, revision, counts, time and readback state. Update commits an unverified receipt first, reads back, then marks verification. Post-commit read failure returns COMMITTED_READBACK_UNAVAILABLE; it must not be replayed automatically or called unsaved. Display success requires the executor's actual persisted APPLIED receipt; a stale renderer confirmation returning PENDING cannot show saved. The 1000-receipt cap fails closed without evicting history. Disk failure may prevent an error receipt; UI must not claim it persisted.
 
-Use a reviewed build with an upgrade-compatible signer; do not uninstall or
-clear Observatory storage. Record source SHA and device/OS. Import synthetic
-fixture first, search, pan/zoom, toggle layers and reopen the app. Import private
-39-point file locally; inspect count and source labels, force-stop/reopen and
-read back 39. Test duplicate and invalid input while retaining existing owner
-pins/notes. Verify permission denied, valid GPS accuracy/time, stale timeout,
-background/resume and provider disabled. Do not send GPS screenshots or user
-locations to external services. Screen/frame evidence and physical GPS must be
-recorded separately from JVM evidence.
+## Database migration, backup and recovery
 
-## Follow-on, not a round-one dependency
+SQLite schema1 stores a small metadata row and ordered 256KiB BLOB chunks, avoiding oversized Android CursorWindow rows while retaining accepted capacity and UTF-8 text. Migration validates the old journal, fsyncs immutable `journal.pre-sqlite-v1.json`, retains `journal.json`, and commits schema/data transactionally. Unsupported schemas/checksum failures fail closed. An explicit migration marker distinguishes interrupted first initialization from initialized storage; missing, zero-byte or version0 initialized/recovered targets must never replay stale legacy data.
 
-Local-first motorcycle routing needs an evaluation of existing offline routing
-capabilities, Thai road/access restrictions, data licensing, map size, battery
-and update costs before selecting an engine. PMTiles supplies map display, not
-routing graphs. The existing navigation handoff rejects UNKNOWN imported pins;
-this candidate does not invent verified destinations or build a routing engine.
-Future GO updates should exchange versioned GeoJSON with stable dataset/feature
-IDs, explicit revisions and conflict review using this journal, without a new
-backend. No funding or service purchase is proposed or authorized here.
+Backups contain the full journal in a versioned checksum envelope (32MiB maximum; no truncation). Restore previews a verified backup and first fsyncs a rollback copy of current state. Its STORAGE receipt is unverified until readback. Corrupt-primary recovery is a separate owner-confirmed action available from the storage-error status: validate backup independently, fingerprint primary against changes, preserve all original primary files, then recover. SQLite builds a new database and atomically switches a validated recovery pointer; the damaged database and sidecars remain untouched. Its custom corruption handler avoids Android's default database deletion. Invalid/interrupted recovery retains originals and backup. Older releases do not read the SQLite database or preserve new receipt fields; downgrading is not a supported rollback. Use the explicit verified backup/recovery path and retain the installed app/data until signing and upgrade compatibility are checked.
 
-## Build gap readback after review
+## GPS, basemap and privacy
 
-Read-only inspection found no Gradle executable/distribution, gradlew wrapper,
-Android SDK, sdkmanager, platform-tools/adb, emulator, Android SDK environment
-variables, or existing SDK/Gradle caches in the saved environment. Setup logs and
-setup-build contain web/Node tooling, not an Android build installation. Java 21
-is installed; CI specifies Java 17. The file named android.jar in scratch is the
-Maven Central Robolectric `android-all:16-robolectric-13921718` API implementation
-JAR downloaded for compiler symbol checks. It is not an installed Android SDK:
-there are no SDK platform metadata, build tools, aapt2, d8, zipalign or emulator.
-Targeted compilation is not APK compilation or Android runtime validation.
+Existing GPS and NETWORK_PROVIDER fallback is retained. Foreground GPS shows accuracy, last-fix time, stale (>30seconds), denied/revoked and unavailable states. A fix is an ephemeral overlay, not a saved pin. GPS/import recentering is explicit with disclosure: without a local PMTiles package the existing online tile provider may learn the viewed area. The map's existing default remains online=true with PMTiles preferred, otherwise OSM roads; no bundled PMTiles was found. Offline roads are not promised without a package. Android's network provider may use device/network services under existing settings.
 
-Existing `.github/workflows/android-browser.yml` installs Gradle 8.11.1,
-command-line tools 15859902, Android platform 36/build-tools 36.0.0 and platform
-tools. It runs JVM tests, lint, instrumentation compilation, debug/ARM64 APK
-builds and an API35 emulator. It contains no production deployment. It triggers
-on pull_request or push to main, and uploads artifacts; there is no manual
-workflow_dispatch path. Runner billing/quota has not been verified, so no remote
-run is described as guaranteed free and no workflow was triggered.
+Owner-approved background use adds a non-exported location foreground service and the normal FOREGROUND_SERVICE_LOCATION declaration. Start is explicit from the visible map after location and notification consent. The ongoing notification opens the app or stops the session. Only the latest fix lives in RAM: no route history, network transfer, boot start, background-location/all-files permission, battery exemption or automatic restart. Stop, task removal, permission/provider loss and service failure end the session. Switching back to ordinary location clears former session ownership, so a timer cannot overwrite a new foreground result.
 
-Smallest local next step: provide a pre-provisioned, already-licensed Android
-SDK (platform36/build-tools36.0.0) plus Gradle8.11.1 and preferably JDK17, then
-run the existing Gradle tasks in this scratch candidate. Do not accept licenses,
-change original checkout, or create fake SDK metadata. Alternatively, after
-explicit review/publishing authorization and cost confirmation, use the existing
-non-deploy PR validation path. No new installation/license acceptance or remote
-publishing was performed during this follow-up.
+Official requirements checked: [foreground-service start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start), [location service type](https://developer.android.com/develop/background-work/services/fgs/service-types), [location permissions](https://developer.android.com/develop/sensors-and-location/location/permissions), [foreground-service changes](https://developer.android.com/develop/background-work/services/fgs/changes). Android16 job quotas do not authorize extra work; this service schedules no jobs. Notification consent is an app prerequisite to keep stop controls visible. Xiaomi may terminate background work; no indefinite survival, routing or voice-navigation claim is made.
 
-## Activity recreation integrity revision
+## GO/PANTHEON contract boundary
 
-The prior per-instance store lock was insufficient when an old Activity's worker
-outlived recreation. All journal IO now uses a process-wide canonical-path lock;
-command and screen read-modify-write sequences hold that same lock throughout.
-`prepareScreen()` centralizes the screen transaction. The manifest declares no
-separate process for this journal's Activities. This is intentionally process-wide
-coordination, not a claim of cross-process file locking.
+Existing read rail: GO Brain `pantheon_observatory` → OwnerBridge `observatory_latest` → GET `/v1/observatory/latest?view=map&round=1`, optional exact device/capture selection. It returns untrusted read-only short-lived observations with capture/sequence/times; NO_FRESH_SNAPSHOT and DEVICE_SELECTION_REQUIRED are explicit. Device observation POST credentials are observe-only, not durable package-write authority. Generic snapshot validation does not establish location privacy; the local explicit allowlist does.
 
-Activity destruction gracefully shuts down its worker, allowing accepted work to
-finish, rather than interrupting an uncertain commit. Destruction is volatile and
-main-thread callbacks check it before touching UI; imports skip posting UI work
-once destruction is observed. A recreated screen whose frame loses a revision
-race reloads instead of confirming stale data. Store failures remain explicit.
+GoviewObservationRead validates the supported envelope using synthetic fixtures. GoviewSandboxContract proposes a file/sandbox envelope with exactly contractVersion=1, operation=propose-update, sourceCaptureId, baseVersion and package. It rejects unknown fields, stale base versions and captures not recorded locally. GoviewPackageExchange separates uploadSelected/downloadProposal; shipping transport returns BLOCKED. Test-only transport receipts are labeled SYNTHETIC. No live snapshot was read/sent, no PANTHEON/GO repository or deployed endpoint was changed, and no credential was added. Manual selected-file exchange is available; live durable delivery remains BLOCKED until contract and transmission authority are verified.
 
-The lifecycle regression uses two distinct MapStateStore instances (including a
-canonical-path alias), an old-screen worker holding its import transaction, and a
-new-screen worker attempting prepareScreen. It verifies blocking/serialization,
-39 exact synthetic pins and existing notes after reload, rejection of a stale
-frame, acceptance of the current frame and absence of a leftover temp journal.
-Command/import coordination now also uses separate store instances. Real-file
-39-record import and separate-JVM-process readback were rerun successfully.
-Actual Android Activity recreation remains an instrumentation/device gate.
+## Evidence and remaining gates
 
-Remaining non-destructive display limitation: when a recreated screen finishes
-rendering and confirming the old revision before the old worker finishes parsing
-and commits an import, that later commit does not notify the already-completed
-screen. The pins remain saved and appear after Retry display/reload or reopening.
-No new refresh architecture has been added; actual-device behavior remains an
-acceptance gate.
+Local:48 Kotlin/JUnit tests and41 Node source/DOM tests pass. Tests cover malformed inputs, duplicate/conflict protection, provenance/export regressions, post-commit failures, shared transactions, separate phases and capture-bound proposals. Targeted Android16 API compilation uses a Robolectric API jar, not a local SDK/build/emulator. Local Gradle/SDK/adb are absent; no new local SDK license was accepted.
 
-## Expanded GOVIEW acceptance: owner edits and versioned batch exchange
+Private real-file test: SHA256 `f580b1a4a30ff950bf093779cddd23cd7dea2c5e733d121aa48343a0965268bb`,19043bytes,39 valid distinct IDs. Local parser/export/reimport/reload preserve all39 exact records, including two co-located IDs; duplicate reimport adds0. Source field-confirmation labels remain source claims. The recovered model-generated file is not verified station truth. Neither dataset nor coordinates are in this repository or evidence bundle.
 
-Source inventory found existing add-pin, note editing and summary/image sharing,
-but no coordinate/label editor or reimportable GeoJSON exporter. GOVIEW retains
-the existing renderer and journal: their transaction/revision primitives are
-sufficient for this small single-device dataset. No app/module replacement,
-SQLite/Room database, app-ID change, signing change or destructive migration is
-justified. No user data is deleted or migrated. Journal version1 is retained with
-an optional additive `updates` receipt array; old journals decode with an empty
-array. Do not downgrade to an older app which would not preserve this new audit
-array on its next write.
+Existing public PR CI (`.github/workflows/android-browser.yml`) builds SDK36 debug/ARM64 APKs, runs JVM/lint/instrumentation compilation, then API35 emulator tests on standard ubuntu-latest. Workflows are unchanged and contain no deployment. Head2df8f4f run39912785917 built successfully; emulator45/46 passed, failing an off-screen owner-pin selector. The corrected adapter-aware selection retains save/focus assertions. SQLite large multibyte migration/reopen/rollback/recovery and GPS notification controls passed there. Headc68eff5 adds empty/version0/absent initialized-target and ordinary-location-after-session regressions; run39915474207 completed SUCCESS (public run page verified after connector status lag). Both build and emulator passed; the recovered job log confirms all50 instrumentation tests completed successfully and the synthetic39-pin screenshot was collected. SQLite is activated in the subsequent candidate change, which must pass a new exact-head run before handoff.
 
-The pin menu now exposes label/longitude/latitude editing and an explicit owner
-checkbox for field confirmation. Saving checks the revision read when the editor
-opened; stale edits fail. Original source properties and separate owner notes
-remain. Local field confirmation records `owner-field-confirmation`, timestamp,
-and VERIFIED coordinate evidence. An imported file's verification claim is not
-local field proof; on a new record it becomes UNKNOWN with an imported-claim
-source. Matching records already present remain unchanged. Neither batch import
-nor generic UPSERT_PIN commands can automatically replace locally field-confirmed
-records. Explicit local owner editing is required.
+Physical Xiaomi15T Android16 GPS, background battery behavior, permission flows, full B2E and signer-compatible upgrade remain UNKNOWN. Emulator service controls do not prove GNSS fixes. Test APKs have ephemeral signing; do not uninstall or clear the installed app to bypass incompatibility. Follow [handset acceptance](goview-handset-acceptance.md) and record CI, emulator and physical evidence separately. Selected file output is not Upload PASS; Download is not Update PASS.
 
-More → Export GeoJSON uses Android ACTION_CREATE_DOCUMENT. It writes a
-FeatureCollection with schemaVersion1, goview.format=`goview.map-update` and a
-numeric package version equal to the source map revision. Features keep their
-stable pin IDs, coordinates, original properties, evidence claims and owner
-notes. Source record snapshots are data only; no command execution path is read
-from the file. Export is an additive pin exchange, not a full map backup: zones,
-grids and deletion intents are not exported. No record is silently truncated;
-exports outside the 1000-feature/1MiB import envelope fail explicitly. Files
-contain saved pin coordinates, so choose the output document destination
-accordingly. Device GPS overlays are never exported. No file is auto-uploaded.
-
-Every accepted import/duplicate and owner field edit receives a durable update
-receipt (UUID, content-hash package identity, package version, revision, status,
-counts and timestamp). Existing command updates continue using original command
-receipts. SAVED means journal persistence, not a rendered frame or device proof.
-DUPLICATE adds no pins. UI import parse/conflict failures attempt to persist a
-REJECTED receipt without changing map state; disk failure may also prevent that
-receipt, and the UI must not claim a durable failure receipt then. More → Update
-results displays current revision/pin count and the latest30 receipts; all stored
-receipts remain retained. At1000 update receipts new updates fail rather than
-silently deleting audit history. Native-package owner-note conflicts also abort
-without overwriting notes.
-
-Expanded local tests cover export→parse→fresh-store import→reload, stable IDs,
-source properties, owner notes, duplicate receipts, explicit field edits, stale
-edit rejection, research overwrite rejection, file verification claims and
-rejected-import receipts. Actual Android16 APK launch, gestures, document picker,
-rotation, GPS, export/edit round trip and physical phone acceptance still require
-CI/emulator/device evidence separately. Future GO exchange is a versioned batch,
-not continuous remote phone control.
-
-The Android instrumentation suite now includes GoviewExchangeTest using real Android org.json and isolated synthetic cache storage; it does not touch owner map files or claim physical-device GPS evidence.
-
-### Unified workspace staging (2026-10-23)
-
-The current follow-up fixes imported provenance and export envelope validation: field confirmation is never preselected, editing either coordinate clears confirmation, ordinary save cannot promote imported evidence, and export preflights the receiver before opening an output stream.
-
-Platform SQLite schema v1 is staged behind an explicit backend constructor, **not enabled for the Activity yet**. It stores the existing journal document transactionally with a SHA-256 integrity check. Migration validates the legacy journal first, fsyncs an immutable `journal.pre-sqlite-v1.json` copy, retains `journal.json`, then commits schema and data together. Failed migration/write rolls back; unsupported schema or bad checksum fails closed instead of replacing data. Synthetic Android instrumentation covers migration, retry, rollback, schema rejection, corruption and overlapping store instances. Activation requires these platform tests to pass; local Android API compilation is not SQLite runtime evidence.
-
-Five distinct operations remain the acceptance contract: Snapshot captures explicitly selected map state with Capture ID/version; Upload transfers an explicitly selected file; Download receives a package; Update validates/diffs/previews, obtains owner approval, commits and verifies readback with its own receipt; Local Storage backs up and restores durably. Download success cannot imply Update success. Snapshot tests cannot substitute for transport or update tests. Existing observe-only PANTHEON snapshots and GO Brain read access do not establish an approved map-package upload/download/update-write endpoint. Live package transfer is BLOCKED pending that contract and explicit transmission approval. No new backend, credentials, persistent access or automatic GPS/history transmission is authorized.
-
-The expanded workspace remains staged, not acceptance-ready: selected Snapshot/transfer adapters, explicit Update approval, SQLite activation, full backup/restore, and Android 16 physical-phone B2E remain to complete. The existing CI emulator is API 35; it does not prove Xiaomi 15T GPS or signing-compatible upgrade. Do not install this ephemeral-signed artifact over actual data or uninstall the existing app to work around signing.
-
-### Local workspace follow-up
-
-Candidate UI now separates a local file read (DOWNLOAD/FILE_RECEIVED, explicitly not network delivery) from UPDATE: it validates a package, previews added/duplicate counts and base revision, asks the owner to approve, then commits with a distinct correlated receipt and readback. Conflicts reject instead of overwriting existing records; intervening edits invalidate approval. Cancelling or rotating before approval does not commit pins.
-
-Selected Snapshot starts with no pins selected, previews names and coordinates, captures only explicit IDs/names/coordinates (no original properties, notes, viewport, raw GPS or history), records Capture ID/version and CAPTURED_LOCAL receipt, then uses Android document creation. Writing that file is neither live Upload nor Update success. Reimport of an unchanged selected projection preserves the existing full records. Full-fidelity recovery is through the local backup, not the privacy-limited snapshot.
-
-Local backup/restore validates schema/checksum and previews the target before approval. Restore first preserves the entire current journal in a separate rollback file, then restores the chosen full state with a new revision and STORAGE receipt. Backup files never execute commands. Failed/corrupt storage reads disable writes/sharing and retain the original files.
-
-SQLite remains staged while synthetic platform tests run. The backend now stores 256 KiB BLOB chunks and a small metadata row, avoiding Android CursorWindow limits without reducing accepted journal capacity. A >2 MiB multibyte valid-journal test covers migration, reopen, failed migration and failed replacement.
-
-`GoviewSandboxContract` is a proposed additive file/sandbox contract, not a deployed endpoint. Proposal keys are strictly allowlisted: contractVersion=1, operation=propose-update, sourceCaptureId, baseVersion, package. Unknown fields and stale baseVersion reject. Read/propose do not authorize commit; owner approval remains local. Upload/download adapters return BLOCKED, never simulated success. No patch to GO or PANTHEON repositories is made in this stage.
-
-Confirmed existing read rail: GO Brain `pantheon_observatory` → OwnerBridge `observatory_latest` → GET `/v1/observatory/latest?view=map&round=1`, with optional exact device_id/capture_id. Returns untrusted read-only observation with capture/sequence/capture-time/receive-time/expiry; NO_FRESH_SNAPSHOT and DEVICE_SELECTION_REQUIRED are explicit failures. The device POST observation rail has short retention and observe-only credentials; it is not durable artifact storage or update authority. No live call was made. Existing unselected map snapshot sending is replaced in GOVIEW UI by explicit local selection; browser observation behavior is unchanged.
-
-Follow-up checks add category edit/filter persistence and native GeoJSON roundtrip; selected snapshot files are fsynced locally before a CAPTURED_LOCAL receipt. Post-commit readback failure returns COMMITTED_READBACK_UNAVAILABLE and never falsely reports an unsaved map or verified readback. A delayed old-screen commit is detected by the existing foreground status refresh and reloads the current screen when idle.
-
-Prior run39907869018 failed one Gecko browser assertion (`Gecko must observe the real fixture input`), not runner setup; all37 tests ran, with one failure. Source inspection found fixture navigation could precede asynchronous `ensureBuiltIn` installation. The test now waits for the real extension installation before fixture navigation while retaining every observation/fill/click assertion and timeout. This setup fix still needs exact-head emulator verification; it is not a claimed proven diagnosis from production telemetry.
-
-Corrupt-primary recovery is now a separate explicit owner action from the storage-error message. It validates a chosen backup without decoding the primary, fingerprints the primary to reject intervening changes, fsyncs preserved copies of all primary files, and only then recovers. For SQLite it creates a new chunked database and atomically switches a validated local pointer; the damaged database and sidecars remain untouched. A custom corruption handler prevents Android's default database-deletion behavior. Recovery tests cover a damaged primary, invalid backup, interrupted recovery, unchanged originals/backup on failure, and successful reopen. This new recovery path remains synthetic-test-only until platform validation passes.
-
-Restore receipts are now unverified-first, with COMMITTED_READBACK_UNAVAILABLE on post-commit read failure. The UI does not label that outcome as an unsaved restore. Local import preview lists IDs/names/coordinates; moving the viewport to the new points is separately opt-in with the existing online tile disclosure. A synthetic 39-point Activity test exercises file receipt, explicit Update approval and actual screen recreation; it is not the private dataset or physical-device evidence.
-
-### Owner-started background GPS session (candidate)
-
-The owner explicitly authorized Maps-like background use on 2026-10-23. This candidate adds a non-exported `location` foreground service and only the required `FOREGROUND_SERVICE_LOCATION` declaration; existing coarse/fine location and notification permissions are reused. Start is an explicit action while the map Activity is visible, after runtime location and notification consent. A persistent notification opens GOVIEW or stops the session. It uses the existing GPS/network-provider capabilities, holds only the latest fix in memory, reports freshness/accuracy, and stops on owner action, task removal, permission loss or disabled location. START_NOT_STICKY prevents automatic restart; no boot receiver, background-location permission, all-files permission, route recording, network transport, or battery exemption is added. Device/OEM termination remains possible; no indefinite-operation guarantee or routing/voice-navigation claim.
-
-Official sources checked: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start ; https://developer.android.com/develop/background-work/services/fgs/service-types ; https://developer.android.com/develop/sensors-and-location/location/permissions ; https://developer.android.com/develop/background-work/services/fgs/changes . Android16 job quota changes do not create permission to run extra transfer jobs; this service schedules none. Notification permission is an application prerequisite here so owner stop controls remain visible.
-
-Synthetic policy tests cover missing start/visibility/location/notification/provider prerequisites. The emulator test starts while visible, moves the Activity behind other tasks, checks the ongoing notification and stops through its action. This proves service controls only, not actual GNSS reception or Xiaomi screen-off/battery survival. Actual Android16 permission-denied/approximate/precise GPS and background acceptance remain PENDING until observed on the handset.
-
-Pending review regressions: a missing target named by goview.current now fails closed rather than reimporting stale legacy data; a delayed render confirmation passes the executor's actual persisted receipt to UI, so PENDING cannot be labeled saved. UI journal loads and command serialization run on the existing worker; MapLibre calls remain on main.
-
-Run39910642989 at160b1486 completed43 emulator tests with one Espresso click failure on the Update approval button; storage/recovery tests reported no failures. The candidate now bounds the long preview in a scrolling panel so approval controls remain reachable on a compact phone; the same real click assertion is retained. Nested Espresso failure details are emitted for GOVIEW tests to diagnose any remaining layout issue instead of rerunning blindly.
-
-The missing-database guard also covers the default database after a migration backup exists, so deleting the database cannot silently replay the old journal. If storage failed after making the migration backup but before creating any database, this intentionally requires explicit recovery rather than guessing that stale legacy data is current.
-
-### SQLite activation gate
-
-Run39912785917 at2df8f4f44280a015fe8e47fc00c239749a5b5d54 completed46 emulator tests: the only failure was the pre-existing owner-pin UI test using an on-screen-only matcher after39 synthetic pins made its target off-screen. All SQLite migration, >2MiB multibyte/rollback, corrupt-primary recovery, missing-default/recovered database tests and GPS-session lifecycle tests completed without failure. The owner-pin test now uses adapter-aware selection that scrolls to the same target and retains its save/focus assertions. Those results established the existing tests, but a later review found initialized-empty-database handling also needed a regression. SQLite activation remains held until that added platform test passes; the Context constructor still uses the retained journal. Full activated-app CI and actual handset upgrade/data acceptance still require separate verification. The backend remains staged/inactive at this checkpoint.
-
-Manual update proposals now require an actually recorded local selected Capture ID and matching baseVersion; Snapshot files carry their own capture receipt. The proposed upload/download adapter ships as BLOCKED/NOT_CONFIGURED. A test-only in-memory adapter exercises separate SYNTHETIC upload/download receipts and local owner approval; none of those synthetic receipts represent live PANTHEON delivery.
+Local-first motorcycle routing remains a documented follow-on requiring road/access/licensing, offline graph size and battery evaluation. PMTiles supplies display, not a routing graph. No new routing engine, paid service or public/multitenant platform is part of this candidate.

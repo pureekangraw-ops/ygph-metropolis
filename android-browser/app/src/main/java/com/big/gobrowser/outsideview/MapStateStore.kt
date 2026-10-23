@@ -8,7 +8,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 class MapStateStore(private val root:File,private val backend:JournalBackend?=null){
-    constructor(context:Context):this(File(context.filesDir,"outside-view"))
+    constructor(context:Context):this(File(context.filesDir,"outside-view"),SqliteJournalBackend(File(context.filesDir,"outside-view")))
     private val journalFile:File get()=File(root,"journal.json")
     /** All store instances for one journal share the same process-wide transaction boundary. */
     internal val transactionLock:Any = journalLocks.computeIfAbsent(journalFile.canonicalPath) { Any() }

@@ -22,6 +22,21 @@ class GoviewSqliteTest {
         return journal
     }
     private fun fails(block:()->Unit) {assertTrue(runCatching(block).isFailure)}
+    @Test fun applicationConstructorMigratesAndReopensSQLiteWithoutChangingLegacy()=isolated {root->
+        val context=object:android.content.ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
+            override fun getFilesDir():File=root
+        }
+        val directory=File(root,"outside-view")
+        val original=seed(directory);val legacy=File(directory,"journal.json").readBytes()
+        val applicationStore=MapStateStore(context)
+        assertEquals(original,applicationStore.load())
+        assertTrue(File(directory,"goview.sqlite").isFile)
+        val changed=original.copy(state=original.state.copy(revision=8,notes=original.state.notes+("application" to "retained")))
+        applicationStore.commit(changed)
+        assertEquals(changed,MapStateStore(context).load())
+        assertArrayEquals(legacy,File(directory,"journal.json").readBytes())
+        assertArrayEquals(legacy,File(directory,"journal.pre-sqlite-v1.json").readBytes())
+    }
     @Test fun migrationPreservesExactLegacyBackupAndReopensIdempotently()=isolated {root->
         val original=seed(root);val legacy=File(root,"journal.json").readBytes()
         val store=MapStateStore(root,SqliteJournalBackend(root))
