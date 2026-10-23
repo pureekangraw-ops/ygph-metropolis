@@ -118,7 +118,8 @@ class GeckoBrowserE2ETest {
 
     private fun currentCapture(): DomCapture? {
         val field = GeckoBrowserActivity::class.java.getDeclaredField("latestDom").apply { isAccessible = true }
-        return (field.get(rule.activity) as? Pair<*, *>)?.second as? DomCapture
+        val latest=field.get(rule.activity) as? Pair<*, *>
+        return latest?.takeIf {it.first==engine().active()?.id}?.second as? DomCapture
     }
 
     @Test fun editingAddressIsNotOverwrittenByPageNavigation() {
@@ -136,19 +137,56 @@ class GeckoBrowserE2ETest {
     }
 
     @Test fun killedSessionRecoveryReattachesTheExistingView() {
-        instrumentation.runOnMainSync { engine().navigate("https://example.com") }
+        instrumentation.runOnMainSync {
+            traceRecoveryNavigation()
+            assertTrue("Initial navigation must be accepted", engine().navigate("https://example.com"))
+            trace("navigate-return requested=${engine().active()?.requestedUrl}")
+        }
         awaitPage("example.com")
         var previousCaptureId: String? = null
         instrumentation.runOnMainSync {
             previousCaptureId = currentCapture()?.captureId
             val tab = engine().active()!!
             val view = find(rule.activity.window.decorView) as org.mozilla.geckoview.GeckoView
+            trace("explicit-kill requested=${tab.requestedUrl}")
             tab.session.close()
             tab.session.contentDelegate!!.onKill(tab.session)
             assertTrue("Recovered session must be open", tab.session.isOpen)
             org.junit.Assert.assertSame("Recovered page must return to the visible view", tab.session, view.session)
         }
         awaitPage("example.com", previousCaptureId)
+    }
+
+    @Test fun immediateOwnerNavigationAfterKnownSessionRestoreKeepsDestination() {
+        // Controlled fixture: real saved example.org state, not whichever tab a previous test left.
+        lateinit var sourceId:String
+        instrumentation.runOnMainSync {sourceId=engine().open("https://example.org")}
+        awaitPage("example.org")
+        // Selecting another tab makes the source inactive and flushes Gecko session state.
+        instrumentation.runOnMainSync {engine().open("https://example.com")}
+        val recovery=GeckoBrowserRecovery(instrumentation.targetContext)
+        var saved:org.mozilla.geckoview.GeckoSession.SessionState?=null
+        val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+        while(saved==null && System.nanoTime()<deadline) {
+            val candidate=recovery.read(sourceId)
+            val sourceUri=runCatching {candidate?.get(candidate.currentIndex)?.uri}.getOrNull()
+            if(sourceUri!=null && android.net.Uri.parse(sourceUri).host=="example.org")saved=candidate else Thread.sleep(100)
+        }
+        assertNotNull("Known source session must have durable recovery state",saved)
+        repeat(3) { attempt ->
+            var previousCaptureId:String?=null
+            instrumentation.runOnMainSync {
+                previousCaptureId=currentCapture()?.captureId
+                engine().open("https://example.org",state=saved!!)
+                traceRecoveryNavigation()
+                assertTrue(engine().navigate("https://example.com"))
+                trace("controlled-restore attempt=$attempt navigate-return=${engine().active()?.requestedUrl}")
+            }
+            awaitPage("example.com",previousCaptureId)
+            instrumentation.runOnMainSync {
+                assertEquals("New owner destination must survive restore callbacks", "example.com",android.net.Uri.parse(engine().active()!!.requestedUrl).host)
+            }
+        }
     }
 
     @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
@@ -199,13 +237,48 @@ class GeckoBrowserE2ETest {
         awaitPage("example.org")
     }
 
+    // Diagnostics retain original delegates and assertions; URLs are synthetic test destinations.
+    private fun trace(event: String) = android.util.Log.i("GeckoRecoveryTrace", event)
+    private fun traceRecoveryNavigation() {
+        val tab=engine().active()!!
+        trace("begin tab=${tab.id} session=${System.identityHashCode(tab.session)} requested=${tab.requestedUrl} open=${tab.session.isOpen}")
+        val navigation=tab.session.navigationDelegate!!
+        tab.session.navigationDelegate=object : org.mozilla.geckoview.GeckoSession.NavigationDelegate by navigation {
+            override fun onLoadRequest(session: org.mozilla.geckoview.GeckoSession, request: org.mozilla.geckoview.GeckoSession.NavigationDelegate.LoadRequest): org.mozilla.geckoview.GeckoResult<org.mozilla.geckoview.AllowOrDeny>? {
+                trace("load-request uri=${request.uri} requested=${tab.requestedUrl}")
+                return navigation.onLoadRequest(session,request)
+            }
+            override fun onLocationChange(session: org.mozilla.geckoview.GeckoSession, url: String?, permissions: List<org.mozilla.geckoview.GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
+                trace("location before=${tab.requestedUrl} incoming=$url")
+                navigation.onLocationChange(session,url,permissions,hasUserGesture)
+                trace("location after=${tab.requestedUrl}")
+            }
+        }
+        val progress=tab.session.progressDelegate!!
+        tab.session.progressDelegate=object : org.mozilla.geckoview.GeckoSession.ProgressDelegate by progress {
+            override fun onPageStop(session: org.mozilla.geckoview.GeckoSession, success: Boolean) {
+                trace("page-stop success=$success requested=${tab.requestedUrl}")
+                progress.onPageStop(session,success)
+            }
+            override fun onSessionStateChange(session: org.mozilla.geckoview.GeckoSession, state: org.mozilla.geckoview.GeckoSession.SessionState) {
+                trace("session-state requested=${tab.requestedUrl}")
+                progress.onSessionStateChange(session,state)
+            }
+        }
+    }
+
     private fun awaitPage(host: String, previousCaptureId: String? = null) {
         val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45)
         var loaded = false
+        var previousDiagnostic=""
         while (!loaded && System.nanoTime() < deadline) {
             instrumentation.runOnMainSync {
                 val capture = currentCapture()
-                loaded = capture != null && android.net.Uri.parse(capture.url).host == host
+                val active=engine().active()
+                val diagnostic="await=$host tab=${active?.id} session=${active?.session?.let(System::identityHashCode)} requested=${active?.requestedUrl} captured=${capture?.url} captureId=${capture?.captureId} title=${capture?.title}"
+                if(diagnostic!=previousDiagnostic){trace(diagnostic);previousDiagnostic=diagnostic}
+                loaded = capture != null && android.net.Uri.parse(active?.requestedUrl.orEmpty()).host == host
+                    && android.net.Uri.parse(capture.url).host == host
                     && capture.title == "Example Domain" && capture.text.isNotBlank()
                     && capture.captureId != previousCaptureId
             }
@@ -214,7 +287,7 @@ class GeckoBrowserE2ETest {
         var diagnostic=""
         if(!loaded)instrumentation.runOnMainSync {
             val capture=currentCapture()
-            diagnostic="phase=${if(previousCaptureId==null) "initial" else "recovery"}, sessionOpen=${engine().active()?.session?.isOpen}, requested=${engine().active()?.requestedUrl}, captured=${capture?.url}, title=${capture?.title}, captureChanged=${capture?.captureId!=previousCaptureId}"
+            diagnostic="phase=${if(previousCaptureId==null) "initial" else "recovery"}, tab=${engine().active()?.id}, session=${engine().active()?.session?.let(System::identityHashCode)}, captureId=${capture?.captureId}, sessionOpen=${engine().active()?.session?.isOpen}, requested=${engine().active()?.requestedUrl}, captured=${capture?.url}, title=${capture?.title}, captureChanged=${capture?.captureId!=previousCaptureId}"
         }
         assertTrue("Actual DOM must load from $host ($diagnostic)", loaded)
     }

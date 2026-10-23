@@ -10,6 +10,8 @@ collect_evidence() {
     timeout 15 adb pull "/data/local/tmp/$name.png" app/build/emulator-evidence/ || true
   done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true
+  # Keep focused synthetic navigation diagnostics accessible in job logs as well as ZIP evidence.
+  grep 'GeckoRecoveryTrace' app/build/emulator-evidence/logcat.txt || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-flow.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-map-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png app/build/emulator-evidence/ || true
