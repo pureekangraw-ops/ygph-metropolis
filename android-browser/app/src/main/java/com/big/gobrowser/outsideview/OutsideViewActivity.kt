@@ -62,6 +62,7 @@ class OutsideViewActivity : Activity() {
         val tools=LinearLayout(this)
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
+        tools.addView(button("GO วาดแผนที่"){startActivity(Intent(this,GoviewStudioActivity::class.java))})
         tools.addView(button("ตำแหน่งฉัน"){requestMyLocation()})
         tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
