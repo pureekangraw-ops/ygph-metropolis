@@ -1,5 +1,6 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { validPageUrl, allowedAction, mayGoAct, cleanStep } from "./policy.mjs";
+import { mcpResponse } from "./mcp.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -16,6 +17,7 @@ function sameGrant(s,url=s.url) {
 function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
     controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:sameGrant(s),
+    note:s.note || null,
     version:s.version || 0, updatedAt:s.updatedAt || null, job:s.job || null };
 }
 export default {
@@ -27,11 +29,25 @@ export default {
     const owner=authorization==="Bearer "+env.OWNER_TOKEN;
     const go=!!env.GO_TOKEN && env.GO_TOKEN!==env.OWNER_TOKEN && authorization==="Bearer "+env.GO_TOKEN;
     if (!owner && !go) return reply({ error:"UNAUTHORIZED" },401);
-    if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
-    if (go && !["/v1/session","/v1/observe","/v1/action","/v1/job","/v1/run"].includes(path)) return reply({error:"OWNER_ONLY"},403);
     const id=env.SESSIONS.idFromName("owner-browser-v1");
+    const stub=env.SESSIONS.get(id);
+    if (path==="/mcp") {
+      if(!go)return reply({error:"GO_TOOL_TOKEN_REQUIRED"},403);
+      return mcpResponse(request,async(method,toolPath,args)=>{
+        const upstream=new Request(new URL(toolPath,request.url),{
+          method, headers:{"x-observatory-role":"GO","content-type":"application/json"},
+          ...(method==="POST"?{body:JSON.stringify(args)}:{})
+        });
+        const result=await stub.fetch(upstream);
+        let data;try{data=await result.json();}catch{data={error:"INVALID_BRIDGE_RESPONSE"};}
+        if(!result.ok)return {error:data.error||"GO_TOOL_NOT_ALLOWED",status:result.status};
+        return data;
+      });
+    }
+    if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
+    if (go && !["/v1/session","/v1/observe","/v1/screenshot","/v1/action","/v1/job","/v1/run","/v1/note"].includes(path)) return reply({error:"OWNER_ONLY"},403);
     const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json"}});
-    const result=await env.SESSIONS.get(id).fetch(upstream);
+    const result=await stub.fetch(upstream);
     // A DO receives role from a trusted internal request, never a client-supplied header.
     return result;
   }
@@ -40,13 +56,8 @@ export default {
 export class BrowserWorkspace {
   constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; }
   async state() {
-    const state=(await this.ctx.storage.get("browser")) || {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false};
-    if(state.job?.status==="RUNNING" && state.updatedAt && Date.now()-Date.parse(state.updatedAt)>180000) {
-      state.job.status="UNKNOWN";state.job.error="RUN_INTERRUPTED_NO_AUTOREPLAY";
-      state.controller="BIG";state.status="UNKNOWN";state.mode="OBSERVE";
-      await this.save(state);
-    }
-    return state;
+    return (await this.ctx.storage.get("browser")) ||
+      {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false,recentRequests:[]};
   }
   async save(state) { state.version=(state.version || 0)+1;state.updatedAt=new Date().toISOString();await this.ctx.storage.put("browser",state);return state; }
   async withPage(state, work) {
@@ -55,12 +66,17 @@ export class BrowserWorkspace {
     try {
       browser=await puppeteer.connect(this.env.BROWSER, state.browserSessionId);
       const pages=await browser.pages();
-      const page=pages.find(p => p.target()._targetId === state.targetId) || pages[0];
-      if (!page) throw new Error("PAGE_UNAVAILABLE");
+      const page=pages.find(p => p.target()._targetId === state.targetId) ||
+        (pages.length===1 ? pages[0] : null);
+      if (!page) throw new Error("EXACT_PAGE_UNAVAILABLE");
       return await work(page);
     } catch (error) {
       if (/session.*(?:closed|not found|does not exist)|browser.*disconnect|ECONN|Target closed/i.test(String(error))) {
-        state.status="EXPIRED";state.controller="BIG";state.mode="IDLE";await this.save(state);
+        const fresh=await this.state();
+        if(fresh.browserSessionId===state.browserSessionId){
+          fresh.status="EXPIRED";fresh.controller="BIG";fresh.mode="IDLE";
+          fresh.allowGoRead=false;fresh.grantedHost=null;await this.save(fresh);
+        }
       }
       throw error;
     } finally { if (browser) await browser.disconnect().catch(()=>{}); }
@@ -80,8 +96,17 @@ export class BrowserWorkspace {
             type:x.getAttribute("type") || ""
           })).filter(x => !["password","hidden"].includes(x.type))
       }));
-      state.url=validPageUrl(snapshot.url) || state.url;await this.save(state);
-      return {...snapshot,version:state.version,observedAt:new Date().toISOString()};
+      const current=await this.state();
+      const browserUrl=validPageUrl(snapshot.url);
+      if(browserUrl && browserUrl!==current.url) {
+        current.url=browserUrl;
+        if(!sameGrant(current,browserUrl)){
+          current.allowGoRead=false;current.grantedHost=null;
+          if(current.controller==="GO"){current.controller="BIG";current.mode="OBSERVE";}
+        }
+        await this.save(current);
+      }
+      return {...snapshot,version:current.version,observedAt:new Date().toISOString()};
     });
   }
   async action(state, raw, role) {
@@ -113,10 +138,14 @@ export class BrowserWorkspace {
           await page.type(step.selector,step.value,{delay:20});break;
         }
       }
-      state.url=validPageUrl(page.url()) || state.url;
-      if(!sameGrant(state)) {state.allowGoRead=false;state.grantedHost=null;}
-      await this.save(state);
-      return {ok:true,type:step.type,url:state.url,version:state.version,at:new Date().toISOString()};
+      const latest=await this.state(); // Preserve a BIG takeover that occurred during a slow navigation.
+      latest.url=validPageUrl(page.url()) || latest.url;
+      if(!sameGrant(latest)) {
+        latest.allowGoRead=false;latest.grantedHost=null;
+        if(latest.controller==="GO"){latest.controller="BIG";latest.mode="OBSERVE";}
+      }
+      await this.save(latest);
+      return {ok:true,type:step.type,url:latest.url,version:latest.version,at:new Date().toISOString()};
     });
   }
   async beginSession(raw) {
@@ -126,7 +155,7 @@ export class BrowserWorkspace {
     if (state.browserSessionId) {
       try {
         const result=await this.withPage(state,page=>page.goto(url,{waitUntil:"domcontentloaded",timeout:20000}).then(()=>({ok:true})));
-        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;state.allowGoRead=false;state.grantedHost=null;await this.save(state);
+        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
         return summarize(state);
       } catch { state.browserSessionId=null; }
     }
@@ -134,13 +163,14 @@ export class BrowserWorkspace {
     try {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
-      state={browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
-        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,version:state.version || 0,allowGoRead:false,grantedHost:null,job:null};
+      state={...state,browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
+        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,allowGoRead:false,grantedHost:null,job:null,
+        note:null};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
   async closeSession(state) {
-    if(state.job?.status==="RUNNING")throw new Error("STOP_JOB_BEFORE_CLOSING");
+    if(state.job?.status==="RUNNING" || state.job?.status==="STOP_REQUESTED")throw new Error("STOP_JOB_BEFORE_CLOSING");
     if(state.browserSessionId){
       try {
         const browser=await puppeteer.connect(this.env.BROWSER,state.browserSessionId);
@@ -150,7 +180,7 @@ export class BrowserWorkspace {
           throw e;
       }
     }
-    state.browserSessionId=null;state.targetId=null;state.controller="BIG";
+    state.browserSessionId=null;state.targetId=null;state.controller="BIG";state.note=null;
     state.allowGoRead=false;state.grantedHost=null;state.mode="IDLE";state.status="CLOSED";
     await this.save(state);return summarize(state);
   }
@@ -164,66 +194,90 @@ export class BrowserWorkspace {
     return {url,validForStartMs:300000,warning:"View URL grants access. Never log or share it."};
   }
 
-  async runScript(state,steps) {
-    const job={id:crypto.randomUUID(),status:"RUNNING",kind:"GO_SCRIPT",startedAt:new Date().toISOString(),
-      progress:0,total:steps.length,results:[]};
-    state.job=job;state.mode="HEADLESS";state.status="RUNNING";await this.save(state);
-    this.cancelAudit=false;
-    this.ctx.waitUntil((async()=>{
-      for(let i=0;i<steps.length;i++) {
-        const latest=await this.state();
-        if(this.cancelAudit || latest.job?.id!==job.id || latest.controller!=="GO" || !latest.allowGoRead ||
-          latest.mode!=="HEADLESS") { job.status="STOPPED";break; }
-        try {
-          const receipt=await this.action(latest,steps[i],"GO");
-          job.results.push({...receipt,step:i+1,dispatched:true,businessOutcome:"UNKNOWN"});
-          job.progress=i+1;latest.job=job;await this.save(latest);
-        } catch(e) {
-          job.results.push({step:i+1,error:String(e.message||e).slice(0,140)});
-          job.status="FAILED";break;
-        }
-      }
-      if(job.status==="RUNNING")job.status="COMPLETED";
-      job.finishedAt=new Date().toISOString();
-      const latest=await this.state();
-      if(latest.job?.id===job.id) {
-        latest.job=job;latest.status=job.status;latest.mode="OBSERVE";latest.controller="BIG";
-        latest.allowGoRead=false;st.grantedHost=null;await this.save(latest);
-      }
-    })().catch(async e=>{
-      const latest=await this.state();
-      if(latest.job?.id===job.id){
-        job.status="UNKNOWN";job.error=String(e.message||e).slice(0,140);
-        latest.job=job;latest.status="UNKNOWN";latest.mode="OBSERVE";latest.controller="BIG";
-        latest.allowGoRead=false;await this.save(latest);
-      }
-    }));
-    return {jobId:job.id,status:"RUNNING",steps:steps.length};
+  /** Durable source-owned work queue; DO alarms wake after the client disconnects.
+   * Persist DISPATCHING *before* a step. If runtime resets mid-click, mark UNKNOWN
+   * instead of replaying an action that might have succeeded on the website.
+   */
+  async enqueue(state,kind,items,requestId) {
+    const repeat=state.recentRequests?.find(r=>r.requestId===requestId);
+    if(repeat) return {jobId:repeat.jobId,status:"ALREADY_ACCEPTED",duplicate:true};
+    if(state.job?.status==="RUNNING" || state.mode==="HEADLESS")throw new Error("JOB_ALREADY_RUNNING");
+    const job={id:crypto.randomUUID(),kind,status:"RUNNING",startedAt:new Date().toISOString(),
+      progress:0,total:items.length,results:[],requestId};
+    state.job=job;state.mode="HEADLESS";state.status="RUNNING";
+    // A page audit is read-only and needs no GO observer grant; GO scripts require
+    // the explicit scoped session grant throughout their entire execution.
+    if(kind==="PAGE_AUDIT"){state.controller="BIG";state.allowGoRead=false;state.grantedHost=null;}
+    state.recentRequests=[...(state.recentRequests||[]).slice(-19),{requestId,jobId:job.id}];
+    await this.ctx.storage.put("pending-job",{jobId:job.id,kind,items,index:0,phase:"READY"});
+    await this.save(state);
+    await this.ctx.storage.setAlarm(Date.now()+500);
+    return {jobId:job.id,status:"RUNNING",total:items.length};
   }
-  async audit(state, urls) {
-    const job={id:crypto.randomUUID(),status:"RUNNING",kind:"PAGE_AUDIT",startedAt:new Date().toISOString(),results:[]};
-    state.job=job;state.mode="HEADLESS";state.allowGoRead=false;state.grantedHost=null;state.status="RUNNING";state.controller="GO";await this.save(state);
-    this.cancelAudit=false;
-    this.ctx.waitUntil((async()=>{
-      for(const url of urls) {
-        if(this.cancelAudit)break;
-        try {
-          const result=await this.withPage(state,async page=>{
-            const response=await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
-            const data=await page.evaluate(()=>({title:document.title,links:document.querySelectorAll("a[href]").length,buttons:document.querySelectorAll("button").length}));
-            return {url,code:response?.status() ?? 0,...data};
-          });
-          job.results.push(result);
-        }catch(e){job.results.push({url,error:String(e.message || e).slice(0,120)});}
-        job.progress=job.results.length;state.job=job;await this.save(state);
+  async finishJob(status,error=null) {
+    const current=await this.state();
+    const job=current.job;if(!job)return;
+    job.status=status;job.finishedAt=new Date().toISOString();
+    if(error)job.error=error;
+    current.job=job;
+    current.status=status;current.mode="OBSERVE";current.controller="BIG";
+    current.allowGoRead=false;current.grantedHost=null;
+    await this.save(current);
+    await this.ctx.storage.delete("pending-job");
+  }
+  async alarm() {
+    const pending=await this.ctx.storage.get("pending-job");
+    if(!pending)return;
+    const state=await this.state();
+    if(!state.job || state.job.id!==pending.jobId){await this.ctx.storage.delete("pending-job");return;}
+    if(state.status==="STOP_REQUESTED" || state.job.status==="STOP_REQUESTED"){
+      await this.finishJob("STOPPED");return;
+    }
+    if(pending.phase!=="READY") {
+      await this.finishJob("UNKNOWN","PREVIOUS_ACTION_OUTCOME_UNKNOWN_NO_REPLAY");
+      return;
+    }
+    if(pending.kind==="GO_SCRIPT" && (state.controller!=="GO" || !sameGrant(state))) {
+      await this.finishJob("STOPPED","OWNER_GO_GRANT_REVOKED");return;
+    }
+    pending.phase="DISPATCHING";
+    await this.ctx.storage.put("pending-job",pending); // source-owned pre-dispatch evidence
+    let receipt=null,err=null;
+    try {
+      const item=pending.items[pending.index];
+      if(pending.kind==="GO_SCRIPT"){
+        receipt=await this.action(state,item,"GO");
+        receipt={...receipt,step:pending.index+1,dispatched:true,businessOutcome:"UNKNOWN"};
+      } else {
+        receipt=await this.withPage(state,async page=>{
+          const response=await page.goto(item,{waitUntil:"domcontentloaded",timeout:20000});
+          const details=await page.evaluate(()=>({
+            title:document.title,links:document.querySelectorAll("a[href]").length,
+            buttons:document.querySelectorAll("button").length
+          }));
+          return {step:pending.index+1,url:item,code:response?.status()??0,...details,
+            at:new Date().toISOString(),businessOutcome:"READ_ONLY"};
+        });
       }
-      job.status=this.cancelAudit?"STOPPED":"COMPLETED";
-      job.finishedAt=new Date().toISOString();state.job=job;state.status=job.status;state.mode="OBSERVE";state.controller="BIG";await this.save(state);
-    })().catch(async e=>{
-      job.status="FAILED";job.error=String(e.message || e).slice(0,150);job.finishedAt=new Date().toISOString();
-      state.job=job;state.status="FAILED";state.mode="OBSERVE";state.controller="BIG";await this.save(state);
-    }));
-    return {jobId:job.id,status:"RUNNING",count:urls.length};
+    } catch(e){err=String(e?.message||e).slice(0,150);}
+    const fresh=await this.state();
+    if(fresh.job?.id!==pending.jobId){await this.ctx.storage.delete("pending-job");return;}
+    const job=fresh.job;
+    if(receipt)job.results.push(receipt);
+    if(err)job.results.push({step:pending.index+1,error:err,at:new Date().toISOString()});
+    job.progress=Math.min(job.total,pending.index+1);
+    fresh.job=job;
+    await this.save(fresh);
+    const shouldStop=fresh.status==="STOP_REQUESTED" || (pending.kind==="GO_SCRIPT" &&
+      (fresh.controller!=="GO" || !sameGrant(fresh)));
+    if(err || shouldStop || job.progress>=job.total){
+      await this.finishJob(err?"FAILED":shouldStop?"STOPPED":"COMPLETED",err);
+      return;
+    }
+    pending.index++;
+    pending.phase="READY";
+    await this.ctx.storage.put("pending-job",pending);
+    await this.ctx.storage.setAlarm(Date.now()+250);
   }
   async fetch(request) {
     const role=request.headers.get("x-observatory-role") === "BIG" ? "BIG" : "GO";
@@ -235,9 +289,27 @@ export class BrowserWorkspace {
       if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
       if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
+      if (method==="GET" && path==="/v1/screenshot") {
+        const state=await this.state();
+        return reply(await this.withPage(state,async page=>{
+          if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
+          const raw=await page.screenshot({type:"jpeg",quality:52,fullPage:false});
+          const bytes=new Uint8Array(raw);
+          if(bytes.byteLength>512000)throw new Error("SCREENSHOT_TOO_LARGE");
+          return {mimeType:"image/jpeg",image:Buffer.from(bytes).toString("base64"),
+            observedAt:new Date().toISOString()};
+        }));
+      }
       if (method==="GET" && path==="/v1/view" && role==="BIG") return reply(await this.view(await this.state()));
       if(method!=="POST")return reply({error:"NOT_FOUND"},404);
       const body=await bodyOf(request),state=await this.state();
+      if(path==="/v1/note" && role==="GO") {
+        const message=body.message;
+        if(typeof message!=="string" || message.trim().length<1 || message.length>240)return reply({error:"INVALID_NOTE"},422);
+        if(!sameGrant(state))return reply({error:"NO_OWNER_INVITATION"},403);
+        state.note={message:message.trim(),at:new Date().toISOString()};
+        await this.save(state);return reply({saved:true,version:state.version});
+      }
       if(path==="/v1/session" && role==="BIG") {
         if(this.inFlight || state.job?.status==="RUNNING")return reply({error:"BUSY"},409);this.inFlight=true;
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
@@ -253,7 +325,7 @@ export class BrowserWorkspace {
         const next=body.controller;
         if(!["BIG","GO"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
         if(state.mode==="HEADLESS" && next==="BIG"){
-          this.cancelAudit=true;state.status="STOP_REQUESTED";
+          state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
         }
         if(next==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";state.grantedHost=next==="GO"?new URL(state.url).hostname:null;await this.save(state);return reply(summarize(state));
@@ -270,13 +342,23 @@ export class BrowserWorkspace {
         if(!Array.isArray(body.steps) || body.steps.length===0 || body.steps.length>10 ||
           !body.steps.every(allowedAction))return reply({error:"INVALID_STEPS"},422);
         if(!mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS))return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
-        return reply(await this.runScript(state,body.steps.map(cleanStep)),202);
+        if(!/^[0-9a-fA-F-]{36}$/.test(body.requestId||""))return reply({error:"REQUEST_ID_UUID_REQUIRED"},422);
+        if(body.steps.some(step=>step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost))
+          return reply({error:"GO_GRANT_ORIGIN_MISMATCH"},403);
+        if(this.inFlight)return reply({error:"BUSY"},409);
+        this.inFlight=true;
+        try{return reply(await this.enqueue(state,"GO_SCRIPT",body.steps.map(cleanStep),body.requestId),202);}
+        finally{this.inFlight=false;}
       }
       if(path==="/v1/audit" && role==="BIG") {
         if(this.inFlight || state.mode==="HEADLESS" || !state.browserSessionId)return reply({error:"BUSY_OR_NO_SESSION"},409);
         const urls=Array.isArray(body.urls) ? body.urls.slice(0,4).map(validPageUrl) : [validPageUrl(state.url)];
         if(urls.some(x=>!x || !mayGoAct(x,this.env.GO_ALLOWED_HOSTS)))return reply({error:"URL_NOT_ALLOWED"},422);
-        return reply(await this.audit(state,urls),202);
+        if(this.inFlight)return reply({error:"BUSY"},409);
+        this.inFlight=true;
+        try {return reply(await this.enqueue(state,"PAGE_AUDIT",urls,
+          /^[0-9a-fA-F-]{36}$/.test(body.requestId||"")?body.requestId:crypto.randomUUID()),202);}
+        finally{this.inFlight=false;}
       }
       if(path==="/v1/close" && role==="BIG") {
         if(this.inFlight)return reply({error:"BUSY"},409);
@@ -284,8 +366,10 @@ export class BrowserWorkspace {
         try{return reply(await this.closeSession(state));}finally{this.inFlight=false;}
       }
       if(path==="/v1/stop" && role==="BIG") {
-        this.cancelAudit=true;const st=await this.state();st.allowGoRead=false;
-        st.controller="BIG";st.mode="OBSERVE";st.status="STOP_REQUESTED";await this.save(st);
+        const st=await this.state();st.allowGoRead=false;st.grantedHost=null;
+        st.controller="BIG";st.status="STOP_REQUESTED";
+        if(st.job?.status==="RUNNING")st.job.status="STOP_REQUESTED";
+        await this.save(st);
         return reply(summarize(st));
       }
       return reply({error:"NOT_FOUND"},404);
