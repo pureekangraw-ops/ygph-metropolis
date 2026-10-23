@@ -3,6 +3,8 @@ package com.big.gobrowser.outsideview
 import android.webkit.WebView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.rule.ActivityTestRule
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -25,8 +27,12 @@ class GoviewStudioAndroidTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
     private fun webView(): WebView {
+        // Following a real Activity.recreate() we must read the current screen, not the old Rule reference.
+        val current = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+            .filterIsInstance<GoviewStudioActivity>().singleOrNull()
+            ?: error("No currently resumed GOVIEW Studio Activity")
         val field = GoviewStudioActivity::class.java.getDeclaredField("web").apply { isAccessible = true }
-        return field.get(screen.activity) as WebView
+        return field.get(current) as WebView
     }
 
     private fun js(expression: String): Any? {
@@ -77,7 +83,9 @@ class GoviewStudioAndroidTest {
 
         instrumentation.runOnMainSync { screen.activity.recreate() }
         await("Recreated Activity must restore same map from AtomicFile") {
-            val text = js("document.getElementById('counts')?.textContent") as? String ?: ""
+            val text = runCatching {
+                js("document.getElementById('counts')?.textContent") as? String ?: ""
+            }.getOrDefault("")
             text.contains("9 จุด") && text.contains("11 ถนน")
         }
     }
@@ -93,11 +101,11 @@ class GoviewStudioAndroidTest {
             "(()=>{const map=GoviewEngine.demo();" +
                 "map.mapId='$testId';map.version=2;return GoviewEngine.pack(map)})()"
         ) as String
-        val before = target.exists()
+        val beforeContent = target.takeIf { it.exists() }?.readText()
         val jsonArgument = JSONObject.quote(payload)
         assertEquals(true, js("window.GoviewStudio.receiveImport($jsonArgument);" +
             "document.getElementById('modal').classList.contains('open')"))
-        assertEquals(before, target.exists())
+        assertEquals(beforeContent, target.takeIf { it.exists() }?.readText())
         assertEquals(true, js("document.getElementById('modalText').textContent.includes('nodes:')"))
         assertEquals(true, js("document.getElementById('modalOk').click(); true"))
         await("Approved package becomes an actual per-map file") {
