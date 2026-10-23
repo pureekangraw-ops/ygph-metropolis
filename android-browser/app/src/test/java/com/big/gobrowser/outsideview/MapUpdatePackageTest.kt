@@ -50,4 +50,32 @@ class MapUpdatePackageTest {
             assertEquals(receipt,store.load().updates.last())
         }finally{root.deleteRecursively()}
     }
+    @Test fun importedSourceTextCannotMintVerificationOnOrdinarySave() {
+        val root=java.nio.file.Files.createTempDirectory("goview-authority").toFile()
+        try {
+            val source=batch().pins.single().copy(evidence=Evidence(EvidenceStatus.UNKNOWN,"owner-field-confirmation"))
+            val json=MapUpdatePackage.export(MapJournal(MapState(pins=mapOf(source.id to source))))
+            val store=MapStateStore(root);store.importGeoJson(GeoJsonImport.parse(json.byteInputStream()))
+            val before=store.load();assertNotEquals("owner-field-confirmation",before.state.pins[source.id]!!.evidence.source)
+            store.editOwnerPin(source.id,"Ordinary save",source.point,false,before.state.revision)
+            assertEquals(EvidenceStatus.UNKNOWN,store.load().state.pins[source.id]!!.evidence.coordinate)
+            val revision=store.load().state.revision
+            store.editOwnerPin(source.id,"Confirmed",source.point,true,revision)
+            store.editOwnerPin(source.id,"Moved",Point(12.0,22.0),false,store.load().state.revision)
+            assertEquals(EvidenceStatus.UNKNOWN,store.load().state.pins[source.id]!!.evidence.coordinate)
+        }finally{root.deleteRecursively()}
+    }
+    @Test fun exporterPreflightsLegacyFieldsAndNormalizedEvidenceEnvelope() {
+        val pin=batch().pins.single()
+        for(invalid in listOf(pin.copy(label="x".repeat(257)),pin.copy(note="x".repeat(8193)),
+            pin.copy(evidence=Evidence(EvidenceStatus.VERIFIED,"x".repeat(512))))) {
+            val state=MapJournal(MapState(pins=mapOf(invalid.id to invalid)))
+            assertThrows(Exception::class.java){MapUpdatePackage.export(state)}
+            assertEquals(invalid,state.state.pins[invalid.id])
+        }
+        val valid=pin.copy(evidence=Evidence(EvidenceStatus.UNKNOWN,"imported-claim:"+"x".repeat(497)))
+        val output=MapUpdatePackage.export(MapJournal(MapState(pins=mapOf(valid.id to valid))))
+        assertEquals(valid,GeoJsonImport.parse(output.byteInputStream()).pins.single())
+    }
+
 }

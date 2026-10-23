@@ -216,7 +216,13 @@ class OutsideViewActivity : Activity() {
                     val label=EditText(this).apply {hint="ชื่อหมุด";setText(pin.label)}
                     val longitude=EditText(this).apply {hint="longitude";setText(pin.point.longitude.toString())}
                     val latitude=EditText(this).apply {hint="latitude";setText(pin.point.latitude.toString())}
-                    val field=CheckBox(this).apply {text="ฉันยืนยันพิกัดหน้างานด้วยตนเอง";isChecked=pin.evidence.source=="owner-field-confirmation"}
+                    val field=CheckBox(this).apply {text="ฉันยืนยันพิกัดหน้างานด้วยตนเอง";isChecked=false}
+                    val changed=object:android.text.TextWatcher {
+                        override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int) {}
+                        override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){field.isChecked=false}
+                        override fun afterTextChanged(s:android.text.Editable?) {}
+                    }
+                    longitude.addTextChangedListener(changed);latitude.addTextChangedListener(changed)
                     form.addView(label);form.addView(longitude);form.addView(latitude);form.addView(field)
                     AlertDialog.Builder(this).setTitle("GOVIEW · แก้ไขหมุด").setView(form).setNegativeButton("ยกเลิก",null)
                         .setPositiveButton("บันทึก"){_,_->

@@ -66,6 +66,7 @@ object GeoJsonImport {
                 val pin=requireNotNull(MapCommandCodec.decode(JSONObject().put("commandId","import").put("action","UPSERT_PIN").put("pin",record)).pin)
                 require(pin.id==feature.getString("id") && pin.point==point){"GOVIEW record/geometry mismatch"}
                 require(pin.id.length in 1..256 && pin.label.length in 1..256 && pin.note.orEmpty().length<=8192 && pin.evidence.source.orEmpty().length<=512)
+                require(MapUpdatePackage.importedClaim(pin).evidence.source.orEmpty().length<=512){"Imported evidence exceeds limit"}
                 require(seen.add(pin.id)){"Duplicate feature id"}
                 if(properties.has("goviewOwnerNote")) ownerNotes[pin.id]=properties.getString("goviewOwnerNote").also {require(it.length<=4000)}
                 return@map pin

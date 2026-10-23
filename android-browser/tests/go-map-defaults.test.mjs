@@ -53,3 +53,11 @@ test('GOVIEW export uses Android document creation and field verification requir
   assert.match(activity,/store\.editOwnerPin\(id,name,point,confirmed,journal\.state\.revision\)/);
   assert.match(activity,/showUpdateReceipts\(\)/);
 });
+
+test('field confirmation starts unchecked and coordinates invalidate the current explicit confirmation', () => {
+  const activity=source('OutsideViewActivity');
+  assert.match(activity,/CheckBox\(this\).*isChecked=false/);
+  assert.doesNotMatch(activity,/isChecked=pin\.evidence\.source/);
+  assert.match(activity,/onTextChanged[^\n]*field\.isChecked=false/);
+  assert.match(activity,/longitude\.addTextChangedListener\(changed\);latitude\.addTextChangedListener\(changed\)/);
+});

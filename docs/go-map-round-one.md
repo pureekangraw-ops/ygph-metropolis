@@ -243,3 +243,13 @@ CI/emulator/device evidence separately. Future GO exchange is a versioned batch,
 not continuous remote phone control.
 
 The Android instrumentation suite now includes GoviewExchangeTest using real Android org.json and isolated synthetic cache storage; it does not touch owner map files or claim physical-device GPS evidence.
+
+### Unified workspace staging (2026-10-23)
+
+The current follow-up fixes imported provenance and export envelope validation: field confirmation is never preselected, editing either coordinate clears confirmation, ordinary save cannot promote imported evidence, and export preflights the receiver before opening an output stream.
+
+Platform SQLite schema v1 is staged behind an explicit backend constructor, **not enabled for the Activity yet**. It stores the existing journal document transactionally with a SHA-256 integrity check. Migration validates the legacy journal first, fsyncs an immutable `journal.pre-sqlite-v1.json` copy, retains `journal.json`, then commits schema and data together. Failed migration/write rolls back; unsupported schema or bad checksum fails closed instead of replacing data. Synthetic Android instrumentation covers migration, retry, rollback, schema rejection, corruption and overlapping store instances. Activation requires these platform tests to pass; local Android API compilation is not SQLite runtime evidence.
+
+Five distinct operations remain the acceptance contract: Snapshot captures explicitly selected map state with Capture ID/version; Upload transfers an explicitly selected file; Download receives a package; Update validates/diffs/previews, obtains owner approval, commits and verifies readback with its own receipt; Local Storage backs up and restores durably. Download success cannot imply Update success. Snapshot tests cannot substitute for transport or update tests. Existing observe-only PANTHEON snapshots and GO Brain read access do not establish an approved map-package upload/download/update-write endpoint. Live package transfer is BLOCKED pending that contract and explicit transmission approval. No new backend, credentials, persistent access or automatic GPS/history transmission is authorized.
+
+The expanded workspace remains staged, not acceptance-ready: selected Snapshot/transfer adapters, explicit Update approval, SQLite activation, full backup/restore, and Android 16 physical-phone B2E remain to complete. The existing CI emulator is API 35; it does not prove Xiaomi 15T GPS or signing-compatible upgrade. Do not install this ephemeral-signed artifact over actual data or uninstall the existing app to work around signing.

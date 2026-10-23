@@ -7,7 +7,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-class MapStateStore(private val root:File){
+class MapStateStore(private val root:File,private val backend:JournalBackend?=null){
     constructor(context:Context):this(File(context.filesDir,"outside-view"))
     private val journalFile:File get()=File(root,"journal.json")
     /** All store instances for one journal share the same process-wide transaction boundary. */
@@ -15,7 +15,7 @@ class MapStateStore(private val root:File){
     companion object {
         private val journalLocks=java.util.concurrent.ConcurrentHashMap<String,Any>()
     }
-    fun load():MapJournal = synchronized(transactionLock) {if(!journalFile.isFile)return MapJournal(MapState());return runCatching{decode(JSONObject(journalFile.readText()))}.getOrElse{MapJournal(MapState())}}
+    fun load():MapJournal = synchronized(transactionLock) {readStrict()}
     /** One transaction in the original journal. Fail closed on unreadable existing data. */
     fun importGeoJson(batch: GeoJsonBatch):Int = importGeoJsonWithReceipt(batch).added
     fun importGeoJsonWithReceipt(batch:GeoJsonBatch):MapUpdateReceipt = synchronized(transactionLock) {
@@ -27,7 +27,13 @@ class MapStateStore(private val root:File){
         commit(withReceipt(after,receipt))
         receipt
     }
-    private fun readStrict():MapJournal=if(journalFile.isFile)decode(JSONObject(journalFile.readText())) else MapJournal(MapState())
+    private fun readStrict():MapJournal {
+        backend?.read()?.let {return decode(JSONObject(it))}
+        val raw=if(journalFile.isFile)journalFile.readText() else encode(MapJournal(MapState())).toString()
+        val journal=decode(JSONObject(raw))
+        backend?.initialize(raw,journal.state.revision,journalFile.takeIf {it.isFile})
+        return journal
+    }
     private fun withReceipt(journal:MapJournal,receipt:MapUpdateReceipt):MapJournal {
         require(journal.updates.size<1000){"Update receipt limit reached; existing records preserved"}
         return journal.copy(updates=journal.updates+receipt)
@@ -43,7 +49,8 @@ class MapStateStore(private val root:File){
         require(journal.pending==null && journal.state.revision==expectedRevision){"Map changed; reopen edit before saving"}
         require(label.isNotBlank() && label.length<=256)
         val original=requireNotNull(journal.state.pins[id]){"Pin missing"}
-        val evidence=Evidence(if(fieldConfirmed)EvidenceStatus.VERIFIED else EvidenceStatus.UNKNOWN,
+        val evidence=if(!fieldConfirmed && point==original.point)original.evidence else Evidence(
+            if(fieldConfirmed)EvidenceStatus.VERIFIED else EvidenceStatus.UNKNOWN,
             if(fieldConfirmed)"owner-field-confirmation" else "owner-field-edit",System.currentTimeMillis())
         val edited=original.copy(label=label,point=point,evidence=evidence,
             gridId=original.gridId.takeIf {journal.state.grids[it]?.bounds?.contains(point)==true}.orEmpty())
@@ -51,7 +58,7 @@ class MapStateStore(private val root:File){
         val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),"owner-field-edit",next.state.revision,"SAVED",next.state.revision,changed=1)
         commit(withReceipt(next,receipt));receipt
     }
-    fun commit(journal:MapJournal):Unit = synchronized(transactionLock) {require(journal.version==1);if(journalFile.isFile)decode(JSONObject(journalFile.readText()));root.mkdirs();val tmp=File(root,"journal.json.tmp");java.io.FileOutputStream(tmp).use{stream->stream.write(encode(journal).toString().toByteArray(Charsets.UTF_8));stream.fd.sync()};try{Files.move(tmp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}catch(e:Exception){tmp.delete();throw IllegalStateException("atomic journal replacement unavailable",e)};Unit}
+    fun commit(journal:MapJournal):Unit = synchronized(transactionLock) {require(journal.version==1);if(backend!=null){readStrict();backend.write(encode(journal).toString(),journal.state.revision);return@synchronized};if(journalFile.isFile)decode(JSONObject(journalFile.readText()));root.mkdirs();val tmp=File(root,"journal.json.tmp");java.io.FileOutputStream(tmp).use{stream->stream.write(encode(journal).toString().toByteArray(Charsets.UTF_8));stream.fd.sync()};try{Files.move(tmp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}catch(e:Exception){tmp.delete();throw IllegalStateException("atomic journal replacement unavailable",e)};Unit}
     /** Screen recreation must read and update the journal in the same shared transaction. */
     fun prepareScreen():MapJournal = synchronized(transactionLock) {
         val journal=load()

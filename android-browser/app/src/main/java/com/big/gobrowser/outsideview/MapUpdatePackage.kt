@@ -28,10 +28,11 @@ object MapUpdatePackage {
             .put("goview",JSONObject().put("format",FORMAT).put("version",journal.state.revision))
             .put("features",features).toString()
         require(output.toByteArray(Charsets.UTF_8).size<=GeoJsonImport.MAX_BYTES){"Export exceeds import limit; no records were truncated"}
+        GeoJsonImport.parse(output.byteInputStream()) // Same envelope as the receiving app, before opening any output stream.
         return output
     }
 
     /** A file's assertion of verification is provenance, not local field verification. */
-    fun importedClaim(pin:Pin):Pin = if(pin.evidence.coordinate==EvidenceStatus.VERIFIED)
-        pin.copy(evidence=pin.evidence.copy(coordinate=EvidenceStatus.UNKNOWN,source="imported-claim:VERIFIED:${pin.evidence.source.orEmpty()}")) else pin
+    fun importedClaim(pin:Pin):Pin = if(pin.evidence.coordinate==EvidenceStatus.VERIFIED || pin.evidence.source=="owner-field-confirmation")
+        pin.copy(evidence=pin.evidence.copy(coordinate=EvidenceStatus.UNKNOWN,source="imported-claim:${pin.evidence.coordinate.name}:${pin.evidence.source.orEmpty()}")) else pin
 }
