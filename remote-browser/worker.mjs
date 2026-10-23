@@ -1,6 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { validPageUrl, allowedAction, mayGoAct, cleanStep } from "./policy.mjs";
 import { mcpResponse } from "./mcp.mjs";
+import { consoleHtml } from "./console.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -24,6 +25,18 @@ function summarize(s) {
 export default {
   async fetch(request, env) {
     const path=new URL(request.url).pathname;
+    if (path==="/console" && request.method==="GET") {
+      const nonce=crypto.randomUUID().replaceAll("-","");
+      const headers=new Headers({
+        "content-type":"text/html; charset=utf-8","cache-control":"no-store",
+        "referrer-policy":"no-referrer","x-frame-options":"DENY",
+        "x-content-type-options":"nosniff",
+        "content-security-policy":"default-src 'none'; connect-src 'self'; style-src 'nonce-"+nonce+
+          "'; script-src 'nonce-"+nonce+"'; img-src 'none'; frame-ancestors 'none'; "+
+          "base-uri 'none'; form-action 'none'"
+      });
+      return new Response(consoleHtml.replaceAll("__NONCE__",nonce),{headers});
+    }
     if (path==="/health") return reply({ service:"observatory-shared-browser", configured:!!env.OWNER_TOKEN && !!env.SESSIONS && !!env.BROWSER });
     const authorization=request.headers.get("authorization") || "";
     if (!env.OWNER_TOKEN || !env.SESSIONS || !env.BROWSER) return reply({ error:"NOT_CONFIGURED" },503);
