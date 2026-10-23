@@ -52,7 +52,8 @@ test('PANTHEON uploads happen only after owner tap; pause always stops',()=>{
   assert.match(app,/private fun sendSnapshotManually\(\)/);
   assert.doesNotMatch(app,/handler\.postDelayed\(this, 5_000L\)|startAutomaticObservation|handler\.post\(tick\)/);
   assert.match(app,/override fun onPause\(\).*stopSharing\(\)/);
-  assert.match(map,/mapShare\.captureOnce\(\)/);
+  assert.doesNotMatch(map,/mapShare\.captureOnce\(\)/);
+  assert.match(map,/selectSnapshot\(\)/);
   assert.doesNotMatch(map,/mapShare\.start\(\)/);
   assert.match(map,/mapShare\.stop\(\)/);
   assert.match(share,/fun captureOnce\(\): Boolean/);

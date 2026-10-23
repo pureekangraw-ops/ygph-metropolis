@@ -6,7 +6,7 @@ mkdir -p app/build/emulator-evidence
 adb shell wm size 720x1600
 adb shell wm density 320
 collect_evidence() {
-  for name in observatory-gecko-browser observatory-gecko-menu observatory-gecko-details; do
+  for name in observatory-gecko-browser observatory-gecko-menu observatory-gecko-details goview-synthetic-39; do
     timeout 15 adb pull "/data/local/tmp/$name.png" app/build/emulator-evidence/ || true
   done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true
@@ -34,6 +34,19 @@ if [ "$status" -ne 0 ]; then
     safe="${safe//$'\n'/'%0A'}"
     echo "::error title=JUnit::$safe"
   done
+  # Preserve actionable nested Espresso causes for synthetic GOVIEW failures.
+  python3 - <<'PYDIAG'
+from pathlib import Path
+import xml.etree.ElementTree as ET
+for path in Path('app/build/outputs/androidTest-results/connected').rglob('*.xml'):
+    try: root = ET.parse(path).getroot()
+    except ET.ParseError: continue
+    for case in root.iter('testcase'):
+        if not any(x in case.get('classname', '') for x in ('Goview', 'OutsideViewFlowTest')): continue
+        for failure in list(case.findall('failure')) + list(case.findall('error')):
+            print('GOVIEW_FAILURE_DETAIL ' + case.get('name', ''))
+            print((failure.text or '')[:6000])
+PYDIAG
 fi
 exit "$status"
 

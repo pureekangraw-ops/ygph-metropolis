@@ -73,7 +73,8 @@ data class Pin(
     val gridId: String,
     val evidence: Evidence,
     val zoneId: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val category:String = ""
 )
 
 enum class MapAction { UPSERT_ZONE, UPSERT_GRID, UPSERT_PIN, NOTE, RECOMMEND, HIGHLIGHT, FOCUS, REMOVE, CLEAR, ROUTE }
@@ -122,7 +123,8 @@ data class MapJournal(
     val hashes: Map<String, String> = emptyMap(),
     val receipts: Map<String, MapReceipt> = emptyMap(),
     val version: Int = 1,
-    val renderedRevision: Long = -1
+    val renderedRevision: Long = -1,
+    val updates: List<MapUpdateReceipt> = emptyList()
 )
 
 enum class ExecutionScope { TEST, LOCAL_OWNER, LIVE_DISABLED }
@@ -167,6 +169,8 @@ fun validate(command: MapCommand, state: MapState, now: Long): List<String> {
         MapAction.UPSERT_PIN -> {
             val pin = command.pin ?: run { errors += "pin required"; null }
             if (pin != null) {
+                val previous=state.pins[pin.id]
+                if(previous?.evidence?.source=="owner-field-confirmation" && previous!=pin) errors += "field-confirmed pin requires explicit owner edit"
                 if (!pin.evidence.canCreateExactPoint(now)) errors += "exact pin needs current coordinate evidence"
                 val grid = state.grids[pin.gridId]
                 if (grid == null) errors += "grid missing" else if (!grid.bounds.contains(pin.point)) errors += "pin outside grid"

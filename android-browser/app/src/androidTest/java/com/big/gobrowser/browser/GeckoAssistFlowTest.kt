@@ -66,6 +66,14 @@ class GeckoAssistFlowTest {
             } catch (_: java.io.IOException) { /* Server is closed by the test. */ }
         }.apply { isDaemon = true; start() }
         try {
+            // ensureBuiltIn is asynchronous. Loading the fixture before the native delegate
+            // is installed can miss its document_idle content-script connection entirely.
+            // This is a setup precondition, not a retry or a weaker observation assertion.
+            await("Observer extension must be installed before fixture navigation") {
+                val engine=field<GeckoBrowserEngine>("engine")
+                val observer=GeckoBrowserEngine::class.java.getDeclaredField("observer").let {it.isAccessible=true;it.get(engine)}
+                GeckoPageObserver::class.java.getDeclaredField("extension").let {it.isAccessible=true;it.get(observer)!=null}
+            }
             val url = "http://127.0.0.1:${server.localPort}/assist"
             instrumentation.runOnMainSync {
                 // Test-only local fixture; owner-entered URLs retain the HTTPS policy.

@@ -37,6 +37,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     private var cameraComplete=true
     private var cameraTarget:Point?=null
     private val timeout=Runnable {failPending("render-confirmation-timeout")}
+    private val layerPreferences=host.context.getSharedPreferences("outside-view-layers",0)
     private val layerIds=arrayOf("zone-fill","grid-lines","pin-dots")
     var onReady:()->Unit={}
     var onConfirmed:(RenderConfirmation)->Unit={}
@@ -65,6 +66,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
             style.addLayer(FillLayer("zone-fill",sourceIds[0]).withProperties(fillColor(color("#73b4d4")),fillOpacity(.25f)))
             style.addLayer(LineLayer("grid-lines",sourceIds[1]).withProperties(lineColor(color("#315f8e")),lineWidth(size(2,5,4))))
             style.addLayer(CircleLayer("pin-dots",sourceIds[2]).withProperties(circleColor(color("#cf476a")),circleRadius(size(7,12,10)),circleStrokeColor("#ffffff"),circleStrokeWidth(2f)))
+            layerIds.forEach {id->style.getLayer(id)?.setProperties(visibility(if(layerVisible(id)) Property.VISIBLE else Property.NONE))}
             drawLocation()
             if(resumed)onReady()
         }
@@ -119,6 +121,12 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         val camera=actual?.let {Bounds(it.longitude,it.latitude,it.longitude,it.latitude)}
         return RenderConfirmation(r.commandId,r.revision,r.styleGeneration,r.token,ids,r.state.focused,camera,error,map?.cameraPosition?.zoom)
     }
+    fun layerVisible(id:String):Boolean=layerPreferences.getBoolean(id,true)
+    fun setLayerVisible(id:String,visible:Boolean) {
+        require(id in layerIds)
+        layerPreferences.edit().putBoolean(id,visible).apply()
+        map?.style?.getLayer(id)?.setProperties(visibility(if(visible) Property.VISIBLE else Property.NONE))
+    }
     fun showLocation(point:Point?){locationFix=point;drawLocation()}
     private fun drawLocation(){
         val style=map?.style?:return
@@ -142,6 +150,13 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         if(!foregroundReady || pending!=null)return false
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude,point.longitude),15.0))?:return false
         return true
+    }
+    fun fitPoints(points:List<Point>) {
+        if(points.isEmpty())return
+        if(points.distinct().size==1){val p=points.first();map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.latitude,p.longitude),15.0));return}
+        val bounds=org.maplibre.android.geometry.LatLngBounds.Builder()
+        points.forEach {bounds.include(LatLng(it.latitude,it.longitude))}
+        map?.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(),48))
     }
     fun center():Point?=map?.cameraPosition?.target?.let {Point(it.longitude,it.latitude)}
     /** Current viewport summary: coordinates are camera state, not proof that map tiles loaded. */

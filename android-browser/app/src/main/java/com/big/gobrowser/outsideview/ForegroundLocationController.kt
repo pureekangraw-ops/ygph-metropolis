@@ -20,10 +20,12 @@ class ForegroundLocationController(private val activity:Activity,private val fix
     private var subscribed=false
     private var latest:Location?=null
     private var recenter=false
+    private var lastFixLabel="ยังไม่มีตำแหน่ง"
+    private fun timestamp(time:Long)=java.text.DateFormat.getDateTimeInstance().format(java.util.Date(time))
     var onCenter:(Point)->Unit={}
     private val expire=object:Runnable {override fun run(){
         if(!foreground || !requested)return
-        latest?.let {if(!valid(it)){latest=null;fix(null);status("ตำแหน่งเก่าแล้ว · กำลังรอตำแหน่งใหม่")}}
+        latest?.let {if(!valid(it)){latest=null;fix(null);status("ตำแหน่งเก่าแล้ว · $lastFixLabel · กำลังรอตำแหน่งใหม่")}}
         handler.postDelayed(this,5_000)
     }}
     private val listener=object:LocationListener {
@@ -37,7 +39,7 @@ class ForegroundLocationController(private val activity:Activity,private val fix
         if(!permission())activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION),REQUEST_CODE)
         else startUpdates()
     }
-    fun permissionResult(){if(permission())startUpdates() else {requested=false;status("ไม่ได้อนุญาตตำแหน่ง · ยังเลือกจุดบนแผนที่เองได้")}}
+    fun permissionResult(){if(permission())startUpdates() else {requested=false;stopUpdates();latest=null;fix(null);status("ไม่ได้อนุญาตตำแหน่ง · ยังเลือกจุดบนแผนที่เองได้")}}
     fun resume(){foreground=true;if(requested && permission())startUpdates()}
     fun pause(){foreground=false;stopUpdates();latest=null;fix(null)}
     private fun permission()=activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED || activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED
@@ -49,7 +51,8 @@ class ForegroundLocationController(private val activity:Activity,private val fix
         if(!foreground || !requested || !valid(location))return
         latest=Location(location);fix(latest)
         @Suppress("DEPRECATION") val simulated=location.isFromMockProvider
-        status("${if(simulated)"ตำแหน่งจำลอง" else "ตำแหน่งจากเครื่อง"} · คลาดเคลื่อนประมาณ ${location.accuracy.toInt()} ม.")
+        lastFixLabel="ล่าสุด ${timestamp(location.time)} · ±${location.accuracy.toInt()} ม."
+        status("${if(simulated)"ตำแหน่งจำลอง" else "ตำแหน่งจากเครื่อง"} · $lastFixLabel")
         if(recenter){recenter=false;onCenter(Point(location.longitude,location.latitude))}
     }
     private fun startUpdates(){
@@ -62,7 +65,7 @@ class ForegroundLocationController(private val activity:Activity,private val fix
             providers.forEach {provider->manager.requestLocationUpdates(provider,2_000L,5f,listener,Looper.getMainLooper());subscribed=true}
             providers.mapNotNull {manager.getLastKnownLocation(it)}.filter(::valid).maxByOrNull {it.elapsedRealtimeNanos}?.let(::accept)
             handler.post(expire)
-        } catch(error:SecurityException){stopUpdates();status("สิทธิ์ตำแหน่งถูกเปลี่ยน · กดตำแหน่งฉันอีกครั้ง")}
+        } catch(error:SecurityException){stopUpdates();latest=null;fix(null);status("สิทธิ์ตำแหน่งถูกเปลี่ยน · กดตำแหน่งฉันอีกครั้ง")}
     }
     private fun stopUpdates(){handler.removeCallbacks(expire);if(subscribed){runCatching {manager.removeUpdates(listener)};subscribed=false}}
     companion object {const val REQUEST_CODE=41}
