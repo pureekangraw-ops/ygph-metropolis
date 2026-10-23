@@ -62,7 +62,7 @@ class OutsideViewActivity : Activity() {
         val tools=LinearLayout(this)
         tools.addView(button("บันทึกจุด"){renderer.center()?.let(::pinDialog)})
         tools.addView(button("จุดของฉัน"){listPins()})
-        tools.addView(button("ตำแหน่งฉัน"){location.resume();location.request()})
+        tools.addView(button("ตำแหน่งฉัน"){requestMyLocation()})
         tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
         shareButton=button("GOVIEW · เลือก Snapshot / ไฟล์ให้ GO"){selectSnapshot()}
@@ -145,8 +145,17 @@ class OutsideViewActivity : Activity() {
             }
         }
     }
+    private fun requestMyLocation() {
+        locationSessionRequested=false
+        if(GoviewLocationService.running){
+            val fix=GoviewLocationService.currentFix();gpsStatus.text=GoviewLocationService.description
+            if(fix!=null){val point=Point(fix.longitude,fix.latitude);renderer.showLocation(point);location.onCenter(point)}
+        }else{location.resume();location.request()}
+    }
     private fun updateLocationSession() {
-        if(foreground && (locationSessionRequested || GoviewLocationService.running)){gpsStatus.text=GoviewLocationService.description;renderer.showLocation(GoviewLocationService.currentFix()?.let {Point(it.longitude,it.latitude)})}
+        if(!foreground)return
+        if(GoviewLocationService.running){gpsStatus.text=GoviewLocationService.description;renderer.showLocation(GoviewLocationService.currentFix()?.let {Point(it.longitude,it.latitude)})}
+        else if(locationSessionRequested){locationSessionRequested=false;gpsStatus.text=GoviewLocationService.description;renderer.showLocation(null)}
     }
     private fun locationSessionDialog() {
         if(GoviewLocationService.running){

@@ -146,4 +146,33 @@ class GoviewSqliteTest {
         assertFalse(database.exists());assertArrayEquals(legacy,File(root,"journal.json").readBytes())
     }
 
+    @Test fun emptyRecoveredTargetAndLostSchemaNeverReplayLegacy()=isolated {root->
+        seed(root);val store=MapStateStore(root,SqliteJournalBackend(root));store.load()
+        val backup=store.createBackup();store.approveRecovery(store.previewRecovery(backup))
+        val target=File(root,File(root,"goview.current").readText());target.writeBytes(byteArrayOf())
+        val original=File(root,"journal.json").readBytes();val pointer=File(root,"goview.current").readText()
+        fails {MapStateStore(root,SqliteJournalBackend(root)).load()}
+        assertEquals(0L,target.length());assertEquals(pointer,File(root,"goview.current").readText())
+        assertArrayEquals(original,File(root,"journal.json").readBytes())
+        // A valid SQLite header with version0 is also damaged initialized storage, not first launch.
+        SQLiteDatabase.openOrCreateDatabase(target,null).use {it.execSQL("CREATE TABLE synthetic (id INTEGER)");it.version=0}
+        val damaged=target.readBytes();fails {MapStateStore(root,SqliteJournalBackend(root)).load()}
+        assertArrayEquals(damaged,target.readBytes());assertArrayEquals(original,File(root,"journal.json").readBytes())
+    }
+    @Test fun truncatedInitializedDefaultDatabaseCannotRestartMigration()=isolated {root->
+        seed(root);MapStateStore(root,SqliteJournalBackend(root)).load()
+        val target=File(root,"goview.sqlite");target.writeBytes(byteArrayOf())
+        fails {MapStateStore(root,SqliteJournalBackend(root)).load()};assertEquals(0L,target.length())
+        assertEquals("initialized",File(root,"goview.migration").readText())
+    }
+    @Test fun missingDatabaseWithoutLegacyStillRequiresExplicitRecovery()=isolated {root->
+        val backend=SqliteJournalBackend(root)
+        backend.initialize("{}",0,null)
+        val target=File(root,"goview.sqlite")
+        check(target.renameTo(File(root,"synthetic-retained.sqlite")))
+        fails {backend.read()}
+        assertFalse(target.exists())
+        assertEquals("initialized",File(root,"goview.migration").readText())
+    }
+
 }

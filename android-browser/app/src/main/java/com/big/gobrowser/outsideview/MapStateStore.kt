@@ -37,6 +37,9 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
     fun previewUpdate(batch:GeoJsonBatch,correlationId:String):MapUpdatePreview = synchronized(transactionLock) {
         val journal=readStrict()
         require(batch.baseVersion==null || batch.baseVersion==journal.state.revision){"Proposal baseVersion differs; request a fresh proposal"}
+        batch.sourceCaptureId?.let {capture->
+            require(journal.updates.any {it.operation=="SNAPSHOT" && it.correlationId==capture && it.packageVersion==batch.baseVersion}){"Proposal does not match a local selected capture/version"}
+        }
         val frozen=batch.copy(pins=batch.pins.toList(),ownerNotes=batch.ownerNotes.toMap())
         val after=GeoJsonImport.merge(journal,frozen)
         val added=after.state.pins.size-journal.state.pins.size
@@ -75,15 +78,16 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         require(ids.isNotEmpty() && ids.all {journal.state.pins.containsKey(it)}){"Select known pins explicitly"}
         val capture=java.util.UUID.randomUUID().toString()
         val selected=journal.copy(state=journal.state.copy(pins=journal.state.pins.filterKeys {it in ids}.mapValues {(_,pin)->pin.copy(gridId="",zoneId=null,note=null,category="",evidence=Evidence(EvidenceStatus.UNKNOWN,"selected-owner-snapshot"))},notes=emptyMap()))
-        val json=JSONObject(MapUpdatePackage.export(selected)).put("captureId",capture).put("capturedAtEpochMs",System.currentTimeMillis())
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),capture,journal.state.revision,"CAPTURED_LOCAL",journal.state.revision,
+            operation="SNAPSHOT",correlationId=capture)
+        val json=JSONObject(MapUpdatePackage.export(selected)).put("captureId",capture).put("capturedAtEpochMs",receipt.createdAt)
+            .put("captureReceipt",JSONObject().put("id",receipt.id).put("operation","SNAPSHOT").put("status","CAPTURED_LOCAL").put("correlationId",capture).put("version",journal.state.revision))
             .put("selection", "explicit-pins-only").toString()
         GeoJsonImport.parse(json.byteInputStream())
         val directory=File(root,"snapshots");check(directory.isDirectory || directory.mkdirs())
         val temp=File(directory,"$capture.tmp")
         java.io.FileOutputStream(temp).use {it.write(json.toByteArray(Charsets.UTF_8));it.fd.sync()}
         Files.move(temp.toPath(),File(directory,"$capture.geojson").toPath(),StandardCopyOption.ATOMIC_MOVE)
-        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),capture,journal.state.revision,"CAPTURED_LOCAL",journal.state.revision,
-            operation="SNAPSHOT",correlationId=capture)
         commit(withReceipt(journal,receipt))
         SelectedSnapshot(capture,journal.state.revision,json,receipt)
     }

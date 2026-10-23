@@ -46,6 +46,7 @@ class GoviewWorkspaceTest {
             assertEquals(1,GeoJsonImport.parse(snapshot.json.byteInputStream()).pins.size)
             assertEquals(0,store.importGeoJson(GeoJsonImport.parse(snapshot.json.byteInputStream())))
             assertEquals(snapshot.captureId,snapshot.receipt.correlationId)
+            assertEquals(snapshot.receipt.id,org.json.JSONObject(snapshot.json).getJSONObject("captureReceipt").getString("id"))
         }finally{root.deleteRecursively()}
     }
     @Test fun restoreRequiresReviewPreservesRollbackAndRejectsTampering() {
@@ -145,6 +146,17 @@ class GoviewWorkspaceTest {
             val receipt=store.approveRestore(preview)
             assertEquals("COMMITTED_READBACK_UNAVAILABLE",receipt.status);assertFalse(receipt.readbackVerified)
             failRead=false;assertEquals(1,store.load().state.pins.size);assertFalse(store.load().updates.last().readbackVerified)
+        }finally{root.deleteRecursively()}
+    }
+
+    @Test fun proposalRequiresTheActualSelectedLocalCaptureAndMatchingVersion() {
+        val root=Files.createTempDirectory("goview-capture-binding").toFile()
+        try {
+            val store=MapStateStore(root);val batch=fixture();store.importGeoJson(batch)
+            val journal=store.load();val capture=store.selectedSnapshot(journal.state.pins.keys,journal.state.revision)
+            assertTrue(runCatching {store.previewUpdate(batch.copy(sourceCaptureId="forged-capture",baseVersion=journal.state.revision),"synthetic")}.isFailure)
+            val preview=store.previewUpdate(batch.copy(sourceCaptureId=capture.captureId,baseVersion=capture.version),"synthetic")
+            assertEquals("DUPLICATE",store.approveUpdate(preview).status)
         }finally{root.deleteRecursively()}
     }
 

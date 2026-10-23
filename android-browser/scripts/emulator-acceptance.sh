@@ -6,7 +6,7 @@ mkdir -p app/build/emulator-evidence
 adb shell wm size 720x1600
 adb shell wm density 320
 collect_evidence() {
-  for name in observatory-gecko-browser observatory-gecko-menu observatory-gecko-details; do
+  for name in observatory-gecko-browser observatory-gecko-menu observatory-gecko-details goview-synthetic-39; do
     timeout 15 adb pull "/data/local/tmp/$name.png" app/build/emulator-evidence/ || true
   done
   timeout 15 adb logcat -d > app/build/emulator-evidence/logcat.txt || true

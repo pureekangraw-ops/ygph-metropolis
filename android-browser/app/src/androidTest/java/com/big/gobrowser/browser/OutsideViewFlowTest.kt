@@ -56,7 +56,7 @@ class OutsideViewFlowTest {
         onView(withText("บันทึก")).inRoot(isDialog()).perform(click())
         rendered(store){store.load().state.pins.size==before+1}
         onView(withText("จุดของฉัน")).perform(click())
-        onView(withText("Owner flow pin")).inRoot(isDialog()).perform(click())
+        androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.equalTo("Owner flow pin")).inRoot(isDialog()).perform(click())
         onView(withText("ดูบนแผนที่")).inRoot(isDialog()).perform(click())
         rendered(store){store.load().state.focused!=null}
         val focused=store.load().state.focused
@@ -87,9 +87,17 @@ class OutsideViewFlowTest {
         val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(15)
         while(store.load().updates.none {it.operation=="DOWNLOAD"} && System.nanoTime()<deadline)Thread.sleep(100)
         assertEquals("Receiving a file must not apply it",before,store.load().state.pins.size)
+        onView(isAssignableFrom(android.widget.CheckBox::class.java)).inRoot(isDialog()).perform(click())
         onView(withText("อนุมัติ Update")).inRoot(isDialog()).perform(click())
         rendered(store){store.load().state.pins.size==before+39}
         assertTrue(store.load().updates.any {it.operation=="UPDATE" && it.readbackVerified})
+        val bitmap=instrumentation.uiAutomation.takeScreenshot()
+        assertNotNull("Synthetic map screenshot available",bitmap)
+        val evidence=java.io.File(rule.activity.getExternalFilesDir(null),"goview-synthetic-39.png")
+        evidence.outputStream().use {bitmap!!.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+        bitmap!!.recycle()
+        instrumentation.uiAutomation.executeShellCommand("cp ${evidence.absolutePath} /data/local/tmp/goview-synthetic-39.png").use {java.io.FileInputStream(it.fileDescriptor).use {stream->stream.readBytes()}}
+
         // A new store instance mirrors a recreated screen's read; the Activity recreation is real.
         instrumentation.runOnMainSync {rule.activity.recreate()}
         instrumentation.waitForIdleSync()

@@ -41,4 +41,22 @@ class GoviewLocationSessionTest {
             assertNull(GoviewLocationService.currentFix())
         }finally{context.stopService(Intent(context,GoviewLocationService::class.java))}
     }
+    @Test fun stoppedOrFailedSessionCannotOverwriteOrdinaryForegroundMode() {
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        for(reason in listOf("notification-stop","service-failure")) {
+            assertFalse(GoviewLocationService.running)
+            instrumentation.runOnMainSync {
+                val instance=activity.activity;val type=OutsideViewActivity::class.java
+                val ownership=type.getDeclaredField("locationSessionRequested").apply {isAccessible=true}
+                ownership.setBoolean(instance,true)
+                type.getDeclaredMethod("requestMyLocation").apply {isAccessible=true}.invoke(instance)
+                assertFalse(ownership.getBoolean(instance))
+                val label=type.getDeclaredField("gpsStatus").apply {isAccessible=true}.get(instance) as android.widget.TextView
+                label.text="SYNTHETIC foreground $reason"
+                type.getDeclaredMethod("updateLocationSession").apply {isAccessible=true}.invoke(instance)
+                assertEquals("SYNTHETIC foreground $reason",label.text.toString())
+            }
+        }
+    }
+
 }

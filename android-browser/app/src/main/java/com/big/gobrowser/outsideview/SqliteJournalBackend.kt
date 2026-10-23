@@ -41,14 +41,26 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
             return db
         } catch(error:Throwable){db.close();throw error}
     }
+    private fun migrationState()=File(root,"goview.migration").takeIf {it.isFile}?.readText()
+    private fun markMigration(value:String) {
+        val temp=File(root,"goview.migration.tmp")
+        java.io.FileOutputStream(temp).use {it.write(value.toByteArray(Charsets.UTF_8));it.fd.sync()}
+        Files.move(temp.toPath(),File(root,"goview.migration").toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)
+    }
+    private fun expectedInitialized()=File(root,"goview.current").exists() || migrationState()=="initialized" ||
+        (File(root,"journal.pre-sqlite-v1.json").exists() && migrationState()!="in-progress")
     override fun read():String? {
-        if(!file.exists()){check(!File(root,"goview.current").exists() && !File(root,"journal.pre-sqlite-v1.json").exists()){"Database missing after migration/recovery; legacy fallback prohibited"};return null}
+        if(!file.exists()){check(!expectedInitialized() && !File(root,"journal.pre-sqlite-v1.json").exists()){"Database missing after migration/recovery; legacy fallback prohibited"};return null}
+        check(file.length()>0 || !expectedInitialized()){"Initialized database is empty; legacy fallback prohibited"}
         return open().use {db->
-            if(db.version==0)return@use null
-            readPayload(db)
+            if(db.version==0){check(!expectedInitialized()){"Initialized database lost schema; legacy fallback prohibited"};return@use null}
+            val payload=readPayload(db)
+            if(migrationState()!="initialized")markMigration("initialized")
+            payload
         }
     }
     override fun initialize(payload:String,revision:Long,legacy:File?) {
+        val initializedAtEntry=expectedInitialized()
         // Backup is fsynced and installed before SQLite activation. Never overwrite a previous backup.
         legacy?.takeIf {it.isFile}?.let {source->
             val backup=File(root,"journal.pre-sqlite-v1.json")
@@ -61,6 +73,8 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
         }
         open().use {db->
             if(db.version==1){check(read()!=null);return}
+            check(!initializedAtEntry){"Refusing to initialize previously activated storage"}
+            markMigration("in-progress")
             db.beginTransaction()
             try {
                 db.execSQL("CREATE TABLE journal (singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL, byte_count INTEGER NOT NULL, sha256 TEXT NOT NULL)")
@@ -70,6 +84,7 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
                 beforeCommit()
                 db.setTransactionSuccessful()
             } finally {db.endTransaction()}
+            markMigration("initialized")
         }
     }
     override fun write(payload:String,revision:Long) {
