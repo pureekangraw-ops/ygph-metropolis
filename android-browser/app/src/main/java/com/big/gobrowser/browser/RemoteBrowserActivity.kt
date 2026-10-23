@@ -15,7 +15,6 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
-import com.big.gobrowser.BuildConfig
 import com.big.gobrowser.outsideview.OutsideViewActivity
 import com.big.gobrowser.transport.AndroidDeviceCredentialStore
 import com.big.gobrowser.transport.StationHttp
@@ -191,6 +190,7 @@ class RemoteBrowserActivity : Activity() {
         })
         column.addView(endpoint)
         column.addView(secret)
+        column.addView(ObservatoryBuildStamp.view(this))
         AlertDialog.Builder(this).setTitle("Cloudflare Shared Browser").setView(column)
             .setPositiveButton("เชื่อมต่อ") { _, _ ->
                 val url = validServiceUrl(endpoint.text.toString())
