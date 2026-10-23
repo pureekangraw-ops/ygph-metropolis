@@ -4,6 +4,21 @@ package com.big.gobrowser.browser
 internal object FocusEvidencePolicy {
     const val MAX_INPUT=262144
     const val MAX_OUTPUT=16384
+    class CaptureBudget(private val maximum:Int=6) {
+        private var used=0
+        @Synchronized fun claim(error:Throwable):Int? {
+            val seen=java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable,Boolean>())
+            var cause:Throwable?=error
+            while(cause!=null && seen.add(cause)) {
+                if(cause is FocusEvidenceProbe || cause.javaClass.simpleName=="RootViewWithoutFocusException") {
+                    if(used>=maximum)return null
+                    return ++used
+                }
+                cause=cause.cause
+            }
+            return null
+        }
+    }
     private val field=Regex("(?:mCurrentFocus|mFocusedApp|mFocusedWindow|mObscuringWindow|mTopFocusedDisplayId|mTopFullscreenOpaqueWindowState|mImeInputTarget|mImeLayeringTarget|mResumedActivity|topResumedActivity|ResumedActivity|mFocusedRootTask|mKeyguardShowing|mKeyguardShown|mDreaming|mWakefulness|mIsPowered|mInteractive|mScreenOffTimeoutSetting|FocusedApplications|FocusedWindows|Display Power|Window #|displayId=)")
     private val component=Regex("\\b[a-z][a-z0-9_]*(?:\\.[A-Za-z0-9_$]+)+/[.A-Za-z0-9_$]+")
     private val windowId=Regex("(?:Window|ActivityRecord)\\{([0-9a-f]+)\\b")
@@ -23,3 +38,6 @@ internal object FocusEvidencePolicy {
         throw error
     }
 }
+
+/** Typed opt-in for the deliberately caught instrumentation probe, never message matching. */
+internal class FocusEvidenceProbe:AssertionError("synthetic-focus-probe")

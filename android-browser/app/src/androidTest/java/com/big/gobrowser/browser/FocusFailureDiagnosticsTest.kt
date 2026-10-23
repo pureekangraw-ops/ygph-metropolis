@@ -28,11 +28,11 @@ class FocusFailureDiagnosticsTest {
             onView(isRoot()).perform(object:ViewAction {
                 override fun getConstraints()=isRoot()
                 override fun getDescription()="Synthetic focus diagnostics probe"
-                override fun perform(controller:UiController,view:View) {throw AssertionError("synthetic-focus-probe")}
+                override fun perform(controller:UiController,view:View) {throw FocusEvidenceProbe()}
             })
         } catch(error:Throwable) {thrown=error}
         assertNotNull("Original Espresso error must escape the hook",thrown)
-        assertTrue("Only the intentional probe is caught",generateSequence(thrown){it.cause}.any {it.message=="synthetic-focus-probe"})
+        assertTrue("Only the intentional probe is caught",generateSequence(thrown){it.cause}.any {it is FocusEvidenceProbe})
         assertFalse("Collection must precede Activity cleanup",activity.activity.isFinishing)
         val evidence=root.listFiles().orEmpty().filter {it.name !in before && it.extension=="txt"}.single()
         val text=evidence.readText()

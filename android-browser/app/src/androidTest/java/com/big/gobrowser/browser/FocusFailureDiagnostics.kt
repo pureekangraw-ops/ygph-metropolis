@@ -12,7 +12,6 @@ import org.junit.runners.model.Statement
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
-import java.util.concurrent.atomic.AtomicInteger
 
 /** Opt-in synthetic emulator evidence. Espresso invokes this before Rule/Activity cleanup. */
 class FocusFailureDiagnostics:TestRule {
@@ -23,13 +22,12 @@ class FocusFailureDiagnostics:TestRule {
             val enabled=InstrumentationRegistry.getArguments().getString("focusDiagnostics")=="true" &&
                 Build.HARDWARE in setOf("ranchu","goldfish")
             if(enabled)Espresso.setFailureHandler {error,_->
-                FocusEvidencePolicy.preserveFailure(error){capture(description)}
+                FocusEvidencePolicy.preserveFailure(error){budget.claim(error)?.let {capture(description,it)}}
             }
             try {base.evaluate()} finally {if(enabled)Espresso.setFailureHandler(defaults)}
         }
     }
-    private fun capture(description:Description) {
-        val index=count.incrementAndGet();if(index>6)return
+    private fun capture(description:Description,index:Int) {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val automation=instrumentation.uiAutomation
         val prefix="focus-${android.os.Process.myPid()}-$index"
@@ -66,5 +64,5 @@ class FocusFailureDiagnostics:TestRule {
             if(source.isFile)runCatching {automation.executeShellCommand("cp ${source.absolutePath} /data/local/tmp/$prefix.$extension").use {fd->FileInputStream(fd.fileDescriptor).use {it.readBytes()}}}
         }
     }
-    companion object {private val count=AtomicInteger()}
+    companion object {private val budget=FocusEvidencePolicy.CaptureBudget()}
 }
