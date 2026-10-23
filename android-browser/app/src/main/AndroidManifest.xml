@@ -20,6 +20,7 @@
                 android:resource="@xml/observatory_share_paths" />
         </provider>
         <activity android:name=".outsideview.OutsideViewActivity" android:exported="false" />
+        <activity android:name=".outsideview.GoviewStudioActivity" android:exported="false" />
         <service android:name=".outsideview.GoviewLocationService" android:exported="false" android:foregroundServiceType="location" android:stopWithTask="true" />
         <service android:name=".browser.GeckoObserverService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Owner-initiated Observatory browser observation" />
