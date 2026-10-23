@@ -23,11 +23,11 @@ test('GPS recenter requires an explicit confirmation before changing online view
 test('GeoJSON transaction runs on existing worker before main-thread presentation', () => {
   const activity=source('OutsideViewActivity');
   const start=activity.indexOf('private fun importGeoJson(');
-  const end=activity.indexOf('private fun noteDialog(',start);
+  const end=activity.indexOf('private fun exportGeoJson(',start);
   const flow=activity.slice(start,end);
   assert.ok(flow.indexOf('importing=true;busy=true') < flow.indexOf('worker.execute'));
-  assert.ok(flow.indexOf('worker.execute') < flow.indexOf('store.importGeoJson(batch)'));
-  assert.ok(flow.indexOf('store.importGeoJson(batch)') < flow.indexOf('handler.post'));
+  assert.ok(flow.indexOf('worker.execute') < flow.indexOf('store.importGeoJsonWithReceipt(batch)'));
+  assert.ok(flow.indexOf('store.importGeoJsonWithReceipt(batch)') < flow.indexOf('handler.post'));
   assert.ok(flow.indexOf('handler.post') < flow.indexOf('GeoJsonImport.present'));
   assert.doesNotMatch(flow,/store\.load\(/);
   assert.match(activity,/if\(importing\|\|busy\|\|commands\.isEmpty\(\)/);
@@ -43,4 +43,13 @@ test('Activity recreation uses shared journal transaction and lets accepted work
   assert.match(activity,/if\(!destroyed\) handler\.post \{\s*if\(destroyed\)return@post/);
   assert.match(activity,/worker\.shutdown\(\)/);
   assert.doesNotMatch(activity,/worker\.shutdownNow\(\)/);
+});
+
+test('GOVIEW export uses Android document creation and field verification requires owner checkbox', () => {
+  const activity=source('OutsideViewActivity');
+  assert.match(activity,/Intent\.ACTION_CREATE_DOCUMENT/);
+  assert.match(activity,/store\.exportGeoJson\(\)/);
+  assert.match(activity,/CheckBox\(this\)/);
+  assert.match(activity,/store\.editOwnerPin\(id,name,point,confirmed,journal\.state\.revision\)/);
+  assert.match(activity,/showUpdateReceipts\(\)/);
 });

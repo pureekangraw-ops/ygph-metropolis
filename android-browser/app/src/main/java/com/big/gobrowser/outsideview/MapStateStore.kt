@@ -17,11 +17,39 @@ class MapStateStore(private val root:File){
     }
     fun load():MapJournal = synchronized(transactionLock) {if(!journalFile.isFile)return MapJournal(MapState());return runCatching{decode(JSONObject(journalFile.readText()))}.getOrElse{MapJournal(MapState())}}
     /** One transaction in the original journal. Fail closed on unreadable existing data. */
-    fun importGeoJson(batch: GeoJsonBatch): Int = synchronized(transactionLock) {
-        val before = if(journalFile.isFile) decode(JSONObject(journalFile.readText())) else MapJournal(MapState())
-        val after = GeoJsonImport.merge(before, batch)
-        if(after != before) commit(after)
-        return after.state.pins.size - before.state.pins.size
+    fun importGeoJson(batch: GeoJsonBatch):Int = importGeoJsonWithReceipt(batch).added
+    fun importGeoJsonWithReceipt(batch:GeoJsonBatch):MapUpdateReceipt = synchronized(transactionLock) {
+        val before=readStrict()
+        val after=GeoJsonImport.merge(before,batch)
+        val added=after.state.pins.size-before.state.pins.size
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),batch.packageId,batch.packageVersion,
+            if(after.state==before.state) "DUPLICATE" else "SAVED",after.state.revision,added)
+        commit(withReceipt(after,receipt))
+        receipt
+    }
+    private fun readStrict():MapJournal=if(journalFile.isFile)decode(JSONObject(journalFile.readText())) else MapJournal(MapState())
+    private fun withReceipt(journal:MapJournal,receipt:MapUpdateReceipt):MapJournal {
+        require(journal.updates.size<1000){"Update receipt limit reached; existing records preserved"}
+        return journal.copy(updates=journal.updates+receipt)
+    }
+    fun recordImportFailure(message:String):MapUpdateReceipt = synchronized(transactionLock) {
+        val journal=readStrict()
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),"unaccepted-input",1,"REJECTED",journal.state.revision,error=message.take(512))
+        commit(withReceipt(journal,receipt));receipt
+    }
+    fun exportGeoJson():String = synchronized(transactionLock) {MapUpdatePackage.export(readStrict())}
+    fun editOwnerPin(id:String,label:String,point:Point,fieldConfirmed:Boolean,expectedRevision:Long):MapUpdateReceipt = synchronized(transactionLock) {
+        val journal=readStrict()
+        require(journal.pending==null && journal.state.revision==expectedRevision){"Map changed; reopen edit before saving"}
+        require(label.isNotBlank() && label.length<=256)
+        val original=requireNotNull(journal.state.pins[id]){"Pin missing"}
+        val evidence=Evidence(if(fieldConfirmed)EvidenceStatus.VERIFIED else EvidenceStatus.UNKNOWN,
+            if(fieldConfirmed)"owner-field-confirmation" else "owner-field-edit",System.currentTimeMillis())
+        val edited=original.copy(label=label,point=point,evidence=evidence,
+            gridId=original.gridId.takeIf {journal.state.grids[it]?.bounds?.contains(point)==true}.orEmpty())
+        val next=journal.copy(state=journal.state.copy(pins=journal.state.pins+(id to edited),revision=journal.state.revision+1),renderedRevision=-1)
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),"owner-field-edit",next.state.revision,"SAVED",next.state.revision,changed=1)
+        commit(withReceipt(next,receipt));receipt
     }
     fun commit(journal:MapJournal):Unit = synchronized(transactionLock) {require(journal.version==1);if(journalFile.isFile)decode(JSONObject(journalFile.readText()));root.mkdirs();val tmp=File(root,"journal.json.tmp");java.io.FileOutputStream(tmp).use{stream->stream.write(encode(journal).toString().toByteArray(Charsets.UTF_8));stream.fd.sync()};try{Files.move(tmp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}catch(e:Exception){tmp.delete();throw IllegalStateException("atomic journal replacement unavailable",e)};Unit}
     /** Screen recreation must read and update the journal in the same shared transaction. */
@@ -50,7 +78,8 @@ class MapStateStore(private val root:File){
         val hashes=JSONObject();j.hashes.forEach{(k,v)->hashes.put(k,v)}
         val receipts=JSONObject();j.receipts.forEach{(k,r)->val ids=JSONArray();r.confirmedFeatureIds.forEach{ids.put(it)};receipts.put(k,JSONObject().put("commandId",r.commandId).put("status",r.status.name).put("reason",stringOrNull(r.reason)).put("revision",r.revision).put("rendererToken",stringOrNull(r.rendererToken)).put("confirmedFeatureIds",ids).put("confirmedCamera",r.confirmedCamera?.let {JSONObject().put("longitude",it.longitude).put("latitude",it.latitude)}?:JSONObject.NULL).put("confirmedZoom",r.confirmedZoom?:JSONObject.NULL))}
         val pending=if(j.pending==null)JSONObject.NULL else JSONObject().put("command",MapCommandCodec.encode(j.pending.command)).put("revision",j.pending.revision).put("token",j.pending.token)
-        return JSONObject().put("version",j.version).put("state",state).put("hashes",hashes).put("receipts",receipts).put("pending",pending).put("renderedRevision",j.renderedRevision)
+        val updates=JSONArray();j.updates.forEach {r->updates.put(JSONObject().put("id",r.id).put("packageId",r.packageId).put("packageVersion",r.packageVersion).put("status",r.status).put("revision",r.revision).put("added",r.added).put("changed",r.changed).put("error",r.error?:JSONObject.NULL).put("createdAt",r.createdAt))}
+        return JSONObject().put("version",j.version).put("state",state).put("hashes",hashes).put("receipts",receipts).put("pending",pending).put("renderedRevision",j.renderedRevision).put("updates",updates)
     }
     private fun stringOrNull(o:JSONObject,key:String):String?=if(o.isNull(key))null else o.optString(key,"")
     private fun decode(o:JSONObject):MapJournal{
@@ -66,6 +95,8 @@ class MapStateStore(private val root:File){
         val receipts=mutableMapOf<String,MapReceipt>();val receiptObject=o.optJSONObject("receipts");receiptObject?.keys()?.forEach{key->val r=receiptObject.getJSONObject(key);val ids=mutableSetOf<String>();val array=r.optJSONArray("confirmedFeatureIds")?:JSONArray();for(i in 0 until array.length())ids+=array.getString(i);receipts[key]=MapReceipt(r.getString("commandId"),MapReceiptStatus.valueOf(r.getString("status")),stringOrNull(r,"reason"),r.optLong("revision"),stringOrNull(r,"rendererToken"),ids,r.optJSONObject("confirmedCamera")?.let {Point(it.getDouble("longitude"),it.getDouble("latitude"))},if(r.isNull("confirmedZoom"))null else r.getDouble("confirmedZoom"))}
         val pendingObject=o.optJSONObject("pending");val pending=if(pendingObject==null)null else PendingRender(MapCommandCodec.decode(pendingObject.getJSONObject("command")),pendingObject.getLong("revision"),pendingObject.getString("token"))
         val renderedRevision=if(o.has("renderedRevision"))o.getLong("renderedRevision") else receipts.values.firstOrNull {it.status==MapReceiptStatus.APPLIED&&it.revision==state.revision&&it.rendererToken!=null}?.revision?:-1L
-        return MapJournal(state,pending,hashes,receipts,renderedRevision=renderedRevision)
+        val updates=mutableListOf<MapUpdateReceipt>();val updateArray=o.optJSONArray("updates")?:JSONArray()
+        for(i in 0 until updateArray.length()){val r=updateArray.getJSONObject(i);updates+=MapUpdateReceipt(r.getString("id"),r.getString("packageId"),r.getLong("packageVersion"),r.getString("status"),r.getLong("revision"),r.getInt("added"),r.getInt("changed"),stringOrNull(r,"error"),r.getLong("createdAt"))}
+        return MapJournal(state,pending,hashes,receipts,renderedRevision=renderedRevision,updates=updates)
     }
 }

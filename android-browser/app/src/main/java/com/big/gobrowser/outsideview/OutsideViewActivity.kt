@@ -110,7 +110,7 @@ class OutsideViewActivity : Activity() {
         }
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
@@ -126,6 +126,8 @@ class OutsideViewActivity : Activity() {
                 10->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),42)
                 11->searchPins()
                 12->showLayers()
+                13->startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/geo+json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"goview-map-update.geojson"),43)
+                14->showUpdateReceipts()
             }
         }.setNegativeButton("ปิด",null).show()
     }
@@ -152,7 +154,7 @@ class OutsideViewActivity : Activity() {
             enqueue(MapCommand("zone:${UUID.randomUUID()}",MapAction.UPSERT_ZONE,zone=Zone(zoneId,label,b)),MapCommand("grid:${UUID.randomUUID()}",MapAction.UPSERT_GRID,grid=grid),MapCommand("pin:${UUID.randomUUID()}",MapAction.UPSERT_PIN,pin=pin))
         }.show()
     }
-    private fun listPins(query:String=""){val pins=store.load().state.pins.values.filter {it.label.contains(query,true)||it.note.orEmpty().contains(query,true)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show()}}.show()}.show()}
+    private fun listPins(query:String=""){val pins=store.load().state.pins.values.filter {it.label.contains(query,true)||it.note.orEmpty().contains(query,true)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์","แก้ไข / ยืนยันหน้างาน")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show();5->editPinDialog(pin.id)}}.show()}.show()}
     private fun searchPins() {
         val query=EditText(this).apply {hint="ชื่อหรือข้อมูลหมุด";isSingleLine=true}
         AlertDialog.Builder(this).setTitle("ค้นหาหมุด").setView(query).setNegativeButton("ยกเลิก",null)
@@ -171,18 +173,69 @@ class OutsideViewActivity : Activity() {
         worker.execute {
             val saved=runCatching {
                 val batch=contentResolver.openInputStream(uri).use {GeoJsonImport.parse(requireNotNull(it))}
-                val added=store.importGeoJson(batch)
-                Pair(batch,added)
+                val receipt=store.importGeoJsonWithReceipt(batch)
+                Pair(batch,receipt)
             }
+            if(saved.isFailure)runCatching {store.recordImportFailure(saved.exceptionOrNull()?.message?:"Import failed")}
             if(!destroyed) handler.post {
                 if(destroyed)return@post
                 importing=false
-                if(!destroyed) saved.onSuccess {(batch,added)->
+                if(!destroyed) saved.onSuccess {(batch,receipt)->
                     val shown=GeoJsonImport.present({renderer.fitPoints(batch.pins.map {it.point})},{renderer.reloadStyle()})
-                    status.text=if(shown) "บันทึก $added หมุด · ในไฟล์ ${batch.pins.size} · กำลังแสดงข้อมูลจากไฟล์ ยังไม่ยืนยันสถานที่"
-                        else "บันทึก $added หมุดแล้ว · ในไฟล์ ${batch.pins.size} · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
+                    status.text=if(shown) "${receipt.status} · เพิ่ม ${receipt.added} · revision ${receipt.revision} · receipt ${receipt.id.take(8)} · กำลังแสดงข้อมูลจากไฟล์"
+                        else "บันทึกแล้ว · receipt ${receipt.id.take(8)} · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
                     // Keep queued commands paused until the reload confirms its frame.
                 }.onFailure {busy=false;status.text="นำเข้าไม่ได้ · ข้อมูลเดิมยังอยู่ · ${it.message}";renderer.reloadStyle()}
+            }
+        }
+    }
+    private fun exportGeoJson(uri:android.net.Uri) {
+        status.text="กำลังส่งออก GOVIEW…"
+        worker.execute {
+            val result=runCatching {
+                val text=store.exportGeoJson()
+                contentResolver.openOutputStream(uri,"wt").use {output->requireNotNull(output).write(text.toByteArray(Charsets.UTF_8))}
+            }
+            handler.post {if(!destroyed)status.text=if(result.isSuccess)"ส่งออก GOVIEW Map Update Package v1 แล้ว · ไฟล์มีพิกัดหมุด" else "ส่งออกไม่ได้ · ${result.exceptionOrNull()?.message}"}
+        }
+    }
+    private fun showUpdateReceipts() {
+        worker.execute {
+            val journal=store.load()
+            val text="revision ${journal.state.revision} · ${journal.state.pins.size} หมุด\n"+
+                journal.updates.takeLast(30).reversed().joinToString("\n") {"${it.status} · package v${it.packageVersion} · rev ${it.revision} · +${it.added}/edit ${it.changed} · ${it.id.take(8)} ${it.error.orEmpty()}"}
+            handler.post {if(!destroyed)AlertDialog.Builder(this).setTitle("GOVIEW · receipt/readback").setMessage(text).setPositiveButton("ปิด",null).show()}
+        }
+    }
+    private fun editPinDialog(id:String) {
+        worker.execute {
+            val journal=store.load();val pin=journal.state.pins[id]?:return@execute
+            handler.post {
+                if(!destroyed) {
+                    val form=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL}
+                    val label=EditText(this).apply {hint="ชื่อหมุด";setText(pin.label)}
+                    val longitude=EditText(this).apply {hint="longitude";setText(pin.point.longitude.toString())}
+                    val latitude=EditText(this).apply {hint="latitude";setText(pin.point.latitude.toString())}
+                    val field=CheckBox(this).apply {text="ฉันยืนยันพิกัดหน้างานด้วยตนเอง";isChecked=pin.evidence.source=="owner-field-confirmation"}
+                    form.addView(label);form.addView(longitude);form.addView(latitude);form.addView(field)
+                    AlertDialog.Builder(this).setTitle("GOVIEW · แก้ไขหมุด").setView(form).setNegativeButton("ยกเลิก",null)
+                        .setPositiveButton("บันทึก"){_,_->
+                            val point=runCatching {Point(longitude.text.toString().toDouble(),latitude.text.toString().toDouble())}.getOrNull()
+                            if(point==null){status.text="พิกัดไม่ถูกต้อง";return@setPositiveButton}
+                            if(busy || importing){status.text="รอแผนที่ทำงานเสร็จ แล้วลองใหม่";return@setPositiveButton}
+                            val name=label.text.toString().trim();val confirmed=field.isChecked
+                            importing=true;busy=true
+                            worker.execute {
+                                val saved=runCatching {store.editOwnerPin(id,name,point,confirmed,journal.state.revision)}
+                                if(!destroyed)handler.post {
+                                    if(!destroyed){importing=false;busy=false
+                                        saved.onSuccess {val displaying=GeoJsonImport.present({},{renderer.reloadStyle()});status.text="บันทึกแล้ว · revision ${it.revision} · receipt ${it.id.take(8)}"+if(displaying)"" else " · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"}
+                                            .onFailure {status.text="บันทึกไม่ได้ · ${it.message}"}
+                                    }
+                                }
+                            }
+                        }.show()
+                }
             }
         }
     }
@@ -284,7 +337,7 @@ class OutsideViewActivity : Activity() {
     private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label){if(importing)status.text="กำลังบันทึก GeoJSON…" else action()}
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==ForegroundLocationController.REQUEST_CODE)location.permissionResult()}
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
-    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==42&&resultCode==RESULT_OK){importGeoJson(uri);return};if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==42&&resultCode==RESULT_OK){importGeoJson(uri);return};if(requestCode==43&&resultCode==RESULT_OK){exportGeoJson(uri);return};if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
     override fun onResume(){super.onResume();foreground=true;busy=true;renderer.onResume();location.resume();handler.post(statusTick);updateSharingStatus()}
     override fun onPause(){foreground=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}

@@ -7,7 +7,7 @@ introduce a new graphics engine, application, database or backend. Existing
 MapLibre implementation and internal APIs remain unchanged.
 
 Base main: `6aba0f5f7465af06e4202b8206614319ad1c69b1` (read back from GitHub 2026-10-23).
-Separate scratch copy; original checkout and all original tracked files preserved. No worktree, new app, database, backend, dependency, manifest change, migration, remote commit, workflow dispatch, deployment, or paid service.
+Separate scratch copy; original checkout and all original tracked files preserved. No worktree, new app, database, backend, dependency, manifest change, destructive migration, workflow dispatch, deployment, or paid service. Authorized Draft PR #241 now runs the existing PR-triggered validation; nothing is merged or deployed.
 
 ## Existing implementation inspected
 
@@ -188,3 +188,58 @@ and commits an import, that later commit does not notify the already-completed
 screen. The pins remain saved and appear after Retry display/reload or reopening.
 No new refresh architecture has been added; actual-device behavior remains an
 acceptance gate.
+
+## Expanded GOVIEW acceptance: owner edits and versioned batch exchange
+
+Source inventory found existing add-pin, note editing and summary/image sharing,
+but no coordinate/label editor or reimportable GeoJSON exporter. GOVIEW retains
+the existing renderer and journal: their transaction/revision primitives are
+sufficient for this small single-device dataset. No app/module replacement,
+SQLite/Room database, app-ID change, signing change or destructive migration is
+justified. No user data is deleted or migrated. Journal version1 is retained with
+an optional additive `updates` receipt array; old journals decode with an empty
+array. Do not downgrade to an older app which would not preserve this new audit
+array on its next write.
+
+The pin menu now exposes label/longitude/latitude editing and an explicit owner
+checkbox for field confirmation. Saving checks the revision read when the editor
+opened; stale edits fail. Original source properties and separate owner notes
+remain. Local field confirmation records `owner-field-confirmation`, timestamp,
+and VERIFIED coordinate evidence. An imported file's verification claim is not
+local field proof; on a new record it becomes UNKNOWN with an imported-claim
+source. Matching records already present remain unchanged. Neither batch import
+nor generic UPSERT_PIN commands can automatically replace locally field-confirmed
+records. Explicit local owner editing is required.
+
+More → Export GeoJSON uses Android ACTION_CREATE_DOCUMENT. It writes a
+FeatureCollection with schemaVersion1, goview.format=`goview.map-update` and a
+numeric package version equal to the source map revision. Features keep their
+stable pin IDs, coordinates, original properties, evidence claims and owner
+notes. Source record snapshots are data only; no command execution path is read
+from the file. Export is an additive pin exchange, not a full map backup: zones,
+grids and deletion intents are not exported. No record is silently truncated;
+exports outside the 1000-feature/1MiB import envelope fail explicitly. Files
+contain saved pin coordinates, so choose the output document destination
+accordingly. Device GPS overlays are never exported. No file is auto-uploaded.
+
+Every accepted import/duplicate and owner field edit receives a durable update
+receipt (UUID, content-hash package identity, package version, revision, status,
+counts and timestamp). Existing command updates continue using original command
+receipts. SAVED means journal persistence, not a rendered frame or device proof.
+DUPLICATE adds no pins. UI import parse/conflict failures attempt to persist a
+REJECTED receipt without changing map state; disk failure may also prevent that
+receipt, and the UI must not claim a durable failure receipt then. More → Update
+results displays current revision/pin count and the latest30 receipts; all stored
+receipts remain retained. At1000 update receipts new updates fail rather than
+silently deleting audit history. Native-package owner-note conflicts also abort
+without overwriting notes.
+
+Expanded local tests cover export→parse→fresh-store import→reload, stable IDs,
+source properties, owner notes, duplicate receipts, explicit field edits, stale
+edit rejection, research overwrite rejection, file verification claims and
+rejected-import receipts. Actual Android16 APK launch, gestures, document picker,
+rotation, GPS, export/edit round trip and physical phone acceptance still require
+CI/emulator/device evidence separately. Future GO exchange is a versioned batch,
+not continuous remote phone control.
+
+The Android instrumentation suite now includes GoviewExchangeTest using real Android org.json and isolated synthetic cache storage; it does not touch owner map files or claim physical-device GPS evidence.

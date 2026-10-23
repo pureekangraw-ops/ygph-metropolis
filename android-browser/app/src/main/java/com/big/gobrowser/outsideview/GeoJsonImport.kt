@@ -5,7 +5,7 @@ import java.io.InputStream
 import java.security.MessageDigest
 
 /** Local owner import, not remote command authority or geographic verification. */
-data class GeoJsonBatch(val pins: List<Pin>)
+data class GeoJsonBatch(val pins: List<Pin>, val packageId:String="legacy", val packageVersion:Long=1, val ownerNotes:Map<String,String> = emptyMap(), val nativePackage:Boolean=false)
 
 object GeoJsonImport {
     const val MAX_BYTES = 1_048_576
@@ -37,6 +37,16 @@ object GeoJsonImport {
         if (document.has("schemaVersion")) require(document.get("schemaVersion") is Number && document.get("schemaVersion").toString().toBigDecimalOrNull()?.compareTo(java.math.BigDecimal.ONE)==0) { "Unsupported GeoJSON schemaVersion" }
         val dataset = document.optString("name", "owner-import").also { require(it.length in 1..256) }
         val namespace = "geojson:v1:${digest(dataset)}:"
+        val packageMeta=document.optJSONObject("goview")
+        val nativePackage=packageMeta!=null
+        if(nativePackage)require(document.has("schemaVersion")){"GOVIEW schemaVersion required"}
+        if(document.has("goview")) require(packageMeta!=null && packageMeta.getString("format")==MapUpdatePackage.FORMAT){"Unsupported GOVIEW package"}
+        val packageVersion=if(packageMeta==null) 1L else {
+            val raw=packageMeta.get("version")
+            require(raw is Number){"Numeric package version required"}
+            raw.toString().toBigDecimal().longValueExact().also {require(it>=0)}
+        }
+        val ownerNotes=mutableMapOf<String,String>()
         val features = document.getJSONArray("features")
         require(features.length() in 1..MAX_FEATURES) { "Import requires 1..1000 points" }
         val seen = mutableSetOf<String>()
@@ -51,6 +61,15 @@ object GeoJsonImport {
             val point = Point(coordinates.getDouble(0), coordinates.getDouble(1))
             require(!feature.has("properties") || feature.isNull("properties") || feature.get("properties") is JSONObject) { "Properties must be an object or null" }
             val properties = feature.optJSONObject("properties") ?: JSONObject()
+            if(nativePackage) {
+                val record=properties.getJSONObject("goviewRecord")
+                val pin=requireNotNull(MapCommandCodec.decode(JSONObject().put("commandId","import").put("action","UPSERT_PIN").put("pin",record)).pin)
+                require(pin.id==feature.getString("id") && pin.point==point){"GOVIEW record/geometry mismatch"}
+                require(pin.id.length in 1..256 && pin.label.length in 1..256 && pin.note.orEmpty().length<=8192 && pin.evidence.source.orEmpty().length<=512)
+                require(seen.add(pin.id)){"Duplicate feature id"}
+                if(properties.has("goviewOwnerNote")) ownerNotes[pin.id]=properties.getString("goviewOwnerNote").also {require(it.length<=4000)}
+                return@map pin
+            }
             val rawId = if(feature.has("id")) feature.get("id") else properties.opt("id")
             require(rawId is String || rawId is Number) { "Stable feature id required" }
             val sourceId = rawId.toString().also { require(it.length in 1..128) }
@@ -61,7 +80,7 @@ object GeoJsonImport {
             val note = canonical(properties).also { require(it.length <= 8192) { "Properties exceed limit" } }
             Pin(id, label, point, "", Evidence(EvidenceStatus.UNKNOWN, "owner-geojson:$dataset"), note=note)
         }
-        return GeoJsonBatch(pins)
+        return GeoJsonBatch(pins,digest(canonical(document)),packageVersion,ownerNotes,nativePackage)
     }
 
     /** Stable property text independent of JSON object iteration/key order, including nested objects. */
@@ -85,12 +104,15 @@ object GeoJsonImport {
         val pins = journal.state.pins.toMutableMap()
         batch.pins.forEach { pin ->
             val existing = pins[pin.id]
-            require(existing == null || existing == pin) { "Conflicting source id; existing data preserved" }
-            pins[pin.id] = pin
+            val imported=if(batch.nativePackage)MapUpdatePackage.importedClaim(pin) else pin
+            require(existing == null || existing == pin || existing == imported) { "Conflicting source id; existing data preserved, including field-confirmed records" }
+            pins[pin.id] = existing ?: imported
         }
         require(pins.size <= MAX_STORED_PINS) { "Stored pin limit reached" }
         require(pins.values.sumOf {it.label.length.toLong()+it.note.orEmpty().length} <= 8_388_608) { "Stored text limit reached" }
-        if(pins == journal.state.pins) return journal
-        return journal.copy(state=journal.state.copy(pins=pins, revision=journal.state.revision+1), renderedRevision=-1)
+        val notes=journal.state.notes.toMutableMap()
+        batch.ownerNotes.forEach {(id,note)->require(notes[id]==null || notes[id]==note){"Owner-note conflict; existing data preserved"};notes[id]=note}
+        if(pins == journal.state.pins && notes==journal.state.notes) return journal
+        return journal.copy(state=journal.state.copy(pins=pins,notes=notes,revision=journal.state.revision+1), renderedRevision=-1)
     }
 }
