@@ -203,7 +203,7 @@ export class BrowserWorkspace {
     if(repeat) return {jobId:repeat.jobId,status:"ALREADY_ACCEPTED",duplicate:true};
     if(state.job?.status==="RUNNING" || state.mode==="HEADLESS")throw new Error("JOB_ALREADY_RUNNING");
     const job={id:crypto.randomUUID(),kind,status:"RUNNING",startedAt:new Date().toISOString(),
-      progress:0,total:items.length,results:[],requestId};
+      progress:0,total:items.length,results:[],requestId,originRole:kind==="GO_SCRIPT"?"GO":"BIG"};
     state.job=job;state.mode="HEADLESS";state.status="RUNNING";
     // A page audit is read-only and needs no GO observer grant; GO scripts require
     // the explicit scoped session grant throughout their entire execution.
@@ -277,14 +277,24 @@ export class BrowserWorkspace {
     pending.index++;
     pending.phase="READY";
     await this.ctx.storage.put("pending-job",pending);
-    await this.ctx.storage.setAlarm(Date.now()+250);
+    await this.ctx.storage.setAlarm(Date.now()+1000);
   }
   async fetch(request) {
     const role=request.headers.get("x-observatory-role") === "BIG" ? "BIG" : "GO";
     const method=request.method,path=new URL(request.url).pathname;
     try {
       const access=await this.state();
-      if(role==="GO" && !sameGrant(access)) return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
+      if(role==="GO" && !sameGrant(access)) {
+        if(method==="GET" && path==="/v1/job" && access.job?.originRole==="GO")
+          return reply({job:access.job});
+        if(method==="GET" && path==="/v1/session")
+          return reply({sessionId:null,pageUrl:null,controller:"BIG",mode:"LOCKED",
+            status:"OWNER_INVITATION_REQUIRED",goCanObserve:false,
+            job:access.job?.originRole==="GO"
+              ? {id:access.job.id,status:access.job.status,progress:access.job.progress,total:access.job.total}
+              : null});
+        return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
+      }
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
       if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
@@ -337,6 +347,10 @@ export class BrowserWorkspace {
         try {return reply(await this.action(state,body,role));}finally{this.inFlight=false;}
       }
       if(path==="/v1/run" && (role==="BIG" || role==="GO")) {
+        if(/^[0-9a-fA-F-]{36}$/.test(body.requestId||"")) {
+          const prior=state.recentRequests?.find(x=>x.requestId===body.requestId);
+          if(prior)return reply({jobId:prior.jobId,status:"ALREADY_ACCEPTED",duplicate:true},200);
+        }
         if(this.inFlight || state.mode==="HEADLESS" || state.controller!=="GO" || !state.allowGoRead)
           return reply({error:"OWNER_GO_GRANT_REQUIRED"},403);
         if(!Array.isArray(body.steps) || body.steps.length===0 || body.steps.length>10 ||
@@ -366,7 +380,10 @@ export class BrowserWorkspace {
         try{return reply(await this.closeSession(state));}finally{this.inFlight=false;}
       }
       if(path==="/v1/stop" && role==="BIG") {
-        const st=await this.state();st.allowGoRead=false;st.grantedHost=null;
+        const st=await this.state();
+        if(!st.job || !["RUNNING","STOP_REQUESTED"].includes(st.job.status))
+          return reply({error:"NO_ACTIVE_JOB"},409);
+        st.allowGoRead=false;st.grantedHost=null;
         st.controller="BIG";st.status="STOP_REQUESTED";
         if(st.job?.status==="RUNNING")st.job.status="STOP_REQUESTED";
         await this.save(st);
