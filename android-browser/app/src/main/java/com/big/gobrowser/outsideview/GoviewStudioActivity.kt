@@ -46,11 +46,14 @@ class GoviewStudioActivity : Activity() {
     }
     private val storageLock = Any()
     private var pendingExport: ByteArray? = null
+    private var webReady = false
+    private var pendingIncoming: Intent? = null
     private val assetRoot = "file:///android_asset/goview-studio/"
     private val maxSize = 1024 * 1024 + 256
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingIncoming = intent
         val host = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         host.addView(TextView(this).apply {
             text = "GOVIEW · GO Map Studio · แผนที่วาดในเครื่อง"
@@ -69,6 +72,12 @@ class GoviewStudioActivity : Activity() {
             settings.setSupportMultipleWindows(false)
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    if (url == assetRoot + "index.html") {
+                        webReady = true
+                        consumeIncoming()
+                    }
+                }
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     return request?.url?.toString() != assetRoot + "index.html"
                 }
@@ -83,6 +92,39 @@ class GoviewStudioActivity : Activity() {
         host.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(host)
         web.loadUrl(assetRoot + "index.html")
+    }
+
+    /** Shared file enters approval preview, never the active map automatically. */
+    private fun consumeIncoming() {
+        if (!webReady) return
+        val shared = pendingIncoming ?: return
+        pendingIncoming = null
+        if (shared.action != Intent.ACTION_SEND && shared.action != Intent.ACTION_VIEW) return
+        @Suppress("DEPRECATION")
+        val uri = if (shared.action == Intent.ACTION_SEND) {
+            shared.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+        } else shared.data
+        val text = if (uri == null) shared.getStringExtra(Intent.EXTRA_TEXT) else null
+        Thread {
+            val result = runCatching {
+                val bytes = if (uri != null) {
+                    contentResolver.openInputStream(uri)?.use { readLimited(it) } ?: error("Unreadable shared file")
+                } else {
+                    (text ?: error("No file attached")).toByteArray(StandardCharsets.UTF_8)
+                        .also { require(it.size <= maxSize) }
+                }
+                String(bytes, StandardCharsets.UTF_8)
+            }
+            result.onSuccess { callback("receiveImport", it) }
+                .onFailure { callback("nativeStatus", "อ่านไฟล์แชร์ไม่ได้หรือขนาดเกิน 1 MiB") }
+        }.start()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingIncoming = intent
+        consumeIncoming()
     }
 
     private fun forbidden() = WebResourceResponse("text/plain", "utf-8",
