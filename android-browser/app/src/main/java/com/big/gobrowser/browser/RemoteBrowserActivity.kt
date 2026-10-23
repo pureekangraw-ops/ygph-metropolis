@@ -49,6 +49,8 @@ class RemoteBrowserActivity : Activity() {
     private var session = false
     private var goControls = false
     private var jobId: String? = null
+    private var latestJobStatus = ""
+    private var latestNoteAt = ""
     private val poll = object : Runnable {
         override fun run() {
             if (!foreground || destroyed) return
@@ -125,7 +127,7 @@ class RemoteBrowserActivity : Activity() {
         toolbar.addView(assist)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("✋ ฉันควบคุมเอง") { takeOver() }, weighted())
-        actions.addView(action("🌙 เบื้องหลัง") { auditCurrent() }, weighted())
+        actions.addView(action("🌙 เบื้องหลัง") { backgroundMenu() }, weighted())
         toolbar.addView(actions)
         val evidence = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         evidence.addView(action("▶ ดูสด") { viewLive() }, weighted())
@@ -283,6 +285,28 @@ class RemoteBrowserActivity : Activity() {
                 .onFailure {status.text="คำสั่งไม่สำเร็จ · "+readableError(it)}
         }
     }
+    private fun backgroundMenu() {
+        if(!session){status.text="เปิดเว็บไซต์ก่อน";return}
+        AlertDialog.Builder(this).setTitle("🌙 ทำงานเบื้องหลัง")
+            .setItems(arrayOf("ให้ GO ทำงานแทน (ไม่แสดงเว็บ)", "ตรวจหน้าเว็บอัตโนมัติ", "กลับดูเว็บสด")) { _,choice ->
+                when(choice) {
+                    0 -> AlertDialog.Builder(this)
+                        .setTitle("ให้ GO ทำงานโดยไม่เปิดหน้าจอ?")
+                        .setMessage("อนุญาตให้ GO ที่เชื่อมเครื่องมือควบคุมเว็บได้ แล้วซ่อน Live View ไว้ GO ยังต้องได้รับคำสั่งงานผ่านช่องที่เชื่อมจริง")
+                        .setPositiveButton("อนุญาตและซ่อน") { _,_->
+                            query("POST","/v1/control",JSONObject().put("controller","GO")) { result->
+                                result.onSuccess {
+                                    renderSession(it)
+                                    page.loadUrl("about:blank")
+                                    status.text="GO ได้สิทธิ์ทำงาน · ซ่อน Live View แล้ว เปิด ☷ ผลงานเพื่อติดตาม"
+                                }.onFailure {status.text="มอบหมายไม่ได้ · "+readableError(it)}
+                            }
+                        }.setNegativeButton("ยกเลิก",null).show()
+                    1 -> auditCurrent()
+                    2 -> viewLive()
+                }
+            }.show()
+    }
     private fun auditCurrent() {
         if (!session) {status.text="เปิดเว็บไซต์ก่อน";return}
         val url=validWebUrl(address.text.toString()) ?: return
@@ -290,7 +314,11 @@ class RemoteBrowserActivity : Activity() {
             .setMessage("ตรวจโครงสร้างหน้า "+url+" บน Cloudflare โดยไม่ต้องเฝ้าหน้าจอ · จำกัดงานตรวจเบื้องต้น ไม่ใช่การทำงานอิสระของ GO ที่ยังไม่เชื่อม")
             .setPositiveButton("เริ่มตรวจ") { _,_->
                 query("POST","/v1/audit",JSONObject().put("urls",JSONArray().put(url))){result->
-                    result.onSuccess {jobId=it.optString("jobId");status.text="เริ่มงานบนคลาวด์แล้ว · ดูผลงานเพื่อติดตาม"}
+                    result.onSuccess {
+                        jobId=it.optString("jobId")
+                        page.loadUrl("about:blank")
+                        status.text="เริ่มงานตรวจเว็บบนคลาวด์ · ซ่อนภาพแล้ว แตะ ☷ ผลงานเพื่อติดตาม"
+                    }
                         .onFailure {status.text="เริ่มไม่ได้ · "+readableError(it)}
                 }
             }.setNegativeButton("ยกเลิก",null).show()
@@ -329,6 +357,24 @@ class RemoteBrowserActivity : Activity() {
         controller.text="ผู้ควบคุม: "+(if(goControls)"GO" else "BIG")+" · "+
             data.optString("mode","IDLE")+" · "+data.optString("status","IDLE")+" · GO อ่าน: "+(if(data.optBoolean("goCanObserve"))"อนุญาต" else "ปิด")
         if(url!=null && !address.hasFocus())address.setText(url)
+        val job=data.optJSONObject("job")
+        if(job!=null) {
+            val state=job.optString("status")
+            val summary=state+":"+job.optInt("progress")+":"+job.optInt("total")
+            if(summary!=latestJobStatus) {
+                latestJobStatus=summary
+                val step=job.optInt("progress")
+                val total=job.optInt("total")
+                status.text=if(state=="RUNNING")
+                    "🌙 กำลังทำงานเบื้องหลัง · "+step+"/"+total+" ขั้น"
+                else "☷ งาน "+state+" · "+step+"/"+total+" ขั้น · แตะผลงานเพื่อดูผล"
+            }
+        }
+        val note=data.optJSONObject("note")
+        if(note!=null && note.optString("at")!=latestNoteAt) {
+            latestNoteAt=note.optString("at")
+            status.text="🤖 GO: "+note.optString("message").take(240)
+        }
     }
     private fun readableError(t: Throwable): String = (t.message ?: "ไม่ทราบสาเหตุ").take(120)
     private fun query(method: String,path: String,body: JSONObject?,onDone:(Result<JSONObject>)->Unit) {
@@ -344,7 +390,15 @@ class RemoteBrowserActivity : Activity() {
             main.post {busy=false;if(!destroyed)onDone(result)}
         }
     }
-    override fun onResume(){super.onResume();foreground=true;main.removeCallbacks(poll);main.post(poll);page.onResume()}
-    override fun onPause(){foreground=false;main.removeCallbacks(poll);page.onPause();super.onPause()}
+    override fun onResume(){
+        super.onResume();foreground=true;main.removeCallbacks(poll);main.post(poll);page.onResume()
+        // Owner returns to a neutral status screen. Live View restarts only on explicit "▶ ดูสด".
+    }
+    override fun onPause(){
+        foreground=false;main.removeCallbacks(poll);page.onPause()
+        // Disconnect the interactive viewer without stopping the remote browser or its queued work.
+        page.loadUrl("about:blank")
+        super.onPause()
+    }
     override fun onDestroy(){destroyed=true;main.removeCallbacks(poll);io.shutdownNow();page.stopLoading();page.destroy();super.onDestroy()}
 }
