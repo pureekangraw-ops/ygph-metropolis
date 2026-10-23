@@ -59,8 +59,19 @@ class GoviewB2EChainTest {
         assertTrue(message,predicate())
     }
     private fun dialog(text:String)=await("Dialog available: $text") {runCatching {onView(withText(text)).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()));true}.getOrDefault(false)}
-    private fun rendered(predicate:(MapJournal)->Boolean={true})=await("Matching persisted/rendered revision required") {
-        val journal=store.load();journal.pending==null && journal.renderedRevision==journal.state.revision && predicate(journal)
+    private fun idleCurrentFrame():Boolean {
+        val activity=runCatching {current()}.getOrNull()?:return false
+        var ready=false
+        instrumentation.runOnMainSync {
+            fun value(name:String)=OutsideViewActivity::class.java.getDeclaredField(name).apply {isAccessible=true}.get(activity)
+            val renderer=value("renderer") as MapLibreOutsideRenderer
+            ready=value("busy")==false && value("importing")==false && renderer.foregroundReady &&
+                value("commandRendererGeneration")==renderer.styleGeneration
+        }
+        return ready
+    }
+    private fun rendered(predicate:(MapJournal)->Boolean={true})=await("Matching current-screen persisted/rendered revision required") {
+        val journal=store.load();idleCurrentFrame() && journal.pending==null && journal.renderedRevision==journal.state.revision && predicate(journal)
     }
     private fun offlineFrame() {
         val activity=current()
@@ -76,14 +87,36 @@ class GoviewB2EChainTest {
         instrumentation.runOnMainSync {OutsideViewActivity::class.java.getDeclaredMethod("importGeoJson",Uri::class.java).apply {isAccessible=true}.invoke(activity,Uri.fromFile(input))}
         dialog("อนุมัติ Update")
     }
-    private fun approve(){onView(withText("อนุมัติ Update")).inRoot(isDialog()).perform(click())}
-    private fun openEditor(label:String) {
+    private fun approve(){
+        onView(isAssignableFrom(CheckBox::class.java)).inRoot(isDialog()).perform(click()) // explicit synthetic viewport selection
+        onView(withText("อนุมัติ Update")).inRoot(isDialog()).perform(click())
+    }
+    private fun visiblePinIds():Set<String> {
+        val activity=current();var ids:Set<String> = emptySet()
+        instrumentation.runOnMainSync {
+            val renderer=OutsideViewActivity::class.java.getDeclaredField("renderer").apply {isAccessible=true}.get(activity) as MapLibreOutsideRenderer
+            val map=MapLibreOutsideRenderer::class.java.getDeclaredField("map").apply {isAccessible=true}.get(renderer) as org.maplibre.android.maps.MapLibreMap
+            ids=map.queryRenderedFeatures(android.graphics.RectF(0f,0f,renderer.mapView.width.toFloat(),renderer.mapView.height.toFloat()),"pin-dots")
+                .filter {it.hasProperty("_id")}.map {it.getStringProperty("_id")}.toSet()
+        }
+        return ids
+    }
+    private fun openPinActions(label:String) {
         invoke("searchPins");dialog("ค้นหา")
         onView(isAssignableFrom(EditText::class.java)).inRoot(isDialog()).perform(replaceText(label),closeSoftKeyboard())
         onView(withText("ค้นหา")).inRoot(isDialog()).perform(click())
         dialog(label)
         onData(equalTo(label)).inRoot(isDialog()).perform(click())
+    }
+    private fun openEditor(label:String) {
+        openPinActions(label)
         onView(withText("แก้ไข / ยืนยันหน้างาน")).inRoot(isDialog()).perform(click());dialog("GOVIEW · แก้ไขหมุด")
+    }
+    private fun focus(label:String,id:String) {
+        openPinActions(label)
+        onView(withText("ดูบนแผนที่")).inRoot(isDialog()).perform(click())
+        rendered {it.state.focused==id}
+        await("Selected pin is actually in rendered viewport") {id in visiblePinIds()}
     }
     private fun feature(id:String,label:String,longitude:Double)=JSONObject().put("type","Feature").put("id",id)
         .put("geometry",JSONObject().put("type","Point").put("coordinates",JSONArray().put(longitude).put(20.0)))
@@ -97,21 +130,46 @@ class GoviewB2EChainTest {
     }
     private fun beforeRestart() {
         assertFalse("Do not silently overwrite a previous chain checkpoint",checkpoint.exists())
+        // Nonempty unrelated fixtures make preservation assertions substantive, not vacuous.
+        val seededStore=store
+        synchronized(seededStore.transactionLock) {
+            val seed=seededStore.load()
+            val sentinel=Pin("synthetic-b2e-unrelated","Unrelated synthetic owner pin",Point(-20.0,-10.0),"",Evidence(EvidenceStatus.UNKNOWN,"synthetic-fixture"))
+            check(sentinel.id !in seed.state.pins)
+            seededStore.commit(seed.copy(state=seed.state.copy(pins=seed.state.pins+(sentinel.id to sentinel),
+                notes=seed.state.notes+(sentinel.id to "Unrelated synthetic owner note"),revision=seed.state.revision+1),renderedRevision=-1))
+        }
+        offlineFrame()
         val initial=store.load()
         val name="SYNTHETIC-B2E-${System.nanoTime()}"
         val features=JSONArray()
         for(i in 0 until 39)features.put(feature("chain-$i",if(i==0)"B2E unique target" else "B2E support $i",10.0+i*.001))
         val raw=JSONObject().put("type","FeatureCollection").put("name",name).put("features",features).toString()
-        val correlationCount=initial.updates.size
         receive(raw)
         assertEquals(initial.state.pins,store.load().state.pins)
         assertEquals("DOWNLOAD",store.load().updates.last().operation)
+        val previewActivity=current();instrumentation.runOnMainSync {previewActivity.recreate()}
+        await("Rotation discards unapproved preview") {runCatching {current()!==previewActivity}.getOrDefault(false)}
+        offlineFrame();assertEquals(initial.state,store.load().state)
+        receive(raw)
+        val download=store.load().updates.last()
         approve()
         rendered {it.state.pins.size==initial.state.pins.size+39}
-        val accepted=store.load();val download=accepted.updates[correlationCount];val update=accepted.updates.last()
+        val accepted=store.load();val update=accepted.updates.last()
         assertEquals("UPDATE",update.operation);assertTrue(update.readbackVerified)
         assertEquals(download.correlationId,update.correlationId);assertNotEquals(download.id,update.id)
+        val importedIds=accepted.state.pins.keys-initial.state.pins.keys
+        await("All39 imported IDs are in rendered viewport") {visiblePinIds().containsAll(importedIds)}
         val id=accepted.state.pins.values.single {it.label=="B2E unique target"}.id
+        // Negative control: the old revision-only gate succeeds on an empty viewport.
+        val away=current()
+        instrumentation.runOnMainSync {
+            val renderer=OutsideViewActivity::class.java.getDeclaredField("renderer").apply {isAccessible=true}.get(away) as MapLibreOutsideRenderer
+            renderer.fitPoints(listOf(Point(-100.0,-50.0)));renderer.reloadStyle(false)
+        }
+        rendered()
+        assertTrue("Negative control must expose revision-only false positive",visiblePinIds().intersect(importedIds).isEmpty())
+        focus("B2E unique target",id)
         openEditor("B2E unique target")
         onView(isAssignableFrom(CheckBox::class.java)).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(isNotChecked()))
         onView(withHint("ชื่อหมุด")).perform(replaceText("B2E confirmed target"),closeSoftKeyboard())
@@ -124,6 +182,7 @@ class GoviewB2EChainTest {
         val edited=store.load().state.pins.getValue(id)
         assertEquals(Point(11.0,21.0),edited.point);assertEquals("owner-field-confirmation",edited.evidence.source)
         assertEquals("synthetic-b2e",edited.category)
+        focus(edited.label,id)
         initial.state.pins.forEach {(key,value)->assertEquals(value,store.load().state.pins[key])}
         assertEquals(initial.state.notes,store.load().state.notes)
         val old=current();instrumentation.runOnMainSync {old.recreate()}
@@ -149,8 +208,11 @@ class GoviewB2EChainTest {
         val id=expected.getString("id");val persisted=store.load();val pin=persisted.state.pins.getValue(id)
         assertEquals(expected.getInt("count"),persisted.state.pins.size)
         assertEquals(expected.getLong("revision"),persisted.state.revision)
+        assertEquals(Point(-20.0,-10.0),persisted.state.pins.getValue("synthetic-b2e-unrelated").point)
+        assertEquals("Unrelated synthetic owner note",persisted.state.notes["synthetic-b2e-unrelated"])
         assertEquals("B2E confirmed target",pin.label);assertEquals(Point(11.0,21.0),pin.point)
         assertEquals(EvidenceStatus.VERIFIED,pin.evidence.coordinate);assertEquals("synthetic-b2e",pin.category)
+        focus(pin.label,id)
         // Export/readback uses the real storage codec; separately from selected Snapshot and transport.
         val exported=store.exportGeoJson();val batch=GeoJsonImport.parse(exported.byteInputStream())
         val duplicate=store.approveUpdate(store.previewUpdate(batch,"synthetic-b2e-export-reimport"))
