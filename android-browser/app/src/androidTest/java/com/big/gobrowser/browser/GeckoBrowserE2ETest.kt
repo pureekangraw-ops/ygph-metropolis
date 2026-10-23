@@ -156,6 +156,33 @@ class GeckoBrowserE2ETest {
         awaitPage("example.com", previousCaptureId)
     }
 
+    @Test fun immediateOwnerNavigationAfterKnownSessionRestoreKeepsDestination() {
+        // Controlled fixture: real saved example.org state, not whichever tab a previous test left.
+        lateinit var sourceId:String
+        instrumentation.runOnMainSync {sourceId=engine().open("https://example.org")}
+        awaitPage("example.org")
+        val recovery=GeckoBrowserRecovery(instrumentation.targetContext)
+        var saved:org.mozilla.geckoview.GeckoSession.SessionState?=null
+        val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+        while(saved==null && System.nanoTime()<deadline) {
+            val candidate=recovery.read(sourceId)
+            if(candidate?.toString()?.contains("https://example.org")==true)saved=candidate else Thread.sleep(100)
+        }
+        assertNotNull("Known source session must have durable recovery state",saved)
+        repeat(3) { attempt ->
+            instrumentation.runOnMainSync {
+                engine().open("https://example.org",state=saved!!)
+                traceRecoveryNavigation()
+                assertTrue(engine().navigate("https://example.com"))
+                trace("controlled-restore attempt=$attempt navigate-return=${engine().active()?.requestedUrl}")
+            }
+            awaitPage("example.com")
+            instrumentation.runOnMainSync {
+                assertEquals("New owner destination must survive restore callbacks", "example.com",android.net.Uri.parse(engine().active()!!.requestedUrl).host)
+            }
+        }
+    }
+
     @Test fun closingInactiveTabKeepsSelectedSessionVisible() {
         instrumentation.runOnMainSync {
             val previous = engine().active()!!
