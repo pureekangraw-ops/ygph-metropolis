@@ -193,6 +193,12 @@ class RemoteBrowserActivity : Activity() {
         })
         column.addView(endpoint)
         column.addView(secret)
+        val recording = CheckBox(this).apply {
+            text="บันทึกการทำงานไว้ดูย้อนหลังบน Cloudflare (อาจเก็บภาพ/ข้อความของเว็บที่เปิด)"
+            textSize=13f
+            isChecked=prefs.getBoolean("record-browser",false)
+        }
+        column.addView(recording)
         column.addView(ObservatoryBuildStamp.view(this))
         AlertDialog.Builder(this).setTitle("Cloudflare Shared Browser").setView(column)
             .setPositiveButton("เชื่อมต่อ") { _, _ ->
@@ -203,7 +209,10 @@ class RemoteBrowserActivity : Activity() {
                     if (token.length < 32 || token.length > 256) { status.text = "OWNER_TOKEN ไม่ถูกต้อง";return@setPositiveButton }
                     credentials.save(token)
                 }
-                if (!prefs.edit().putString("service",url).commit()) {status.text = "บันทึกที่อยู่ Worker ไม่สำเร็จ";return@setPositiveButton}
+                if (!prefs.edit().putString("service",url)
+                    .putBoolean("record-browser",recording.isChecked).commit()) {
+                    status.text = "บันทึกการตั้งค่า Worker ไม่สำเร็จ";return@setPositiveButton
+                }
                 if (!configured()) {status.text = "ต้องมี OWNER_TOKEN และ Worker ก่อนใช้งาน";return@setPositiveButton}
                 query("GET", "/v1/session", null) { result ->
                     result.onSuccess { renderSession(it); status.text = "เชื่อมต่อ Worker แล้ว · กด ไป เพื่อเปิดเว็บ" }
@@ -221,6 +230,7 @@ class RemoteBrowserActivity : Activity() {
         if (url == null) {status.text = "ต้องเป็นเว็บไซต์ HTTPS สาธารณะ";return}
         prefs.edit().putString("last-url",url).apply()
         val body=JSONObject().put("url",url)
+            .put("recording",prefs.getBoolean("record-browser",false))
         // A new session is owner initiated; after connection the same remote tab persists.
         query("POST", "/v1/session", body) { result ->
             result.onSuccess { renderSession(it);viewLive() }

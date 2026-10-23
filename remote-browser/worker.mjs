@@ -18,6 +18,7 @@ function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
     controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:sameGrant(s),
     note:s.note || null,
+    recording:!!s.recording, lastClosedSessionId:s.lastClosedSessionId || null,
     version:s.version || 0, updatedAt:s.updatedAt || null, job:s.job || null };
 }
 export default {
@@ -151,8 +152,10 @@ export class BrowserWorkspace {
   async beginSession(raw) {
     const url=validPageUrl(raw.url || "https://shop.yggmetro.com/");
     if (!url) throw new Error("HTTPS_PUBLIC_URL_REQUIRED");
+    const recording=raw.recording===true;
     let state=await this.state();
-    if (state.browserSessionId && state.url && new URL(state.url).hostname!==new URL(url).hostname) {
+    if (state.browserSessionId && state.url &&
+        (new URL(state.url).hostname!==new URL(url).hostname || !!state.recording!==recording)) {
       // Restrict a Browser Run session to its original domain; a new site receives a fresh session
       // with host-specific network guardrails, so redirects cannot reach internal hosts.
       await this.closeSession(state);
@@ -170,14 +173,15 @@ export class BrowserWorkspace {
       .map(s=>s.trim().toLowerCase()).filter(s=>/^[a-z0-9.-]+$/.test(s) && s.includes("."));
     const browser=await puppeteer.launch(this.env.BROWSER,{
       keep_alive:600000,
-      guardrails:{allowedDomains:[host,`*.${host}`,...extras]}
+      guardrails:{allowedDomains:[host,`*.${host}`,...extras]},
+      recording
     });
     try {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
       state={...state,browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
         controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,allowGoRead:false,grantedHost:null,job:null,
-        note:null};
+        note:null,recording,lastClosedSessionId:state.lastClosedSessionId||null};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
@@ -192,6 +196,7 @@ export class BrowserWorkspace {
           throw e;
       }
     }
+    state.lastClosedSessionId=state.browserSessionId;
     state.browserSessionId=null;state.targetId=null;state.controller="BIG";state.note=null;
     state.allowGoRead=false;state.grantedHost=null;state.mode="IDLE";state.status="CLOSED";
     await this.save(state);return summarize(state);
