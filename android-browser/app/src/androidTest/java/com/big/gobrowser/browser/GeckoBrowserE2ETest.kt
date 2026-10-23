@@ -118,7 +118,8 @@ class GeckoBrowserE2ETest {
 
     private fun currentCapture(): DomCapture? {
         val field = GeckoBrowserActivity::class.java.getDeclaredField("latestDom").apply { isAccessible = true }
-        return (field.get(rule.activity) as? Pair<*, *>)?.second as? DomCapture
+        val latest=field.get(rule.activity) as? Pair<*, *>
+        return latest?.takeIf {it.first==engine().active()?.id}?.second as? DomCapture
     }
 
     @Test fun editingAddressIsNotOverwrittenByPageNavigation() {
@@ -170,13 +171,15 @@ class GeckoBrowserE2ETest {
         }
         assertNotNull("Known source session must have durable recovery state",saved)
         repeat(3) { attempt ->
+            var previousCaptureId:String?=null
             instrumentation.runOnMainSync {
+                previousCaptureId=currentCapture()?.captureId
                 engine().open("https://example.org",state=saved!!)
                 traceRecoveryNavigation()
                 assertTrue(engine().navigate("https://example.com"))
                 trace("controlled-restore attempt=$attempt navigate-return=${engine().active()?.requestedUrl}")
             }
-            awaitPage("example.com")
+            awaitPage("example.com",previousCaptureId)
             instrumentation.runOnMainSync {
                 assertEquals("New owner destination must survive restore callbacks", "example.com",android.net.Uri.parse(engine().active()!!.requestedUrl).host)
             }
