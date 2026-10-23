@@ -18,6 +18,7 @@ for phase in before after; do
   log="app/build/emulator-evidence/goview-b2e-$phase.log"
   adb shell am instrument -w -r \
     -e class com.big.gobrowser.browser.GoviewB2EChainTest \
+    -e focusDiagnostics true \
     -e goviewPhase "$phase" \
     com.big.gobrowser.test/androidx.test.runner.AndroidJUnitRunner | tee "$log"
   # am instrument can return exit0 even when JUnit fails: inspect its actual result.

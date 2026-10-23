@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class GoviewB2EChainTest {
     private val screen=ActivityTestRule(OutsideViewActivity::class.java)
-    @get:Rule val rules:RuleChain=RuleChain.outerRule(GrantPermissionRule.grant(
+    @get:Rule val rules:RuleChain=RuleChain.outerRule(FocusFailureDiagnostics()).around(GrantPermissionRule.grant(
         Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.POST_NOTIFICATIONS)).around(screen)
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()

@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class OutsideViewFlowTest {
-    @get:Rule val rule=ActivityTestRule(OutsideViewActivity::class.java)
+    val rule=ActivityTestRule(OutsideViewActivity::class.java)
+    @get:Rule val diagnosticRules:org.junit.rules.RuleChain=org.junit.rules.RuleChain.outerRule(FocusFailureDiagnostics()).around(rule)
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private fun views(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap {views(v.getChildAt(it))}else emptyList()
     private fun rendered(store:MapStateStore, predicate:()->Boolean) {
