@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -31,7 +32,18 @@ import java.security.MessageDigest
  */
 class GoviewStudioActivity : Activity() {
     private lateinit var web: WebView
-    private val storage by lazy { AtomicFile(File(filesDir, "goview-studio-map-v1.json")) }
+    private val legacyStorage by lazy { AtomicFile(File(filesDir, "goview-studio-map-v1.json")) }
+    private val mapDirectory by lazy { File(filesDir, "goview-studio-maps").apply { mkdirs() } }
+    private val preferences by lazy { getSharedPreferences("goview-studio-map-library", MODE_PRIVATE) }
+    private val mapIdPattern = Regex("[a-zA-Z0-9_-]{1,70}")
+    private fun mapStorage(id: String): AtomicFile {
+        require(mapIdPattern.matches(id))
+        return AtomicFile(File(mapDirectory, "$"+"{id}.goview.json"))
+    }
+    private fun activeStorage(): AtomicFile {
+        val id = preferences.getString("activeMap", null)
+        return if (id != null && mapIdPattern.matches(id)) mapStorage(id) else legacyStorage
+    }
     private val storageLock = Any()
     private var pendingExport: ByteArray? = null
     private val assetRoot = "file:///android_asset/goview-studio/"
@@ -131,7 +143,7 @@ class GoviewStudioActivity : Activity() {
     private inner class Bridge {
         @JavascriptInterface fun readState() {
             val raw = synchronized(storageLock) {
-                runCatching { storage.openRead().use { input ->
+                runCatching { activeStorage().openRead().use { input ->
                     val bytes = readLimited(input)
                     String(bytes, StandardCharsets.UTF_8)
                 } }.getOrNull()
@@ -145,12 +157,17 @@ class GoviewStudioActivity : Activity() {
                 return
             }
             val bytes = text.toByteArray(StandardCharsets.UTF_8)
+            val id = JSONObject(text).getJSONObject("map").getString("mapId")
             val result = synchronized(storageLock) {
                 runCatching {
+                    val storage = mapStorage(id)
                     val out = storage.startWrite()
                     try {
                         out.write(bytes)
                         storage.finishWrite(out)
+                        check(preferences.edit().putString("activeMap", id).commit()) {
+                            "could not store active map id"
+                        }
                     } catch (error: Exception) {
                         storage.failWrite(out)
                         throw error
@@ -159,6 +176,42 @@ class GoviewStudioActivity : Activity() {
             }
             if (result.isFailure) callback("nativeStatus", "บันทึกลงเครื่องไม่สำเร็จ: เก็บไฟล์เดิมไว้")
             else callback("nativeStatus", "บันทึกแพ็กเกจลงเครื่องแล้ว")
+        }
+
+        @JavascriptInterface fun listMaps() {
+            val entries = JSONArray()
+            synchronized(storageLock) {
+                mapDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".goview.json") }?.forEach { file ->
+                    val id = file.name.removeSuffix(".goview.json")
+                    if (mapIdPattern.matches(id)) {
+                        runCatching {
+                            val raw = String(readLimited(mapStorage(id).openRead()), StandardCharsets.UTF_8)
+                            val info = JSONObject(raw).getJSONObject("map")
+                            entries.put(JSONObject().put("id", id)
+                                .put("title", info.getString("title"))
+                                .put("version", info.getInt("version")))
+                        }
+                    }
+                }
+            }
+            callback("receiveMapList", entries.toString())
+        }
+
+        @JavascriptInterface fun openMap(id: String) {
+            if (!mapIdPattern.matches(id)) {
+                callback("nativeStatus", "ไม่พบแผนที่ที่เลือก")
+                return
+            }
+            val raw = synchronized(storageLock) {
+                runCatching {
+                    val item = mapStorage(id)
+                    val content = item.openRead().use { String(readLimited(it), StandardCharsets.UTF_8) }
+                    require(preferences.edit().putString("activeMap", id).commit())
+                    content
+                }.getOrNull()
+            }
+            if (raw != null) callback("receiveNativePackage", raw)
+            else callback("nativeStatus", "เปิดไฟล์แผนที่ไม่ได้ · ไม่มีการลบข้อมูล")
         }
 
         @JavascriptInterface fun chooseImport() {
