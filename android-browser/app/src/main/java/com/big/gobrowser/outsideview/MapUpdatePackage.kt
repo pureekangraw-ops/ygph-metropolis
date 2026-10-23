@@ -7,7 +7,8 @@ import org.json.JSONObject
 data class MapUpdateReceipt(
     val id:String, val packageId:String, val packageVersion:Long, val status:String,
     val revision:Long, val added:Int=0, val changed:Int=0, val error:String?=null,
-    val createdAt:Long=System.currentTimeMillis()
+    val createdAt:Long=System.currentTimeMillis(),
+    val operation:String="UPDATE", val correlationId:String=id, val readbackVerified:Boolean=false
 )
 
 object MapUpdatePackage {

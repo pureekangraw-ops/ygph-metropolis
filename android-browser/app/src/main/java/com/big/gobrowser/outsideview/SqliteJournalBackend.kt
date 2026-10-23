@@ -24,12 +24,7 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
         if(!file.exists())return null
         return open().use {db->
             if(db.version==0)return@use null
-            db.rawQuery("SELECT payload,sha256 FROM journal WHERE singleton=1",null).use {cursor->
-                check(cursor.moveToFirst()){"GOVIEW database state missing"}
-                val payload=cursor.getString(0)
-                check(hash(payload.toByteArray(Charsets.UTF_8))==cursor.getString(1)){"GOVIEW database checksum mismatch"}
-                payload
-            }
+            readPayload(db)
         }
     }
     override fun initialize(payload:String,revision:Long,legacy:File?) {
@@ -47,7 +42,8 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
             if(db.version==1){check(read()!=null);return}
             db.beginTransaction()
             try {
-                db.execSQL("CREATE TABLE journal (singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL, payload TEXT NOT NULL, sha256 TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE journal (singleton INTEGER PRIMARY KEY CHECK(singleton=1), revision INTEGER NOT NULL, byte_count INTEGER NOT NULL, sha256 TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE journal_chunks (sequence INTEGER PRIMARY KEY, payload BLOB NOT NULL)")
                 put(db,payload,revision)
                 db.version=1
                 beforeCommit()
@@ -62,9 +58,37 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
             try {put(db,payload,revision);beforeCommit();db.setTransactionSuccessful()} finally {db.endTransaction()}
         }
     }
+    /** Cursor rows stay below 256 KiB, including multibyte text; no whole-document Cursor row. */
+    private fun readPayload(db:SQLiteDatabase):String {
+        val metadata=db.rawQuery("SELECT byte_count,sha256 FROM journal WHERE singleton=1",null).use {cursor->
+            check(cursor.moveToFirst()){"GOVIEW database state missing"};cursor.getInt(0) to cursor.getString(1)
+        }
+        check(metadata.first>=0)
+        val output=java.io.ByteArrayOutputStream()
+        db.rawQuery("SELECT sequence,payload FROM journal_chunks ORDER BY sequence",null).use {cursor->
+            var expected=0
+            while(cursor.moveToNext()) {
+                check(cursor.getInt(0)==expected++){"GOVIEW chunk missing"}
+                val bytes=cursor.getBlob(1);check(bytes.size in 1..262144)
+                check(output.size().toLong()+bytes.size<=metadata.first.toLong())
+                output.write(bytes)
+            }
+        }
+        val bytes=output.toByteArray()
+        check(bytes.size==metadata.first && hash(bytes)==metadata.second){"GOVIEW database checksum mismatch"}
+        return Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+    }
     private fun put(db:SQLiteDatabase,payload:String,revision:Long) {
-        val values=ContentValues().apply {put("singleton",1);put("revision",revision);put("payload",payload);put("sha256",hash(payload.toByteArray(Charsets.UTF_8)))}
+        val bytes=payload.toByteArray(Charsets.UTF_8)
+        val values=ContentValues().apply {put("singleton",1);put("revision",revision);put("byte_count",bytes.size);put("sha256",hash(bytes))}
         check(db.insertWithOnConflict("journal",null,values,SQLiteDatabase.CONFLICT_REPLACE)!=-1L){"GOVIEW SQLite write failed"}
-        db.rawQuery("SELECT payload FROM journal WHERE singleton=1",null).use {cursor->check(cursor.moveToFirst() && cursor.getString(0)==payload){"GOVIEW transaction readback mismatch"}}
+        db.delete("journal_chunks",null,null)
+        var offset=0;var sequence=0
+        while(offset<bytes.size) {
+            val end=minOf(offset+262144,bytes.size)
+            val chunk=ContentValues().apply {put("sequence",sequence++);put("payload",bytes.copyOfRange(offset,end))}
+            check(db.insertOrThrow("journal_chunks",null,chunk)!=-1L);offset=end
+        }
+        check(readPayload(db)==payload){"GOVIEW transaction readback mismatch"}
     }
 }

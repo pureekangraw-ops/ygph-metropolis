@@ -26,11 +26,11 @@ test('GeoJSON transaction runs on existing worker before main-thread presentatio
   const end=activity.indexOf('private fun exportGeoJson(',start);
   const flow=activity.slice(start,end);
   assert.ok(flow.indexOf('importing=true;busy=true') < flow.indexOf('worker.execute'));
-  assert.ok(flow.indexOf('worker.execute') < flow.indexOf('store.importGeoJsonWithReceipt(batch)'));
-  assert.ok(flow.indexOf('store.importGeoJsonWithReceipt(batch)') < flow.indexOf('handler.post'));
+  assert.ok(flow.indexOf('worker.execute') < flow.indexOf('store.receiveFile(batch,correlation)'));
+  assert.ok(flow.indexOf('store.receiveFile(batch,correlation)') < flow.indexOf('handler.post'));
   assert.ok(flow.indexOf('handler.post') < flow.indexOf('GeoJsonImport.present'));
   assert.doesNotMatch(flow,/store\.load\(/);
-  assert.match(activity,/if\(importing\|\|busy\|\|commands\.isEmpty\(\)/);
+  assert.match(activity,/if\(storageUnavailable\|\|importing\|\|busy\|\|commands\.isEmpty\(\)/);
   assert.match(activity,/renderer\.onReady=ready@\{\s*if\(destroyed \|\| importing\)return@ready/);
 });
 
@@ -40,7 +40,7 @@ test('Activity recreation uses shared journal transaction and lets accepted work
   assert.match(activity,/store\.prepareScreen\(\)/);
   assert.doesNotMatch(activity,/synchronized\(store\)/);
   assert.match(activity,/@Volatile private var destroyed=false/);
-  assert.match(activity,/if\(!destroyed\) handler\.post \{\s*if\(destroyed\)return@post/);
+  assert.match(activity,/handler\.post \{\s*if\(destroyed\)return@post/);
   assert.match(activity,/worker\.shutdown\(\)/);
   assert.doesNotMatch(activity,/worker\.shutdownNow\(\)/);
 });
@@ -48,7 +48,7 @@ test('Activity recreation uses shared journal transaction and lets accepted work
 test('GOVIEW export uses Android document creation and field verification requires owner checkbox', () => {
   const activity=source('OutsideViewActivity');
   assert.match(activity,/Intent\.ACTION_CREATE_DOCUMENT/);
-  assert.match(activity,/store\.exportGeoJson\(\)/);
+  assert.match(activity,/store\.selectedSnapshot\(/);
   assert.match(activity,/CheckBox\(this\)/);
   assert.match(activity,/store\.editOwnerPin\(id,name,point,confirmed,journal\.state\.revision\)/);
   assert.match(activity,/showUpdateReceipts\(\)/);
@@ -60,4 +60,16 @@ test('field confirmation starts unchecked and coordinates invalidate the current
   assert.doesNotMatch(activity,/isChecked=pin\.evidence\.source/);
   assert.match(activity,/onTextChanged[^\n]*field\.isChecked=false/);
   assert.match(activity,/longitude\.addTextChangedListener\(changed\);latitude\.addTextChangedListener\(changed\)/);
+});
+
+
+test('map exchange requires selection and preview approval, with guarded storage reads', () => {
+ const activity=source('OutsideViewActivity');
+ assert.match(activity,/BooleanArray\(pins.size\)/);
+ assert.match(activity,/store\.previewUpdate\(batch,correlation\)/);
+ assert.match(activity,/setPositiveButton\("อนุมัติ Update"\)/);
+ assert.match(activity,/store\.approveUpdate\(preview\)/);
+ assert.doesNotMatch(activity,/mapShare\.captureOnce\(/);
+ assert.equal((activity.match(/store\.load\(/g)||[]).length,1);
+ assert.match(activity,/private fun readJournal\(\).*catch\(error:Exception\)\{storageFailure\(\);null\}/);
 });

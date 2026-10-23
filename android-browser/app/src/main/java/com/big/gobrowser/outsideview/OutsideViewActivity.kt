@@ -35,9 +35,18 @@ class OutsideViewActivity : Activity() {
     private var importing=false
     private var busy=false
     @Volatile private var destroyed=false
+    @Volatile private var storageUnavailable=false
+    private var pendingExportPath:String?=null
+    private fun storageFailure() {
+        storageUnavailable=true
+        handler.post {if(!destroyed){busy=false;status.text="อ่านที่เก็บข้อมูลไม่ได้ · หยุดการบันทึกและแชร์ · ไฟล์เดิมยังอยู่ · กดลองแสดงใหม่หลังแก้ไขที่เก็บข้อมูล";if(::shareButton.isInitialized)shareButton.isEnabled=false}}
+    }
+    private fun readJournal():MapJournal?=try {store.load()}catch(error:Exception){storageFailure();null}
+
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         store=MapStateStore(this);packageStore=LocalMapPackageStore(this)
+        pendingExportPath=savedInstanceState?.getString("goview.selectedExport")
         val root=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(12,8,12,8)}
         root.addView(ObservatoryTheme.title(this,"หอดูดาว · GOVIEW"))
         root.addView(ObservatoryBuildStamp.view(this))
@@ -51,7 +60,7 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ตำแหน่งฉัน"){location.request()})
         tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
-        shareButton=button("ส่งแผนที่เข้า PANTHEON"){mapShare.captureOnce();updateSharingStatus()}
+        shareButton=button("GOVIEW · เลือก Snapshot / ไฟล์ให้ GO"){selectSnapshot()}
         root.addView(shareButton)
         root.addView(gpsStatus)
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
@@ -61,7 +70,7 @@ class OutsideViewActivity : Activity() {
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore,savedInstanceState)
         executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
-        mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&store.load().let {it.pending==null&&it.renderedRevision==it.state.revision}},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
+        mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&readJournal()?.let {it.pending==null&&it.renderedRevision==it.state.revision}==true},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
         location.onCenter={point->
             val receivedAt=android.os.SystemClock.elapsedRealtime()
@@ -102,15 +111,16 @@ class OutsideViewActivity : Activity() {
                 val loaded=runCatching {store.prepareScreen()}
                 handler.post {
                     if(!destroyed && foreground && generation==renderer.styleGeneration) loaded.onSuccess {journal->
-                        if(journal.pending!=null)executor.resume()
+                        storageUnavailable=false;shareButton.isEnabled=true
+                        if(journal.pending!=null)runCatching {executor.resume()}.onFailure {storageFailure()}
                         else renderer.render(RenderRequest("screen-${UUID.randomUUID()}",journal.state.revision,generation,"screen",journal.state)){}
-                    }.onFailure {status.text="อ่านข้อมูลแผนที่ไม่ได้ · เก็บไฟล์เดิมไว้แล้ว"}
+                    }.onFailure {storageFailure()}
                 }
             }
         }
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
@@ -126,17 +136,18 @@ class OutsideViewActivity : Activity() {
                 10->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),42)
                 11->searchPins()
                 12->showLayers()
-                13->startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/geo+json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"goview-map-update.geojson"),43)
+                13->selectSnapshot()
                 14->showUpdateReceipts()
+                15->showStorageTools()
             }
         }.setNegativeButton("ปิด",null).show()
     }
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
     private fun pump(){
-        if(importing||busy||commands.isEmpty()||!renderer.foregroundReady)return
+        if(storageUnavailable||importing||busy||commands.isEmpty()||!renderer.foregroundReady)return
         busy=true
         val command=commands.removeFirst()
-        val receipt=executor.submit(command)
+        val receipt=try {executor.submit(command)}catch(error:Exception){storageFailure();return}
         if(receipt.status!=MapReceiptStatus.PENDING){
             busy=false
             status.text="${receipt.status}: ${receipt.reason ?: ""}"
@@ -154,7 +165,7 @@ class OutsideViewActivity : Activity() {
             enqueue(MapCommand("zone:${UUID.randomUUID()}",MapAction.UPSERT_ZONE,zone=Zone(zoneId,label,b)),MapCommand("grid:${UUID.randomUUID()}",MapAction.UPSERT_GRID,grid=grid),MapCommand("pin:${UUID.randomUUID()}",MapAction.UPSERT_PIN,pin=pin))
         }.show()
     }
-    private fun listPins(query:String=""){val pins=store.load().state.pins.values.filter {it.label.contains(query,true)||it.note.orEmpty().contains(query,true)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์","แก้ไข / ยืนยันหน้างาน")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show();5->editPinDialog(pin.id)}}.show()}.show()}
+    private fun listPins(query:String=""){val pins=(readJournal()?:return).state.pins.values.filter {it.label.contains(query,true)||it.note.orEmpty().contains(query,true)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์","แก้ไข / ยืนยันหน้างาน")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show();5->editPinDialog(pin.id)}}.show()}.show()}
     private fun searchPins() {
         val query=EditText(this).apply {hint="ชื่อหรือข้อมูลหมุด";isSingleLine=true}
         AlertDialog.Builder(this).setTitle("ค้นหาหมุด").setView(query).setNegativeButton("ยกเลิก",null)
@@ -167,49 +178,127 @@ class OutsideViewActivity : Activity() {
             .setPositiveButton("ปิด",null).show()
     }
     private fun importGeoJson(uri:android.net.Uri) {
-        if(busy || importing || commands.isNotEmpty()){status.text="รอแผนที่ทำงานเสร็จ แล้วนำเข้าใหม่";return}
+        if(storageUnavailable || busy || importing || commands.isNotEmpty()){status.text="รอแผนที่พร้อม แล้วนำเข้าใหม่";return}
         importing=true;busy=true
-        status.text="GOVIEW · กำลังตรวจและบันทึก GeoJSON…"
+        val correlation=UUID.randomUUID().toString()
+        status.text="GOVIEW · กำลังอ่านไฟล์ · ยังไม่อัปเดตหมุด"
         worker.execute {
-            val saved=runCatching {
-                val batch=contentResolver.openInputStream(uri).use {GeoJsonImport.parse(requireNotNull(it))}
-                val receipt=store.importGeoJsonWithReceipt(batch)
-                Pair(batch,receipt)
+            var phase="DOWNLOAD"
+            val prepared=runCatching {
+                val batch=contentResolver.openInputStream(uri).use {GoviewSandboxContract.readFile(requireNotNull(it))}
+                store.receiveFile(batch,correlation)
+                phase="UPDATE"
+                store.previewUpdate(batch,correlation)
             }
-            if(saved.isFailure)runCatching {store.recordImportFailure(saved.exceptionOrNull()?.message?:"Import failed")}
-            if(!destroyed) handler.post {
+            if(prepared.isFailure)runCatching {store.recordPhaseFailure(phase,correlation,prepared.exceptionOrNull()?.message?:"Validation failed")}
+            handler.post {
                 if(destroyed)return@post
-                importing=false
-                if(!destroyed) saved.onSuccess {(batch,receipt)->
-                    val shown=GeoJsonImport.present({renderer.fitPoints(batch.pins.map {it.point})},{renderer.reloadStyle()})
-                    status.text=if(shown) "${receipt.status} · เพิ่ม ${receipt.added} · revision ${receipt.revision} · receipt ${receipt.id.take(8)} · กำลังแสดงข้อมูลจากไฟล์"
-                        else "บันทึกแล้ว · receipt ${receipt.id.take(8)} · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
-                    // Keep queued commands paused until the reload confirms its frame.
-                }.onFailure {busy=false;status.text="นำเข้าไม่ได้ · ข้อมูลเดิมยังอยู่ · ${it.message}";renderer.reloadStyle()}
+                prepared.onSuccess {preview->
+                    AlertDialog.Builder(this).setTitle("GOVIEW · ตรวจแล้วรออนุมัติ")
+                        .setMessage("อ่านไฟล์แล้ว แต่ยังไม่บันทึกหมุด\nเพิ่ม ${preview.added} · ซ้ำ ${preview.duplicates} · ไม่แทนข้อมูลที่ขัดแย้ง\npackage v${preview.packageVersion} · base ${preview.expectedRevision} · capture ${preview.batch.sourceCaptureId?:"local-file"}\ncorrelation ${preview.correlationId}\nอนุมัติเพื่อบันทึกและตรวจอ่านกลับ")
+                        .setNegativeButton("ยกเลิก"){_,_->importing=false;busy=false;pump()}
+                        .setOnCancelListener {importing=false;busy=false;pump()}
+                        .setPositiveButton("อนุมัติ Update"){_,_->approveUpdate(preview)}.show()
+                }.onFailure {importing=false;busy=false;status.text="ไม่อัปเดต · ${it.message}";readJournal()}
             }
         }
+    }
+    private fun approveUpdate(preview:MapUpdatePreview) {
+        worker.execute {
+            val saved=runCatching {store.approveUpdate(preview)}
+            if(saved.isFailure)runCatching {store.recordPhaseFailure("UPDATE",preview.correlationId,saved.exceptionOrNull()?.message?:"Update failed")}
+            handler.post {
+                if(destroyed)return@post
+                importing=false;busy=false
+                saved.onSuccess {receipt->
+                    val shown=GeoJsonImport.present({renderer.fitPoints(preview.batch.pins.map {it.point})},{renderer.reloadStyle()})
+                    status.text="UPDATE ${receipt.status} · readback ${receipt.readbackVerified} · receipt ${receipt.id}"+if(shown)" · กำลังแสดง" else " · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
+                }.onFailure {status.text="Update ไม่สำเร็จ · ${it.message}";readJournal()}
+            }
+        }
+    }
+    private fun selectSnapshot() {
+        worker.execute {
+            val journal=readJournal()?:return@execute
+            val pins=journal.state.pins.values.toList()
+            handler.post {
+                if(destroyed)return@post
+                val checked=BooleanArray(pins.size)
+                AlertDialog.Builder(this).setTitle("เลือกหมุด · ชื่อและพิกัดเท่านั้น")
+                    .setMultiChoiceItems(pins.map {it.label}.toTypedArray(),checked){_,i,value->checked[i]=value}
+                    .setNegativeButton("ยกเลิก",null).setPositiveButton("ดูรายการก่อนสร้าง"){_,_->
+                        val selected=pins.filterIndexed {i,_->checked[i]}
+                        if(selected.isEmpty()){status.text="ยังไม่ได้เลือกหมุด";return@setPositiveButton}
+                        AlertDialog.Builder(this).setTitle("Snapshot ${selected.size} หมุด · v${journal.state.revision}")
+                            .setMessage(selected.joinToString("\n") {"${it.label} · ${it.point.longitude}, ${it.point.latitude}"}+"\nไฟล์มีเฉพาะ ID ชื่อ พิกัดที่เลือก ไม่รวม GPS ประวัติ โน้ต หรือ viewport · ยังไม่ส่งไปบริการใด")
+                            .setNegativeButton("ยกเลิก",null).setPositiveButton("สร้าง Snapshot และเลือกไฟล์"){_,_->
+                                worker.execute {
+                                    val result=runCatching {
+                                        val snapshot=store.selectedSnapshot(selected.map {it.id}.toSet(),journal.state.revision)
+                                        val file=java.io.File(cacheDir,"goview-selected-${snapshot.captureId}.geojson")
+                                        java.io.FileOutputStream(file).use {it.write(snapshot.json.toByteArray(Charsets.UTF_8));it.fd.sync()}
+                                        snapshot to file.absolutePath
+                                    }
+                                    handler.post {if(!destroyed)result.onSuccess {(snapshot,path)->
+                                        pendingExportPath=path;status.text="SNAPSHOT CAPTURED_LOCAL · ${snapshot.captureId} · receipt ${snapshot.receipt.id} · Upload ยังไม่เกิดขึ้น"
+                                        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/geo+json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"goview-selected.geojson"),43)
+                                    }.onFailure {status.text="Snapshot ไม่สำเร็จ · ${it.message}"}}
+                                }
+                            }.show()
+                    }.show()
+            }
+        }
+    }
+    private fun showStorageTools() {
+        AlertDialog.Builder(this).setTitle("GOVIEW · ที่เก็บบนเครื่อง").setItems(arrayOf("สร้างสำเนาสำรอง", "ตรวจและกู้คืนสำเนา")){_,choice->
+            worker.execute {
+                if(choice==0) {
+                    val result=runCatching {store.createBackup()}
+                    handler.post {if(!destroyed)status.text=result.fold({"สำรองแล้ว · $it"},{"สำรองไม่ได้ · ${it.message}"})}
+                } else {
+                    val names=store.backups()
+                    handler.post {if(!destroyed)AlertDialog.Builder(this).setTitle("เลือกสำเนา").setItems(names.toTypedArray()){_,i->
+                        worker.execute {
+                            val result=runCatching {store.previewRestore(names[i])}
+                            handler.post {if(!destroyed)result.onSuccess {preview->
+                                AlertDialog.Builder(this).setTitle("อนุมัติกู้คืนทั้งแผนที่?")
+                                    .setMessage("${preview.name} · ${preview.pins} หมุด\nแทนสถานะแผนที่ปัจจุบันด้วยสำเนานี้ และเก็บสำเนาปัจจุบันเพื่อย้อนกลับก่อนบันทึก")
+                                    .setNegativeButton("ยกเลิก",null).setPositiveButton("อนุมัติกู้คืน"){_,_->worker.execute {
+                                        val restored=runCatching {store.approveRestore(preview)}
+                                        handler.post {if(!destroyed)restored.onSuccess {status.text="STORAGE RESTORED · readback ${it.readbackVerified} · ${it.id}";renderer.reloadStyle()}.onFailure {status.text="กู้คืนไม่ได้ · ${it.message}"}}
+                                    }}.show()
+                            }.onFailure {status.text="สำเนาไม่ผ่านตรวจ · ${it.message}"}}
+                        }
+                    }.show()}
+                }
+            }
+        }.show()
     }
     private fun exportGeoJson(uri:android.net.Uri) {
         status.text="กำลังส่งออก GOVIEW…"
         worker.execute {
             val result=runCatching {
-                val text=store.exportGeoJson()
+                val path=requireNotNull(pendingExportPath){"Select snapshot again"}
+                val file=java.io.File(path)
+                require(file.canonicalFile.parentFile==cacheDir.canonicalFile && file.name.startsWith("goview-selected-"))
+                val text=file.readText()
+                GeoJsonImport.parse(text.byteInputStream())
                 contentResolver.openOutputStream(uri,"wt").use {output->requireNotNull(output).write(text.toByteArray(Charsets.UTF_8))}
             }
-            handler.post {if(!destroyed)status.text=if(result.isSuccess)"ส่งออก GOVIEW Map Update Package v1 แล้ว · ไฟล์มีพิกัดหมุด" else "ส่งออกไม่ได้ · ${result.exceptionOrNull()?.message}"}
+            handler.post {if(!destroyed)status.text=if(result.isSuccess)"เขียนไฟล์ Snapshot ที่เลือกแล้ว · ไม่ใช่ Upload หรือ Update สำเร็จ" else "ส่งออกไม่ได้ · ${result.exceptionOrNull()?.message}"}
         }
     }
     private fun showUpdateReceipts() {
         worker.execute {
-            val journal=store.load()
+            val journal=readJournal()?:return@execute
             val text="revision ${journal.state.revision} · ${journal.state.pins.size} หมุด\n"+
-                journal.updates.takeLast(30).reversed().joinToString("\n") {"${it.status} · package v${it.packageVersion} · rev ${it.revision} · +${it.added}/edit ${it.changed} · ${it.id.take(8)} ${it.error.orEmpty()}"}
+                journal.updates.takeLast(30).reversed().joinToString("\n") {"${it.operation}/${it.status} · ${it.correlationId.take(8)} · readback ${it.readbackVerified} · package v${it.packageVersion} · rev ${it.revision} · +${it.added}/edit ${it.changed} · ${it.id.take(8)} ${it.error.orEmpty()}"}
             handler.post {if(!destroyed)AlertDialog.Builder(this).setTitle("GOVIEW · receipt/readback").setMessage(text).setPositiveButton("ปิด",null).show()}
         }
     }
     private fun editPinDialog(id:String) {
         worker.execute {
-            val journal=store.load();val pin=journal.state.pins[id]?:return@execute
+            val journal=readJournal()?:return@execute;val pin=journal.state.pins[id]?:return@execute
             handler.post {
                 if(!destroyed) {
                     val form=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL}
@@ -245,17 +334,12 @@ class OutsideViewActivity : Activity() {
             }
         }
     }
-    private fun noteDialog(id:String,label:String){val value=EditText(this).apply {setText(store.load().state.notes[id].orEmpty())};AlertDialog.Builder(this).setTitle("โน้ต · $label").setView(value).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก"){_,_->enqueue(MapCommand("note:${UUID.randomUUID()}",MapAction.NOTE,MapTarget(id,"map"),note=value.text.toString().take(4000)))}.show()}
-    fun context():JSONObject {
-        val state=store.load().state
-        val pins=JSONArray();state.pins.values.take(32).forEach {pins.put(JSONObject().put("id",it.id).put("label",it.label).put("longitude",it.point.longitude).put("latitude",it.point.latitude).put("source",it.evidence.source))}
-        val center=renderer.center()
-        return JSONObject().put("mapSummary",JSONObject().put("revision",state.revision).put("pins",pins).put("notes",JSONObject(state.notes as Map<*,*>)).put("center",center?.let {JSONObject().put("longitude",it.longitude).put("latitude",it.latitude)}?:JSONObject.NULL))
-    }
+    private fun noteDialog(id:String,label:String){val value=EditText(this).apply {setText((readJournal()?:return).state.notes[id].orEmpty())};AlertDialog.Builder(this).setTitle("โน้ต · $label").setView(value).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก"){_,_->enqueue(MapCommand("note:${UUID.randomUUID()}",MapAction.NOTE,MapTarget(id,"map"),note=value.text.toString().take(4000)))}.show()}
+    fun context():JSONObject = JSONObject().put("status","EXPLICIT_SNAPSHOT_SELECTION_REQUIRED").put("view","map")
     private fun updateSharingStatus(){
         if(destroyed||importing||!::mapShare.isInitialized||!::sharingStatus.isInitialized)return
         worker.execute {
-            val journal=store.load()
+            val journal=readJournal()?:return@execute
             handler.post {
                 if(!destroyed && !importing) {
                     val recent=mapShare.lastAck?.let {System.currentTimeMillis()-it in 0..14_999}==true
@@ -305,42 +389,13 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
 
-    private fun currentMapHandoff(): String {
-        val journal = store.load()
-        val state = journal.state
-        val pins = JSONArray()
-        state.pins.values.take(100).forEach { pin ->
-            pins.put(JSONObject().put("name", pin.label.take(100))
-                .put("latitude", pin.point.latitude).put("longitude", pin.point.longitude)
-                .put("source", pin.evidence.source ?: JSONObject.NULL))
-        }
-        val evidence = JSONObject()
-            .put("schema", "observatory.map.handoff.v1")
-            .put("viewport", renderer.cameraSnapshot())
-            .put("revision", state.revision)
-            .put("renderedRevision", journal.renderedRevision)
-            .put("pinCount", state.pins.size)
-            .put("pins", pins)
-            .put("truncated", state.pins.size > 100)
-            .put("note", "Camera and saved pins only; not a live map image or GPS proof")
-        return com.big.gobrowser.transport.EvidenceExport.redactText("YGG OBSERVATORY — MAP EVIDENCE (owner-shared)\n" + com.big.gobrowser.transport.EvidenceExport.redactJson(evidence).toString(2))
-    }
+    private fun currentMapHandoff(): String = "GOVIEW · Select an explicit snapshot to export map data; no pins, GPS or viewport included."
 
-    private fun shareMapToGo() {
-        if (!foreground) { status.text = "เปิดหน้าแผนที่ก่อนแชร์"; return }
-        val handoff = currentMapHandoff()
-        AlertDialog.Builder(this).setTitle("ส่งแผนที่ให้ GO")
-            .setMessage("แชร์ตำแหน่งกล้องแผนที่และหมุดที่บันทึกไว้ (สูงสุด 100 จุด) ผ่านเมนูแชร์ของ Android\\nพิกัดอาจเป็นข้อมูลส่วนตัว")
-            .setNegativeButton("ยกเลิก", null)
-            .setPositiveButton("เลือกแอปเพื่อแชร์") { _, _ ->
-                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, handoff)
-                }, "แชร์แผนที่ให้ GO"))
-            }.show()
-    }
+    private fun shareMapToGo() {selectSnapshot()}
 
 
-    private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label){if(importing)status.text="กำลังบันทึก GeoJSON…" else action()}
+
+    private fun button(label:String,action:()->Unit)=ObservatoryTheme.button(this,label){if(storageUnavailable){status.text="ที่เก็บข้อมูลอ่านไม่ได้ · ปิดแล้วเปิดหน้าจอเพื่อลองอ่านใหม่"}else if(importing)status.text="กำลังบันทึก GeoJSON…" else action()}
     override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==ForegroundLocationController.REQUEST_CODE)location.permissionResult()}
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==42&&resultCode==RESULT_OK){importGeoJson(uri);return};if(requestCode==43&&resultCode==RESULT_OK){exportGeoJson(uri);return};if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
@@ -350,7 +405,7 @@ class OutsideViewActivity : Activity() {
     override fun onStop(){renderer.onStop();super.onStop()}
     override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdown();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
-    override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState)}
+    override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState);outState.putString("goview.selectedExport",pendingExportPath)}
 }
 
 

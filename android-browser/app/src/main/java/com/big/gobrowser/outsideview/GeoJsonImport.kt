@@ -5,7 +5,7 @@ import java.io.InputStream
 import java.security.MessageDigest
 
 /** Local owner import, not remote command authority or geographic verification. */
-data class GeoJsonBatch(val pins: List<Pin>, val packageId:String="legacy", val packageVersion:Long=1, val ownerNotes:Map<String,String> = emptyMap(), val nativePackage:Boolean=false)
+data class GeoJsonBatch(val pins: List<Pin>, val packageId:String="legacy", val packageVersion:Long=1, val ownerNotes:Map<String,String> = emptyMap(), val nativePackage:Boolean=false, val sourceCaptureId:String?=null, val baseVersion:Long?=null, val snapshotOnly:Boolean=false)
 
 object GeoJsonImport {
     const val MAX_BYTES = 1_048_576
@@ -81,7 +81,7 @@ object GeoJsonImport {
             val note = canonical(properties).also { require(it.length <= 8192) { "Properties exceed limit" } }
             Pin(id, label, point, "", Evidence(EvidenceStatus.UNKNOWN, "owner-geojson:$dataset"), note=note)
         }
-        return GeoJsonBatch(pins,digest(canonical(document)),packageVersion,ownerNotes,nativePackage)
+        return GeoJsonBatch(pins,digest(canonical(document)),packageVersion,ownerNotes,nativePackage,snapshotOnly=document.optString("selection")=="explicit-pins-only")
     }
 
     /** Stable property text independent of JSON object iteration/key order, including nested objects. */
@@ -106,7 +106,7 @@ object GeoJsonImport {
         batch.pins.forEach { pin ->
             val existing = pins[pin.id]
             val imported=if(batch.nativePackage)MapUpdatePackage.importedClaim(pin) else pin
-            require(existing == null || existing == pin || existing == imported) { "Conflicting source id; existing data preserved, including field-confirmed records" }
+            require(existing == null || existing == pin || existing == imported || (batch.snapshotOnly && existing.label==pin.label && existing.point==pin.point)) { "Conflicting source id; existing data preserved, including field-confirmed records" }
             pins[pin.id] = existing ?: imported
         }
         require(pins.size <= MAX_STORED_PINS) { "Stored pin limit reached" }

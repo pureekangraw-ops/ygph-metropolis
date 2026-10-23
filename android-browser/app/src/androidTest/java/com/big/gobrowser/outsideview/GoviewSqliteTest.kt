@@ -58,7 +58,7 @@ class GoviewSqliteTest {
     }
     @Test fun checksumFailureNeverFallsBackToOldLegacyState()=isolated {root->
         seed(root);MapStateStore(root,SqliteJournalBackend(root)).load()
-        SQLiteDatabase.openOrCreateDatabase(File(root,"goview.sqlite"),null).use {it.execSQL("UPDATE journal SET payload='{}' WHERE singleton=1")}
+        SQLiteDatabase.openOrCreateDatabase(File(root,"goview.sqlite"),null).use {it.execSQL("UPDATE journal_chunks SET payload=X'7B7D' WHERE sequence=0")}
         fails {MapStateStore(root,SqliteJournalBackend(root)).load()}
         assertTrue(File(root,"journal.pre-sqlite-v1.json").isFile)
     }
@@ -73,4 +73,19 @@ class GoviewSqliteTest {
         val final=MapStateStore(root,SqliteJournalBackend(root)).load()
         assertEquals("committed",final.state.notes["old"]);assertEquals(1,final.state.pins.size)
     }
+    @Test fun largeMultibyteJournalMigratesReopensAndRollsBackWithoutCursorOverflow()=isolated {root->
+        val base=seed(root)
+        val pins=(0 until 200).associate {i->val p=base.state.pins.values.single().copy(id="synthetic-$i",note="ก".repeat(8192));p.id to p}
+        val large=base.copy(state=base.state.copy(pins=pins))
+        MapStateStore(root).commit(large)
+        val legacy=File(root,"journal.json").readBytes();assertTrue(legacy.size>2*1024*1024)
+        fails {MapStateStore(root,SqliteJournalBackend(root){error("large migration rollback")}).load()}
+        assertArrayEquals(legacy,File(root,"journal.json").readBytes())
+        assertEquals(large,MapStateStore(root,SqliteJournalBackend(root)).load())
+        assertEquals(large,MapStateStore(root,SqliteJournalBackend(root)).load())
+        fails {MapStateStore(root,SqliteJournalBackend(root){error("large update rollback")}).commit(base)}
+        assertEquals(large,MapStateStore(root,SqliteJournalBackend(root)).load())
+        assertArrayEquals(legacy,File(root,"journal.pre-sqlite-v1.json").readBytes())
+    }
+
 }
