@@ -158,6 +158,7 @@ class GoviewStudioActivity : Activity() {
                 }
             }
             if (result.isFailure) callback("nativeStatus", "บันทึกลงเครื่องไม่สำเร็จ: เก็บไฟล์เดิมไว้")
+            else callback("nativeStatus", "บันทึกแพ็กเกจลงเครื่องแล้ว")
         }
 
         @JavascriptInterface fun chooseImport() {
