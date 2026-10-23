@@ -71,8 +71,9 @@ class GoviewStudioAndroidTest {
                     JSONObject(text).getJSONObject("map").getJSONArray("roads").length() == 11
             }.getOrDefault(false)
         }
-        val receipt = js("document.getElementById('message').textContent") as String
-        assertTrue("UI must confirm actual file readback", receipt.contains("ตรวจอ่านกลับสำเร็จ"))
+        await("Native save receipt must be linked to the just-written file") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจอ่านกลับสำเร็จ")
+        }
 
         instrumentation.runOnMainSync { screen.activity.recreate() }
         await("Recreated Activity must restore same map from AtomicFile") {
@@ -89,8 +90,8 @@ class GoviewStudioAndroidTest {
         val target = File(screen.activity.filesDir, "goview-studio-maps/$testId.goview.json")
         // Synthetic test file only; never touch preexisting user data.
         val payload = js(
-            "JSON.stringify((()=>{const map=GoviewEngine.demo();" +
-                "map.mapId='$testId';map.version=2;return GoviewEngine.pack(map)})())"
+            "(()=>{const map=GoviewEngine.demo();" +
+                "map.mapId='$testId';map.version=2;return GoviewEngine.pack(map)})()"
         ) as String
         val before = target.exists()
         val jsonArgument = JSONObject.quote(payload)
