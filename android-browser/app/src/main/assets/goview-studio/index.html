@@ -91,6 +91,16 @@ small{font-size:11px;color:#9bb6ce}
   <small>พิกัดเป็นเพียงจุดอ้างอิงของภาพวาด ระยะทางในกราฟคำนวณจากหน่วยเมตรของแผนที่</small>
  </div>
  <div class="row"><button id="myGps">⌖ GPS ของเครื่อง</button><button id="restore">นำเข้าสำเนา</button></div>
+ <div class="stat"><strong>GO Access · Cloudflare Package Bridge</strong>
+  <label for="bridgeUrl">Worker URL (HTTPS)</label>
+  <input id="bridgeUrl" type="url" placeholder="https://goview-package-bridge.…workers.dev" autocorrect="off" autocomplete="off" spellcheck="false">
+  <label for="bridgeMapId">Map ID ที่ GO เตรียมไว้</label>
+  <input id="bridgeMapId" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="go_synthetic_route_demo">
+  <label for="bridgeToken">คีย์อ่านแพ็กเกจ (ไม่บันทึกลงไฟล์)</label>
+  <input id="bridgeToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Android read token">
+  <div class="row" style="margin-top:8px"><button id="pullFromGo">↓ ดาวน์โหลดแพ็กเกจจาก GO</button></div>
+  <small>ดาวน์โหลดเป็นเพียงข้อเสนอ · ต้องตรวจ Diff แล้วอนุมัติก่อน Update ในเครื่อง</small>
+ </div>
  <div class="stat" id="gps">GPS: ยังไม่ได้ร้องขอ</div>
  <div id="message" aria-live="polite"></div>
  <small>Import คือรับไฟล์และแสดง Diff ก่อนกดอนุมัติ · Download ≠ Update · ไฟล์สำรองเป็นของผู้ใช้ ไม่อัปโหลดอัตโนมัติ</small>
@@ -316,6 +326,16 @@ $("library").onclick=()=>{
  window.GoviewStudio.receiveMapList(JSON.stringify(entries));
 };
 $("myGps").onclick=()=>native?window.GoviewHost.locate():status("GPS ในเวอร์ชันเว็บตัวอย่างต้องใช้ผ่านแอป Android");
+$("pullFromGo").onclick=()=>{
+ if(!native)return status("GO Access ต้องเปิดผ่านแอป Android");
+ const url=$("bridgeUrl").value.trim(),id=$("bridgeMapId").value.trim(),token=$("bridgeToken").value;
+ if(!url||!id||!token)return status("กรอก Worker URL, Map ID และคีย์อ่านก่อน");
+ if(!/^https:\/\//i.test(url))return status("ต้องใช้ HTTPS เท่านั้น");
+ // Forget the visible credential as soon as the request is passed into the native process.
+ $("bridgeToken").value="";
+ window.GoviewHost.downloadLatest(url,id,token);
+ status("กำลังขอแพ็กเกจจาก GO · จะยังไม่แก้แผนที่จนกว่าจะอนุมัติ");
+};
 for(const id of ["roadsLayer","areasLayer","poisLayer"])$(id).onchange=draw;
 $("search").oninput=event=>{
  const query=event.target.value.trim().toLocaleLowerCase();if(!query)return;
