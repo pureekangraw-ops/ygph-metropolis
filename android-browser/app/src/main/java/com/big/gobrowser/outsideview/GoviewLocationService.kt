@@ -40,13 +40,14 @@ class GoviewLocationService:android.app.Service() {
             check(providers.isNotEmpty()){"Location providers disabled"}
             providers.forEach {manager.requestLocationUpdates(it,5_000L,5f,listener,Looper.getMainLooper());subscribed=true}
             running=true;handler.post(tick)
-        }catch(error:Exception){finishSession("เริ่ม GPS ต่อเนื่องไม่ได้ · เปิดแอปและตรวจสิทธิ์ก่อนลองใหม่")}
+        }catch(error:SecurityException){finishSession("GPS ต่อเนื่องหยุด · สิทธิ์ตำแหน่งถูกปฏิเสธหรือเปลี่ยน")}
+        catch(error:Exception){finishSession("เริ่ม GPS ต่อเนื่องไม่ได้ · เปิดแอปและตรวจสิทธิ์ก่อนลองใหม่")}
         return START_NOT_STICKY
     }
     private fun locationEnabled()=if(Build.VERSION.SDK_INT>=28)manager.isLocationEnabled else manager.isProviderEnabled(LocationManager.GPS_PROVIDER)||manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     private fun permissions():Boolean =
         (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED) &&
-        (Build.VERSION.SDK_INT<33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED) && getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+        (Build.VERSION.SDK_INT<33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED) && getSystemService(NotificationManager::class.java).areNotificationsEnabled() && getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL)?.importance!=NotificationManager.IMPORTANCE_NONE
     private fun refresh() {
         if(!permissions() || !locationEnabled()){finishSession("GPS ต่อเนื่องหยุด · สิทธิ์หรือบริการตำแหน่งเปลี่ยน");return}
         val fix=currentFix()
@@ -63,7 +64,7 @@ class GoviewLocationService:android.app.Service() {
     }
     private fun finishSession(message:String){description=message;running=false;latest=null;handler.removeCallbacks(tick);if(subscribed){runCatching {manager.removeUpdates(listener)};subscribed=false};stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()}
     override fun onTaskRemoved(rootIntent:Intent?){finishSession("หยุด GPS เมื่อปิดงานแอป");super.onTaskRemoved(rootIntent)}
-    override fun onDestroy(){running=false;latest=null;handler.removeCallbacksAndMessages(null);if(subscribed)runCatching {manager.removeUpdates(listener)};super.onDestroy()}
+    override fun onDestroy(){if(running)description="GPS ต่อเนื่องหยุดแล้ว · เริ่มใหม่ได้จากหน้าแผนที่";running=false;latest=null;handler.removeCallbacksAndMessages(null);if(subscribed)runCatching {manager.removeUpdates(listener)};super.onDestroy()}
     companion object {
         const val START="com.big.gobrowser.goview.START_LOCATION_SESSION"
         const val STOP="com.big.gobrowser.goview.STOP_LOCATION_SESSION"

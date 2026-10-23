@@ -42,7 +42,7 @@ class SqliteJournalBackend(private val root:File,private val beforeCommit:()->Un
         } catch(error:Throwable){db.close();throw error}
     }
     override fun read():String? {
-        if(!file.exists()){check(!File(root,"goview.current").exists()){"Recovered database missing; legacy fallback prohibited"};return null}
+        if(!file.exists()){check(!File(root,"goview.current").exists() && !File(root,"journal.pre-sqlite-v1.json").exists()){"Database missing after migration/recovery; legacy fallback prohibited"};return null}
         return open().use {db->
             if(db.version==0)return@use null
             readPayload(db)

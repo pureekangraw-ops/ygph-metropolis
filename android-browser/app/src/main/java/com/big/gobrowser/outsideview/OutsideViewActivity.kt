@@ -36,6 +36,7 @@ class OutsideViewActivity : Activity() {
     private var busy=false
     private var displayedRevision=-1L
     private var activeCommandId:String?=null
+    private var locationSessionRequested=false
     @Volatile private var commandRendererReady=false
     @Volatile private var commandRendererGeneration=0L
     @Volatile private var destroyed=false
@@ -145,12 +146,12 @@ class OutsideViewActivity : Activity() {
         }
     }
     private fun updateLocationSession() {
-        if(foreground && GoviewLocationService.running){gpsStatus.text=GoviewLocationService.description;renderer.showLocation(GoviewLocationService.currentFix()?.let {Point(it.longitude,it.latitude)})}
+        if(foreground && (locationSessionRequested || GoviewLocationService.running)){gpsStatus.text=GoviewLocationService.description;renderer.showLocation(GoviewLocationService.currentFix()?.let {Point(it.longitude,it.latitude)})}
     }
     private fun locationSessionDialog() {
         if(GoviewLocationService.running){
             AlertDialog.Builder(this).setTitle("หยุด GPS ต่อเนื่อง?").setMessage("หยุดรับตำแหน่งและล้างตำแหน่งล่าสุดในหน่วยความจำ")
-                .setNegativeButton("ใช้ต่อ",null).setPositiveButton("หยุด GPS"){_,_->stopService(Intent(this,GoviewLocationService::class.java));renderer.showLocation(null);gpsStatus.text="หยุด GPS ต่อเนื่องแล้ว"}.show()
+                .setNegativeButton("ใช้ต่อ",null).setPositiveButton("หยุด GPS"){_,_->locationSessionRequested=false;stopService(Intent(this,GoviewLocationService::class.java));renderer.showLocation(null);gpsStatus.text="หยุด GPS ต่อเนื่องแล้ว"}.show()
             return
         }
         AlertDialog.Builder(this).setTitle("เริ่ม GPS ต่อเนื่อง?")
@@ -164,7 +165,7 @@ class OutsideViewActivity : Activity() {
                 val enabled=if(android.os.Build.VERSION.SDK_INT>=28)manager.isLocationEnabled else manager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)||manager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
                 if(!LocationSessionPolicy.mayStart(true,foreground,granted,notifications && getSystemService(android.app.NotificationManager::class.java).areNotificationsEnabled(),enabled)){gpsStatus.text="ยังไม่เริ่ม · เปิดตำแหน่งและการแจ้งเตือน แล้วกดเริ่มในหน้าแผนที่";return@setPositiveButton}
                 runCatching {startForegroundService(Intent(this,GoviewLocationService::class.java).setAction(GoviewLocationService.START))}
-                    .onSuccess {location.pause();gpsStatus.text="กำลังเริ่ม GPS ต่อเนื่อง · ตรวจการแจ้งเตือน"}
+                    .onSuccess {locationSessionRequested=true;location.pause();gpsStatus.text="กำลังเริ่ม GPS ต่อเนื่อง · ตรวจการแจ้งเตือน"}
                     .onFailure {gpsStatus.text="เริ่มไม่ได้ · เปิดหน้าแผนที่และตรวจสิทธิ์ก่อนลองใหม่"}
             }.show()
     }

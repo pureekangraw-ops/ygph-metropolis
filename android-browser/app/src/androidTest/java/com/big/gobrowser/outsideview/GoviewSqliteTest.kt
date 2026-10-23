@@ -138,4 +138,12 @@ class GoviewSqliteTest {
         assertArrayEquals(legacy,File(root,"journal.json").readBytes());assertEquals(original,MapStateStore(root).load())
     }
 
+    @Test fun missingMigratedDefaultDatabaseAlsoFailsClosed()=isolated {root->
+        seed(root);MapStateStore(root,SqliteJournalBackend(root)).load()
+        val database=File(root,"goview.sqlite");check(database.renameTo(File(root,"synthetic-retained.sqlite")))
+        val legacy=File(root,"journal.json").readBytes()
+        fails {MapStateStore(root,SqliteJournalBackend(root)).load()}
+        assertFalse(database.exists());assertArrayEquals(legacy,File(root,"journal.json").readBytes())
+    }
+
 }
