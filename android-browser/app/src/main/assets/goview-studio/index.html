@@ -159,8 +159,63 @@ function pointFromEvent(ev){
  return pt.matrixTransform(transform.inverse());
 }
 function targetNode(p){return G.nearestNode(map,p.x,p.y,Math.max(15,view.w/40));}
+function featureAt(p) {
+ const n=targetNode(p);if(n)return {type:"node",value:n};
+ const nodes=new Map(map.nodes.map(n=>[n.id,n]));
+ let chosen=null,dist=Math.max(12,view.w/50);
+ for(const r of map.roads){
+  const a=nodes.get(r.from),b=nodes.get(r.to),dx=b.x-a.x,dy=b.y-a.y;
+  const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+  const d=Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));
+  if(d<dist){dist=d;chosen={type:"road",value:r};}
+ }
+ if(chosen)return chosen;
+ for(const a of map.areas){
+  let inside=false;const v=a.points;
+  for(let i=0,j=v.length-1;i<v.length;j=i++){
+   if(((v[i].y>p.y)!=(v[j].y>p.y)) &&
+     p.x<(v[j].x-v[i].x)*(p.y-v[i].y)/(v[j].y-v[i].y)+v[i].x)inside=!inside;
+  }
+  if(inside)return {type:"area",value:a};
+ }
+ return null;
+}
+function editFeature(hit) {
+ const {type,value}=hit;
+ if(type==="node"){
+  const poi=map.pois.find(x=>x.nodeId===value.id);
+  if(poi){showDialog("แก้ไขสถานที่","เปลี่ยนชื่อ "+poi.id,poi.name,"บันทึก",name=>{
+   if(!name)return;snap();poi.name=name.slice(0,140);commit();
+  });return;}
+  showDialog("แก้พิกัดจุดถนน",value.id+" · หน่วยเมตรบนแผนที่",value.x+","+value.y,"บันทึก",text=>{
+   const parts=text.split(",").map(Number);
+   if(parts.length!==2||parts.some(n=>!Number.isFinite(n)||Math.abs(n)>2000000))return status("ต้องเป็น x,y ที่ถูกต้อง");
+   snap();value.x=parts[0];value.y=parts[1];commit();
+  });
+ }else showDialog("แก้ชื่อ"+(type==="road"?"ถนน":"พื้นที่"),value.id,value.name||"ไม่มีชื่อ","บันทึก",name=>{
+  if(!name)return;snap();value.name=name.slice(0,100);commit();
+ });
+}
+function deleteFeature(hit) {
+ const {type,value}=hit;
+ showDialog("ลบจากแผนที่",type+" "+value.id+" · ลบจุดถนนจะลบถนนและหมุดที่ติดอยู่",null,"ลบ",yes=>{
+  if(!yes)return;snap();
+  if(type==="node"){
+    map.nodes=map.nodes.filter(n=>n.id!==value.id);
+    map.roads=map.roads.filter(r=>r.from!==value.id&&r.to!==value.id);
+    map.pois=map.pois.filter(p=>p.nodeId!==value.id);
+  }else if(type==="road")map.roads=map.roads.filter(r=>r.id!==value.id);
+  else map.areas=map.areas.filter(a=>a.id!==value.id);
+  start=null;finish=null;path=null;commit();
+ });
+}
 function clickMap(p){
  const n=targetNode(p);
+ if(mode==="edit"||mode==="erase"){
+  const hit=featureAt(p);if(!hit)return status("ไม่พบองค์ประกอบตรงจุดที่แตะ");
+  return mode==="edit"?editFeature(hit):deleteFeature(hit);
+ }
+
  if(mode==="node"){snap();map.nodes.push({id:nextId("n",map.nodes),x:Math.round(p.x),y:Math.round(p.y)});commit();}
  else if(mode==="road"){
   if(!n)return status("เลือกจุดถนนที่มีอยู่ก่อน");
