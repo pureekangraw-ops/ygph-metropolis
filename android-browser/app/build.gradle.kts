@@ -39,6 +39,13 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // User-test APK installs alongside the original application: no old map data is removed.
+            if (System.getenv("OBSERVATORY_PARALLEL_PREVIEW") == "true") {
+                applicationIdSuffix = ".preview"
+                versionNameSuffix = "-side-by-side"
+            }
+        }
         release {
             isMinifyEnabled = false
         }
