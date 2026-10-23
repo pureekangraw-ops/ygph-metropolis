@@ -15,6 +15,7 @@ p{margin:5px 0;color:#9bb6ce;font-size:12px}
 main{display:grid;grid-template-columns:minmax(0,1fr) 282px;height:calc(100dvh - 104px);min-height:480px}
 aside{border-left:1px solid #28425a;background:#111d2a;padding:13px;overflow:auto}
 label{display:block;font-size:12px;color:#a9c9df;margin:9px 0 5px}
+input[type="checkbox"]{width:auto;max-width:none;vertical-align:middle;margin-right:4px}
 input{background:#08131d;color:#f0f7ff;border:1px solid #39556b;border-radius:8px;padding:9px;max-width:100%;width:100%;font:inherit;font-size:13px}
 button{background:#1e3447;border:1px solid #426783;color:#f4faff;border-radius:9px;padding:8px 10px;font:inherit;font-size:12px;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:2px solid #6ee1c7;outline-offset:2px}
@@ -77,9 +78,13 @@ small{font-size:11px;color:#9bb6ce}
   <button data-mode="poi">📍 สถานที่</button>
   <button data-mode="area">▱ พื้นที่</button>
   <button data-mode="route">➜ เส้นทาง</button>
+  <button data-mode="edit">✎ แก้ไข</button>
+  <button data-mode="erase">⌫ ลบส่วน</button>
  </div>
  <div class="row" style="margin-top:8px"><button id="finishArea">จบรูปพื้นที่</button><button class="danger" id="undo">ย้อนแก้ไข</button></div>
  <div class="stat" id="counts"></div>
+ <label>ค้นหาสถานที่</label><input id="search" type="search" placeholder="ค้นหาชื่อหมุด...">
+ <div class="stat">ชั้นข้อมูล: <label><input id="roadsLayer" type="checkbox" checked> ถนน</label><label><input id="areasLayer" type="checkbox" checked> พื้นที่</label><label><input id="poisLayer" type="checkbox" checked> สถานที่</label></div>
  <div class="stat"><strong>คำนวณเส้นทางในเครื่อง</strong><div id="routeInfo">เลือก 'เส้นทาง' แล้วแตะต้นทางกับปลายทาง</div></div>
  <div class="stat"><strong>จุดอ้างอิงพิกัด WGS84</strong>
   <div class="row"><div style="flex:1;min-width:90px"><label for="lat">Lat</label><input id="lat" inputmode="decimal" type="number" step="any"></div><div style="flex:1;min-width:90px"><label for="lng">Lng</label><input id="lng" inputmode="decimal" type="number" step="any"></div></div>
@@ -136,16 +141,16 @@ function draw(){svg.replaceChildren();svg.setAttribute("viewBox",[view.x,view.y,
  pattern.append(el("path",{d:"M 50 0 L 0 0 0 50",fill:"none",stroke:"#456879","stroke-width":"0.7",opacity:"0.35"}));defs.append(pattern);svg.append(defs);
  svg.append(el("rect",{x:-100000,y:-100000,width:200000,height:200000,fill:"url(#grid)"}));
  const nodes=new Map(map.nodes.map(n=>[n.id,n]));
- map.areas.forEach(a=>svg.append(el("polygon",{points:a.points.map(p=>p.x+","+p.y).join(" "),fill:"#2e8468","fill-opacity":".34",stroke:"#77c6a9","stroke-width":2})));
- map.roads.forEach(r=>{const a=nodes.get(r.from),b=nodes.get(r.to);svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#172738","stroke-width":14,"stroke-linecap":"round"}));svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#b6d6ed","stroke-width":7,"stroke-linecap":"round"}));});
+ if($("areasLayer").checked)map.areas.forEach(a=>svg.append(el("polygon",{points:a.points.map(p=>p.x+","+p.y).join(" "),fill:"#2e8468","fill-opacity":".34",stroke:"#77c6a9","stroke-width":2})));
+ if($("roadsLayer").checked)map.roads.forEach(r=>{const a=nodes.get(r.from),b=nodes.get(r.to);svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#172738","stroke-width":14,"stroke-linecap":"round"}));svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#b6d6ed","stroke-width":7,"stroke-linecap":"round"}));});
  if(path)for(let i=1;i<path.nodeIds.length;i++){const a=nodes.get(path.nodeIds[i-1]),b=nodes.get(path.nodeIds[i]);svg.append(el("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:"#f8bb57","stroke-width":9,"stroke-linecap":"round"}));}
  if(poly.length){svg.append(el("polyline",{points:poly.map(p=>p.x+","+p.y).join(" "),fill:"none",stroke:"#75efc3","stroke-width":3,"stroke-dasharray":"6 5"}));}
  map.nodes.forEach(n=>{svg.append(el("circle",{cx:n.x,cy:n.y,r:mode==="route"?9:6,fill:n.id===start||n.id===finish?"#ffcc67":"#72dfe3",stroke:"#123545","stroke-width":2}));});
- map.pois.forEach(p=>{const n=nodes.get(p.nodeId);svg.append(el("circle",{cx:n.x,cy:n.y-18,r:8,fill:"#f5aee9"}));svg.append(el("text",{x:n.x+12,y:n.y-15,fill:"#fff","font-size":"14","paint-order":"stroke",stroke:"#0b1822","stroke-width":"3"},p.name));});
+ if($("poisLayer").checked)map.pois.forEach(p=>{const n=nodes.get(p.nodeId);svg.append(el("circle",{cx:n.x,cy:n.y-18,r:8,fill:"#f5aee9"}));svg.append(el("text",{x:n.x+12,y:n.y-15,fill:"#fff","font-size":"14","paint-order":"stroke",stroke:"#0b1822","stroke-width":"3"},p.name));});
  $("counts").textContent="โครงข่าย: "+map.nodes.length+" จุด · "+map.roads.length+" ถนน · "+map.areas.length+" พื้นที่ · "+map.pois.length+" สถานที่";
  $("version").textContent="v"+map.version;
  $("title").value=map.title;$("lat").value=map.origin.lat;$("lng").value=map.origin.lng;
- $("legend").textContent={pan:"ลากเพื่อเลื่อนแผนที่",node:"แตะที่ว่างเพื่อเพิ่มจุดถนน",road:"แตะจุดต้นและปลายเพื่อเชื่อมถนน",poi:"แตะจุดถนนเพื่อเพิ่มสถานที่",area:"แตะจุดยอดพื้นที่ แล้วกด จบรูปพื้นที่",route:"แตะจุดต้นทาง แล้วแตะปลายทาง"}[mode];
+ $("legend").textContent={pan:"ลากเพื่อเลื่อนแผนที่",node:"แตะที่ว่างเพื่อเพิ่มจุดถนน",road:"แตะจุดต้นและปลายเพื่อเชื่อมถนน",poi:"แตะจุดถนนเพื่อเพิ่มสถานที่",area:"แตะจุดยอดพื้นที่ แล้วกด จบรูปพื้นที่",route:"แตะจุดต้นทาง แล้วแตะปลายทาง",edit:"แตะจุด/ถนนเพื่อแก้ไข",erase:"แตะจุด/ถนนเพื่อลบ"}[mode];
 }
 function render(){draw();}
 function pointFromEvent(ev){
@@ -224,7 +229,7 @@ function exportText(raw,name,type){
 $("export").onclick=()=>{try{exportText(G.pack(map),filename(".goview.json"),"application/json");status("เตรียมแพ็กเกจพร้อม SHA-256");}catch(e){status(e.message);}};
 $("geoexport").onclick=()=>{try{exportText(JSON.stringify(G.toGeoJson(map),null,2),filename(".geojson"),"application/geo+json");status("ส่งข้อมูล Geometry ออก (GeoJSON ไม่มี graph metadata)");}catch(e){status(e.message);}};
 function offer(raw){
- let next;try{next=G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
+ let next;try{const file=JSON.parse(raw);next=file.type==="FeatureCollection"?G.fromGeoJson(file):G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
  const counts=G.diff(map,next),lines=Object.entries(counts).map(([key,v])=>key+": +"+v.added+" / เปลี่ยน "+v.changed+" / ลบ "+v.removed);
  const sameId=map.mapId===next.mapId;
  showDialog("GO Map Update · ตรวจ Diff",
@@ -242,6 +247,14 @@ $("file").onchange=async(ev)=>{const f=ev.target.files?.[0];if(!f)return;try{if(
 $("import").onclick=()=>native?window.GoviewHost.chooseImport():$("file").click();
 $("restore").onclick=$("import").onclick;
 $("myGps").onclick=()=>native?window.GoviewHost.locate():status("GPS ในเวอร์ชันเว็บตัวอย่างต้องใช้ผ่านแอป Android");
+for(const id of ["roadsLayer","areasLayer","poisLayer"])$(id).onchange=draw;
+$("search").oninput=event=>{
+ const query=event.target.value.trim().toLocaleLowerCase();if(!query)return;
+ const p=map.pois.find(p=>p.name.toLocaleLowerCase().includes(query));
+ if(!p)return status("ยังไม่พบสถานที่");
+ const n=map.nodes.find(n=>n.id===p.nodeId);if(!n)return;
+ view.x=n.x-view.w/2;view.y=n.y-view.h/2;draw();status("พบสถานที่: "+p.name);
+};
 window.GoviewStudio={
  receiveNativePackage(raw){try{map=G.unpack(raw);ready=true;render();$("fit").click();}catch(e){status("ข้อมูลบนเครื่องเปิดไม่ได้: "+e.message);}},
  receiveImport:offer,
