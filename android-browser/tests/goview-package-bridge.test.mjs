@@ -77,3 +77,15 @@ test("no arbitrary method, path traversal, remote mutation or cross-origin reque
   assert.equal((await Worker.fetch(req(path+"latest",env.GO_WRITE_TOKEN,"DELETE"),env)).status,405);
   assert.equal((await Worker.fetch(req("http://goview.example.test/v1/maps/go_synthetic_route_demo/packages/latest",env.ANDROID_READ_TOKEN),env)).status,400);
 });
+
+test("misconfigured identical read and write secrets fail closed",async()=>{
+  const env=setup();env.ANDROID_READ_TOKEN=env.GO_WRITE_TOKEN;
+  assert.equal((await Worker.fetch(req(path+"latest",env.GO_WRITE_TOKEN),env)).status,503);
+});
+test("oversize map streams fail before reaching private R2",async()=>{
+  const env=setup();
+  const huge=JSON.stringify({filler:"x".repeat(1024*1024+1024)});
+  const response=await Worker.fetch(req(path+"1",env.GO_WRITE_TOKEN,"PUT",huge),env);
+  assert.equal(response.status,413);
+  assert.equal(env.PACKAGES.items.size,0);
+});
