@@ -65,7 +65,7 @@ object GeoJsonImport {
                 val record=properties.getJSONObject("goviewRecord")
                 val pin=requireNotNull(MapCommandCodec.decode(JSONObject().put("commandId","import").put("action","UPSERT_PIN").put("pin",record)).pin)
                 require(pin.id==feature.getString("id") && pin.point==point){"GOVIEW record/geometry mismatch"}
-                require(pin.id.length in 1..256 && pin.label.length in 1..256 && pin.note.orEmpty().length<=8192 && pin.evidence.source.orEmpty().length<=512)
+                require(pin.id.length in 1..256 && pin.label.length in 1..256 && pin.note.orEmpty().length<=8192 && pin.evidence.source.orEmpty().length<=512 && pin.category.length<=64)
                 require(MapUpdatePackage.importedClaim(pin).evidence.source.orEmpty().length<=512){"Imported evidence exceeds limit"}
                 require(seen.add(pin.id)){"Duplicate feature id"}
                 if(properties.has("goviewOwnerNote")) ownerNotes[pin.id]=properties.getString("goviewOwnerNote").also {require(it.length<=4000)}
@@ -79,7 +79,8 @@ object GeoJsonImport {
             val label = properties.optString("name", properties.optString("label", sourceId))
             require(label.length in 1..256) { "Name exceeds limit" }
             val note = canonical(properties).also { require(it.length <= 8192) { "Properties exceed limit" } }
-            Pin(id, label, point, "", Evidence(EvidenceStatus.UNKNOWN, "owner-geojson:$dataset"), note=note)
+            val category=properties.optString("category", "").also {require(it.length<=64)}
+            Pin(id, label, point, "", Evidence(EvidenceStatus.UNKNOWN, "owner-geojson:$dataset"), note=note,category=category)
         }
         return GeoJsonBatch(pins,digest(canonical(document)),packageVersion,ownerNotes,nativePackage,snapshotOnly=document.optString("selection")=="explicit-pins-only")
     }

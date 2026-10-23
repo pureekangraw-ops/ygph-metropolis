@@ -73,7 +73,8 @@ data class Pin(
     val gridId: String,
     val evidence: Evidence,
     val zoneId: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val category:String = ""
 )
 
 enum class MapAction { UPSERT_ZONE, UPSERT_GRID, UPSERT_PIN, NOTE, RECOMMEND, HIGHLIGHT, FOCUS, REMOVE, CLEAR, ROUTE }

@@ -88,4 +88,28 @@ class GoviewWorkspaceTest {
         }finally{root.deleteRecursively()}
     }
 
+    @Test fun categoryEditPersistsAndVersionedExportReimports() {
+        val root=Files.createTempDirectory("goview-category").toFile()
+        try {val store=MapStateStore(root);store.importGeoJson(fixture());val j=store.load();val p=j.state.pins.values.single()
+            store.editOwnerPin(p.id,p.label,p.point,false,j.state.revision,"Synthetic category")
+            assertEquals("Synthetic category",MapStateStore(root).load().state.pins[p.id]!!.category)
+            assertEquals("Synthetic category",GeoJsonImport.parse(store.exportGeoJson().byteInputStream()).pins.single().category)
+        }finally{root.deleteRecursively()}
+    }
+    @Test fun postCommitReadbackFailureNeverClaimsNothingWasSavedOrVerified() {
+        val root=Files.createTempDirectory("goview-readback").toFile()
+        var value:String?=null;var fail=false
+        val backend=object:JournalBackend {
+            override fun read():String? {if(fail)error("synthetic readback unavailable");return value}
+            override fun initialize(payload:String,revision:Long,legacy:java.io.File?){value=payload}
+            override fun write(payload:String,revision:Long){value=payload;fail=true}
+        }
+        try {val store=MapStateStore(root,backend);val preview=store.previewUpdate(fixture(),"synthetic")
+            val receipt=store.approveUpdate(preview)
+            assertEquals("COMMITTED_READBACK_UNAVAILABLE",receipt.status);assertFalse(receipt.readbackVerified)
+            fail=false;assertEquals(1,store.load().state.pins.size)
+            assertFalse(store.load().updates.single().readbackVerified)
+        }finally{root.deleteRecursively()}
+    }
+
 }

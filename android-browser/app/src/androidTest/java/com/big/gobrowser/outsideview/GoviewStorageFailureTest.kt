@@ -28,7 +28,7 @@ class GoviewStorageFailureTest {
                 status=TextView(instrumentation.targetContext);share=Button(instrumentation.targetContext)
                 set("store",MapStateStore(root));set("status",status);set("shareButton",share)
                 assertNull(read.invoke(activity))
-                type.getDeclaredMethod("listPins",String::class.java).apply {isAccessible=true}.invoke(activity,"")
+                type.getDeclaredMethod("listPins",String::class.java,String::class.java).apply {isAccessible=true}.invoke(activity,"",null)
                 type.getDeclaredMethod("noteDialog",String::class.java,String::class.java).apply {isAccessible=true}.invoke(activity,"synthetic","Synthetic")
             }
             val failure=java.util.concurrent.atomic.AtomicReference<Throwable>()

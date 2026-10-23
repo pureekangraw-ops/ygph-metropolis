@@ -48,12 +48,20 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         val after=GeoJsonImport.merge(before,preview.batch)
         val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),preview.batch.packageId,preview.packageVersion,
             if(after.state==before.state)"DUPLICATE" else "SAVED",after.state.revision,preview.added,
-            operation="UPDATE",correlationId=preview.correlationId,readbackVerified=true)
+            operation="UPDATE",correlationId=preview.correlationId,readbackVerified=false)
         val expected=withReceipt(after,receipt)
         commit(expected)
-        check(readStrict()==expected){"Commit outcome uncertain: readback failed; reopen receipts before retry"}
-        receipt
+        try {
+            check(readStrict()==expected){"Readback mismatch"}
+            val verified=receipt.copy(readbackVerified=true)
+            commit(expected.copy(updates=expected.updates.dropLast(1)+verified))
+            verified
+        } catch(error:Exception) {
+            // Durable state may already exist. Never tell the owner that nothing was saved.
+            receipt.copy(status="COMMITTED_READBACK_UNAVAILABLE",error="Reopen receipts before retry: ${error.message}")
+        }
     }
+
     fun recordPhaseFailure(operation:String,correlationId:String,message:String):MapUpdateReceipt = synchronized(transactionLock) {
         require(operation in setOf("SNAPSHOT","UPLOAD","DOWNLOAD","UPDATE","STORAGE"))
         val journal=readStrict()
@@ -66,9 +74,14 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         require(journal.state.revision==expectedRevision){"Map changed; select again"}
         require(ids.isNotEmpty() && ids.all {journal.state.pins.containsKey(it)}){"Select known pins explicitly"}
         val capture=java.util.UUID.randomUUID().toString()
-        val selected=journal.copy(state=journal.state.copy(pins=journal.state.pins.filterKeys {it in ids}.mapValues {(_,pin)->pin.copy(gridId="",zoneId=null,note=null,evidence=Evidence(EvidenceStatus.UNKNOWN,"selected-owner-snapshot"))},notes=emptyMap()))
+        val selected=journal.copy(state=journal.state.copy(pins=journal.state.pins.filterKeys {it in ids}.mapValues {(_,pin)->pin.copy(gridId="",zoneId=null,note=null,category="",evidence=Evidence(EvidenceStatus.UNKNOWN,"selected-owner-snapshot"))},notes=emptyMap()))
         val json=JSONObject(MapUpdatePackage.export(selected)).put("captureId",capture).put("capturedAtEpochMs",System.currentTimeMillis())
             .put("selection", "explicit-pins-only").toString()
+        GeoJsonImport.parse(json.byteInputStream())
+        val directory=File(root,"snapshots");check(directory.isDirectory || directory.mkdirs())
+        val temp=File(directory,"$capture.tmp")
+        java.io.FileOutputStream(temp).use {it.write(json.toByteArray(Charsets.UTF_8));it.fd.sync()}
+        Files.move(temp.toPath(),File(directory,"$capture.geojson").toPath(),StandardCopyOption.ATOMIC_MOVE)
         val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),capture,journal.state.revision,"CAPTURED_LOCAL",journal.state.revision,
             operation="SNAPSHOT",correlationId=capture)
         commit(withReceipt(journal,receipt))
@@ -132,15 +145,16 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         commit(withReceipt(journal,receipt));receipt
     }
     fun exportGeoJson():String = synchronized(transactionLock) {MapUpdatePackage.export(readStrict())}
-    fun editOwnerPin(id:String,label:String,point:Point,fieldConfirmed:Boolean,expectedRevision:Long):MapUpdateReceipt = synchronized(transactionLock) {
+    fun editOwnerPin(id:String,label:String,point:Point,fieldConfirmed:Boolean,expectedRevision:Long,category:String?=null):MapUpdateReceipt = synchronized(transactionLock) {
         val journal=readStrict()
         require(journal.pending==null && journal.state.revision==expectedRevision){"Map changed; reopen edit before saving"}
         require(label.isNotBlank() && label.length<=256)
+        require(category==null || category.length<=64)
         val original=requireNotNull(journal.state.pins[id]){"Pin missing"}
         val evidence=if(!fieldConfirmed && point==original.point)original.evidence else Evidence(
             if(fieldConfirmed)EvidenceStatus.VERIFIED else EvidenceStatus.UNKNOWN,
             if(fieldConfirmed)"owner-field-confirmation" else "owner-field-edit",System.currentTimeMillis())
-        val edited=original.copy(label=label,point=point,evidence=evidence,
+        val edited=original.copy(label=label,point=point,evidence=evidence,category=category?:original.category,
             gridId=original.gridId.takeIf {journal.state.grids[it]?.bounds?.contains(point)==true}.orEmpty())
         val next=journal.copy(state=journal.state.copy(pins=journal.state.pins+(id to edited),revision=journal.state.revision+1),renderedRevision=-1)
         val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),"owner-field-edit",next.state.revision,"SAVED",next.state.revision,changed=1)

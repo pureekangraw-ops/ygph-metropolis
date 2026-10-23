@@ -50,7 +50,7 @@ test('GOVIEW export uses Android document creation and field verification requir
   assert.match(activity,/Intent\.ACTION_CREATE_DOCUMENT/);
   assert.match(activity,/store\.selectedSnapshot\(/);
   assert.match(activity,/CheckBox\(this\)/);
-  assert.match(activity,/store\.editOwnerPin\(id,name,point,confirmed,journal\.state\.revision\)/);
+  assert.match(activity,/store\.editOwnerPin\(id,name,point,confirmed,journal\.state\.revision,group\)/);
   assert.match(activity,/showUpdateReceipts\(\)/);
 });
 

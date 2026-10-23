@@ -34,6 +34,7 @@ class OutsideViewActivity : Activity() {
     private lateinit var shareButton:Button
     private var importing=false
     private var busy=false
+    private var displayedRevision=-1L
     @Volatile private var destroyed=false
     @Volatile private var storageUnavailable=false
     private var pendingExportPath:String?=null
@@ -69,7 +70,7 @@ class OutsideViewActivity : Activity() {
         PhoneLayout.fitSystemBars(root)
         setContentView(root)
         renderer=MapLibreOutsideRenderer(host,packageStore,savedInstanceState)
-        executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER)
+        executor=MapCommandExecutor(store,renderer,ExecutionScope.LOCAL_OWNER,onStorageError={storageFailure()})
         mapShare=ObservatoryMapShare(this,store,{foreground&&renderer.foregroundReady&&readJournal()?.let {it.pending==null&&it.renderedRevision==it.state.revision}==true},{message->status.text=message;updateSharingStatus()},{renderer.cameraSnapshot()})
         location=ForegroundLocationController(this,{fix->renderer.showLocation(fix?.let {Point(it.longitude,it.latitude)})},{gpsStatus.text=it})
         location.onCenter={point->
@@ -93,7 +94,7 @@ class OutsideViewActivity : Activity() {
                         if(!destroyed && !importing && confirmation.styleGeneration==renderer.styleGeneration) {
                             busy=false
                             confirmed.onSuccess {accepted->
-                                if(accepted)pump()
+                                if(accepted){displayedRevision=confirmation.revision;pump()}
                                 else if(confirmation.error==null)renderer.reloadStyle() // another Activity completed a newer transaction
                             }.onFailure {status.text="บันทึกข้อมูลแล้ว แต่ยืนยันภาพไม่ได้ · กดลองแสดงใหม่"}
                             updateSharingStatus()
@@ -101,7 +102,7 @@ class OutsideViewActivity : Activity() {
                     }
                 }
             }
-            else {busy=false;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";pump()}
+            else {busy=false;if(confirmation.error==null)displayedRevision=confirmation.revision;status.text=if(confirmation.error==null)"บันทึกบนแผนที่แล้ว · ${confirmation.revision}" else "แสดงแผนที่ไม่สำเร็จ: ${confirmation.error}";pump()}
         }
         renderer.onReady=ready@{
             if(destroyed || importing)return@ready
@@ -120,7 +121,7 @@ class OutsideViewActivity : Activity() {
         }
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
@@ -139,6 +140,7 @@ class OutsideViewActivity : Activity() {
                 13->selectSnapshot()
                 14->showUpdateReceipts()
                 15->showStorageTools()
+                16->showCategories()
             }
         }.setNegativeButton("ปิด",null).show()
     }
@@ -165,7 +167,11 @@ class OutsideViewActivity : Activity() {
             enqueue(MapCommand("zone:${UUID.randomUUID()}",MapAction.UPSERT_ZONE,zone=Zone(zoneId,label,b)),MapCommand("grid:${UUID.randomUUID()}",MapAction.UPSERT_GRID,grid=grid),MapCommand("pin:${UUID.randomUUID()}",MapAction.UPSERT_PIN,pin=pin))
         }.show()
     }
-    private fun listPins(query:String=""){val pins=(readJournal()?:return).state.pins.values.filter {it.label.contains(query,true)||it.note.orEmpty().contains(query,true)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์","แก้ไข / ยืนยันหน้างาน")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show();5->editPinDialog(pin.id)}}.show()}.show()}
+    private fun listPins(query:String="",category:String?=null){val pins=(readJournal()?:return).state.pins.values.filter {(it.label.contains(query,true)||it.note.orEmpty().contains(query,true))&&(category==null||it.category==category)};if(pins.isEmpty()){status.text="ยังไม่มีจุดที่บันทึก";return};AlertDialog.Builder(this).setTitle("จุดของฉัน").setItems(pins.map {it.label}.toTypedArray()){_,i->val pin=pins[i];AlertDialog.Builder(this).setTitle(pin.label).setItems(arrayOf("ดูบนแผนที่","เปิดนำทาง","เพิ่มโน้ต","ลบจุด","ข้อมูลจากไฟล์","แก้ไข / ยืนยันหน้างาน")){_,a->when(a){0->enqueue(MapCommand("focus:${UUID.randomUUID()}",MapAction.FOCUS,MapTarget(pin.id,"pin")));1->status.text=if(PinNavigation.launch(this,pin)==NavigationResult.HANDOFF_STARTED)"เปิดแอปนำทางแล้ว" else "ไม่มีแอปนำทางที่รองรับ";2->noteDialog(pin.id,pin.label);3->enqueue(MapCommand("remove:${UUID.randomUUID()}",MapAction.REMOVE,MapTarget(pin.id,"pin")));4->AlertDialog.Builder(this).setTitle("ข้อมูลต้นทาง · ${pin.evidence.coordinate}").setMessage(pin.note?:pin.evidence.source.orEmpty()).setPositiveButton("ปิด",null).show();5->editPinDialog(pin.id)}}.show()}.show()}
+    private fun showCategories() {
+        val categories=(readJournal()?:return).state.pins.values.map {it.category}.distinct().sorted()
+        AlertDialog.Builder(this).setTitle("หมวดหมู่").setItems(categories.map {it.ifBlank {"ยังไม่จัดหมวด"}}.toTypedArray()){_,i->listPins(category=categories[i])}.show()
+    }
     private fun searchPins() {
         val query=EditText(this).apply {hint="ชื่อหรือข้อมูลหมุด";isSingleLine=true}
         AlertDialog.Builder(this).setTitle("ค้นหาหมุด").setView(query).setNegativeButton("ยกเลิก",null)
@@ -305,6 +311,7 @@ class OutsideViewActivity : Activity() {
                     val label=EditText(this).apply {hint="ชื่อหมุด";setText(pin.label)}
                     val longitude=EditText(this).apply {hint="longitude";setText(pin.point.longitude.toString())}
                     val latitude=EditText(this).apply {hint="latitude";setText(pin.point.latitude.toString())}
+                    val category=EditText(this).apply {hint="หมวดหมู่";setText(pin.category)}
                     val field=CheckBox(this).apply {text="ฉันยืนยันพิกัดหน้างานด้วยตนเอง";isChecked=false}
                     val changed=object:android.text.TextWatcher {
                         override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int) {}
@@ -312,16 +319,16 @@ class OutsideViewActivity : Activity() {
                         override fun afterTextChanged(s:android.text.Editable?) {}
                     }
                     longitude.addTextChangedListener(changed);latitude.addTextChangedListener(changed)
-                    form.addView(label);form.addView(longitude);form.addView(latitude);form.addView(field)
+                    form.addView(label);form.addView(longitude);form.addView(latitude);form.addView(category);form.addView(field)
                     AlertDialog.Builder(this).setTitle("GOVIEW · แก้ไขหมุด").setView(form).setNegativeButton("ยกเลิก",null)
                         .setPositiveButton("บันทึก"){_,_->
                             val point=runCatching {Point(longitude.text.toString().toDouble(),latitude.text.toString().toDouble())}.getOrNull()
                             if(point==null){status.text="พิกัดไม่ถูกต้อง";return@setPositiveButton}
                             if(busy || importing){status.text="รอแผนที่ทำงานเสร็จ แล้วลองใหม่";return@setPositiveButton}
-                            val name=label.text.toString().trim();val confirmed=field.isChecked
+                            val name=label.text.toString().trim();val confirmed=field.isChecked;val group=category.text.toString().trim()
                             importing=true;busy=true
                             worker.execute {
-                                val saved=runCatching {store.editOwnerPin(id,name,point,confirmed,journal.state.revision)}
+                                val saved=runCatching {store.editOwnerPin(id,name,point,confirmed,journal.state.revision,group)}
                                 if(!destroyed)handler.post {
                                     if(!destroyed){importing=false;busy=false
                                         saved.onSuccess {val displaying=GeoJsonImport.present({},{renderer.reloadStyle()});status.text="บันทึกแล้ว · revision ${it.revision} · receipt ${it.id.take(8)}"+if(displaying)"" else " · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"}
@@ -334,7 +341,7 @@ class OutsideViewActivity : Activity() {
             }
         }
     }
-    private fun noteDialog(id:String,label:String){val value=EditText(this).apply {setText((readJournal()?:return).state.notes[id].orEmpty())};AlertDialog.Builder(this).setTitle("โน้ต · $label").setView(value).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก"){_,_->enqueue(MapCommand("note:${UUID.randomUUID()}",MapAction.NOTE,MapTarget(id,"map"),note=value.text.toString().take(4000)))}.show()}
+    private fun noteDialog(id:String,label:String){val journal=readJournal()?:return;val value=EditText(this).apply {setText(journal.state.notes[id].orEmpty())};AlertDialog.Builder(this).setTitle("โน้ต · $label").setView(value).setNegativeButton("ยกเลิก",null).setPositiveButton("บันทึก"){_,_->enqueue(MapCommand("note:${UUID.randomUUID()}",MapAction.NOTE,MapTarget(id,"map"),note=value.text.toString().take(4000)))}.show()}
     fun context():JSONObject = JSONObject().put("status","EXPLICIT_SNAPSHOT_SELECTION_REQUIRED").put("view","map")
     private fun updateSharingStatus(){
         if(destroyed||importing||!::mapShare.isInitialized||!::sharingStatus.isInitialized)return
@@ -342,6 +349,7 @@ class OutsideViewActivity : Activity() {
             val journal=readJournal()?:return@execute
             handler.post {
                 if(!destroyed && !importing) {
+                    if(foreground && !busy && journal.pending==null && journal.state.revision!=displayedRevision)renderer.reloadStyle()
                     val recent=mapShare.lastAck?.let {System.currentTimeMillis()-it in 0..14_999}==true
                     val fresh=recent&&renderer.foregroundReady&&journal.renderedRevision==journal.state.revision&&mapShare.acknowledgedRevision==journal.state.revision
                     val state=SharingStatus.resolve(mapShare.sharing,mapShare.isPaired(),foreground,ObservatoryTheme.online(this),fresh,mapShare.lastAck,mapShare.deliveryFailed,System.currentTimeMillis())

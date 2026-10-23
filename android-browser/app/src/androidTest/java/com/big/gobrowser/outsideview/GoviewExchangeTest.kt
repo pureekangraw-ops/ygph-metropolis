@@ -32,4 +32,33 @@ class GoviewExchangeTest {
             assertEquals("SAVED",readback.updates.single().status)
         }finally{root.deleteRecursively()}
     }
+    @Test fun sqliteFilePreviewApprovalSnapshotAndBackupRestoreHaveSeparateEvidence() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val root=File(context.cacheDir,"goview-local-cycle-${System.nanoTime()}")
+        try {
+            val store=MapStateStore(root,SqliteJournalBackend(root))
+            val raw="""{"type":"FeatureCollection","features":[{"type":"Feature","id":"local","geometry":{"type":"Point","coordinates":[10,20]},"properties":{"name":"Synthetic cycle"}}]}"""
+            val batch=GoviewSandboxContract.readFile(raw.byteInputStream())
+            val received=store.receiveFile(batch,"synthetic-cycle")
+            val preview=store.previewUpdate(batch,"synthetic-cycle")
+            assertEquals("DOWNLOAD",received.operation);assertTrue(store.load().state.pins.isEmpty())
+            val saved=store.approveUpdate(preview)
+            assertEquals("UPDATE",saved.operation);assertTrue(saved.readbackVerified)
+            val recreated=MapStateStore(root,SqliteJournalBackend(root));val readback=recreated.load()
+            assertEquals(1,readback.state.pins.size)
+            val snapshot=recreated.selectedSnapshot(readback.state.pins.keys,readback.state.revision)
+            assertEquals("SNAPSHOT",snapshot.receipt.operation)
+            assertNotEquals(saved.id,snapshot.receipt.id)
+            assertTrue(File(root,"snapshots/${snapshot.captureId}.geojson").isFile)
+            val backup=recreated.createBackup();val pin=readback.state.pins.values.single()
+            recreated.editOwnerPin(pin.id,"Changed synthetic",pin.point,false,readback.state.revision)
+            val restored=recreated.approveRestore(recreated.previewRestore(backup))
+            assertEquals("STORAGE",restored.operation);assertTrue(restored.readbackVerified)
+            assertEquals(pin,MapStateStore(root,SqliteJournalBackend(root)).load().state.pins[pin.id])
+            assertEquals(0,recreated.importGeoJson(batch))
+            assertEquals("BLOCKED",GoviewSandboxContract.blocked("upload-selected-package",snapshot.captureId).getString("status"))
+            assertEquals("BLOCKED",GoviewSandboxContract.blocked("download-proposal",snapshot.captureId).getString("status"))
+        }finally{root.deleteRecursively()}
+    }
+
 }

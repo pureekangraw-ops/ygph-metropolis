@@ -20,11 +20,11 @@ object GoviewSandboxContract {
         val bytes=output.toByteArray()
         val raw=Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
         // Ordinary GeoJSON keeps the existing bounded parser. A contract envelope must be explicit.
-        if(!raw.contains("contractVersion"))return GeoJsonImport.parse(bytes.inputStream())
         var depth=0;var quoted=false;var escaped=false
         for(c in raw){if(quoted){if(escaped)escaped=false else if(c=='\\')escaped=true else if(c=='"')quoted=false}else when(c){'"'->quoted=true;'{','['->{depth++;require(depth<=16)};'}',']'->depth--}}
         val tokener=org.json.JSONTokener(raw);val envelope=tokener.nextValue() as? JSONObject?:error("Object required")
         require(tokener.nextClean()=='\u0000')
+        if(!envelope.has("contractVersion"))return GeoJsonImport.parse(bytes.inputStream())
         require(envelope.keys().asSequence().toSet()==setOf("contractVersion","operation","sourceCaptureId","baseVersion","package")){"Unexpected proposal fields"}
         require(envelope.get("contractVersion").toString()=="1" && envelope.getString("operation")=="propose-update")
         val capture=envelope.getString("sourceCaptureId");require(capture.matches(Regex("[a-zA-Z0-9_-]{8,100}")))
