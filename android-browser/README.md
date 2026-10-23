@@ -17,3 +17,5 @@ Removed obsolete GeckoRuntime/GeckoView dependency and launcher, Gecko observer 
 Node tests: from android-browser run node --test tests/*.test.mjs ../remote-browser/tests/*.test.mjs. Android Gradle: testDebugUnitTest, lintDebug, assembleDebug and emulator. Remote Worker: cd remote-browser && npm install && npm test && npx wrangler deploy --dry-run. CI APK is development-signed; never uninstall the installed owner app merely to resolve a signature mismatch. No real Android handset test, live Cloudflare session, deployed Worker, or registered GO tool is claimed from this source-only build.
 
 See docs/observatory-shared-browser-work.md for API, credentials and remaining integration steps.
+
+The same remote Worker now exposes an owner console at /console and seven stateless MCP tools at /mcp. Cloudflare session recording is owner opt-in and off by default. See remote-browser/WORK_HANDOFF.md for the WORK/TEST boundary.
