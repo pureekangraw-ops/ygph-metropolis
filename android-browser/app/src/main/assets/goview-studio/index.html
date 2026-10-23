@@ -110,7 +110,7 @@ small{font-size:11px;color:#9bb6ce}
 "use strict";
 const G=window.GoviewEngine,$=id=>document.getElementById(id),svg=$("map");
 const NS="http://www.w3.org/2000/svg",native=typeof window.GoviewHost!=="undefined",LOCAL_KEY="goview-studio-drawn-map-v1";
-let map=G.fresh(),mode="pan",selected=null,start=null,finish=null,path=null,poly=[],undoStack=[],view={x:0,y:0,w:800,h:520},pointer=null,ready=false,gpsPoint=null;
+let map=G.fresh(),mode="pan",selected=null,start=null,finish=null,path=null,poly=[],undoStack=[],view={x:0,y:0,w:800,h:520},pointer=null,ready=false,gpsPoint=null,pendingWrite=null;
 const status=t=>{$("message").textContent=t;};
 function showDialog(title,text,inputValue,okLabel,callback) {
  $("modalTitle").textContent=title;$("modalText").textContent=text||"";
@@ -129,8 +129,15 @@ function snap(){undoStack.push(JSON.stringify(map));if(undoStack.length>35)undoS
 function persist() {
  try{
   const payload=G.pack(map);
-  if(native){window.GoviewHost.savePackage(payload);status("ส่งคำขอบันทึกแล้ว · รอผลยืนยันจากเครื่อง");}
-  else {localStorage.setItem(LOCAL_KEY,payload);localStorage.setItem(LOCAL_KEY+":"+map.mapId,payload);status("บันทึกแผนที่เวอร์ชัน "+map.version+" แล้ว");}
+  if(native){
+   pendingWrite={id:map.mapId,version:map.version,digest:G.hash(payload)};
+   window.GoviewHost.savePackage(payload);
+   status("กำลังบันทึก · รอผลตรวจอ่านกลับจาก Android");
+  }else{
+   localStorage.setItem(LOCAL_KEY,payload);
+   localStorage.setItem(LOCAL_KEY+":"+map.mapId,payload);
+   status("บันทึกแผนที่เวอร์ชัน "+map.version+" แล้ว");
+  }
  }catch(e){status("บันทึกไม่ได้: "+e.message);}
 }
 function commit(){map.version++;selected=null;path=null;persist();render();}
@@ -262,7 +269,7 @@ $("finishArea").onclick=()=>{if(poly.length<3)return status("พื้นที�
  if(!value)return;snap();map.areas.push({id:nextId("a",map.areas),name:value.slice(0,100),points});poly=[];commit();
  });};
 $("undo").onclick=()=>{if(!undoStack.length)return status("ไม่มีรายการย้อนแก้ไข");
- try{map=G.normalize(JSON.parse(undoStack.pop()));selected=null;path=null;persist();render();}catch(e){status(e.message);}};
+ try{const currentVersion=map.version;map=G.normalize(JSON.parse(undoStack.pop()));map.version=currentVersion+1;selected=null;path=null;persist();render();}catch(e){status(e.message);}};
 $("title").onchange=ev=>{const value=ev.target.value.trim();if(!value)return render();snap();map.title=value;commit();};
 function updateOrigin(){const lat=Number($("lat").value),lng=Number($("lng").value);if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lng)||Math.abs(lng)>180)return status("พิกัดอ้างอิงไม่ถูกต้อง");
  snap();map.origin={lat,lng};commit();}
@@ -335,6 +342,13 @@ window.GoviewStudio={
    const x=(lng-map.origin.lng)*111320*Math.cos(map.origin.lat*Math.PI/180),y=(lat-map.origin.lat)*110540;
    gpsPoint={x,y};$("gps").textContent=text+" · บนแผนที่วาด x="+Math.round(x)+", y="+Math.round(y);draw();
   }
+ },
+ nativePersisted(id,version,digest){
+  if(!pendingWrite||pendingWrite.id!==id||pendingWrite.version!==version||pendingWrite.digest!==digest){
+   status("ได้รับ Receipt แต่เวอร์ชันหรือ checksum ไม่ตรง · ต้องตรวจอีกครั้ง");return;
+  }
+  pendingWrite=null;
+  status("บันทึกและตรวจอ่านกลับสำเร็จ · "+id+" · v"+version+" · SHA-256 "+digest.slice(0,12)+"…");
  },
  nativeStatus:status
 };
