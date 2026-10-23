@@ -64,6 +64,15 @@ class GoviewStudioAndroidTest {
 
         assertEquals(true, js("document.getElementById('demo').click(); document.getElementById('modal').classList.contains('open')"))
         assertEquals(true, js("document.getElementById('modalOk').click(); document.getElementById('counts').textContent.includes('11 ถนน')"))
+        // Preserve an actual emulator screenshot of the GO-authored map for later visual inspection.
+        runCatching {
+            val image = instrumentation.uiAutomation.takeScreenshot() ?: return@runCatching
+            val folder = screen.activity.getExternalFilesDir(null) ?: return@runCatching
+            File(folder, "goview-studio-go-drawn.png").outputStream().use {
+                image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            image.recycle()
+        }
         val summary = js("JSON.stringify(GoviewEngine.route(GoviewEngine.demo(),'A','I'))") as String
         val route = JSONObject(summary)
         assertEquals(800.0, route.getDouble("meters"), 0.01)
