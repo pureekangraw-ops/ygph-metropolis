@@ -187,5 +187,65 @@
       ...map.pois.map(p=>feature(p.id,{type:"Point",coordinates:lonLat(map,nodes.get(p.nodeId))},{name:p.name,kind:"poi"}))
     ]};
   }
-  return {FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,lonLat};
+  /**
+   * Import geographic lines/polygons/points as editable drawn features.
+   * Only shared explicit LineString vertices create graph junctions.
+   * Geometries that visually cross without a shared vertex do NOT connect.
+   */
+  function fromGeoJson(collection) {
+    assert(collection&&collection.type==="FeatureCollection"&&Array.isArray(collection.features),"GeoJSON FeatureCollection required");
+    assert(collection.features.length<=2000,"too many GeoJSON features");
+    const map=fresh(string(collection.name,140)?collection.name:"GO นำเข้าข้อมูล GeoJSON");
+    const coordinates=[];
+    for(const feature of collection.features){
+      assert(feature&&feature.type==="Feature"&&feature.geometry,"invalid GeoJSON Feature");
+      const g=feature.geometry;
+      if(g.type==="Point") coordinates.push(g.coordinates);
+      else if(g.type==="LineString"){
+        assert(Array.isArray(g.coordinates)&&g.coordinates.length>=2&&g.coordinates.length<=1000,"invalid LineString");
+        coordinates.push(...g.coordinates);
+      }else if(g.type==="Polygon"){
+        assert(Array.isArray(g.coordinates)&&g.coordinates.length===1 &&
+          Array.isArray(g.coordinates[0])&&g.coordinates[0].length>=4&&g.coordinates[0].length<=151,
+          "Polygon needs exactly one outer ring with <=150 vertices");
+        coordinates.push(...g.coordinates[0]);
+      }else throw Error("unsupported GeoJSON geometry "+String(g.type));
+    }
+    for(const point of coordinates){
+      assert(Array.isArray(point)&&point.length===2&&point.every(Number.isFinite) &&
+        Math.abs(point[0])<=180&&Math.abs(point[1])<=90,"invalid WGS84 lon/lat point");
+    }
+    if(coordinates.length===0)return normalize(map);
+    map.origin={lng:coordinates[0][0],lat:coordinates[0][1]};
+    const scaleLng=111320*Math.max(.01,Math.cos(map.origin.lat*Math.PI/180));
+    const local=p=>({x:Math.round((p[0]-map.origin.lng)*scaleLng*1000)/1000,
+      y:Math.round((p[1]-map.origin.lat)*110540*1000)/1000});
+    const keys=new Map();
+    const ensureNode=p=>{
+      const xy=local(p),key=xy.x+","+xy.y;
+      if(keys.has(key))return keys.get(key);
+      const id="n"+(map.nodes.length+1);
+      map.nodes.push({id,...xy});keys.set(key,id);return id;
+    };
+    for(const feat of collection.features){
+      const g=feat.geometry,properties=feat.properties&&typeof feat.properties==="object"?feat.properties:{};
+      const name=string(properties.name,140)?properties.name:"จาก GeoJSON";
+      if(g.type==="LineString"){
+        const ids=g.coordinates.map(ensureNode);
+        for(let i=1;i<ids.length;i++){
+          if(ids[i]!==ids[i-1])map.roads.push({id:"r"+(map.roads.length+1),from:ids[i-1],to:ids[i],name:name.slice(0,100)});
+        }
+      }else if(g.type==="Point"){
+        const nodeId=ensureNode(g.coordinates);
+        map.pois.push({id:"poi"+(map.pois.length+1),name,nodeId});
+      }else if(g.type==="Polygon"){
+        const ring=g.coordinates,first=ring[0],last=ring[ring.length-1];
+        assert(first[0]===last[0]&&first[1]===last[1],"Polygon ring must be closed");
+        const points=ring.slice(0,-1).map(local);
+        map.areas.push({id:"a"+(map.areas.length+1),name:name.slice(0,100),points});
+      }
+    }
+    return normalize(map);
+  }
+  return {FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,fromGeoJson,lonLat};
 });
