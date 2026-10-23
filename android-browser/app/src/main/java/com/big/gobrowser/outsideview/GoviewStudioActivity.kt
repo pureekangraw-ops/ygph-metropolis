@@ -38,7 +38,7 @@ class GoviewStudioActivity : Activity() {
     private val mapIdPattern = Regex("[a-zA-Z0-9_-]{1,70}")
     private fun mapStorage(id: String): AtomicFile {
         require(mapIdPattern.matches(id))
-        return AtomicFile(File(mapDirectory, "$"+"{id}.goview.json"))
+        return AtomicFile(File(mapDirectory, "${id}.goview.json"))
     }
     private fun activeStorage(): AtomicFile {
         val id = preferences.getString("activeMap", null)
@@ -165,13 +165,11 @@ class GoviewStudioActivity : Activity() {
                     try {
                         out.write(bytes)
                         storage.finishWrite(out)
-                        check(preferences.edit().putString("activeMap", id).commit()) {
-                            "could not store active map id"
-                        }
                     } catch (error: Exception) {
                         storage.failWrite(out)
                         throw error
                     }
+                    check(preferences.edit().putString("activeMap", id).commit()) { "could not store active map id" }
                 }
             }
             if (result.isFailure) callback("nativeStatus", "บันทึกลงเครื่องไม่สำเร็จ: เก็บไฟล์เดิมไว้")
@@ -185,7 +183,7 @@ class GoviewStudioActivity : Activity() {
                     val id = file.name.removeSuffix(".goview.json")
                     if (mapIdPattern.matches(id)) {
                         runCatching {
-                            val raw = String(readLimited(mapStorage(id).openRead()), StandardCharsets.UTF_8)
+                            val raw = mapStorage(id).openRead().use { String(readLimited(it), StandardCharsets.UTF_8) }
                             val info = JSONObject(raw).getJSONObject("map")
                             entries.put(JSONObject().put("id", id)
                                 .put("title", info.getString("title"))
