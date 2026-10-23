@@ -10,10 +10,28 @@ import java.nio.file.StandardCopyOption
 class MapStateStore(private val root:File){
     constructor(context:Context):this(File(context.filesDir,"outside-view"))
     private val journalFile:File get()=File(root,"journal.json")
-    fun load():MapJournal{if(!journalFile.isFile)return MapJournal(MapState());return runCatching{decode(JSONObject(journalFile.readText()))}.getOrElse{MapJournal(MapState())}}
-    @Synchronized fun commit(journal:MapJournal){require(journal.version==1);root.mkdirs();val tmp=File(root,"journal.json.tmp");java.io.FileOutputStream(tmp).use{stream->stream.write(encode(journal).toString().toByteArray(Charsets.UTF_8));stream.fd.sync()};try{Files.move(tmp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}catch(e:Exception){tmp.delete();throw IllegalStateException("atomic journal replacement unavailable",e)}}
+    /** All store instances for one journal share the same process-wide transaction boundary. */
+    internal val transactionLock:Any = journalLocks.computeIfAbsent(journalFile.canonicalPath) { Any() }
+    companion object {
+        private val journalLocks=java.util.concurrent.ConcurrentHashMap<String,Any>()
+    }
+    fun load():MapJournal = synchronized(transactionLock) {if(!journalFile.isFile)return MapJournal(MapState());return runCatching{decode(JSONObject(journalFile.readText()))}.getOrElse{MapJournal(MapState())}}
+    /** One transaction in the original journal. Fail closed on unreadable existing data. */
+    fun importGeoJson(batch: GeoJsonBatch): Int = synchronized(transactionLock) {
+        val before = if(journalFile.isFile) decode(JSONObject(journalFile.readText())) else MapJournal(MapState())
+        val after = GeoJsonImport.merge(before, batch)
+        if(after != before) commit(after)
+        return after.state.pins.size - before.state.pins.size
+    }
+    fun commit(journal:MapJournal):Unit = synchronized(transactionLock) {require(journal.version==1);if(journalFile.isFile)decode(JSONObject(journalFile.readText()));root.mkdirs();val tmp=File(root,"journal.json.tmp");java.io.FileOutputStream(tmp).use{stream->stream.write(encode(journal).toString().toByteArray(Charsets.UTF_8));stream.fd.sync()};try{Files.move(tmp.toPath(),journalFile.toPath(),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING)}catch(e:Exception){tmp.delete();throw IllegalStateException("atomic journal replacement unavailable",e)};Unit}
+    /** Screen recreation must read and update the journal in the same shared transaction. */
+    fun prepareScreen():MapJournal = synchronized(transactionLock) {
+        val journal=load()
+        commit(journal.copy(renderedRevision=-1))
+        journal
+    }
     /** Called only for the renderer's completed screen/retry frame, never transport acceptance. */
-    @Synchronized fun confirmScreen(c:RenderConfirmation):Boolean {
+    fun confirmScreen(c:RenderConfirmation):Boolean = synchronized(transactionLock) {
         val j=load()
         if(!c.commandId.startsWith("screen-")||c.token!="screen"||c.error!=null||c.revision!=j.state.revision||j.pending!=null)return false
         commit(j.copy(renderedRevision=c.revision));return true
