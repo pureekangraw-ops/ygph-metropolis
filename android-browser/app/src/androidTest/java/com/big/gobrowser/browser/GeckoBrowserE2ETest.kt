@@ -162,12 +162,15 @@ class GeckoBrowserE2ETest {
         lateinit var sourceId:String
         instrumentation.runOnMainSync {sourceId=engine().open("https://example.org")}
         awaitPage("example.org")
+        // Selecting another tab makes the source inactive and flushes Gecko session state.
+        instrumentation.runOnMainSync {engine().open("https://example.com")}
         val recovery=GeckoBrowserRecovery(instrumentation.targetContext)
         var saved:org.mozilla.geckoview.GeckoSession.SessionState?=null
         val deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
         while(saved==null && System.nanoTime()<deadline) {
             val candidate=recovery.read(sourceId)
-            if(candidate?.toString()?.contains("https://example.org")==true)saved=candidate else Thread.sleep(100)
+            val sourceUri=runCatching {candidate?.get(candidate.currentIndex)?.uri}.getOrNull()
+            if(sourceUri!=null && android.net.Uri.parse(sourceUri).host=="example.org")saved=candidate else Thread.sleep(100)
         }
         assertNotNull("Known source session must have durable recovery state",saved)
         repeat(3) { attempt ->
