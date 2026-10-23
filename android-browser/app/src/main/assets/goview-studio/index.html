@@ -52,7 +52,7 @@ small{font-size:11px;color:#9bb6ce}
  <div class="top">
   <h1>◉ GOVIEW <span>GO MAP STUDIO · OFFLINE</span></h1>
   <div class="row">
-   <button id="new">แผนที่ใหม่</button><button id="demo">GO วาดตัวอย่าง</button>
+   <button id="new">แผนที่ใหม่</button><button id="library">คลังแผนที่</button><button id="demo">GO วาดตัวอย่าง</button>
    <button id="import">นำเข้า / GO Update</button><button class="primary" id="export">ส่งแพ็กเกจ</button>
   </div>
  </div>
@@ -130,7 +130,7 @@ function persist() {
  try{
   const payload=G.pack(map);
   if(native)window.GoviewHost.savePackage(payload);
-  else localStorage.setItem(LOCAL_KEY,payload);
+  else {localStorage.setItem(LOCAL_KEY,payload);localStorage.setItem(LOCAL_KEY+":"+map.mapId,payload);}
   status("บันทึกแผนที่เวอร์ชัน "+map.version+" แล้ว");
  }catch(e){status("บันทึกไม่ได้: "+e.message);}
 }
@@ -301,6 +301,13 @@ function offer(raw){
 $("file").onchange=async(ev)=>{const f=ev.target.files?.[0];if(!f)return;try{if(f.size>1049000)throw Error("ขนาดไฟล์เกิน");offer(await f.text());}catch(e){status(e.message);}ev.target.value="";};
 $("import").onclick=()=>native?window.GoviewHost.chooseImport():$("file").click();
 $("restore").onclick=$("import").onclick;
+$("library").onclick=()=>{
+ if(native){window.GoviewHost.listMaps();return;}
+ const entries=Object.keys(localStorage).filter(k=>k.startsWith(LOCAL_KEY+":")).map(key=>{
+  try{const value=G.unpack(localStorage.getItem(key));return {id:value.mapId,title:value.title,version:value.version};}catch{return null;}
+ }).filter(Boolean);
+ window.GoviewStudio.receiveMapList(JSON.stringify(entries));
+};
 $("myGps").onclick=()=>native?window.GoviewHost.locate():status("GPS ในเวอร์ชันเว็บตัวอย่างต้องใช้ผ่านแอป Android");
 for(const id of ["roadsLayer","areasLayer","poisLayer"])$(id).onchange=draw;
 $("search").oninput=event=>{
@@ -313,6 +320,15 @@ $("search").oninput=event=>{
 window.GoviewStudio={
  receiveNativePackage(raw){try{map=G.unpack(raw);ready=true;render();$("fit").click();}catch(e){status("ข้อมูลบนเครื่องเปิดไม่ได้: "+e.message);}},
  receiveImport:offer,
+ receiveMapList(raw){
+  let entries;try{entries=JSON.parse(raw);}catch{return status("อ่านคลังแผนที่ไม่ได้");}
+  if(!entries.length)return status("ยังไม่มีแผนที่ที่บันทึกไว้");
+  showDialog("คลังแผนที่",entries.map(x=>x.title+" · v"+x.version+"\nID: "+x.id).join("\n\n"),entries[0].id,"เปิดแผนที่",id=>{
+   if(!id)return;if(!entries.some(e=>e.id===id))return status("กรุณาระบุ ID ที่มีอยู่ในรายการ");
+   if(native)window.GoviewHost.openMap(id);
+   else{try{map=G.unpack(localStorage.getItem(LOCAL_KEY+":"+id));localStorage.setItem(LOCAL_KEY,G.pack(map));render();$("fit").click();}catch(e){status(e.message);}}
+  });
+ },
  setGps(text,lat,lng){
   $("gps").textContent=text;
   if(typeof lat==="number"&&typeof lng==="number"&&Number.isFinite(lat)&&Number.isFinite(lng)){
