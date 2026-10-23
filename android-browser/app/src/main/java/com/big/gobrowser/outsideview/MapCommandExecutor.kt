@@ -2,7 +2,7 @@ package com.big.gobrowser.outsideview
 
 import java.util.UUID
 
-class MapCommandExecutor(private val store:MapStateStore,private val renderer:MapRenderer,private val scope:ExecutionScope,private val clock:()->Long={System.currentTimeMillis()},private val onStorageError:()->Unit={}) {
+class MapCommandExecutor(private val store:MapStateStore,private val renderer:MapRenderer,private val scope:ExecutionScope,private val clock:()->Long={System.currentTimeMillis()},private val onStorageError:()->Unit={},private val onReceipt:(MapReceipt)->Unit={}) {
     @Synchronized fun submit(command:MapCommand):MapReceipt = synchronized(store.transactionLock) {
         val j=store.load();val hash=MapCommandCodec.canonical(command)
         j.hashes[command.commandId]?.let {
@@ -25,6 +25,6 @@ class MapCommandExecutor(private val store:MapStateStore,private val renderer:Ma
         val r=if(c.error!=null)MapReceipt(c.commandId,MapReceiptStatus.FAILED,c.error,c.revision,c.token) else MapReceipt(c.commandId,MapReceiptStatus.APPLIED,null,c.revision,c.token,c.confirmedFeatureIds,c.camera?.center(),c.cameraZoom)
         store.commit(j.copy(pending=null,receipts=j.receipts+(c.commandId to r),renderedRevision=if(r.status==MapReceiptStatus.APPLIED)c.revision else j.renderedRevision));return r
     }
-    private fun dispatch(p:PendingRender,s:MapState)=renderer.render(RenderRequest(p.command.commandId,p.revision,renderer.styleGeneration,p.token,s,if(p.command.action==MapAction.FOCUS)p.command.target else null)){confirmation->try {confirm(confirmation)}catch(error:Exception){onStorageError()}}
+    private fun dispatch(p:PendingRender,s:MapState)=renderer.render(RenderRequest(p.command.commandId,p.revision,renderer.styleGeneration,p.token,s,if(p.command.action==MapAction.FOCUS)p.command.target else null)){confirmation->try {onReceipt(confirm(confirmation))}catch(error:Exception){onStorageError()}}
     private fun reduce(s:MapState,c:MapCommand):MapState=when(c.action){MapAction.UPSERT_ZONE->s.copy(zones=s.zones+(c.zone!!.id to c.zone));MapAction.UPSERT_GRID->s.copy(grids=s.grids+(c.grid!!.id to c.grid));MapAction.UPSERT_PIN->s.copy(pins=s.pins+(c.pin!!.id to c.pin));MapAction.NOTE->s.copy(notes=s.notes+(c.target!!.id to c.note!!));MapAction.RECOMMEND->s.copy(recommendations=s.recommendations+c.target!!.id);MapAction.HIGHLIGHT->s.copy(highlights=s.highlights+c.target!!.id);MapAction.FOCUS->s.copy(focused=c.target!!.id);MapAction.REMOVE->s.copy(zones=s.zones-c.target!!.id,grids=s.grids-c.target!!.id,pins=s.pins-c.target!!.id);MapAction.CLEAR->when(c.scope){"pins"->s.copy(pins=emptyMap());"grids"->s.copy(grids=emptyMap());"zones"->s.copy(zones=emptyMap());else->s.copy(pins=emptyMap(),grids=emptyMap(),zones=emptyMap())};MapAction.ROUTE->s}
 }

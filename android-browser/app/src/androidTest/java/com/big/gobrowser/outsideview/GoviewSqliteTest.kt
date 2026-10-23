@@ -127,4 +127,15 @@ class GoviewSqliteTest {
         assertArrayEquals(backupBytes,File(root,"backups/$backup").readBytes())
     }
 
+    @Test fun missingRecoveredTargetNeverFallsBackToStaleLegacy()=isolated {root->
+        val original=seed(root);val store=MapStateStore(root,SqliteJournalBackend(root));store.load()
+        val backup=store.createBackup();store.approveRecovery(store.previewRecovery(backup))
+        val pointer=File(root,"goview.current").readText();val recovered=File(root,pointer)
+        val retained=File(root,"synthetic-held-database.sqlite");check(recovered.renameTo(retained))
+        val legacy=File(root,"journal.json").readBytes()
+        fails {MapStateStore(root,SqliteJournalBackend(root)).load()}
+        assertFalse(recovered.exists());assertEquals(pointer,File(root,"goview.current").readText())
+        assertArrayEquals(legacy,File(root,"journal.json").readBytes());assertEquals(original,MapStateStore(root).load())
+    }
+
 }

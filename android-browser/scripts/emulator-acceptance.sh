@@ -34,6 +34,19 @@ if [ "$status" -ne 0 ]; then
     safe="${safe//$'\n'/'%0A'}"
     echo "::error title=JUnit::$safe"
   done
+  # Preserve actionable nested Espresso causes for synthetic GOVIEW failures.
+  python3 - <<'PYDIAG'
+from pathlib import Path
+import xml.etree.ElementTree as ET
+for path in Path('app/build/outputs/androidTest-results/connected').rglob('*.xml'):
+    try: root = ET.parse(path).getroot()
+    except ET.ParseError: continue
+    for case in root.iter('testcase'):
+        if not any(x in case.get('classname', '') for x in ('Goview', 'OutsideViewFlowTest')): continue
+        for failure in list(case.findall('failure')) + list(case.findall('error')):
+            print('GOVIEW_FAILURE_DETAIL ' + case.get('name', ''))
+            print((failure.text or '')[:6000])
+PYDIAG
 fi
 exit "$status"
 

@@ -38,6 +38,9 @@ class GoviewStorageFailureTest {
             instrumentation.runOnMainSync {assertFalse(share.isEnabled);assertTrue(status.text.toString().contains("ไฟล์เดิมยังอยู่"))}
             assertEquals("corrupt synthetic journal",file.readText())
             assertFalse(File(root,"journal.json.tmp").exists())
-        }finally{root.deleteRecursively()}
+        }finally{
+            (type.getDeclaredField("worker").apply {isAccessible=true}.get(activity) as java.util.concurrent.ExecutorService).shutdown()
+            root.deleteRecursively()
+        }
     }
 }

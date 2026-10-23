@@ -32,4 +32,19 @@ class MapCommandExecutorTest {
         assertTrue(store.confirmScreen(RenderConfirmation("screen-retry",7,2,"screen",emptySet())))
         assertEquals(7,store.load().renderedRevision);dir.deleteRecursively()
     }
+    @Test fun delayedConfirmationAfterReloadReportsPendingUntilMatchingFramePersists() {
+        val dir=root();val store=MapStateStore(dir);val renderer=Renderer(true);val receipts=mutableListOf<MapReceipt>()
+        try {
+            val executor=MapCommandExecutor(store,renderer,ExecutionScope.TEST,onReceipt={receipts+=it})
+            executor.submit(MapCommand("delayed",MapAction.UPSERT_ZONE,zone=Zone("a","A",Bounds(0.0,0.0,1.0,1.0))))
+            val old=renderer.request!!;val delayed=renderer.callback!!
+            renderer.cancel()
+            delayed(RenderConfirmation(old.commandId,old.revision,old.styleGeneration,old.token,setOf("a")))
+            assertEquals(MapReceiptStatus.PENDING,receipts.single().status);assertNotNull(store.load().pending)
+            executor.resume();val fresh=renderer.request!!
+            renderer.callback!!(RenderConfirmation(fresh.commandId,fresh.revision,fresh.styleGeneration,fresh.token,setOf("a")))
+            assertEquals(MapReceiptStatus.APPLIED,receipts.last().status);assertNull(store.load().pending)
+        }finally{dir.deleteRecursively()}
+    }
+
 }

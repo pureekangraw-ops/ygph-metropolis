@@ -26,7 +26,7 @@ object GoviewSandboxContract {
         require(tokener.nextClean()=='\u0000')
         if(!envelope.has("contractVersion"))return GeoJsonImport.parse(bytes.inputStream())
         require(envelope.keys().asSequence().toSet()==setOf("contractVersion","operation","sourceCaptureId","baseVersion","package")){"Unexpected proposal fields"}
-        require(envelope.get("contractVersion").toString()=="1" && envelope.getString("operation")=="propose-update")
+        require(envelope.get("contractVersion") is Number && envelope.get("contractVersion").toString()=="1" && envelope.getString("operation")=="propose-update")
         val capture=envelope.getString("sourceCaptureId");require(capture.matches(Regex("[a-zA-Z0-9_-]{8,100}")))
         val version=envelope.get("baseVersion");require(version is Number)
         val base=version.toString().toBigDecimal().longValueExact();require(base>=0)
