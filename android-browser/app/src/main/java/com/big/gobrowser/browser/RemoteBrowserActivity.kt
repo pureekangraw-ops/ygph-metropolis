@@ -165,6 +165,10 @@ class RemoteBrowserActivity : Activity() {
         assist.addView(action("👁 เรียก GO") { inviteGo() }, weighted())
         assist.addView(action("🖐 ให้ GO ทำ") { grantGo() }, weighted())
         toolbar.addView(assist)
+        val permissionRow=LinearLayout(this).apply {orientation=LinearLayout.HORIZONTAL}
+        permissionRow.addView(action("🔐 สิทธิ์เว็บไซต์ · GO"){sitePermissionManager()},
+            LinearLayout.LayoutParams(-1,dp(44)))
+        toolbar.addView(permissionRow)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(action("✋ ฉันควบคุมเอง") { takeOver() }, weighted())
         actions.addView(action("🌙 เบื้องหลัง") { backgroundMenu() }, weighted())
@@ -301,14 +305,81 @@ class RemoteBrowserActivity : Activity() {
             }.onFailure {status.text="เปิด Live View ไม่ได้ · " + readableError(it)}
         }
     }
+    /** BIG authorizes each HTTPS host before separately inviting GO to the session. */
+    private fun withApprovedSite(next:()->Unit) {
+        if(!session){status.text="เปิดเว็บไซต์ก่อน";return}
+        query("GET","/v1/site-permissions",null){outcome->
+            outcome.onSuccess {record->
+                if(record.optBoolean("canInviteGo")){next();return@onSuccess}
+                val host=record.optString("pageHost")
+                if(host.isBlank()){status.text="อ่านโดเมนปัจจุบันไม่ได้";return@onSuccess}
+                AlertDialog.Builder(this).setTitle("อนุญาตให้ GO เข้า "+host+"?")
+                    .setMessage("อนุญาตเว็บไซต์นี้เท่านั้น GO ยังต้องได้รับคำเชิญแต่ละเซสชัน\\nถอนสิทธิ์ได้จาก 🔐 สิทธิ์เว็บไซต์")
+                    .setNegativeButton("ยกเลิก",null)
+                    .setPositiveButton("อนุญาตเว็บนี้"){_,_->
+                        query("POST","/v1/site-permissions",JSONObject()
+                            .put("action","allow").put("host",host)){saved->
+                            saved.onSuccess {v->
+                                if(v.optBoolean("canInviteGo")){status.text="อนุญาต "+host+" แล้ว";next()}
+                                else status.text="อนุญาตไซต์ไม่สำเร็จ"
+                            }.onFailure {status.text="ตั้งค่าสิทธิ์เว็บไม่ได้ · "+readableError(it)}
+                        }
+                    }.show()
+            }.onFailure {status.text="อ่านสิทธิ์เว็บไม่ได้ · "+readableError(it)}
+        }
+    }
+
+    private fun sitePermissionManager() {
+        if(!configured()){status.text="ตั้งค่า Cloudflare ก่อน";return}
+        query("GET","/v1/site-permissions",null){outcome->
+            outcome.onSuccess {record->
+                val host=record.optString("pageHost").takeIf{it.isNotBlank()}
+                val sites=record.optJSONArray("approvedSites")?:JSONArray()
+                val labels=mutableListOf<String>()
+                if(host!=null)labels.add("เว็บปัจจุบัน: "+host+" · "+
+                    if(record.optBoolean("canInviteGo"))"อนุญาต GO" else "ยังไม่อนุญาต GO")
+                for(i in 0 until sites.length())labels.add("ถอนสิทธิ์: "+sites.optString(i))
+                AlertDialog.Builder(this).setTitle("🔐 จัดการสิทธิ์เว็บไซต์")
+                    .setMessage("การอนุญาตเว็บแยกจากสิทธิ์ควบคุมเซสชัน รายการเก็บใน Workspace ของบิ๊ก")
+                    .setItems(labels.toTypedArray()){_,index->
+                        if(host!=null&&index==0){
+                            if(record.optBoolean("ownerGranted")&&!record.optBoolean("defaultGranted"))
+                                confirmRevokeHost(host)
+                            else if(!record.optBoolean("canInviteGo"))
+                                withApprovedSite {status.text="อนุญาตเว็บแล้ว · กด 👁 หรือ 🖐 เพื่อเชิญ GO"}
+                            else status.text="ไซต์นี้รองรับ GO อยู่แล้ว"
+                        }else{
+                            val i=index-if(host!=null)1 else 0
+                            if(i>=0&&i<sites.length())confirmRevokeHost(sites.getString(i))
+                        }
+                    }.setNegativeButton("ปิด",null).show()
+            }.onFailure {status.text="โหลดสิทธิ์เว็บไม่ได้ · "+readableError(it)}
+        }
+    }
+    private fun confirmRevokeHost(host:String) {
+        AlertDialog.Builder(this).setTitle("ถอนสิทธิ์ GO?")
+            .setMessage("ถอนสิทธิ์ "+host+" · GO จะเสียสิทธิ์ดู/ควบคุมเว็บนี้")
+            .setNegativeButton("ยกเลิก",null).setPositiveButton("ถอนสิทธิ์"){_,_->
+                query("POST","/v1/site-permissions",JSONObject()
+                    .put("action","revoke").put("host",host)){result->
+                    result.onSuccess {
+                        status.text="ถอนสิทธิ์ "+host+" แล้ว"
+                        query("GET","/v1/session",null){updated->updated.onSuccess{renderSession(it)}}
+                    }.onFailure {status.text="ถอนสิทธิ์ไม่ได้ · "+readableError(it)}
+                }
+            }.show()
+    }
+
     private fun inviteGo() {
         if(!session) {status.text="เปิดเว็บไซต์ก่อน";return}
         AlertDialog.Builder(this).setTitle("เชิญ GO ดูหน้าเว็บ")
             .setMessage("อนุญาตให้ GO ที่ถือคีย์แบบอ่านอย่างเดียวอ่านหน้าเว็บเซสชันนี้ผ่านช่องเครื่องมือที่เชื่อมแล้ว\n\nไม่อนุญาตให้กดหรือเปลี่ยนข้อมูล")
             .setPositiveButton("เชิญ GO") { _,_->
-                query("POST","/v1/observe-access",JSONObject().put("allow",true)){result->
+                withApprovedSite {
+                    query("POST","/v1/observe-access",JSONObject().put("allow",true)){result->
                     result.onSuccess {renderSession(it);readPage()}
                         .onFailure {status.text="เชิญ GO ไม่สำเร็จ · "+readableError(it)}
+                    }
                 }
             }.setNegativeButton("ยกเลิก",null).show()
     }
@@ -329,9 +400,11 @@ class RemoteBrowserActivity : Activity() {
         AlertDialog.Builder(this).setTitle("ให้ GO ควบคุมหน้าเว็บ?")
             .setMessage("GO จะได้รับสิทธิ์กด/พิมพ์ผ่าน GO Controller ที่เชื่อมกับ Worker นี้ เฉพาะโดเมนที่อนุญาต\n\nการเปิดสิทธิ์ไม่ได้แปลว่า GO เริ่มงานเอง ต้องมีคำสั่งงานผ่านช่อง GO ที่เชื่อมแล้ว")
             .setPositiveButton("อนุญาต") { _,_->
-                query("POST", "/v1/control", JSONObject().put("controller","GO")){result->
+                withApprovedSite {
+                    query("POST", "/v1/control", JSONObject().put("controller","GO")){result->
                     result.onSuccess { renderSession(it) }
                         .onFailure {status.text="ยังให้ GO ควบคุมไม่ได้ · "+readableError(it)}
+                    }
                 }
             }.setNegativeButton("ยกเลิก",null).show()
     }
