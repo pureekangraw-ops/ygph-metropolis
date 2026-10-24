@@ -2,6 +2,8 @@ package com.big.gobrowser.outsideview
 
 import android.webkit.WebView
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.onData
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.withText
@@ -255,15 +257,25 @@ class GoviewStudioAndroidTest {
             .put("version",1).put("sha256",digest).put("status","OWNER_APPROVED_FILE_READBACK_VERIFIED").toString())
         File(directory,"$bId.json").writeText(JSONObject().put("transferId",bId).put("mapId","missing_$suffix")
             .put("version",1).put("sha256","0".repeat(64)).put("status","DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
-        js("GoviewHost.exportReceipt();true")
-        onView(withText(startsWith(bId))).perform(click())
-        onView(withText(containsString("NOT_SAVED"))).check(matches(isDisplayed()))
-        onView(withText("Close")).perform(click())
-        js("GoviewHost.exportReceipt();true")
-        onView(withText(startsWith(aId))).perform(click())
-        onView(withText(containsString(digest))).check(matches(isDisplayed()))
-        onView(withText(containsString("READ_VERIFIED"))).check(matches(isDisplayed()))
-        onView(withText("Close")).perform(click())
+        fun openReceipts() {
+            js("GoviewHost.exportReceipt();true")
+            // WebView bridge work is not an Espresso idling resource. Await the native dialog.
+            await("Native receipt chooser visible") {
+                runCatching {
+                    onView(withText("Choose transfer receipt")).inRoot(isDialog()).check(matches(isDisplayed()))
+                    true
+                }.getOrDefault(false)
+            }
+        }
+        openReceipts()
+        onData(startsWith(bId)).inRoot(isDialog()).perform(click())
+        onView(withText(containsString("NOT_SAVED"))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText("Close")).inRoot(isDialog()).perform(click())
+        openReceipts()
+        onData(startsWith(aId)).inRoot(isDialog()).perform(click())
+        onView(withText(containsString(digest))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText(containsString("READ_VERIFIED"))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText("Close")).inRoot(isDialog()).perform(click())
         assertEquals(raw,saved.readText())
         assertFalse(File(screen.activity.filesDir,"goview-studio-maps/missing_$suffix.goview.json").exists())
     }
