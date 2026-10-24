@@ -112,8 +112,10 @@ class GoviewStudioAndroidTest {
         ) as String
         val beforeContent = target.takeIf { it.exists() }?.readText()
         val jsonArgument = JSONObject.quote(payload)
-        assertEquals(true, js("window.GoviewStudio.receiveImport($jsonArgument);" +
-            "document.getElementById('modal').classList.contains('open')"))
+        js("window.GoviewStudio.receiveImport($jsonArgument);true")
+        await("Destination read must precede approval preview") {
+            js("document.getElementById('modal').classList.contains('open')") == true
+        }
         assertEquals(beforeContent, target.takeIf { it.exists() }?.readText())
         assertEquals(true, js("document.getElementById('modalText').textContent.includes('nodes:')"))
         assertEquals(true, js("document.getElementById('modalOk').click(); true"))
@@ -123,4 +125,59 @@ class GoviewStudioAndroidTest {
             }.getOrDefault(false)
         }
     }
+    @Test fun nativeDestinationRejectsConflictsAndRetainsPreviousVersion() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val id = "synthetic_guard_" + System.nanoTime()
+        val file = File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json")
+        fun payload(version: Int, title: String) = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';m.version=$version;m.title='$title';return GoviewEngine.pack(m)})()") as String
+        fun save(raw: String) { js("document.getElementById('message').textContent='waiting';GoviewHost.savePackage(" + JSONObject.quote(raw) + ");true") }
+        val original = payload(1, "Original")
+        save(original)
+        await("Initial native commit") { file.exists() && file.readText() == original }
+        val conflicting = payload(1, "Conflicting")
+        save(conflicting)
+        await("Native guard rejects conflict even outside JS preview") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(original, file.readText())
+        val update = payload(2, "Updated")
+        save(update)
+        await("New version committed") { file.readText() == update }
+        assertEquals(original, File(file.parentFile, "$id.v1.backup.json").readText())
+        save(original)
+        await("Stale version rejected") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+        val third = payload(3, "Proposal")
+        js("document.getElementById('message').textContent='waiting';GoviewHost.saveApprovedPackage(" + JSONObject.quote(third) + "," + JSONObject.quote(original) + ");true")
+        await("Changed preview base must reject even a newer proposal") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+        instrumentation.runOnMainSync { screen.activity.recreate() }
+        await("Recreated screen ready") { runCatching { js("Boolean(window.GoviewHost)") == true }.getOrDefault(false) }
+        save(conflicting)
+        await("Recreated instance also checks destination version") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+    }
+
+    @Test fun downloadValidationBindsIdentityVersionAndDigestWithoutSaving() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine)") == true }
+        val id = "synthetic_download_" + System.nanoTime()
+        val raw = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';return GoviewEngine.pack(m)})()") as String
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val validator = GoviewStudioActivity::class.java.getDeclaredMethod("validateDownloadedPackage",
+            String::class.java, String::class.java, String::class.java, String::class.java).apply { isAccessible = true }
+        validator.invoke(screen.activity, raw, id, "1", digest)
+        for (headers in listOf(arrayOf("other", "1", digest), arrayOf(id, "2", digest), arrayOf(id, "1", "bad"))) {
+            val failure = runCatching { validator.invoke(screen.activity, raw, headers[0], headers[1], headers[2]) }.exceptionOrNull()
+            assertTrue("Mismatched download envelope must be rejected", failure is java.lang.reflect.InvocationTargetException)
+        }
+        assertFalse("Download validation must not commit", File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json").exists())
+    }
+
 }

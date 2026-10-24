@@ -48,7 +48,8 @@ class GoviewStudioActivity : Activity() {
         val id = preferences.getString("activeMap", null)
         return if (id != null && mapIdPattern.matches(id)) mapStorage(id) else legacyStorage
     }
-    private val storageLock = Any()
+    // All Activity instances coordinate read/modify/write, including rotation.
+    companion object { private val storageLock = Any() }
     private var pendingExport: ByteArray? = null
     private var webReady = false
     private var pendingIncoming: Intent? = null
@@ -197,7 +198,21 @@ class GoviewStudioActivity : Activity() {
             if (raw != null) callback("receiveNativePackage", raw)
         }
 
-        @JavascriptInterface fun savePackage(text: String) {
+        @JavascriptInterface fun prepareImport(text: String) {
+            val result = synchronized(storageLock) { runCatching {
+                check(validPackage(text))
+                val id = JSONObject(text).getJSONObject("map").getString("mapId")
+                val destination = mapStorage(id)
+                if (destination.baseFile.exists() || File(destination.baseFile.path + ".bak").exists())
+                    destination.openRead().use { String(readLimited(it), StandardCharsets.UTF_8) } else null
+            } }
+            result.onSuccess { callback("receiveImportPreview", text, it) }
+                .onFailure { callback("nativeStatus", "Preview อ่านแผนที่เดิมไม่ได้ · ไม่เปลี่ยนข้อมูล") }
+        }
+
+        @JavascriptInterface fun savePackage(text: String) { save(text, null) }
+        @JavascriptInterface fun saveApprovedPackage(text: String, expectedBase: String) { save(text, expectedBase) }
+        private fun save(text: String, expectedBase: String?) {
             if (!validPackage(text)) {
                 callback("nativeStatus", "ไม่บันทึก: โครงสร้างแพ็กเกจผิดหรือเกินขนาด")
                 return
@@ -207,6 +222,37 @@ class GoviewStudioActivity : Activity() {
             val result = synchronized(storageLock) {
                 runCatching {
                     val storage = mapStorage(id)
+                    // Read the destination even when a different map is currently displayed.
+                    // Corrupt/unreadable existing data must never be treated as a new map.
+                    val existing = if (storage.baseFile.exists() || File(storage.baseFile.path + ".bak").exists())
+                        storage.openRead().use { readLimited(it) } else null
+                    if (expectedBase != null) {
+                        val actual = existing?.let { String(it, StandardCharsets.UTF_8) } ?: ""
+                        check(actual == expectedBase) { "PREVIEW_BASE_CHANGED" }
+                    }
+                    if (existing != null) {
+                        val oldEnvelope = JSONObject(String(existing, StandardCharsets.UTF_8))
+                        val oldMap = oldEnvelope.getJSONObject("map")
+                        val incoming = JSONObject(text).getJSONObject("map")
+                        check(oldMap.getString("mapId") == id) { "STORED_IDENTITY_CONFLICT" }
+                        val oldVersion = oldMap.getInt("version")
+                        val newVersion = incoming.getInt("version")
+                        check(newVersion >= oldVersion) { "STALE_VERSION" }
+                        if (newVersion == oldVersion) {
+                            check(existing.contentEquals(bytes)) { "VERSION_CONFLICT" }
+                        } else {
+                            // Retain exact old bytes before replacing the active version.
+                            val backup = AtomicFile(File(mapDirectory, "$id.v$oldVersion.backup.json"))
+                            if (backup.baseFile.exists()) {
+                                check(backup.openRead().use { readLimited(it) }.contentEquals(existing)) { "BACKUP_CONFLICT" }
+                            } else {
+                                val backupOut = backup.startWrite()
+                                try { backupOut.write(existing); backup.finishWrite(backupOut) }
+                                catch (failure: Exception) { backup.failWrite(backupOut); throw failure }
+                                check(backup.openRead().use { readLimited(it) }.contentEquals(existing)) { "BACKUP_READBACK_FAILED" }
+                            }
+                        }
+                    }
                     val out = storage.startWrite()
                     try {
                         out.write(bytes)
@@ -323,15 +369,29 @@ class GoviewStudioActivity : Activity() {
                             error("GO HTTP " + response.code)
                         }
                         val stream = response.body?.byteStream() ?: error("GO returned empty response")
-                        String(stream.use { readLimited(it) }, StandardCharsets.UTF_8)
+                        val bytes = stream.use { readLimited(it) }
+                        val text = String(bytes, StandardCharsets.UTF_8)
+                        validateDownloadedPackage(text, mapId,
+                            response.header("x-goview-version"), response.header("x-goview-sha256"))
+                        text
                     }
                 }
-                result.onSuccess { callback("receiveImport", it) }
+                result.onSuccess { callback("receiveDownload", it, java.util.UUID.randomUUID().toString()) }
                     .onFailure { callback("nativeStatus", "GO Download ไม่สำเร็จ: " + (it.message ?: "network error")) }
             }.start()
         }
 
         @JavascriptInterface fun locate() { runOnUiThread { showLocation() } }
+    }
+
+    private fun validateDownloadedPackage(text: String, mapId: String, version: String?, sha256: String?) {
+        check(validPackage(text)) { "INVALID_PACKAGE" }
+        val received = JSONObject(text).getJSONObject("map")
+        check(received.getString("mapId") == mapId) { "DOWNLOAD_IDENTITY_MISMATCH" }
+        check(version == received.getInt("version").toString()) { "DOWNLOAD_VERSION_MISMATCH" }
+        val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        check(sha256 == digest) { "DOWNLOAD_DIGEST_MISMATCH" }
     }
 
     private fun readLimited(input: java.io.InputStream): ByteArray {

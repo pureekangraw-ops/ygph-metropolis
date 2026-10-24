@@ -136,12 +136,13 @@ function showDialog(title,text,inputValue,okLabel,callback) {
 }
 function nextId(prefix,items){let n=1;const used=new Set(items.map(x=>x.id));while(used.has(prefix+n))n++;return prefix+n;}
 function snap(){undoStack.push(JSON.stringify(map));if(undoStack.length>35)undoStack.shift();}
-function persist() {
+function persist(expectedBase) {
  try{
   const payload=G.pack(map);
   if(native){
    pendingWrite={id:map.mapId,version:map.version,digest:G.hash(payload)};
-   window.GoviewHost.savePackage(payload);
+   if(expectedBase!==undefined)window.GoviewHost.saveApprovedPackage(payload,expectedBase);
+   else window.GoviewHost.savePackage(payload);
    status("กำลังบันทึก · รอผลตรวจอ่านกลับจาก Android");
   }else{
    localStorage.setItem(LOCAL_KEY,payload);
@@ -300,19 +301,22 @@ function exportText(raw,name,type){
 }
 $("export").onclick=()=>{try{exportText(G.pack(map),filename(".goview.json"),"application/json");status("เตรียมแพ็กเกจพร้อม SHA-256");}catch(e){status(e.message);}};
 $("geoexport").onclick=()=>{try{exportText(JSON.stringify(G.toGeoJson(map),null,2),filename(".geojson"),"application/geo+json");status("ส่งข้อมูล Geometry ออก (GeoJSON ไม่มี graph metadata)");}catch(e){status(e.message);}};
-function offer(raw){
+function offer(raw,existing){
  let next;try{const file=JSON.parse(raw);next=file.type==="FeatureCollection"?G.fromGeoJson(file):G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
- const counts=G.diff(map,next),lines=Object.entries(counts).map(([key,v])=>key+": +"+v.added+" / เปลี่ยน "+v.changed+" / ลบ "+v.removed);
- const sameId=map.mapId===next.mapId;
+ if(native && arguments.length===1){window.GoviewHost.prepareImport(G.pack(next));return;}
+ let baseline=map;
+ if(native){try{baseline=existing?G.unpack(existing):G.fresh();}catch(e){return status("Preview อ่านแผนที่เดิมไม่ได้: "+e.message);}}
+ const counts=G.diff(baseline,next),lines=Object.entries(counts).map(([key,v])=>key+": +"+v.added+" / เปลี่ยน "+v.changed+" / ลบ "+v.removed);
+ const sameId=baseline.mapId===next.mapId;
  showDialog("GO Map Update · ตรวจ Diff",
   "แพ็กเกจ: "+next.title+" v"+next.version+"\nแผนที่: "+next.mapId+
   "\n"+lines.join("\n")+
-  (sameId && next.version<=map.version?"\nคำเตือน: เวอร์ชันนี้ไม่ใหม่กว่าในเครื่อง":"")+
+  (sameId && next.version<=baseline.version?"\nคำเตือน: เวอร์ชันนี้ไม่ใหม่กว่าในเครื่อง":"")+
   "\n\nไฟล์ที่ดาวน์โหลดมาไม่เปลี่ยนแผนที่จนกว่าจะกดอนุมัติ",null,"อนุมัติ Update",yes=>{
    if(!yes)return;
-   if(sameId && next.version<map.version)return status("ปฏิเสธ: ไม่อนุญาตให้ลดเวอร์ชันอัตโนมัติ");
-   if(sameId && next.version===map.version && G.hash(JSON.stringify(map))===G.hash(JSON.stringify(next)))return status("แพ็กเกจซ้ำ ไม่มีการเปลี่ยนแปลง");
-   snap();map=next;start=null;finish=null;path=null;poly=[];persist();render();$("fit").click();
+   try{if(G.updateDecision(baseline,next)==="DUPLICATE")return status("แพ็กเกจซ้ำ ไม่มีการเปลี่ยนแปลง");}
+   catch(e){return status("ปฏิเสธ Update: "+e.message);}
+   snap();map=next;start=null;finish=null;path=null;poly=[];persist(native?(existing||""):undefined);render();$("fit").click();
   });
 }
 $("file").onchange=async(ev)=>{const f=ev.target.files?.[0];if(!f)return;try{if(f.size>1049000)throw Error("ขนาดไฟล์เกิน");offer(await f.text());}catch(e){status(e.message);}ev.target.value="";};
@@ -347,6 +351,12 @@ $("search").oninput=event=>{
 window.GoviewStudio={
  receiveNativePackage(raw){try{map=G.unpack(raw);ready=true;render();$("fit").click();}catch(e){status("ข้อมูลบนเครื่องเปิดไม่ได้: "+e.message);}},
  receiveImport:offer,
+ receiveImportPreview:offer,
+ receiveDownload(raw,receipt){
+  try{G.unpack(raw);}catch(e){return status("Download validation failed: "+e.message);}
+  status("DOWNLOAD VERIFIED · "+receipt+" · ยังไม่ Update หรือบันทึก");
+  offer(raw);
+ },
  receiveMapList(raw){
   let entries;try{entries=JSON.parse(raw);}catch{return status("อ่านคลังแผนที่ไม่ได้");}
   if(!entries.length)return status("ยังไม่มีแผนที่ที่บันทึกไว้");
