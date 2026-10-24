@@ -418,8 +418,10 @@ class GoviewStudioActivity : Activity() {
             // A redirect must never forward a bearer credential to another host.
             val uri = runCatching { URI(endpoint.trim()) }.getOrNull()
             val host = uri?.host?.lowercase()
+            // Send the owner-entered read credential only to our known map receiver.
+            // Do not accept arbitrary workers.dev hostnames, even though they use HTTPS.
             val approvedHost = host == "goview.yggmetro.com" ||
-                (host != null && host.endsWith(".workers.dev"))
+                host == "goview-package-bridge.pureekangraw.workers.dev"
             if (uri == null || uri.scheme != "https" || !approvedHost ||
                 uri.userInfo != null || uri.query != null || uri.fragment != null ||
                 uri.port != -1 || (uri.path != null && uri.path != "" && uri.path != "/") ||
