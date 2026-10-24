@@ -22,7 +22,8 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 17
-        versionName = "0.7.1-preview"
+        versionName = "0.7.1"
+        manifestPlaceholders["observatoryAppLabel"] = "YGG Observatory"
         // Smaller handset build. Universal CI build and emulator remain unchanged.
         if (System.getenv("OBSERVATORY_ARM64_ONLY") == "true") {
             ndk { abiFilters += "arm64-v8a" }
@@ -43,7 +44,8 @@ android {
             // User-test APK installs alongside the original application: no old map data is removed.
             if (System.getenv("OBSERVATORY_PARALLEL_PREVIEW") == "true") {
                 applicationIdSuffix = ".preview"
-                versionNameSuffix = "-side-by-side"
+                versionNameSuffix = "-preview-side-by-side"
+                manifestPlaceholders["observatoryAppLabel"] = "YGG Observatory Preview"
             }
         }
         release {
