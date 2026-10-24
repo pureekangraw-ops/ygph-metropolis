@@ -419,7 +419,11 @@ class RemoteBrowserActivity : Activity() {
         session=!data.isNull("sessionId") && data.optString("sessionId").isNotEmpty()
         goControls=data.optString("controller")=="GO"
         touchBlock.visibility=if(goControls)View.VISIBLE else View.GONE
-        if (!session) liveViewerActive = false
+        if (!session) {
+            liveViewerActive = false
+            addressRow.visibility = View.VISIBLE
+            navigationRow.visibility = View.VISIBLE
+        }
         controller.text="ผู้ควบคุม: "+(if(goControls)"GO" else "BIG")+" · "+
             data.optString("mode","IDLE")+" · "+data.optString("status","IDLE")+" · GO อ่าน: "+(if(data.optBoolean("goCanObserve"))"อนุญาต" else "ปิด")
         if(url!=null && !address.hasFocus())address.setText(url)
