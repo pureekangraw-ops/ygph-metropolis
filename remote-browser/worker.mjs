@@ -138,7 +138,15 @@ export class BrowserWorkspace {
         case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
         case "forward": await page.goForward({waitUntil:"domcontentloaded",timeout:20000});break;
         case "reload": await page.reload({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "scroll": await page.evaluate(y => window.scrollBy(0,y),step.y);break;
+        case "scroll": {
+          // Dispatch a real wheel event at the page center. window.scrollBy only
+          // moves the top-level window and fails on sites with a nested scroll owner.
+          const viewport=page.viewport();
+          if (viewport && viewport.width > 0 && viewport.height > 0)
+            await page.mouse.move(Math.floor(viewport.width / 2),Math.floor(viewport.height / 2));
+          await page.mouse.wheel({deltaY:step.y});
+          break;
+        }
         case "click": {
           const risk=await page.$eval(step.selector, el => ({
             text:(el.innerText || el.getAttribute("aria-label") || el.value || "").slice(0,160),
