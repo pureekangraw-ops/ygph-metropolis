@@ -341,7 +341,17 @@ class GoviewStudioActivity : Activity() {
                 callback("nativeStatus", "ไม่ส่งออก: ไฟล์ไม่ถูกต้องหรือใหญ่เกิน")
                 return
             }
-            pendingExport = bytes
+            val exported = if (mime == "application/json") synchronized(storageLock) { runCatching {
+                val requested = JSONObject(text)
+                val map = requested.getJSONObject("map")
+                val stored = mapStorage(map.getString("mapId")).openRead().use { readLimited(it) }
+                val saved = JSONObject(String(stored, StandardCharsets.UTF_8))
+                check(saved.getJSONObject("map").getInt("version") == map.getInt("version") &&
+                    saved.getString("checksum") == requested.getString("checksum")) { "SAVE_BEFORE_EXPORT" }
+                stored
+            }.getOrNull() } else bytes
+            if (exported == null) { callback("nativeStatus", "Save and verify this version before exporting"); return }
+            pendingExport = exported
             runOnUiThread {
                 val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -416,8 +426,7 @@ class GoviewStudioActivity : Activity() {
                         val text = String(bytes, StandardCharsets.UTF_8)
                         validateDownloadedPackage(text, mapId,
                             response.header("x-goview-version"), response.header("x-goview-sha256"))
-                        check(JSONObject(text).getJSONObject("map").getInt("version").toString() == expectedVersion) { "EXPECTED_VERSION_MISMATCH" }
-                        check(sha256(bytes) == expectedSha256) { "EXPECTED_UPLOAD_DIGEST_MISMATCH" }
+                        GoviewArtifact.verify(bytes, mapId, expectedVersion.toInt(), expectedSha256)
                         synchronized(storageLock) {
                             val receipt = JSONObject().put("transferId", transferId).put("mapId", mapId)
                                 .put("version", expectedVersion.toInt()).put("sha256", expectedSha256)
@@ -432,8 +441,10 @@ class GoviewStudioActivity : Activity() {
                         text
                     }
                 }
+                preferences.edit().putString("endpoint", uri.host).putString("transferId", transferId)
+                    .putString("endpointStatus", if (result.isSuccess) "EXACT_DOWNLOAD_VERIFIED" else "DOWNLOAD_FAILED").apply()
                 result.onSuccess { callback("receiveDownload", it, transferId) }
-                    .onFailure { callback("nativeStatus", "GO Download ไม่สำเร็จ: " + (it.message ?: "network error")) }
+                    .onFailure { callback("nativeStatus", "GO Download failed · correlation: " + transferId) }
             }.start()
         }
 

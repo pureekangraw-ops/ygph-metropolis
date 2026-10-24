@@ -156,7 +156,16 @@ class GoviewStudioAndroidTest {
         }
         assertEquals(update, file.readText())
         instrumentation.runOnMainSync { screen.activity.recreate() }
-        await("Recreated screen ready") { runCatching { js("Boolean(window.GoviewHost)") == true }.getOrDefault(false) }
+        await("Recreated screen ready") {
+            val replaced = AtomicReference(false)
+            instrumentation.runOnMainSync {
+                replaced.set(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                    .filterIsInstance<GoviewStudioActivity>().any { it !== screen.activity })
+            }
+            replaced.get() && runCatching {
+                js("Boolean(window.GoviewHost && window.GoviewStudio && window.GoviewEngine && document.getElementById('counts').textContent.includes('11 ถนน'))") == true
+            }.getOrDefault(false)
+        }
         save(conflicting)
         await("Recreated instance also checks destination version") {
             (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
@@ -196,6 +205,12 @@ class GoviewStudioAndroidTest {
         await("Downgrade rejected against B v5 while A open") { (js("document.getElementById('message').textContent") as? String ?: "").contains("STALE_VERSION") }
         assertEquals(original, file.readText())
         val exact = JSONObject(payload(6)).toString(4)
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(exact.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        // Synthetic downloaded-receipt fixture; no claim of network or handset transfer.
+        val receipt = File(File(screen.activity.filesDir, "goview-transfers").apply { mkdirs() }, "synthetic_$suffix.json")
+        receipt.writeText(JSONObject().put("transferId", "synthetic_$suffix").put("mapId", id)
+            .put("version", 6).put("sha256", digest).put("status", "DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
         js("GoviewStudio.receiveImport(" + JSONObject.quote(exact) + ");true")
         await("New proposal preview") { js("document.getElementById('modal').classList.contains('open')") == true }
         js("document.getElementById('modalCancel').click();true")
@@ -204,6 +219,11 @@ class GoviewStudioAndroidTest {
         await("Proposal preview again") { js("document.getElementById('modal').classList.contains('open')") == true }
         js("document.getElementById('modalOk').click();true")
         await("Exact original imported bytes retained, including whitespace") { file.readText() == exact }
+        await("Durable transfer receipt promoted only after approval and readback") {
+            JSONObject(receipt.readText()).optString("status") == "OWNER_APPROVED_FILE_READBACK_VERIFIED"
+        }
+        assertEquals(digest, JSONObject(receipt.readText()).getString("readbackSha256"))
+        assertEquals("synthetic_$suffix", JSONObject(receipt.readText()).getString("transferId"))
         assertEquals(original, File(file.parentFile, "$id.v5.backup.json").readText())
     }
 

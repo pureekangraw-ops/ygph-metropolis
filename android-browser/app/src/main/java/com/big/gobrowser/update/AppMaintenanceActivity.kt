@@ -65,6 +65,7 @@ class AppMaintenanceActivity : Activity() {
     private fun digest(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
     private fun diagnostics(): String {
         val remote = getSharedPreferences("observatory-remote-ui", MODE_PRIVATE)
+        val mapConnection = getSharedPreferences("goview-studio-map-library", MODE_PRIVATE)
         val endpoint = runCatching { Uri.parse(remote.getString("service", "")).host }.getOrNull() ?: "not configured"
         val maps = File(filesDir,"goview-studio-maps").listFiles()?.filter { it.name.endsWith(".goview.json") }
             ?.mapNotNull { f -> runCatching { JSONObject(f.readText()).getJSONObject("map").let {
@@ -73,6 +74,9 @@ class AppMaintenanceActivity : Activity() {
             "\nMap packages: ${maps.size}\n" + maps.joinToString("\n") +
             "\nBrowser endpoint: $endpoint\nLast endpoint check: " + remote.getString("diagnostic-status", "not checked") +
             "\nCorrelation ID: " + remote.getString("diagnostic-id", "none") +
+            "\nMap endpoint: " + mapConnection.getString("endpoint", "not configured") +
+            "\nMap endpoint status: " + mapConnection.getString("endpointStatus", "not checked") +
+            "\nMap transfer ID: " + mapConnection.getString("transferId", "none") +
             "\nLast update check: " + prefs.getString("result", "not checked") +
             "\nUpdate correlation ID: " + prefs.getString("correlation", "none")
     }
