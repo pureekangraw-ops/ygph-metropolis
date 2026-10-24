@@ -162,14 +162,19 @@ class GoviewStudioAndroidTest {
             (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
         }
         assertEquals(update, file.readText())
-        instrumentation.runOnMainSync { screen.activity.recreate() }
-        await("Recreated screen ready") {
+        // ActivityTestRule.activity follows the replacement instance. Capture the old reference once.
+        val previousActivity = screen.activity
+        instrumentation.runOnMainSync { previousActivity.recreate() }
+        await("Recreated Activity instance resumed") {
             val replaced = AtomicReference(false)
             instrumentation.runOnMainSync {
                 replaced.set(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
-                    .filterIsInstance<GoviewStudioActivity>().any { it !== screen.activity })
+                    .filterIsInstance<GoviewStudioActivity>().any { it !== previousActivity })
             }
-            replaced.get() && runCatching {
+            replaced.get()
+        }
+        await("Recreated Studio restored saved map before next write") {
+            runCatching {
                 js("Boolean(window.GoviewHost && window.GoviewStudio && window.GoviewEngine && document.getElementById('counts').textContent.includes('11 ถนน'))") == true
             }.getOrDefault(false)
         }
