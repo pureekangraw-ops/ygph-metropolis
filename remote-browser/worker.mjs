@@ -4,6 +4,7 @@ import { mcpResponse } from "./mcp.mjs";
 import { consoleHtml } from "./console.mjs";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { invokeObservatoryGo } from "./go-bridge.mjs";
+import { scrollRemotePage } from "./scroll.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -138,7 +139,7 @@ export class BrowserWorkspace {
         case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
         case "forward": await page.goForward({waitUntil:"domcontentloaded",timeout:20000});break;
         case "reload": await page.reload({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "scroll": await page.evaluate(y => window.scrollBy(0,y),step.y);break;
+        case "scroll": await scrollRemotePage(page,step.y);break;
         case "click": {
           const risk=await page.$eval(step.selector, el => ({
             text:(el.innerText || el.getAttribute("aria-label") || el.value || "").slice(0,160),

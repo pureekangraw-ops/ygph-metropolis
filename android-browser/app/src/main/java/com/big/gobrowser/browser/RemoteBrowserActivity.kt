@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -43,6 +44,12 @@ class RemoteBrowserActivity : Activity() {
     private lateinit var page: WebView
     private lateinit var touchBlock: View
     private lateinit var toolbar: LinearLayout
+    private lateinit var addressRow: LinearLayout
+    private lateinit var navigationRow: LinearLayout
+    private var liveViewerActive = false
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private var swipeStarted = false
     private var foreground = false
     private var destroyed = false
     private var busy = false
@@ -66,7 +73,7 @@ class RemoteBrowserActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ObservatoryTheme.title(this, "YGG OBSERVATORY · Browser"))
         val switcher = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        switcher.addView(action("🌐 Browser") { openSettings() }, weighted())
+        switcher.addView(action("🌐 Browser") { toggleNativeChrome() }, weighted())
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
         }, weighted())
@@ -84,12 +91,14 @@ class RemoteBrowserActivity : Activity() {
         ObservatoryTheme.address(address)
         row.addView(address, LinearLayout.LayoutParams(0, dp(48), 1f))
         row.addView(action("ไป") { openAddress() }, LinearLayout.LayoutParams(dp(62), dp(48)))
+        addressRow = row
         root.addView(row)
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         controls.addView(action("‹") { step("back") }, weighted())
         controls.addView(action("›") { step("forward") }, weighted())
         controls.addView(action("↻") { step("reload") }, weighted())
         controls.addView(action("⚙") { openSettings() }, weighted())
+        navigationRow = controls
         root.addView(controls)
         status = ObservatoryTheme.status(this).apply { text = "ยังไม่ได้เชื่อม Cloudflare · แตะ ⚙ เพื่อตั้งค่า" }
         controller = ObservatoryTheme.status(this).apply { text = "ผู้ควบคุม: BIG · ยังไม่มีเซสชัน" }
@@ -103,6 +112,36 @@ class RemoteBrowserActivity : Activity() {
             settings.allowContentAccess = false
             settings.setSupportMultipleWindows(false)
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            // Cloudflare Live View is a remote Chrome tab, not a local webpage.
+            // Hosted taps work on the owner's phone, but swipes fail to move the page.
+            // Forward only a completed clearly vertical owner swipe through the Worker.
+            setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        swipeDownX = event.x
+                        swipeDownY = event.y
+                        swipeStarted = true
+                    }
+                    MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> swipeStarted = false
+                    MotionEvent.ACTION_UP -> {
+                        if (swipeStarted && liveViewerActive && session && !goControls) {
+                            val delta = RemoteSwipeScroll.delta(
+                                swipeDownX, swipeDownY, event.x, event.y, dp(48).toFloat()
+                            )
+                            if (delta != null) {
+                                query("POST", "/v1/action",
+                                    JSONObject().put("type", "scroll").put("y", delta)) { result ->
+                                    result.onFailure {
+                                        status.text = "เลื่อนหน้าเว็บไม่ได้ · " + readableError(it)
+                                    }
+                                }
+                            }
+                        }
+                        swipeStarted = false
+                    }
+                }
+                false // Preserve tap, text input and hosted Live View controls.
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                     !allowedViewerUrl(request.url.toString())
@@ -147,6 +186,15 @@ class RemoteBrowserActivity : Activity() {
         } else openSettings()
     }
     private fun dp(value: Int) = ObservatoryTheme.dp(this, value)
+    private fun toggleNativeChrome() {
+        val show = addressRow.visibility != View.VISIBLE
+        addressRow.visibility = if (show) View.VISIBLE else View.GONE
+        navigationRow.visibility = if (show) View.VISIBLE else View.GONE
+    }
+    private fun hideDuplicateChrome() {
+        addressRow.visibility = View.GONE
+        navigationRow.visibility = View.GONE
+    }
     private fun weighted() = LinearLayout.LayoutParams(0, dp(48), 1f)
     private fun action(label: String, click: () -> Unit) = ObservatoryTheme.button(this,label,click).apply {
         textSize = 12f
@@ -222,6 +270,7 @@ class RemoteBrowserActivity : Activity() {
             }.setNeutralButton("ลบคีย์") { _, _ ->
                 credentials.revoke()
                 page.loadUrl("about:blank")
+                liveViewerActive = false
                 session=false;goControls=false;touchBlock.visibility=View.GONE
                 status.text = "ลบคีย์เจ้าของออกจากเครื่องแล้ว"
             }.setNegativeButton("ยกเลิก",null).show()
@@ -245,6 +294,8 @@ class RemoteBrowserActivity : Activity() {
                 val link=it.optString("url")
                 if (allowedViewerUrl(link)) {
                     page.loadUrl(link)
+                    liveViewerActive = true
+                    hideDuplicateChrome()
                     status.text = if(goControls) "GO ได้สิทธิ์ควบคุม · บิ๊กดูสดได้" else "LIVE · BIG กำลังดูหน้าเว็บระยะไกล"
                 } else status.text="Live View URL ไม่ถูกต้อง"
             }.onFailure {status.text="เปิด Live View ไม่ได้ · " + readableError(it)}
@@ -310,6 +361,7 @@ class RemoteBrowserActivity : Activity() {
                                 result.onSuccess {
                                     renderSession(it)
                                     page.loadUrl("about:blank")
+                                    liveViewerActive = false
                                     status.text="GO ได้สิทธิ์ทำงาน · ซ่อน Live View แล้ว เปิด ☷ ผลงานเพื่อติดตาม"
                                 }.onFailure {status.text="มอบหมายไม่ได้ · "+readableError(it)}
                             }
@@ -329,6 +381,7 @@ class RemoteBrowserActivity : Activity() {
                     result.onSuccess {
                         jobId=it.optString("jobId")
                         page.loadUrl("about:blank")
+                        liveViewerActive = false
                         status.text="เริ่มงานตรวจเว็บบนคลาวด์ · ซ่อนภาพแล้ว แตะ ☷ ผลงานเพื่อติดตาม"
                     }
                         .onFailure {status.text="เริ่มไม่ได้ · "+readableError(it)}
@@ -341,7 +394,7 @@ class RemoteBrowserActivity : Activity() {
             .setMessage("ปิดเบราว์เซอร์บน Cloudflare เพื่อหยุดใช้เวลาเซสชัน หากงานกำลังทำอยู่ให้หยุดงานก่อน")
             .setPositiveButton("ปิดเซสชัน"){_,_->
                 query("POST","/v1/close",JSONObject()){result->
-                    result.onSuccess { renderSession(it);page.loadUrl("about:blank");status.text="ปิด Cloudflare Browser แล้ว" }
+                    result.onSuccess { renderSession(it);page.loadUrl("about:blank");liveViewerActive=false;status.text="ปิด Cloudflare Browser แล้ว" }
                         .onFailure { status.text="ปิดไม่ได้ · "+readableError(it) }
                 }
             }.setNegativeButton("ยกเลิก",null).show()
@@ -366,6 +419,11 @@ class RemoteBrowserActivity : Activity() {
         session=!data.isNull("sessionId") && data.optString("sessionId").isNotEmpty()
         goControls=data.optString("controller")=="GO"
         touchBlock.visibility=if(goControls)View.VISIBLE else View.GONE
+        if (!session) {
+            liveViewerActive = false
+            addressRow.visibility = View.VISIBLE
+            navigationRow.visibility = View.VISIBLE
+        }
         controller.text="ผู้ควบคุม: "+(if(goControls)"GO" else "BIG")+" · "+
             data.optString("mode","IDLE")+" · "+data.optString("status","IDLE")+" · GO อ่าน: "+(if(data.optBoolean("goCanObserve"))"อนุญาต" else "ปิด")
         if(url!=null && !address.hasFocus())address.setText(url)
@@ -412,6 +470,9 @@ class RemoteBrowserActivity : Activity() {
         foreground=false;main.removeCallbacks(poll);page.onPause()
         // Disconnect the interactive viewer without stopping the remote browser or its queued work.
         page.loadUrl("about:blank")
+        liveViewerActive = false
+        addressRow.visibility = View.VISIBLE
+        navigationRow.visibility = View.VISIBLE
         super.onPause()
     }
     override fun onDestroy(){destroyed=true;main.removeCallbacks(poll);io.shutdownNow();page.stopLoading();page.destroy();super.onDestroy()}

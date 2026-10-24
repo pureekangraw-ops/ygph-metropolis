@@ -97,6 +97,9 @@ class GoviewStudioActivity : Activity() {
             addJavascriptInterface(Bridge(), "GoviewHost")
         }
         host.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        // Android 15/16 edge-to-edge can place this native header under status-bar icons.
+        // Reuse the same native safe-area handling as the main Observatory Browser.
+        com.big.gobrowser.ui.PhoneLayout.fitSystemBars(host)
         setContentView(host)
         web.loadUrl(assetRoot + "index.html")
     }
