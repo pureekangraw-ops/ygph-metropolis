@@ -367,9 +367,12 @@ class GoviewStudioActivity : Activity() {
                 val file = transferDirectory.listFiles()?.filter { it.name.endsWith(".json") }
                     ?.maxByOrNull { it.lastModified() } ?: error("NO_RECEIPT")
                 val receipt = JSONObject(AtomicFile(file).openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
-                val stored = mapStorage(receipt.getString("mapId")).openRead().use { readLimited(it) }
-                receipt.put("currentReadbackSha256", sha256(stored))
-                    .put("matchesTransferredArtifact", sha256(stored) == receipt.getString("sha256"))
+                val storage = mapStorage(receipt.getString("mapId"))
+                val present = storage.baseFile.exists() || File(storage.baseFile.path + ".bak").exists()
+                val stored = if (present) runCatching { storage.openRead().use { readLimited(it) } }.getOrNull() else null
+                receipt.put("currentReadbackStatus", if (!present) "NOT_SAVED" else if (stored == null) "READ_FAILED" else "READ_VERIFIED")
+                    .put("currentReadbackSha256", stored?.let { sha256(it) } ?: JSONObject.NULL)
+                    .put("matchesTransferredArtifact", stored != null && sha256(stored) == receipt.getString("sha256"))
                 receipt.toString(2).toByteArray(StandardCharsets.UTF_8)
             } }
             result.onSuccess { bytes ->

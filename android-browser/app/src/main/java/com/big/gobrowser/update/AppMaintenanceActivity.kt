@@ -149,7 +149,7 @@ class AppMaintenanceActivity : Activity() {
         val update=candidate ?: return
         verifiedApk=null
         work {
-            val file=File(File(cacheDir,"observatory_updates").apply { mkdirs() },"verified-update.apk")
+            val file=File(File(cacheDir,"observatory_updates").apply { mkdirs() },"verified-${UUID.randomUUID()}.apk")
             try { fetch(update.url,file,150L*1024*1024); verify(file,update); verifiedApk=file }
             catch(t: Exception) { file.delete(); throw t }
             "APK verified · version ${update.versionCode}\nSHA-256: ${update.sha256}\nInstaller will require your consent."
