@@ -430,6 +430,7 @@ class RemoteBrowserActivity : Activity() {
                         .setTitle("ให้ GO ทำงานโดยไม่เปิดหน้าจอ?")
                         .setMessage("อนุญาตให้ GO ที่เชื่อมเครื่องมือควบคุมเว็บได้ แล้วซ่อน Live View ไว้ GO ยังต้องได้รับคำสั่งงานผ่านช่องที่เชื่อมจริง")
                         .setPositiveButton("อนุญาตและซ่อน") { _,_->
+                            withApprovedSite {
                             query("POST","/v1/control",JSONObject().put("controller","GO")) { result->
                                 result.onSuccess {
                                     renderSession(it)
@@ -437,6 +438,7 @@ class RemoteBrowserActivity : Activity() {
                                     liveViewerActive = false
                                     status.text="GO ได้สิทธิ์ทำงาน · ซ่อน Live View แล้ว เปิด ☷ ผลงานเพื่อติดตาม"
                                 }.onFailure {status.text="มอบหมายไม่ได้ · "+readableError(it)}
+                            }
                             }
                         }.setNegativeButton("ยกเลิก",null).show()
                     1 -> auditCurrent()
