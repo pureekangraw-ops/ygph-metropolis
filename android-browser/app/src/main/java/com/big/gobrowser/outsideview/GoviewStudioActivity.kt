@@ -363,9 +363,26 @@ class GoviewStudioActivity : Activity() {
         }
 
         @JavascriptInterface fun exportReceipt() {
+            val entries = synchronized(storageLock) {
+                transferDirectory.listFiles()?.filter { it.name.endsWith(".json") }
+                    ?.sortedByDescending { it.lastModified() }?.mapNotNull { file ->
+                        runCatching {
+                            val receipt = JSONObject(AtomicFile(file).openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
+                            file to (receipt.getString("transferId") + " · " + receipt.getString("mapId") +
+                                " v" + receipt.getInt("version") + " · " + receipt.getString("status"))
+                        }.getOrNull()
+                    }.orEmpty()
+            }
+            if (entries.isEmpty()) { callback("nativeStatus", "No saved transfer receipts"); return }
+            runOnUiThread {
+                android.app.AlertDialog.Builder(this@GoviewStudioActivity).setTitle("Choose transfer receipt")
+                    .setItems(entries.map { it.second }.toTypedArray()) { _, index -> showReceipt(entries[index].first) }
+                    .setNegativeButton("Cancel", null).show()
+            }
+        }
+
+        private fun showReceipt(file: File) {
             val result = synchronized(storageLock) { runCatching {
-                val file = transferDirectory.listFiles()?.filter { it.name.endsWith(".json") }
-                    ?.maxByOrNull { it.lastModified() } ?: error("NO_RECEIPT")
                 val receipt = JSONObject(AtomicFile(file).openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
                 val storage = mapStorage(receipt.getString("mapId"))
                 val present = storage.baseFile.exists() || File(storage.baseFile.path + ".bak").exists()
@@ -419,7 +436,8 @@ class GoviewStudioActivity : Activity() {
             Thread {
                 val result = runCatching {
                     val request = Request.Builder().url(url)
-                        .header("Authorization", "Bearer " + token).get().build()
+                        .header("Authorization", "Bearer " + token)
+                        .header("x-goview-transfer-id", transferId).get().build()
                     client.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) {
                             error("GO HTTP " + response.code)
@@ -430,6 +448,7 @@ class GoviewStudioActivity : Activity() {
                         validateDownloadedPackage(text, mapId,
                             response.header("x-goview-version"), response.header("x-goview-sha256"))
                         GoviewArtifact.verify(bytes, mapId, expectedVersion.toInt(), expectedSha256)
+                        check(response.header("x-goview-transfer-id") == transferId) { "TRANSFER_ID_MISMATCH" }
                         synchronized(storageLock) {
                             val receipt = JSONObject().put("transferId", transferId).put("mapId", mapId)
                                 .put("version", expectedVersion.toInt()).put("sha256", expectedSha256)

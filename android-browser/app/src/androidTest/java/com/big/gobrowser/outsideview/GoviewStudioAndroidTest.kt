@@ -1,6 +1,13 @@
 package com.big.gobrowser.outsideview
 
 import android.webkit.WebView
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import org.hamcrest.Matchers.containsString
+import org.hamcrest.Matchers.startsWith
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -225,6 +232,35 @@ class GoviewStudioAndroidTest {
         assertEquals(digest, JSONObject(receipt.readText()).getString("readbackSha256"))
         assertEquals("synthetic_$suffix", JSONObject(receipt.readText()).getString("transferId"))
         assertEquals(original, File(file.parentFile, "$id.v5.backup.json").readText())
+    }
+
+    @Test fun ownerCanSelectOlderCompletedReceiptAfterCancellingNewMap() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val suffix=System.nanoTime().toString()
+        val mapId="receipt_a_$suffix"
+        val raw=js("(()=>{const m=GoviewEngine.demo();m.mapId='$mapId';return GoviewEngine.pack(m)})()") as String
+        js("GoviewHost.savePackage("+JSONObject.quote(raw)+");true")
+        val saved=File(screen.activity.filesDir,"goview-studio-maps/$mapId.goview.json")
+        await("Map A saved") { saved.exists() && saved.readText()==raw }
+        val digest=java.security.MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val directory=File(screen.activity.filesDir,"goview-transfers").apply { mkdirs() }
+        val aId="completed_$suffix";val bId="cancelled_$suffix"
+        File(directory,"$aId.json").writeText(JSONObject().put("transferId",aId).put("mapId",mapId)
+            .put("version",1).put("sha256",digest).put("status","OWNER_APPROVED_FILE_READBACK_VERIFIED").toString())
+        File(directory,"$bId.json").writeText(JSONObject().put("transferId",bId).put("mapId","missing_$suffix")
+            .put("version",1).put("sha256","0".repeat(64)).put("status","DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
+        js("GoviewHost.exportReceipt();true")
+        onView(withText(startsWith(bId))).perform(click())
+        onView(withText(containsString("NOT_SAVED"))).check(matches(isDisplayed()))
+        onView(withText("Close")).perform(click())
+        js("GoviewHost.exportReceipt();true")
+        onView(withText(startsWith(aId))).perform(click())
+        onView(withText(containsString(digest))).check(matches(isDisplayed()))
+        onView(withText(containsString("READ_VERIFIED"))).check(matches(isDisplayed()))
+        onView(withText("Close")).perform(click())
+        assertEquals(raw,saved.readText())
+        assertFalse(File(screen.activity.filesDir,"goview-studio-maps/missing_$suffix.goview.json").exists())
     }
 
 }

@@ -24,3 +24,9 @@ The manifest is metadata, not an authorization to replace the installed signer. 
 Local JS tests cover storage contract, exact-version readback after latest advances, artifact mismatch and closed unconfigured receiver. JVM tests cover APK package/version/hash/signer mismatch and unsafe URLs. Instrumentation covers inactive B v5 with A open, incoming B v2 rejection, cancel, exact imported bytes, retained backup, same-version conflict, concurrent preview base and recreation. Android execution status must come from the exact-head CI run, not this document.
 
 Not executed: map bucket/Worker provisioning, credentials, runtime service binding, deployment, production signer setup, merge, phone installation, real GO→R2→phone transfer, phone installer acceptance. Browser same-tab live acceptance is handled by parent and still requires owner invitation. None of these are implied by passing source tests.
+
+## Review corrections
+
+Transfer IDs now reserve an immutable `(mapId, version, full-byte SHA-256)` binding in the same R2 store through the existing versioned HTTP route. `x-goview-transfer-id` is optional for legacy clients and required by the new adapter/Android path. Same-ID retries must use the same artifact; a new version/content requires a new ID. Conditional creation plus readback handles competing reservations. A reservation is not an upload success: exact GET still verifies stored bytes. Neither Worker, adapter nor CLI trims package whitespace. CLI emits the chosen transfer ID before attempting PUT and accepts GOVIEW_TRANSFER_ID for a correlated retry after readback. Both caller and receiver check runtime string types, not regex coercion.
+
+Receipt inspection offers an owner-selected list, including previously completed transfers; a downloaded/cancelled map without local storage shows NOT_SAVED and remains exportable. Tests use synthetic receipts and real receiver/Worker with memory R2, not production activation.

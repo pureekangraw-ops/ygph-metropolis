@@ -98,7 +98,8 @@ test('GO adapter publishes exact artifact and reads old version after latest adv
  assert.equal(receipt.ok,true);assert.equal(receipt.package,raw);
  assert.equal(receipt.androidStatus,'NOT_OBSERVED_OWNER_APPROVAL_REQUIRED');
  map.version=2;const newer=Engine.pack(map);
- assert.equal((await invokeGoview(env,'goview_publish',{...args,version:2,sha256:Engine.hash(newer),package:newer})).ok,true);
+ assert.equal((await invokeGoview(env,'goview_publish',{...args,version:2,sha256:Engine.hash(newer),package:newer})).httpStatus,409);
+ assert.equal((await invokeGoview(env,'goview_publish',{...args,transferId:'transfer_new',version:2,sha256:Engine.hash(newer),package:newer})).ok,true);
  assert.equal((await invokeGoview(env,'goview_readback',args)).package,raw);
  assert.equal((await invokeGoview(env,'goview_readback',{...args,sha256:'0'.repeat(64)})).status,'READBACK_MISMATCH');
 });
@@ -107,4 +108,26 @@ test('GO adapter rejects artifact substitution and fails closed without storage'
  assert.equal((await invokeGoview(setup(),'goview_publish',args)).status,'ARTIFACT_MISMATCH');
  assert.equal((await invokeGoview({},'goview_readback',args)).ok,false);
  assert.equal((await invokeGoview(setup(),'goview_delete',args)).status,'UNSUPPORTED');
+});
+
+test('exact newline bytes roundtrip and identical transfer retries survive receiver recreation',async()=>{
+ const env=setup(),raw=Engine.pack(Engine.demo())+'\n';
+ const args={mapId:'go_synthetic_route_demo',version:1,sha256:Engine.hash(raw),transferId:'newline_transfer',package:raw};
+ const first=await invokeGoview(env,'goview_publish',args);assert.equal(first.ok,true);assert.equal(first.package,raw);
+ const retry=await invokeGoview({...env},'goview_publish',args);assert.equal(retry.ok,true);assert.equal(retry.sha256,args.sha256);
+ assert.equal((await invokeGoview({...env},'goview_readback',args)).package,raw);
+ assert.equal((await invokeGoview(env,'goview_publish',{...args,package:raw.trim(),sha256:Engine.hash(raw.trim())})).httpStatus,409);
+});
+test('receiver rejects coerced identities before touching storage',async()=>{
+ const raw=Engine.pack(Engine.demo()),args={mapId:'go_synthetic_route_demo',version:1,sha256:Engine.hash(raw),transferId:'strict_transfer',package:raw};
+ for(const field of ['mapId','transferId','sha256'])for(const value of [123,[args[field]],{},null]) {
+  const env=setup();assert.equal((await invokeGoview(env,'goview_publish',{...args,[field]:value})).status,'INVALID_ARTIFACT_IDENTITY');
+  assert.equal(env.PACKAGES.items.size,0);
+ }
+});
+test('racing distinct artifacts cannot claim the same transfer ID',async()=>{
+ const env=setup(),one=Engine.demo(),two=Engine.demo();two.mapId='other_fixture';
+ const make=m=>({mapId:m.mapId,version:m.version,sha256:Engine.hash(Engine.pack(m)),transferId:'race_transfer',package:Engine.pack(m)});
+ const results=await Promise.all([invokeGoview(env,'goview_publish',make(one)),invokeGoview(env,'goview_publish',make(two))]);
+ assert.equal(results.filter(r=>r.ok).length,1);assert.equal(results.filter(r=>r.httpStatus===409).length,1);
 });

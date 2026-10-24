@@ -6,17 +6,17 @@ import Engine from '../android-browser/app/src/main/assets/goview-studio/engine.
 export async function invokeGoview(env, name, args={}) {
   if (!['goview_publish','goview_readback'].includes(name)) return {ok:false,status:'UNSUPPORTED'};
   if (!args || typeof args !== 'object' || Array.isArray(args) ||
-      !/^[a-zA-Z0-9_-]{1,70}$/.test(args.mapId || '') ||
+      typeof args.mapId !== 'string' || !/^[a-zA-Z0-9_-]{1,70}$/.test(args.mapId) ||
       !Number.isInteger(args.version) || args.version < 1 || args.version > 999999 ||
-      !/^[a-zA-Z0-9_-]{1,80}$/.test(args.transferId || '') ||
-      !/^[a-f0-9]{64}$/.test(args.sha256 || '')) return {ok:false,status:'INVALID_ARTIFACT_IDENTITY'};
+      typeof args.transferId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(args.transferId) ||
+      typeof args.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(args.sha256)) return {ok:false,status:'INVALID_ARTIFACT_IDENTITY'};
   const url=`https://goview.internal/v1/maps/${args.mapId}/packages/${args.version}`;
-  const headers={authorization:'Bearer '+env.GO_WRITE_TOKEN,'content-type':'application/json'};
+  const headers={authorization:'Bearer '+env.GO_WRITE_TOKEN,'content-type':'application/json','x-goview-transfer-id':args.transferId};
   try {
     if(name==='goview_publish') {
       if(typeof args.package !== 'string' || new TextEncoder().encode(args.package).length > 1048832)
         return {ok:false,status:'INVALID_PACKAGE'};
-      const raw=args.package.trim(), map=Engine.unpack(raw);
+      const raw=args.package, map=Engine.unpack(raw);
       if(map.mapId!==args.mapId || map.version!==args.version || Engine.hash(raw)!==args.sha256)
         return {ok:false,status:'ARTIFACT_MISMATCH'};
       const put=await worker.fetch(new Request(url,{method:'PUT',headers,body:raw}),env);
