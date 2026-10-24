@@ -1,5 +1,23 @@
 # Browser Live View repair candidate (Lane B)
 
+## เช็คพ้อยต์ร่วมสำหรับบิ๊ก — 25 ต.ค. 2026
+
+เป้าหมายที่อนุมัติ: GO มีทั้ง **ตาและมือ** สำหรับเว็บและแผนที่ ผ่านสิทธิ์และการอนุมัติเดิม ไม่ลดเหลือแค่หน้าสถานะ และไม่เพิ่มสิทธิ์อัตโนมัติ
+
+| งาน | ผู้รับผิดชอบ / source | สถานะหลักฐาน |
+| --- | --- | --- |
+| Lane A: GOVIEW Direct | ห้อง Lane A; branch `atlas/goview-direct-lifecycle-20261025`; [Draft PR256](https://github.com/pureekangraw-ops/ygph-metropolis/pull/256); head ที่อ่านจาก GitHub `b227587a55a87ba79a8a3bee02b41ce0b749ed77` | Parent แจ้ง reviewer พบ P2 partial credential commit เมื่อ state write ล้มเหลวที่รุ่นก่อน `70cff432`; ห้องนี้ยังไม่ได้ตรวจว่ารุ่นล่าสุดปิด finding แล้วหรือไม่ |
+| Lane B: Browser | ห้อง Lane B; branch `atlas/browser-view-diagnostics-20261025`; [Draft PR255](https://github.com/pureekangraw-ops/ygph-metropolis/pull/255); code/tests checkpoint `b595212de283dad100c2c796841cf56bfb1cc773` (commit ถัดจากนี้ปรับเอกสาร checkpoint) | Actual Worker/DO + synthetic provider affected tests 10/10 ผ่าน: observe/click/type/navigation, สิทธิ์ปฏิเสธ, exact target และ owner recovery; JVM tests เพิ่มแล้ว รอ Android CI/final review |
+
+**สิ่งที่ทำจริง:** exact-target ไม่เปิด tab อื่นแทน; error ปลอดภัยแยกขั้น; request ID ส่งก่อนคำขอและ server echo; Live View ไม่ถูก polling ทับ; Browser / GO Direct / package download history แยกกัน GO Direct `authRejected=false` หมายถึงยังไม่ยืนยัน ไม่ใช่ CONNECTED
+
+**CI ที่อ่านได้:** commit ก่อนหน้า `fc79f290` Web Smoke40144600443 ผ่าน; Android40144600445 และ unsigned build40144600446 ยัง in progress ณ ตอนอ่าน ไม่ใช่ผลของ final head การอ่านผ่าน gh เคย401 authentication failure; GitHub connector metadata ที่ parent อนุญาตอ่านสำเร็จ ไม่เปลี่ยน login/credentials
+
+**ขั้นถัดไป:** ปิด/ตรวจซ้ำ P2 Lane A; reviewer ตรวจ final heads ของสอง PR; ยืนยัน CI ของ final heads และ field contract ก่อน integration; ขอ release approval แยกก่อน merge/deploy แล้วค่อยทดสอบบนโทรศัพท์ว่า GO มอง/คลิก/พิมพ์/นำทางเว็บ และอ่าน/เสนอ/แก้/อัปเดตแผนที่ตาม owner approval ได้จริง
+
+**ขอบเขต:** ยังไม่มี merge/deploy หรือ device PASS ไม่มีเปลี่ยน signing/package identity/data/permissions และไม่อ้างว่า synthetic tests พิสูจน์ root cause ของ Browser400/GOVIEW401 บนมือถือแล้ว
+
+
 Base main abb5c36258859c0282c26b645977a35036cecef6. Existing Browser implementation
 matches deployed source 9b31c1e50510685f2d80d33a8a9923cecbd62038. This patch fixes
 validated source defects; it does not establish the phone's original root cause.
