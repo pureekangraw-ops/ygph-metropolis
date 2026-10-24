@@ -1,6 +1,15 @@
 package com.big.gobrowser.outsideview
 
 import android.webkit.WebView
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.onData
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import org.hamcrest.Matchers.containsString
+import org.hamcrest.Matchers.startsWith
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
@@ -112,8 +121,10 @@ class GoviewStudioAndroidTest {
         ) as String
         val beforeContent = target.takeIf { it.exists() }?.readText()
         val jsonArgument = JSONObject.quote(payload)
-        assertEquals(true, js("window.GoviewStudio.receiveImport($jsonArgument);" +
-            "document.getElementById('modal').classList.contains('open')"))
+        js("window.GoviewStudio.receiveImport($jsonArgument);true")
+        await("Destination read must precede approval preview") {
+            js("document.getElementById('modal').classList.contains('open')") == true
+        }
         assertEquals(beforeContent, target.takeIf { it.exists() }?.readText())
         assertEquals(true, js("document.getElementById('modalText').textContent.includes('nodes:')"))
         assertEquals(true, js("document.getElementById('modalOk').click(); true"))
@@ -123,4 +134,150 @@ class GoviewStudioAndroidTest {
             }.getOrDefault(false)
         }
     }
+    @Test fun nativeDestinationRejectsConflictsAndRetainsPreviousVersion() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val id = "synthetic_guard_" + System.nanoTime()
+        val file = File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json")
+        fun payload(version: Int, title: String) = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';m.version=$version;m.title='$title';return GoviewEngine.pack(m)})()") as String
+        fun save(raw: String) { js("document.getElementById('message').textContent='waiting';GoviewHost.savePackage(" + JSONObject.quote(raw) + ");true") }
+        val original = payload(1, "Original")
+        save(original)
+        await("Initial native commit") { file.exists() && file.readText() == original }
+        val conflicting = payload(1, "Conflicting")
+        save(conflicting)
+        await("Native guard rejects conflict even outside JS preview") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(original, file.readText())
+        val update = payload(2, "Updated")
+        save(update)
+        await("New version committed") { file.readText() == update }
+        assertEquals(original, File(file.parentFile, "$id.v1.backup.json").readText())
+        save(original)
+        await("Stale version rejected") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+        val third = payload(3, "Proposal")
+        js("document.getElementById('message').textContent='waiting';GoviewHost.saveApprovedPackage(" + JSONObject.quote(third) + "," + JSONObject.quote(original) + ");true")
+        await("Changed preview base must reject even a newer proposal") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+        // ActivityTestRule.activity follows the replacement instance. Capture the old reference once.
+        val previousActivity = screen.activity
+        instrumentation.runOnMainSync { previousActivity.recreate() }
+        await("Recreated Activity instance resumed") {
+            val replaced = AtomicReference(false)
+            instrumentation.runOnMainSync {
+                replaced.set(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                    .filterIsInstance<GoviewStudioActivity>().any { it !== previousActivity })
+            }
+            replaced.get()
+        }
+        await("Recreated Studio restored saved map before next write") {
+            runCatching {
+                js("Boolean(window.GoviewHost && window.GoviewStudio && window.GoviewEngine && document.getElementById('counts').textContent.includes('11 ถนน'))") == true
+            }.getOrDefault(false)
+        }
+        save(conflicting)
+        await("Recreated instance also checks destination version") {
+            (js("document.getElementById('message').textContent") as? String ?: "").contains("ตรวจไฟล์")
+        }
+        assertEquals(update, file.readText())
+    }
+
+    @Test fun downloadValidationBindsIdentityVersionAndDigestWithoutSaving() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine)") == true }
+        val id = "synthetic_download_" + System.nanoTime()
+        val raw = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';return GoviewEngine.pack(m)})()") as String
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val validator = GoviewStudioActivity::class.java.getDeclaredMethod("validateDownloadedPackage",
+            String::class.java, String::class.java, String::class.java, String::class.java).apply { isAccessible = true }
+        validator.invoke(screen.activity, raw, id, "1", digest)
+        for (headers in listOf(arrayOf("other", "1", digest), arrayOf(id, "2", digest), arrayOf(id, "1", "bad"))) {
+            val failure = runCatching { validator.invoke(screen.activity, raw, headers[0], headers[1], headers[2]) }.exceptionOrNull()
+            assertTrue("Mismatched download envelope must be rejected", failure is java.lang.reflect.InvocationTargetException)
+        }
+        assertFalse("Download validation must not commit", File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json").exists())
+    }
+
+    @Test fun inactiveDestinationCancelAndExactBytesSurviveApproval() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val suffix = System.nanoTime().toString()
+        val id = "synthetic_inactive_$suffix"
+        fun payload(version: Int) = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';m.version=$version;return GoviewEngine.pack(m)})()") as String
+        val original = payload(5)
+        val file = File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json")
+        js("GoviewHost.savePackage(" + JSONObject.quote(original) + ");true")
+        await("Saved inactive fixture") { file.exists() && file.readText() == original }
+        js("(()=>{const m=GoviewEngine.demo();m.mapId='active_$suffix';GoviewHost.savePackage(GoviewEngine.pack(m));GoviewStudio.receiveNativePackage(GoviewEngine.pack(m));})()")
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(payload(2)) + ");true")
+        await("Inactive destination preview") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalOk').click();true")
+        await("Downgrade rejected against B v5 while A open") { (js("document.getElementById('message').textContent") as? String ?: "").contains("STALE_VERSION") }
+        assertEquals(original, file.readText())
+        val exact = JSONObject(payload(6)).toString(4)
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(exact.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        // Synthetic downloaded-receipt fixture; no claim of network or handset transfer.
+        val receipt = File(File(screen.activity.filesDir, "goview-transfers").apply { mkdirs() }, "synthetic_$suffix.json")
+        receipt.writeText(JSONObject().put("transferId", "synthetic_$suffix").put("mapId", id)
+            .put("version", 6).put("sha256", digest).put("status", "DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(exact) + ");true")
+        await("New proposal preview") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalCancel').click();true")
+        assertEquals(original, file.readText())
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(exact) + ");true")
+        await("Proposal preview again") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalOk').click();true")
+        await("Exact original imported bytes retained, including whitespace") { file.readText() == exact }
+        await("Durable transfer receipt promoted only after approval and readback") {
+            JSONObject(receipt.readText()).optString("status") == "OWNER_APPROVED_FILE_READBACK_VERIFIED"
+        }
+        assertEquals(digest, JSONObject(receipt.readText()).getString("readbackSha256"))
+        assertEquals("synthetic_$suffix", JSONObject(receipt.readText()).getString("transferId"))
+        assertEquals(original, File(file.parentFile, "$id.v5.backup.json").readText())
+    }
+
+    @Test fun ownerCanSelectOlderCompletedReceiptAfterCancellingNewMap() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val suffix=System.nanoTime().toString()
+        val mapId="receipt_a_$suffix"
+        val raw=js("(()=>{const m=GoviewEngine.demo();m.mapId='$mapId';return GoviewEngine.pack(m)})()") as String
+        js("GoviewHost.savePackage("+JSONObject.quote(raw)+");true")
+        val saved=File(screen.activity.filesDir,"goview-studio-maps/$mapId.goview.json")
+        await("Map A saved") { saved.exists() && saved.readText()==raw }
+        val digest=java.security.MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val directory=File(screen.activity.filesDir,"goview-transfers").apply { mkdirs() }
+        val aId="completed_$suffix";val bId="cancelled_$suffix"
+        File(directory,"$aId.json").writeText(JSONObject().put("transferId",aId).put("mapId",mapId)
+            .put("version",1).put("sha256",digest).put("status","OWNER_APPROVED_FILE_READBACK_VERIFIED").toString())
+        File(directory,"$bId.json").writeText(JSONObject().put("transferId",bId).put("mapId","missing_$suffix")
+            .put("version",1).put("sha256","0".repeat(64)).put("status","DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
+        fun openReceipts() {
+            js("GoviewHost.exportReceipt();true")
+            // WebView bridge work is not an Espresso idling resource. Await the native dialog.
+            await("Native receipt chooser visible") {
+                runCatching {
+                    onView(withText("Choose transfer receipt")).inRoot(isDialog()).check(matches(isDisplayed()))
+                    true
+                }.getOrDefault(false)
+            }
+        }
+        openReceipts()
+        onData(startsWith(bId)).inRoot(isDialog()).perform(click())
+        onView(withText(containsString("NOT_SAVED"))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText("Close")).inRoot(isDialog()).perform(click())
+        openReceipts()
+        onData(startsWith(aId)).inRoot(isDialog()).perform(click())
+        onView(withText(containsString(digest))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText(containsString("READ_VERIFIED"))).inRoot(isDialog()).check(matches(isDisplayed()))
+        onView(withText("Close")).inRoot(isDialog()).perform(click())
+        assertEquals(raw,saved.readText())
+        assertFalse(File(screen.activity.filesDir,"goview-studio-maps/missing_$suffix.goview.json").exists())
+    }
+
 }

@@ -28,7 +28,23 @@ const versionKey = (id, v) => `goview/${id}/versions/${String(v).padStart(7, "0"
 const pointerKey = id => `goview/${id}/latest.json`;
 const asText = object => object ? object.text() : null;
 
-async function fetchMap(bucket, id, version) {
+// A transfer ID is immutable: retries may name only the same exact artifact.
+async function bindTransfer(bucket, transferId, id, version, sha256, create) {
+  if (transferId === null) return null; // Legacy versioned clients remain readable.
+  if (!/^[a-zA-Z0-9_-]{1,80}$/.test(transferId)) return reply(400,{error:"INVALID_TRANSFER_ID"});
+  const key = `goview/transfers/${transferId}.json`;
+  const binding = JSON.stringify({mapId:id,version:Number(version),sha256});
+  let prior = await bucket.get(key);
+  if (!prior && create) {
+    await bucket.put(key,binding,{onlyIf:{etagDoesNotMatch:"*"},httpMetadata:{contentType:"application/json"}});
+    prior = await bucket.get(key); // Includes a competing reservation; never assume our write won.
+  }
+  if (!prior) return reply(404,{error:"TRANSFER_NOT_FOUND"});
+  if (await prior.text() !== binding) return reply(409,{error:"TRANSFER_ID_CONFLICT"});
+  return null;
+}
+
+async function fetchMap(bucket, id, version, transferId = null) {
   const index = version === "latest"
     ? await bucket.get(pointerKey(id))
     : null;
@@ -45,7 +61,10 @@ async function fetchMap(bucket, id, version) {
   try {
     const map = Engine.unpack(text);
     if (map.mapId !== id || String(map.version) !== target) throw Error("wrong identity");
+    const conflict = await bindTransfer(bucket,transferId,id,target,Engine.hash(text),false);
+    if (conflict) return conflict;
     const result = new Response(text, {status:200, headers:{
+      ...(transferId ? {"x-goview-transfer-id":transferId} : {}),
       ...JSON_HEADERS,"etag":file.httpEtag || `"${Engine.hash(text)}"`,
       "x-goview-version": String(map.version), "x-goview-sha256": Engine.hash(text)
     }});
@@ -77,14 +96,16 @@ async function saveMap(bucket, id, version, request) {
   if (raw === null) return reply(413, {error:"PACKAGE_TOO_LARGE"});
   let map;
   try {
-    map = Engine.unpack(raw.trim());
+    map = Engine.unpack(raw);
     if(map.mapId !== id || String(map.version) !== version) return reply(409,{error:"IDENTITY_MISMATCH"});
   } catch {
     return reply(422, {error:"INVALID_PACKAGE"});
   }
+  const conflict = await bindTransfer(bucket,request.headers.get("x-goview-transfer-id"),id,version,Engine.hash(raw),true);
+  if (conflict) return conflict;
   const key = versionKey(id, version);
   const existing = await bucket.get(key);
-  if (existing && (await existing.text()) !== raw.trim())
+  if (existing && (await existing.text()) !== raw)
     return reply(409, {error:"VERSION_ALREADY_EXISTS"});
   const latest = await bucket.get(pointerKey(id));
   const latestTag = latest?.etag;
@@ -95,11 +116,11 @@ async function saveMap(bucket, id, version, request) {
   }
   if (Number(version) < lastVersion) return reply(409,{error:"STALE_VERSION",currentVersion:lastVersion});
   if (Number(version) === lastVersion) {
-    if (existing) return reply(200,{status:"ALREADY_PRESENT",mapId:id,version:Number(version),sha256:Engine.hash(raw.trim())});
+    if (existing) return reply(200,{status:"ALREADY_PRESENT",mapId:id,version:Number(version),sha256:Engine.hash(raw)});
     return reply(409,{error:"INDEX_VERSION_CONFLICT"});
   }
   if (!existing) {
-    const created = await bucket.put(key,raw.trim(),{
+    const created = await bucket.put(key,raw,{
       onlyIf:{etagDoesNotMatch:"*"},
       httpMetadata:{contentType:"application/json"}
     });
@@ -112,7 +133,7 @@ async function saveMap(bucket, id, version, request) {
   });
   if (!updated) return reply(409,{error:"LATEST_POINTER_CONFLICT",retrySafe:true});
   return reply(201,{status:"STORED",mapId:id,version:Number(version),
-    sha256:Engine.hash(raw.trim()),checksum:JSON.parse(raw.trim()).checksum});
+    sha256:Engine.hash(raw),checksum:JSON.parse(raw).checksum});
 }
 
 /** Private package exchange only; unauthenticated clients cannot discover map IDs. */
@@ -134,7 +155,7 @@ export default {
         (pieces[4] === "latest" || validVersion(pieces[4]))) {
       if(!allowed(request,env.ANDROID_READ_TOKEN) && !allowed(request,env.GO_WRITE_TOKEN))
         return reply(401,{error:"UNAUTHORIZED"});
-      try { return await fetchMap(env.PACKAGES,id,pieces[4]); }
+      try { return await fetchMap(env.PACKAGES,id,pieces[4],request.headers.get("x-goview-transfer-id")); }
       catch { return reply(503,{error:"STORAGE_UNAVAILABLE"}); }
     }
     if(request.method === "PUT" && pieces.length === 5 && validVersion(pieces[4])) {

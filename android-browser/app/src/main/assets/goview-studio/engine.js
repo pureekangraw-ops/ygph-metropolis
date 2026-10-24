@@ -247,5 +247,15 @@
     }
     return normalize(map);
   }
-  return {FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,fromGeoJson,lonLat};
+  function updateDecision(current, incoming) {
+    current=normalize(current); incoming=normalize(incoming);
+    if(current.mapId!==incoming.mapId)return "NEW_MAP";
+    assert(incoming.version>=current.version,"STALE_VERSION");
+    if(incoming.version===current.version){
+      assert(pack(current)===pack(incoming),"VERSION_CONFLICT");
+      return "DUPLICATE";
+    }
+    return "UPDATE";
+  }
+  return {updateDecision,FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,fromGeoJson,lonLat};
 });

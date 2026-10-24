@@ -10,7 +10,7 @@ import android.widget.*
 import android.view.ViewGroup
 import com.big.gobrowser.lyra.LyraDialog
 import com.big.gobrowser.ui.*
-import com.big.gobrowser.browser.GeckoBrowserActivity
+import com.big.gobrowser.browser.RemoteBrowserActivity
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -181,13 +181,13 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "เชื่อมต่อ PANTHEON", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "กลับ Browser", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
                 1->shareMapToGo()
                 2->shareVisibleMapImage()
-                3->startActivity(Intent(this,GeckoBrowserActivity::class.java))
+                3->startActivity(Intent(this,RemoteBrowserActivity::class.java))
                 4->ObservatoryMemoryDialog.preserve(this,"map",currentMapHandoff())
                 5->ObservatoryMemoryDialog.saved(this)
                 6->startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),40)

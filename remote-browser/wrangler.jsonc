@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "observatory-shared-browser",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSIONS",
+        "class_name": "BrowserWorkspace"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "BrowserWorkspace"
+      ]
+    }
+  ],
+  "vars": {
+    "GO_ALLOWED_HOSTS": "*.yggmetro.com,greenhouse-owner.pages.dev,observatory-web.pureekangraw.workers.dev",
+    "PUBLIC_ASSET_HOSTS": "cdn.jsdelivr.net,fonts.googleapis.com,fonts.gstatic.com,static.cloudflareinsights.com,unpkg.com"
+  }
+}

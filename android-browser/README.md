@@ -1,49 +1,21 @@
-# YGG Observatory — Android GeckoView engine
+# YGG Observatory — Android Browser + GOVIEW
 
-Standalone Android GeckoView browser for the GO Observer. The Gecko implementation is the production launcher; the former WebView implementation remains only for comparison. This project is intentionally separate from `android-shell` / PRISM.
+The Android application exposes exactly two modes, Browser and GOVIEW. The new Browser launcher is RemoteBrowserActivity; target websites run in Cloudflare Browser Run, not GeckoView or an on-device website WebView. Android WebView here only renders the hosted Live View.
 
-## Implemented in this slice
+## Browser Mode
+The Browser header has address input, navigation, Observe / invite GO, grant GO control, owner takeover, headless audit, and job receipts. The owner may hide the view while a cloud job works. API session and GO permissions are enforced in a standalone Cloudflare Worker with a Durable Object. The owner token is encrypted in Android Keystore and the UI only accepts HTTPS on workers.dev or yggmetro.com. Without the Worker configured the app shows an explicit setup dialog; GOVIEW stays reachable.
 
-- One application-level GeckoRuntime with one GeckoSession per tab; HTTPS-only navigation and fail-closed external URL policy.
-- The address bar accepts a bare website (such as `www.google.co.th`) and adds `https://` before validation. Explicit non-HTTPS schemes remain blocked; remote command and relay URLs still require absolute HTTPS URLs.
-- URL bar with back, forward, reload, and new-tab controls.
-- Tab store with active-tab selection, encrypted Gecko SessionState restore, crash recovery, popup/session lifecycle hooks, and URL fallback.
-- Session restore does not grant control or observer permission.
-- Activity lifecycle/power-state check for interactive actions.
-- PRISM-reused WebExtension/native-messaging observation with frame-aware targets, freshness, redaction, truncation, and debounce.
-- Guarded Gecko command hand with capture/frame/signature checks and no arbitrary transport-supplied JavaScript.
-- Encrypted device credential boundary, bounded outbox, configurable HTTPS relay adapter, and transport-only sync pass.
-- Foreground Activity wiring: Share → Gecko capture → outbox → relay poll → guarded GeckoSession dispatch → fresh readback → receipt.
-- Explicit owner route/WorkContext configuration and local confirmation; no default live connection.
-- JVM/Node regression tests and offline WebView/Keystore instrumentation fixtures.
+Important: tapping 'ให้ GO ทำ' does not automatically register a ChatGPT remote-browser tool. The Worker plus GO tool connection must be deployed/configured and verified before claiming actual GO autonomy. Headless GO_SCRIPT accepts bounded steps with receipts; it is not a natural-language agent.
 
-## GO-assisted reading and supervised browser actions (October 2026)
+## GOVIEW
+Existing native map, Map Studio, GPS, route engine, local owner data and update preview remain in the same APK. GOVIEW source is stacked from Draft PR #245 and has not been merged or deployed.
 
-The menu now includes **ส่งหน้าเว็บให้ GO** (owner-approved Android Sharesheet with sanitized URL, visible text and labelled controls) and **ช่วยกรอก / ช่วยกด** (local owner-confirmed fill/click on fresh top-frame Gecko DOM targets). Form values, passwords and authentication codes are never exported by this handoff. The browser validates freshness, exact DOM capture identity and target signature again before execution. Clicking submits **a dispatch**, not proof of a completed business operation. Payments, form submissions, deletions, sending, consent and other high-impact controls are blocked.
+## Replacement
+Removed obsolete GeckoRuntime/GeckoView dependency and launcher, Gecko observer service, extension assets, and Gecko-only tests. The Cloudflare controller is in remote-browser; do not paste Cloudflare Secrets into the repository or into chat.
 
-The native map now provides **ส่งแผนที่ให้ GO** with owner-confirmed sharing of camera center/zoom and up to 100 saved pins. It also provides **ส่งภาพแผนที่** using a real MapLibre bitmap and an Android chooser backed by a private cache-only FileProvider (temporary read permission). Active Station map snapshots include a current viewport report alongside the stored map state, not an image of all rendered tiles or a GPS verification.
+## Build / proof
+Node tests: from android-browser run node --test tests/*.test.mjs ../remote-browser/tests/*.test.mjs. Android Gradle: testDebugUnitTest, lintDebug, assembleDebug and emulator. Remote Worker: cd remote-browser && npm install && npm test && npx wrangler deploy --dry-run. CI APK is development-signed; never uninstall the installed owner app merely to resolve a signature mismatch. No real Android handset test, live Cloudflare session, deployed Worker, or registered GO tool is claimed from this source-only build.
 
-Android Sharesheet sharing sends only to apps selected by the owner; it is **not automatic delivery to this ChatGPT conversation**. Foreground device snapshots travel to PANTHEON only after an owner-approved pair. They do not grant GO or LIGHT MCP access, remote browser actions, or business execution. Real-device handoff requires separate end-to-end verification.
+See docs/observatory-shared-browser-work.md for API, credentials and remaining integration steps.
 
-## Direct PANTHEON device observation (0.6.2 — draft)
-
-The Gecko launcher and Outside View map use `PantheonObservatoryClient` for observe-only device transport. To pair a handset, the owner opens **เชื่อมต่อ**, enters their PANTHEON owner token **once**, and explicitly confirms. The token is used for one HTTPS request to `/v1/observatory/pair` and never saved on the phone. Only the PANTHEON-issued 64-hex device credential is stored with Android Keystore AES-GCM under the app's package identity.
-
-While paired and foreground, browser DOM observations and rendered map-state observations are sent every **5 seconds** as non-executable snapshots. PANTHEON validates an increasing epoch/sequence and provides receipt ACKs; the `/v1/observatory/latest` owner read endpoint hides each sample after **30 seconds**. Physical deletion happens on subsequent writes/reads and a separately configured cleanup schedule; it is **not guaranteed to occur at the exact 30-second mark when idle**. The Android activity stops observation when paused. Pairing, stop, and disconnect APIs cannot run browser commands.
-
-Owner-selected permanent evidence is saved **locally** via Android Keystore-backed `ObservatoryMemoryDialog` and is explicitly separate from ephemeral server data. Old previously saved Metropolis records are **not migrated or deleted** by this change; the retired source/credential should not be purged until an owner-approved recovery procedure exists. Saved map pins and settings remain untouched.
-
-**Not yet ready for unattended use:** the matching backend is in draft [Pantheon-WorkHub PR #4](https://github.com/pureekangraw-ops/Pantheon-WorkHub/pull/4), not deployed to production. This APK should only be used for source/CI validation until a staged PANTHEON readback confirms pairing, snapshot, expiry, and revocation end-to-end. The Android CI builds development-signed debug APKs; subsequent builds may use different signing keys. Android will not install over a differently signed app, and uninstalling can destroy owner data. Never uninstall an existing Observatory copy before backup/migration approval.
-
-## Not claimed yet
-
-The relay adapter is deliberately route-configurable: no MCP endpoint, Work ID, credential, or owner-specific route is invented here. Live MCP readback, real-handset installation, Xiaomi 15T acceptance, and production signing remain unverified until the owner route, permissions, and a real Android device are available.
-
-## Build
-
-```bash
-gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
-```
-
-Run `node --test tests/*.test.mjs` for DOM regression tests. CI checks JVM tests, Android lint, instrumentation compilation, and debug APK build. Android build requires a working SDK and dependency access; instrumentation execution requires an emulator/device. See [relay contract](integration/relay-contract.md) for setup and the [verification boundary](integration-verification.md) for limitations.
-
+The same remote Worker now exposes an owner console at /console and seven stateless MCP tools at /mcp. Cloudflare session recording is owner opt-in and off by default. See remote-browser/WORK_HANDOFF.md for the WORK/TEST boundary.

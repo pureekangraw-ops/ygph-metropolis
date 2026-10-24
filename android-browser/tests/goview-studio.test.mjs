@@ -91,3 +91,12 @@ test("GeoJSON polygon holes are rejected rather than silently disappearing",()=>
     ]}}
   ]}),/Polygon needs exactly one outer ring/);
 });
+
+test("update policy rejects same-version conflicts and stale packages",()=>{
+  const map=G.demo(), changed=structuredClone(map);changed.nodes[0].x+=1;
+  assert.equal(G.updateDecision(map,map),"DUPLICATE");
+  assert.throws(()=>G.updateDecision(map,changed),/VERSION_CONFLICT/);
+  changed.version=2;assert.equal(G.updateDecision(map,changed),"UPDATE");
+  assert.throws(()=>G.updateDecision(changed,map),/STALE_VERSION/);
+  changed.mapId="other_map";assert.equal(G.updateDecision(map,changed),"NEW_MAP");
+});

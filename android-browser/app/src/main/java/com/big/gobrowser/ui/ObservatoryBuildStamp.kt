@@ -24,7 +24,8 @@ object ObservatoryBuildStamp {
     fun detail(): String = "YGG Observatory\nVersion: ${BuildConfig.VERSION_NAME}\nVersionCode: ${BuildConfig.VERSION_CODE}\nSource commit: $revision\nGitHub run: $runId"
 
     fun view(context: Context): TextView = ObservatoryTheme.status(context).apply {
-        text = label()
+        text = label() + " · About / Updates"
+        setOnClickListener { context.startActivity(android.content.Intent(context, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }
         contentDescription = detail()
         setOnLongClickListener {
             val clipboard = context.getSystemService(ClipboardManager::class.java)

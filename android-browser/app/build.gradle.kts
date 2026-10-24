@@ -21,8 +21,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.6.5"
+        versionCode = 17
+        versionName = "0.7.1-preview"
         // Smaller handset build. Universal CI build and emulator remain unchanged.
         if (System.getenv("OBSERVATORY_ARM64_ONLY") == "true") {
             ndk { abiFilters += "arm64-v8a" }
@@ -39,6 +39,13 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // User-test APK installs alongside the original application: no old map data is removed.
+            if (System.getenv("OBSERVATORY_PARALLEL_PREVIEW") == "true") {
+                applicationIdSuffix = ".preview"
+                versionNameSuffix = "-side-by-side"
+            }
+        }
         release {
             isMinifyEnabled = false
         }
@@ -56,7 +63,6 @@ android {
 
 dependencies {
     implementation("org.maplibre.gl:android-sdk-opengl:13.6.1")
-    implementation("org.mozilla.geckoview:geckoview-nightly-omni:153.0.20260615093007")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-ktx:1.10.0")

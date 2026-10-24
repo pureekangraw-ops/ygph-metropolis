@@ -37,7 +37,7 @@ jobs:
       - name: DOM targeting regression tests
         run: |
           set -o pipefail
-          node --test tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
+          node --test tests/*.test.mjs ../remote-browser/tests/*.test.mjs 2>&1 | tee "$RUNNER_TEMP/android-browser-dom-tests.log"
       - name: Publish DOM test diagnostics
         if: ${{ failure() }}
         run: cat "$RUNNER_TEMP/android-browser-dom-tests.log" >> "$GITHUB_STEP_SUMMARY"
@@ -80,27 +80,34 @@ jobs:
         run: |
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
-          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Remote.apk"
           cp "$apk" "$installer"
           sha256sum "$installer" | tee "$installer.sha256"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$installer" | tee "$installer.signing.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$installer" > "$installer.package.txt"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: YGG-Observatory-Gecko
+          name: YGG-Observatory-Remote
           path: |
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.signing.txt
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.package.txt
           retention-days: 14
 
       - name: Build compact ARM64 installer
         env:
           OBSERVATORY_ARM64_ONLY: "true"
+          OBSERVATORY_PARALLEL_PREVIEW: "true"
         run: |
           set -euxo pipefail
           gradle --no-daemon :app:clean :app:assembleDebug
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
-          installer="app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk"
+          # The Preview package must not replace the installed owner app.
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "package: name='com.big.gobrowser.preview'"
+          installer="app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64-Preview.apk"
           # Gradle compresses native libraries with a fast level by default;
           # re-compress only the ARM64 APK with deflate level 9, then zipalign
           # and sign again using this build's original debug key.
@@ -139,11 +146,11 @@ jobs:
       - name: Upload compact ARM64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: YGG-Observatory-Gecko-ARM64
+          name: YGG-Observatory-Remote-ARM64-Preview
           path: |
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.sha256
-            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Gecko-ARM64.apk.signing.txt
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64-Preview.apk
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64-Preview.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote-ARM64-Preview.apk.signing.txt
           retention-days: 14
 
   observatory-emulator:
