@@ -5,6 +5,7 @@ import { consoleHtml } from "./console.mjs";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { invokeObservatoryGo } from "./go-bridge.mjs";
 import { scrollRemotePage } from "./scroll.mjs";
+import {mayGoUseSite,sitePermissionsView,updateOwnerSitePermission} from "./site-permissions.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -98,6 +99,24 @@ export class BrowserWorkspace {
       throw error;
     } finally { if (browser) await browser.disconnect().catch(()=>{}); }
   }
+  /** Read the actual Cloudflare tab origin before any new owner permission.
+   * Owner-initiated browsing may redirect (google.com -> www.google.com).
+   */
+  async refreshPageAddress(state) {
+    if(!state.browserSessionId)throw Error("SESSION_NOT_STARTED");
+    const actual=await this.withPage(state,page=>page.url());
+    const current=validPageUrl(actual);
+    if(!current)throw Error("CURRENT_PAGE_NOT_PUBLIC_HTTPS");
+    if(current!==state.url){
+      state.url=current;
+      if(!sameGrant(state)){
+        state.allowGoRead=false;state.grantedHost=null;
+        if(state.controller==="GO"){state.controller="BIG";state.mode="OBSERVE";}
+      }
+      await this.save(state);
+    }
+    return state;
+  }
   async observe(state,role) {
     return this.withPage(state, async page => {
       if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
@@ -129,8 +148,8 @@ export class BrowserWorkspace {
   async action(state, raw, role) {
     const step=cleanStep(raw);
     if (state.controller!==role) throw new Error("CONTROLLER_MISMATCH");
-    if (role==="GO" && (!mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS) || !sameGrant(state))) throw new Error("GO_DOMAIN_NOT_ALLOWED");
-    if (step.type==="navigate" && role==="GO" && !mayGoAct(step.url,this.env.GO_ALLOWED_HOSTS)) throw new Error("GO_DOMAIN_NOT_ALLOWED");
+    if (role==="GO" && (!mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions) || !sameGrant(state))) throw new Error("GO_DOMAIN_NOT_ALLOWED");
+    if (step.type==="navigate" && role==="GO" && !mayGoUseSite(step.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) throw new Error("GO_DOMAIN_NOT_ALLOWED");
     return this.withPage(state, async page => {
       if(role==="GO" && (!sameGrant(state,page.url()) ||
         (step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost)))throw new Error("GO_GRANT_ORIGIN_MISMATCH");
@@ -179,8 +198,10 @@ export class BrowserWorkspace {
     }
     if (state.browserSessionId) {
       try {
-        await this.withPage(state,page=>page.goto(url,{waitUntil:"domcontentloaded",timeout:20000}).then(()=>({ok:true})));
-        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=url;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
+        const finalUrl=await this.withPage(state,async page=>{
+          await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});return validPageUrl(page.url()) || url;
+        });
+        state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=finalUrl;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
         return summarize(state);
       } catch { state.browserSessionId=null; }
     }
@@ -196,7 +217,7 @@ export class BrowserWorkspace {
       const page=(await browser.pages())[0] || await browser.newPage();
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
       state={...state,browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
-        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url,allowGoRead:false,grantedHost:null,job:null,
+        controller:"BIG",mode:"OBSERVE",status:"RUNNING",url:validPageUrl(page.url()) || url,allowGoRead:false,grantedHost:null,job:null,
         note:null,recording,lastClosedSessionId:state.lastClosedSessionId||null};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
@@ -330,6 +351,11 @@ export class BrowserWorkspace {
         return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
       }
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
+      if(method==="GET" && path==="/v1/site-permissions" && role==="BIG") {
+        const state=await this.state();
+        if(state.browserSessionId)await this.refreshPageAddress(state);
+        return reply(sitePermissionsView(state,this.env.GO_ALLOWED_HOSTS));
+      }
       if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
       if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
@@ -360,10 +386,20 @@ export class BrowserWorkspace {
         this.inFlight=true;
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
       }
+      if(path==="/v1/site-permissions" && role==="BIG") {
+        if(this.inFlight || !["allow","revoke"].includes(body.action) ||
+            typeof body.host!=="string")return reply({error:"INVALID_OR_BUSY_PERMISSION_REQUEST"},422);
+        // The session owner approves only the tab origin actually on screen.
+        if(body.action==="allow")await this.refreshPageAddress(state);
+        updateOwnerSitePermission(state,body.action,body.host);
+        await this.save(state);
+        return reply(sitePermissionsView(state,this.env.GO_ALLOWED_HOSTS));
+      }
       if(path==="/v1/observe-access" && role==="BIG") {
         if(typeof body.allow !== "boolean" || !state.browserSessionId)
           return reply({error:"INVALID_OBSERVE_GRANT"},422);
-        if(body.allow && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS))
+        if(body.allow)await this.refreshPageAddress(state);
+        if(body.allow && !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))
           return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.allowGoRead=body.allow;state.grantedHost=body.allow?new URL(state.url).hostname:null;
         if(!body.allow && state.controller==="GO") {state.controller="BIG";state.mode="OBSERVE";}
@@ -376,7 +412,8 @@ export class BrowserWorkspace {
         if(state.mode==="HEADLESS" && next==="BIG"){
           state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
         }
-        if(next==="GO" && !mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
+        if(next==="GO")await this.refreshPageAddress(state);
+        if(next==="GO" && !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";state.grantedHost=next==="GO"?new URL(state.url).hostname:null;await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/action") {
@@ -394,7 +431,7 @@ export class BrowserWorkspace {
           return reply({error:"OWNER_GO_GRANT_REQUIRED"},403);
         if(!Array.isArray(body.steps) || body.steps.length===0 || body.steps.length>10 ||
           !body.steps.every(allowedAction))return reply({error:"INVALID_STEPS"},422);
-        if(!mayGoAct(state.url,this.env.GO_ALLOWED_HOSTS))return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
+        if(!mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         if(!/^[0-9a-fA-F-]{36}$/.test(body.requestId||""))return reply({error:"REQUEST_ID_UUID_REQUIRED"},422);
         if(body.steps.some(step=>step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost))
           return reply({error:"GO_GRANT_ORIGIN_MISMATCH"},403);
@@ -407,7 +444,7 @@ export class BrowserWorkspace {
         if(this.inFlight || ["RUNNING","STOP_REQUESTED"].includes(state.job?.status) ||
           state.mode==="HEADLESS" || !state.browserSessionId)return reply({error:"BUSY_OR_NO_SESSION"},409);
         const urls=Array.isArray(body.urls) ? body.urls.slice(0,4).map(validPageUrl) : [validPageUrl(state.url)];
-        if(urls.some(x=>!x || !mayGoAct(x,this.env.GO_ALLOWED_HOSTS)))return reply({error:"URL_NOT_ALLOWED"},422);
+        if(urls.some(x=>!x || !mayGoUseSite(x,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)))return reply({error:"URL_NOT_ALLOWED"},422);
         if(this.inFlight)return reply({error:"BUSY"},409);
         this.inFlight=true;
         try {return reply(await this.enqueue(state,"PAGE_AUDIT",urls,

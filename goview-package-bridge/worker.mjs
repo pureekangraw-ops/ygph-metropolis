@@ -1,4 +1,5 @@
 import Engine from "../android-browser/app/src/main/assets/goview-studio/engine.js";
+import {directCommandRouter} from "./direct-commands.mjs";
 
 const LIMIT = 1024 * 1024 + 256;
 const JSON_HEADERS = {
@@ -142,6 +143,7 @@ export default {
     if (!env?.PACKAGES || !env?.GO_WRITE_TOKEN || !env?.ANDROID_READ_TOKEN ||
         env.GO_WRITE_TOKEN === env.ANDROID_READ_TOKEN) return notConfigured();
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/v1/direct/commands")) return directCommandRouter(request,env);
     if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1")
       return reply(400,{error:"HTTPS_REQUIRED"});
     if (request.method === "GET" && url.pathname === "/health")
