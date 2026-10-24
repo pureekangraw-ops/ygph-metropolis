@@ -29,9 +29,12 @@ browser-session, browser-command. Each has suffixes -status, -request-id, -time
 request/response body. Old diagnostic-status/diagnostic-id are not used as proof.
 
 AppMaintenanceActivity displays three separate sections: Browser request results,
-GO Direct connection, Package download history. Lane A's existing
-`goview-studio-map-library` endpoint/endpointStatus/transferId are read unchanged;
-parent must coordinate any new Direct fields before integration. Lane B does not
+GO Direct connection, Package download history. The `goview-studio-map-library` endpoint/endpointStatus/transferId remain historical
+package download fields, never GO Direct status. Lane A at 70cff432 uses
+`goview-direct-connection.authRejected` (boolean). Diagnostics reads only that
+nonsecret flag: true means AUTH_REJECTED_RECONNECT_REQUIRED; false/missing means
+NOT_VERIFIED, not CONNECTED. No network or credential read occurs in diagnostics.
+Parent must coordinate any further Direct fields before integration. Lane B does not
 edit GoviewDirectClient, OutsideViewActivity, signing/build policy, or user data.
 
 ## Verification and release limits
