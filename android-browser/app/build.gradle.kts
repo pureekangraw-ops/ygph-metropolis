@@ -21,8 +21,8 @@ android {
         applicationId = "com.big.gobrowser"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "0.7.1"
+        versionCode = 18
+        versionName = "0.7.2"
         manifestPlaceholders["observatoryAppLabel"] = "YGG Observatory"
         // Smaller handset build. Universal CI build and emulator remain unchanged.
         if (System.getenv("OBSERVATORY_ARM64_ONLY") == "true") {
