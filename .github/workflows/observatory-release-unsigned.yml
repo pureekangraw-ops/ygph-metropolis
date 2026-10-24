@@ -1,0 +1,54 @@
+name: Observatory Release APK (unsigned)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/observatory-release-unsigned.yml"
+      - "android-browser/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/observatory-release-unsigned.yml"
+      - "android-browser/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  OBSERVATORY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  OBSERVATORY_BUILD_RUN_ID: ${{ github.run_id }}
+jobs:
+  unsigned-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-browser
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build release variant without private signing material
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          mkdir -p app/build/outputs/release-delivery
+          apk="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+          test -n "$apk" && test -f "$apk"
+          cp "$apk" app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk
+          sha256sum app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk > app/build/outputs/release-delivery/SHA256SUMS.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > app/build/outputs/release-delivery/package.txt
+          printf 'source_sha=%s\nrun_id=%s\nvariant=release\nsigned=false\n' "$OBSERVATORY_SOURCE_SHA" "$OBSERVATORY_BUILD_RUN_ID" > app/build/outputs/release-delivery/provenance.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YGG-Observatory-Release-UNSIGNED
+          path: android-browser/app/build/outputs/release-delivery/*
+          retention-days: 14
