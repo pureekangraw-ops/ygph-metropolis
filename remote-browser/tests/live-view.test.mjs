@@ -7,17 +7,22 @@ import * as sites from '../site-permissions.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
 const id='11111111-2222-4333-8444-555555555555';
-function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected'}={}) {
- let state={browserSessionId:'synthetic',targetId,controller:'BIG',mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.test/',grantedHost:goRead?'example.test':null},calls=0,cdpCalls=0;
+function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/'}={}) {
+ let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0;
  const privateError=()=>Error('PRIVATE_TOKEN https://live.browser.run/?jwt=PRIVATE_URL');
- const puppeteer={connect:async()=>{calls++;if(mode==='connect')throw privateError();return {
-  pages:async()=>{if(mode==='pages')throw privateError();return targets.map(t=>({target:()=>({_targetId:t}),createCDPSession:async()=>{if(mode==='cdp')throw privateError();return {send:async()=>{cdpCalls++;if(mode==='provider')throw privateError();return {devtoolsFrontendUrl:mode==='url'?'https://attacker.invalid/':'https://live.browser.run/synthetic'};},detach:async()=>{}};}}));},disconnect:async()=>{}
- };}};
+ const page=t=>({target:()=>({_targetId:t}),url:()=>actualUrl,
+  goto:async url=>{navigations++;actualUrl=url;},
+  evaluate:async()=>{observations++;return {title:'synthetic',url:actualUrl,text:'fixture only',controls:[]};},
+  createCDPSession:async()=>{if(mode==='cdp')throw privateError();return {send:async()=>{cdpCalls++;if(mode==='provider')throw privateError();return {devtoolsFrontendUrl:mode==='url'?'https://attacker.invalid/':'https://live.browser.run/synthetic'};},detach:async()=>{}};}});
+ const browser=()=>({pages:async()=>{if(mode==='pages')throw privateError();return targets.map(page);},disconnect:async()=>{},sessionId:()=> 'new-synthetic-session'});
+ const puppeteer={connect:async()=>{calls++;if(mode==='connect')throw privateError();return browser();},
+  launch:async()=>{launches++;targets=['explicit-new-target'];return browser();}};
  const deps={puppeteer,...policy,...sites,WorkerEntrypoint:class {}};
  const {worker,BrowserWorkspace}=new Function(...Object.keys(deps),source+';return {worker,BrowserWorkspace};')(...Object.values(deps));
- const instance=new BrowserWorkspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v);}}},{});
- const env={OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{},SESSIONS:{idFromName:()=>1,get:()=>({fetch:r=>instance.fetch(r)})}};
- return {get calls(){return calls},get cdpCalls(){return cdpCalls},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
+ const env={OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{},GO_ALLOWED_HOSTS:'example.com'};
+ const instance=new BrowserWorkspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v);}}},env);
+ env.SESSIONS={idFromName:()=>1,get:()=>({fetch:r=>instance.fetch(r)})};
+ return {get calls(){return calls},get cdpCalls(){return cdpCalls},get navigations(){return navigations},get launches(){return launches},get observations(){return observations},get state(){return structuredClone(state)},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
   return worker.fetch(new Request('https://fixture.invalid'+path,{method,headers:{...(token?{authorization:'Bearer '+token}:{}),'x-request-id':requestId,'x-observatory-role':'GO'},...(body!==undefined?{body}:{})}),env);
  }};
 }
@@ -44,4 +49,29 @@ test('request correlation log contains only fixed metadata, never credentials or
  try {const r=await fixture().call();assert.equal(r.status,200);} finally {console.info=previous;}
  assert.equal(logs.length,1);assert.deepEqual(JSON.parse(logs[0]),{event:'browser_view_request',requestId:id,httpStatus:200});
  assert.doesNotMatch(logs[0],/synthetic|Bearer|https:|jwt/);
+});
+
+test('GO observes and navigates the exact permitted tab; owner revocation still denies',async()=>{
+ const f=fixture({goRead:true,controller:'GO'});
+ const observed=await f.call({token:'synthetic-go',path:'/v1/observe'});
+ assert.equal(observed.status,200);assert.equal(f.observations,1);
+ const moved=await f.call({token:'synthetic-go',path:'/v1/action',method:'POST',body:JSON.stringify({type:'navigate',url:'https://example.com/next'})});
+ assert.equal(moved.status,200);assert.equal(f.navigations,1);
+ const revoked=await f.call({path:'/v1/observe-access',method:'POST',body:'{"allow":false}'});assert.equal(revoked.status,200);
+ const denied=await f.call({token:'synthetic-go',path:'/v1/observe'});assert.equal(denied.status,403);assert.equal(f.observations,1);
+});
+test('GO cannot read uninvited or changed-origin tab, control as observer, or navigate outside grant',async()=>{
+ const off=fixture();assert.equal((await off.call({token:'synthetic-go',path:'/v1/observe'})).status,403);assert.equal(off.calls,0);
+ const drift=fixture({goRead:true,actualUrl:'https://different.com/'});assert.equal((await drift.call({token:'synthetic-go',path:'/v1/observe'})).status,400);assert.equal(drift.observations,0);
+ const observer=fixture({goRead:true});assert.equal((await observer.call({token:'synthetic-go',path:'/v1/action',method:'POST',body:'{"type":"navigate","url":"https://example.com/next"}'})).status,400);assert.equal(observer.navigations,0);
+ const control=fixture({goRead:true,controller:'GO'});assert.equal((await control.call({token:'synthetic-go',path:'/v1/action',method:'POST',body:'{"type":"navigate","url":"https://different.com/"}'})).status,400);assert.equal(control.navigations,0);
+});
+test('missing target recovers only through explicit owner URL open and a fresh GO grant',async()=>{
+ const f=fixture({targets:['other'],goRead:true,controller:'GO'});
+ assert.equal((await f.call()).status,409);assert.equal(f.launches,0);
+ assert.equal((await f.call({token:'synthetic-go',path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'})).status,404);assert.equal(f.launches,0);
+ const opened=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'});assert.equal(opened.status,200);assert.equal(f.launches,1);assert.equal(f.state.targetId,'explicit-new-target');assert.equal(f.state.allowGoRead,false);
+ assert.equal((await f.call()).status,200);
+ assert.equal((await f.call({path:'/v1/control',method:'POST',body:'{"controller":"GO"}'})).status,200);
+ assert.equal((await f.call({token:'synthetic-go',path:'/v1/observe'})).status,200);
 });

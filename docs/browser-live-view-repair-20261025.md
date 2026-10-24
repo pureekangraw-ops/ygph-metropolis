@@ -54,3 +54,29 @@ Release coordination: the new client expects X-Request-ID echo, so deploy the
 reviewed Worker before distributing this APK in an independently approved release.
 An old Worker produces STATION_CORRELATION_UNVERIFIED rather than a false success.
 No automatic session recreation, permission widening or token rotation is used.
+
+## Preserve intended GO use and explicit recovery
+
+Owner's clarification: this repair must retain authorized GO website use and map
+access. The affected suite now covers real Worker routes with a synthetic provider:
+GO observe + same-grant navigation succeed; uninvited reads, observer control,
+changed-origin reads and out-of-grant navigation remain denied. Owner revocation
+stops later GO access. Missing target does not trigger automatic recreation; the
+existing explicit owner URL-open action creates/selects a fresh target and resets
+GO grants, after which owner explicitly grants GO control and observe works again.
+This is recovery by owner-selected URL, not silent selection of an unrelated tab.
+GOVIEW/manual maps and Lane A implementation are unchanged.
+
+First run of the new tests used .test hosts, correctly rejected by the existing
+public-site policy. Fixtures now use example.com/different.com with NO network;
+policy was not loosened. Final affected suite: 9/9 pass.
+
+Still required after independent review and separately approved release: on the
+phone, open a permitted public site as BIG, obtain Live View, grant GO observe,
+then control; verify the same selected tab, authorized navigation and owner
+revocation. Exercise target-loss recovery only in an authorized test session.
+Verify a failed Live View remains visible after successful polling and correlate
+its request ID with sanitized Worker metadata. Check manual map use and approved
+GO map access with Lane A's acceptance procedure. No phone/production acceptance
+has been performed by this room, and passing fixtures does not resolve the
+original handset error by itself.
