@@ -137,11 +137,11 @@ small{font-size:11px;color:#9bb6ce}
 "use strict";
 const G=window.GoviewEngine,$=id=>document.getElementById(id),svg=$("map");
 const NS="http://www.w3.org/2000/svg",native=typeof window.GoviewHost!=="undefined",LOCAL_KEY="goview-studio-drawn-map-v1";
-const mobileSlot=$("mobileToolsSlot"),drawTools=$("tools"),originalToolParent=drawTools.parentNode;
+const mobileSlot=$("mobileToolsSlot"),drawTools=$("tools"),originalToolParent=drawTools.parentNode,originalToolNext=drawTools.nextSibling;
 const phoneQuery=window.matchMedia("(max-width:750px)");
 function placeDrawingTools(){
  if(phoneQuery.matches){mobileSlot.hidden=false;mobileSlot.appendChild(drawTools);}
- else{originalToolParent.appendChild(drawTools);mobileSlot.hidden=true;}
+ else{originalToolParent.insertBefore(drawTools,originalToolNext);mobileSlot.hidden=true;}
 }
 placeDrawingTools();
 phoneQuery.addEventListener("change",placeDrawingTools);
