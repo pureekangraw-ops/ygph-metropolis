@@ -4,6 +4,7 @@ import { mcpResponse } from "./mcp.mjs";
 import { consoleHtml } from "./console.mjs";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { invokeObservatoryGo } from "./go-bridge.mjs";
+import { scrollRemotePage } from "./scroll.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -138,15 +139,7 @@ export class BrowserWorkspace {
         case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
         case "forward": await page.goForward({waitUntil:"domcontentloaded",timeout:20000});break;
         case "reload": await page.reload({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "scroll": {
-          // Dispatch a real wheel event at the page center. window.scrollBy only
-          // moves the top-level window and fails on sites with a nested scroll owner.
-          const viewport=page.viewport();
-          if (viewport && viewport.width > 0 && viewport.height > 0)
-            await page.mouse.move(Math.floor(viewport.width / 2),Math.floor(viewport.height / 2));
-          await page.mouse.wheel({deltaY:step.y});
-          break;
-        }
+        case "scroll": await scrollRemotePage(page,step.y);break;
         case "click": {
           const risk=await page.$eval(step.selector, el => ({
             text:(el.innerText || el.getAttribute("aria-label") || el.value || "").slice(0,160),
