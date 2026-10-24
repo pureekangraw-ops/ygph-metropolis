@@ -7,8 +7,9 @@ import * as sites from '../site-permissions.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
 const id='11111111-2222-4333-8444-555555555555';
-function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/',inputType='text',sensitiveClick=false}={}) {
- let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0,clicks=0,typed=[];
+function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/',inputType='text',sensitiveClick=false,cleanupFails=false}={}) {
+ let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0,clicks=0,typed=[],closed=0;
+ const liveSessions=new Set(['synthetic']);
  const privateError=()=>Error('PRIVATE_TOKEN https://live.browser.run/?jwt=PRIVATE_URL');
  const page=t=>({target:()=>({_targetId:t}),url:()=>actualUrl,
   goto:async url=>{navigations++;actualUrl=url;},
@@ -16,15 +17,15 @@ function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected
   click:async()=>{clicks++;},type:async(selector,value)=>{typed.push(value);},
   evaluate:async()=>{observations++;return {title:'synthetic',url:actualUrl,text:'fixture only',controls:[]};},
   createCDPSession:async()=>{if(mode==='cdp')throw privateError();return {send:async()=>{cdpCalls++;if(mode==='provider')throw privateError();return {devtoolsFrontendUrl:mode==='url'?'https://attacker.invalid/':'https://live.browser.run/synthetic'};},detach:async()=>{}};}});
- const browser=()=>({pages:async()=>{if(mode==='pages')throw privateError();return targets.map(page);},disconnect:async()=>{},sessionId:()=> 'new-synthetic-session'});
+ const browser=()=>({pages:async()=>{if(mode==='pages')throw privateError();return targets.map(page);},disconnect:async()=>{},close:async()=>{if(cleanupFails)throw privateError();closed++;liveSessions.delete('synthetic');},sessionId:()=> 'new-synthetic-session'});
  const puppeteer={connect:async()=>{calls++;if(mode==='connect')throw privateError();return browser();},
-  launch:async()=>{launches++;targets=['explicit-new-target'];return browser();}};
+  launch:async()=>{assert.equal(liveSessions.size,0,'old session must be closed before replacement');liveSessions.add('new-synthetic-session');launches++;targets=['explicit-new-target'];return browser();}};
  const deps={puppeteer,...policy,...sites,WorkerEntrypoint:class {}};
  const {worker,BrowserWorkspace}=new Function(...Object.keys(deps),source+';return {worker,BrowserWorkspace};')(...Object.values(deps));
  const env={OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{},GO_ALLOWED_HOSTS:'example.com'};
  const instance=new BrowserWorkspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v);}}},env);
  env.SESSIONS={idFromName:()=>1,get:()=>({fetch:r=>instance.fetch(r)})};
- return {get calls(){return calls},get cdpCalls(){return cdpCalls},get navigations(){return navigations},get launches(){return launches},get observations(){return observations},get clicks(){return clicks},get typed(){return typed},get state(){return structuredClone(state)},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
+ return {get calls(){return calls},get cdpCalls(){return cdpCalls},get navigations(){return navigations},get launches(){return launches},get observations(){return observations},get closed(){return closed},get liveSessions(){return [...liveSessions]},get clicks(){return clicks},get typed(){return typed},get state(){return structuredClone(state)},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
   return worker.fetch(new Request('https://fixture.invalid'+path,{method,headers:{...(token?{authorization:'Bearer '+token}:{}),'x-request-id':requestId,'x-observatory-role':'GO'},...(body!==undefined?{body}:{})}),env);
  }};
 }
@@ -72,7 +73,7 @@ test('missing target recovers only through explicit owner URL open and a fresh G
  const f=fixture({targets:['other'],goRead:true,controller:'GO'});
  assert.equal((await f.call()).status,409);assert.equal(f.launches,0);
  assert.equal((await f.call({token:'synthetic-go',path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'})).status,404);assert.equal(f.launches,0);
- const opened=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'});assert.equal(opened.status,200);assert.equal(f.launches,1);assert.equal(f.state.targetId,'explicit-new-target');assert.equal(f.state.allowGoRead,false);
+ const opened=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'});assert.equal(opened.status,200);assert.equal(f.launches,1);assert.equal(f.closed,1);assert.deepEqual(f.liveSessions,['new-synthetic-session']);assert.equal(f.state.targetId,'explicit-new-target');assert.equal(f.state.allowGoRead,false);
  assert.equal((await f.call()).status,200);
  assert.equal((await f.call({path:'/v1/control',method:'POST',body:'{"controller":"GO"}'})).status,200);
  assert.equal((await f.call({token:'synthetic-go',path:'/v1/observe'})).status,200);
@@ -89,4 +90,11 @@ test('GO hands click/type permitted controls while sensitive actions remain bloc
  assert.equal((await action(sensitive,{type:'click',selector:'#button'})).status,400);assert.equal(sensitive.clicks,0);
  const missing=fixture({goRead:true,controller:'GO',targets:['other']});
  assert.equal((await action(missing,{type:'click',selector:'#details'})).status,400);assert.equal(missing.clicks,0);
+});
+
+test('owner recovery retains tracked old session and never launches if cleanup fails',async()=>{
+ const f=fixture({targets:['other'],cleanupFails:true});
+ const r=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'});
+ assert.equal(r.status,400);const text=await r.text();assert.equal(JSON.parse(text).error,'SESSION_CLEANUP_FAILED');assert.doesNotMatch(text,/PRIVATE|jwt|https:/);
+ assert.equal(f.launches,0);assert.equal(f.closed,0);assert.deepEqual(f.liveSessions,['synthetic']);assert.equal(f.state.browserSessionId,'synthetic');assert.equal(f.state.targetId,'selected');
 });

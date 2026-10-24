@@ -98,3 +98,27 @@ its request ID with sanitized Worker metadata. Check manual map use and approved
 GO map access with Lane A's acceptance procedure. No phone/production acceptance
 has been performed by this room, and passing fixtures does not resolve the
 original handset error by itself.
+
+## เช็คพ้อยต์แก้ reviewer HOLD: ไม่ทิ้ง session เก่า
+
+Reviewer พบ P2 ที่ 02411aa: owner recovery เมื่อ target หายสร้าง session ใหม่
+แต่ไม่ได้ปิด browser เดิม ห้องนี้ reproduce ด้วย regression ใหม่บน source เก่าแล้ว
+ล้มเหลวทั้งกรณี cleanup ปกติและ cleanup ล้มเหลว (synthetic เท่านั้น)
+
+แก้ใน candidate ปัจจุบัน: เมื่อ target หาย หรือ provider ยืนยัน session หมดอายุ
+owner กดเปิด URL ใหม่จะเรียก closeSession ก่อน replacement เสมอ ถ้าปิดไม่สำเร็จ
+ตอบ SESSION_CLEANUP_FAILED เก็บ session ID เดิมไว้และไม่ launch เพิ่ม ไม่มี
+wrong-tab fallback ส่วน provider/navigation error ที่ไม่ได้ยืนยันเหตุ recovery
+จะไม่สร้าง session ใหม่โดยเดา Affected suite 11/11 ผ่าน รวม assertion ว่า
+ไม่มี live synthetic session เก่าค้างก่อน replacement และ error ไม่เผยข้อมูล
+
+ข้อจำกัด: หาก upstream close สำเร็จแต่ response สูญหาย การเชื่อมต่อเก่าจะยังถูก
+ติดตามไว้เพื่อให้ owner ตรวจ/ลองใหม่อย่างชัดเจน ไม่ถือว่า cleanup สำเร็จเอง
+ไม่มีการปิดหรือเปิด session จริงระหว่างแก้ ยังรอ exact-head CI/independent review
+
+**Compatibility / ลำดับ release:** Worker ใหม่รับ client เก่าที่ไม่มี X-Request-ID
+โดยสร้าง ID ให้เอง แต่ client ใหม่ต้องการ echo ที่ตรงกัน จึงต้อง release Worker
+ที่ตรวจแล้วก่อน แล้วจึงแจก/ติดตั้ง APK ใหม่ เมื่อชน Worker เก่า client จะแจ้ง
+STATION_CORRELATION_UNVERIFIED ไม่อ้างเชื่อมสำเร็จ การ rollback Worker เก่าขณะ
+ใช้ APK ใหม่จึงไม่ compatible ต้องวางแผนคู่กัน ไม่มี merge/deploy/device PASS
+จาก checkpoint นี้ และไม่ควรเรียก APK ว่าพร้อมใช้บนโทรศัพท์ก่อน server release

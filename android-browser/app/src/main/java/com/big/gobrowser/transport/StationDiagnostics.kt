@@ -8,7 +8,7 @@ class StationFailure(val httpStatus: Int, val code: String, val requestId: Strin
 
 object StationDiagnostics {
     private val codes = setOf("UNAUTHORIZED", "OWNER_ONLY", "NOT_CONFIGURED", "SESSION_NOT_STARTED",
-        "SESSION_UNAVAILABLE", "EXACT_PAGE_UNAVAILABLE", "LIVE_VIEW_CDP_UNAVAILABLE",
+        "SESSION_UNAVAILABLE", "SESSION_CLEANUP_FAILED", "EXACT_PAGE_UNAVAILABLE", "LIVE_VIEW_CDP_UNAVAILABLE",
         "LIVE_VIEW_PROVIDER_ERROR", "LIVE_VIEW_UNAVAILABLE", "BUSY", "NOT_FOUND")
     fun safeCode(value: String): String? = value.takeIf { it in codes }
     fun requestId(value: String?): String? = value?.takeIf {

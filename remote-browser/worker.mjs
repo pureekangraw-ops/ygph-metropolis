@@ -232,7 +232,13 @@ export class BrowserWorkspace {
         });
         state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=finalUrl;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
         return summarize(state);
-      } catch { state.browserSessionId=null; }
+      } catch(error) {
+        // Owner explicitly reopened a URL. Retire the old session before replacing
+        // it; a missing target does not mean its browser has stopped billing/running.
+        if(error.message!=="EXACT_PAGE_UNAVAILABLE" && error.sessionExpired!==true) throw error;
+        try {await this.closeSession(state);} catch {throw new Error("SESSION_CLEANUP_FAILED");}
+        state=await this.state();
+      }
     }
     const host=new URL(url).hostname;
     const extras=String(this.env.PUBLIC_ASSET_HOSTS || "").split(",")
@@ -508,7 +514,7 @@ export class BrowserWorkspace {
       }
       return reply({error:"NOT_FOUND"},404);
     }catch(error) {
-      const safe=new Set(["BODY_TOO_LARGE","SESSION_NOT_STARTED","SESSION_UNAVAILABLE","EXACT_PAGE_UNAVAILABLE",
+      const safe=new Set(["BODY_TOO_LARGE","SESSION_NOT_STARTED","SESSION_UNAVAILABLE","SESSION_CLEANUP_FAILED","EXACT_PAGE_UNAVAILABLE",
         "OBSERVE_GRANT_ORIGIN_MISMATCH","CONTROLLER_MISMATCH","GO_DOMAIN_NOT_ALLOWED","GO_GRANT_ORIGIN_MISMATCH",
         "SENSITIVE_ACTION_NEEDS_OWNER","PROTECTED_INPUT","HTTPS_PUBLIC_URL_REQUIRED","STOP_JOB_BEFORE_CLOSING",
         "JOB_ALREADY_RUNNING","SCREENSHOT_TOO_LARGE"]);
