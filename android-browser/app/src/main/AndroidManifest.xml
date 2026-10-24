@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
-    <application android:allowBackup="false" android:label="YGG Observatory Preview" android:supportsRtl="true" android:theme="@style/ObservatoryTheme" android:usesCleartextTraffic="false">
+    <application android:allowBackup="false" android:label="${observatoryAppLabel}" android:supportsRtl="true" android:theme="@style/ObservatoryTheme" android:usesCleartextTraffic="false">
         <provider android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
