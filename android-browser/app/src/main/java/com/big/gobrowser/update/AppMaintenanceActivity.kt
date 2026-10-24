@@ -72,12 +72,19 @@ class AppMaintenanceActivity : Activity() {
                 "schema ${it.getInt("schema")} / data v${it.getInt("version")}" } }.getOrNull() }.orEmpty()
         return ObservatoryBuildStamp.detail() + "\nPackage: $packageName\nSigner SHA-256: " + signers(ownInfo()).joinToString(", ") +
             "\nMap packages: ${maps.size}\n" + maps.joinToString("\n") +
-            "\nBrowser endpoint: $endpoint\nLast endpoint check: " + remote.getString("diagnostic-status", "not checked") +
-            "\nCorrelation ID: " + remote.getString("diagnostic-id", "none") +
-            "\nMap endpoint: " + mapConnection.getString("endpoint", "not configured") +
+            "\n\nBrowser — request results (not live-session health)\nEndpoint: $endpoint" +
+            listOf("browser-view" to "Live View", "browser-session" to "Session polling/open", "browser-command" to "Other Browser request").joinToString("") { (key,label) ->
+                "\n$label: " + remote.getString("$key-status", "not checked in this version") +
+                "\nTime UTC: " + remote.getString("$key-time", "unknown") +
+                " · HTTP: " + remote.getString("$key-http", "unknown") +
+                "\nRequest: " + remote.getString("$key-method", "") + " " + remote.getString("$key-path", "") +
+                "\nRequest ID: " + remote.getString("$key-request-id", "none") +
+                " · server echo: " + remote.getBoolean("$key-server-correlated",false)
+            } +
+            "\n\nGO Direct — separate connection\nMap endpoint: " + mapConnection.getString("endpoint", "not configured") +
             "\nMap endpoint status: " + mapConnection.getString("endpointStatus", "not checked") +
             "\nMap transfer ID: " + mapConnection.getString("transferId", "none") +
-            "\nLast update check: " + prefs.getString("result", "not checked") +
+            "\n\nPackage download history — not Browser/GO Direct health\nLast update check: " + prefs.getString("result", "not checked") +
             "\nUpdate correlation ID: " + prefs.getString("correlation", "none")
     }
     private fun work(action: () -> String) {
