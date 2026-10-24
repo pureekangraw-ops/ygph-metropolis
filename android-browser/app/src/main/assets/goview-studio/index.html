@@ -42,7 +42,11 @@ small{font-size:11px;color:#9bb6ce}
 @media(max-width:750px){
  header{padding:9px 12px}header .top{gap:6px}h1{font-size:16px}
  main{display:flex;flex-direction:column;height:auto;min-height:0}
- #surface{height:51dvh;min-height:315px}
+ #surface{height:51dvh;min-height:315px;display:flex;flex-direction:column}
+ #map{flex:1 1 auto;height:0;min-height:0}
+ /* Mobile zoom controls get their own dock; no button sits atop map roads/POIs. */
+ .map-actions{position:static;flex:0 0 auto;flex-direction:row;justify-content:flex-end;padding:6px 10px;background:#101f30;border-top:1px solid #28425a}
+ .map-actions button{min-height:40px}
  aside{border-left:0;border-top:1px solid #28425a;max-height:none;padding:12px}
  .group{grid-template-columns:repeat(3,1fr)}
 }
