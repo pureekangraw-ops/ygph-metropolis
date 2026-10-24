@@ -7,11 +7,13 @@ import * as sites from '../site-permissions.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
 const id='11111111-2222-4333-8444-555555555555';
-function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/'}={}) {
- let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0;
+function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/',inputType='text',sensitiveClick=false}={}) {
+ let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0,clicks=0,typed=[];
  const privateError=()=>Error('PRIVATE_TOKEN https://live.browser.run/?jwt=PRIVATE_URL');
  const page=t=>({target:()=>({_targetId:t}),url:()=>actualUrl,
   goto:async url=>{navigations++;actualUrl=url;},
+  $eval:async(selector,fn)=>fn({getAttribute:key=>key==='type'?inputType:null,innerText:sensitiveClick?'Buy now':'Open details',closest:()=>null,isContentEditable:false,dispatchEvent:()=>{},value:''}),
+  click:async()=>{clicks++;},type:async(selector,value)=>{typed.push(value);},
   evaluate:async()=>{observations++;return {title:'synthetic',url:actualUrl,text:'fixture only',controls:[]};},
   createCDPSession:async()=>{if(mode==='cdp')throw privateError();return {send:async()=>{cdpCalls++;if(mode==='provider')throw privateError();return {devtoolsFrontendUrl:mode==='url'?'https://attacker.invalid/':'https://live.browser.run/synthetic'};},detach:async()=>{}};}});
  const browser=()=>({pages:async()=>{if(mode==='pages')throw privateError();return targets.map(page);},disconnect:async()=>{},sessionId:()=> 'new-synthetic-session'});
@@ -22,7 +24,7 @@ function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected
  const env={OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{},GO_ALLOWED_HOSTS:'example.com'};
  const instance=new BrowserWorkspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v);}}},env);
  env.SESSIONS={idFromName:()=>1,get:()=>({fetch:r=>instance.fetch(r)})};
- return {get calls(){return calls},get cdpCalls(){return cdpCalls},get navigations(){return navigations},get launches(){return launches},get observations(){return observations},get state(){return structuredClone(state)},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
+ return {get calls(){return calls},get cdpCalls(){return cdpCalls},get navigations(){return navigations},get launches(){return launches},get observations(){return observations},get clicks(){return clicks},get typed(){return typed},get state(){return structuredClone(state)},async call({token='synthetic-owner',path='/v1/view',method='GET',body,requestId=id}={}){
   return worker.fetch(new Request('https://fixture.invalid'+path,{method,headers:{...(token?{authorization:'Bearer '+token}:{}),'x-request-id':requestId,'x-observatory-role':'GO'},...(body!==undefined?{body}:{})}),env);
  }};
 }
@@ -74,4 +76,17 @@ test('missing target recovers only through explicit owner URL open and a fresh G
  assert.equal((await f.call()).status,200);
  assert.equal((await f.call({path:'/v1/control',method:'POST',body:'{"controller":"GO"}'})).status,200);
  assert.equal((await f.call({token:'synthetic-go',path:'/v1/observe'})).status,200);
+});
+
+test('GO hands click/type permitted controls while sensitive actions remain blocked',async()=>{
+ const f=fixture({goRead:true,controller:'GO'});
+ const action=async(f,body)=>f.call({token:'synthetic-go',path:'/v1/action',method:'POST',body:JSON.stringify(body)});
+ assert.equal((await action(f,{type:'click',selector:'#details'})).status,200);assert.equal(f.clicks,1);
+ assert.equal((await action(f,{type:'type',selector:'#query',value:'synthetic text'})).status,200);assert.deepEqual(f.typed,['synthetic text']);
+ const protectedInput=fixture({goRead:true,controller:'GO',inputType:'password'});
+ assert.equal((await action(protectedInput,{type:'type',selector:'#field',value:'synthetic'})).status,400);assert.deepEqual(protectedInput.typed,[]);
+ const sensitive=fixture({goRead:true,controller:'GO',sensitiveClick:true});
+ assert.equal((await action(sensitive,{type:'click',selector:'#button'})).status,400);assert.equal(sensitive.clicks,0);
+ const missing=fixture({goRead:true,controller:'GO',targets:['other']});
+ assert.equal((await action(missing,{type:'click',selector:'#details'})).status,400);assert.equal(missing.clicks,0);
 });
