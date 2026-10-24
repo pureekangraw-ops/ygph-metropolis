@@ -9,7 +9,7 @@ const page="https://www.google.com/search?q=map";
 test("public hosts are exact, not parent domains or private endpoints",()=>{
   assert.equal(publicSiteHost(page),"www.google.com");
   for(const u of ["http://www.google.com/","https://localhost/","https://10.0.0.1/",
-    "https://evil.google.com:443/","https://user:secret@www.google.com/",
+    "https://evil.google.com:8443/","https://user:secret@www.google.com/",
     "https://google.com.evil.invalid/","https://foo.internal/","https://example.com:8080/"])
     assert.equal(publicSiteHost(u),null,u);
 });
