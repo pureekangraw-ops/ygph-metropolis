@@ -24,6 +24,16 @@ class OutsideViewActivity : Activity() {
     private lateinit var status:TextView
     private lateinit var sharingStatus:TextView
     private lateinit var gpsStatus:TextView
+    private lateinit var directStatus:TextView
+    private val directClient by lazy { GoviewDirectClient(this) }
+    private var directFetching=false
+    private var directPromptOpen=false
+    private val directTick=object:Runnable { override fun run(){
+        if(foreground && !destroyed) {
+            pollDirect()
+            handler.postDelayed(this,12_000)
+        }
+    }}
     private lateinit var location:ForegroundLocationController
     private var foreground=false
     private val statusTick=object:Runnable {override fun run(){if(foreground){updateSharingStatus();updateLocationSession();handler.postDelayed(this,10_000)}}}
@@ -64,12 +74,15 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("จุดของฉัน"){listPins()})
         tools.addView(button("ตำแหน่งฉัน"){requestMyLocation()})
         tools.addView(button("เพิ่มเติม"){showMapTools()})
+        tools.addView(button("GO Direct"){showDirectSettings()})
         root.addView(scroll(tools))
         // New Map Studio is a standalone action: do not crowd the original phone toolbar.
         root.addView(button("✎ GO Map Studio · สร้างแผนที่"){startActivity(Intent(this,GoviewStudioActivity::class.java))})
         shareButton=button("GOVIEW · เลือก Snapshot / ไฟล์ให้ GO"){selectSnapshot()}
         root.addView(shareButton)
         root.addView(gpsStatus)
+        directStatus=ObservatoryTheme.status(this).apply {text="GO Direct · ปิดอยู่ · แตะเพื่อเชื่อมต่อ";setOnClickListener {showDirectSettings()}}
+        root.addView(directStatus)
         val host=FrameLayout(this);root.addView(host,LinearLayout.LayoutParams(-1,0,1f))
         root.addView(TextView(this).apply {text=packageStore.active()?.attribution?:"© OpenStreetMap contributors · openstreetmap.org/copyright";textSize=12f;setOnClickListener {startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse("https://www.openstreetmap.org/copyright")))}})
         ObservatoryTheme.apply(this,root)
@@ -181,7 +194,7 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "กลับ Browser", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "กลับ Browser", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด", "GO Direct · ตั้งค่าการเชื่อม", "อัปเดตแอป Observatory")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
@@ -202,9 +215,132 @@ class OutsideViewActivity : Activity() {
                 15->showStorageTools()
                 16->showCategories()
                 17->locationSessionDialog()
+                18->showDirectSettings()
+                19->startActivity(Intent(this,com.big.gobrowser.update.AppMaintenanceActivity::class.java))
             }
         }.setNegativeButton("ปิด",null).show()
     }
+    /** The GO bridge is set once in Settings. GPS and saved maps are never uploaded. */
+    private fun showDirectSettings() {
+        val connected=directClient.configured()
+        val input=EditText(this).apply {
+            hint="Android read token จากเจ้าของ Cloudflare"
+            inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine()
+        }
+        AlertDialog.Builder(this).setTitle("GOVIEW · GO Direct")
+            .setMessage(if(connected)
+                "เชื่อมไว้แล้ว · แผนที่จะอ่านเฉพาะคำสั่งขณะเปิด GOVIEW · ไม่ส่ง GPS ขึ้น Cloud · เจ้าของอนุมัติหมุดก่อนบันทึก"
+                else "ตั้งค่าคีย์อ่านของอุปกรณ์ครั้งเดียว · เก็บด้วย Android Keystore ไม่แสดงในหน้าแผนที่")
+            .setView(input).setNegativeButton("ปิด",null)
+            .setNeutralButton("ยกเลิกการเชื่อม"){_,_->runCatching {directClient.disconnect()}
+                directStatus.text="GO Direct · ปิดแล้ว"
+            }
+            .setPositiveButton("เชื่อม / อัปเดตคีย์"){_,_->
+                runCatching {directClient.configure(input.text.toString().trim())}
+                    .onSuccess {directStatus.text="GO Direct · เชื่อมแล้ว · รอคำสั่ง";pollDirect()}
+                    .onFailure {directStatus.text="GO Direct · คีย์ไม่ถูกต้องหรือบันทึกไม่ได้"}
+            }.show()
+    }
+
+    /** No network request is executed on Android's UI thread. */
+    private fun pollDirect() {
+        if(!foreground || destroyed || storageUnavailable || directFetching || directPromptOpen ||
+            !directClient.configured())return
+        directFetching=true
+        worker.execute {
+            val received=runCatching {directClient.pending()}
+            handler.post {
+                directFetching=false
+                if(!destroyed && foreground) {
+                    received.onSuccess {commands->
+                        directStatus.text=if(commands.isEmpty())"GO Direct · เชื่อมอยู่ · รอคำสั่ง"
+                            else "GO Direct · มีคำสั่งจาก GO"
+                        if(commands.isNotEmpty() && !directPromptOpen){
+                            directPromptOpen=true
+                            openDirectProposal(commands.first())
+                        }
+                    }.onFailure {directStatus.text="GO Direct · ตรวจคำสั่งไม่ได้ · "+(it.message?:"CONNECTION_ERROR")}
+                }
+            }
+        }
+    }
+
+    private fun reportDirect(command:GoviewDirectProposal, result:String, revision:Long,verified:Boolean) {
+        worker.execute {
+            val sent=runCatching {directClient.receipt(command,result,revision,verified)}
+            handler.post {
+                if(!destroyed) {
+                    directPromptOpen=false
+                    if(sent.isFailure)directStatus.text="GO Direct · ยังส่ง Receipt ไม่ได้ · จะพบคำสั่งเดิมอีกครั้ง"
+                    else directStatus.text="GO Direct · "+result+" · revision "+revision
+                }
+            }
+        }
+    }
+
+    private fun openDirectProposal(proposal:GoviewDirectProposal) {
+        if(!foreground||destroyed){directPromptOpen=false;return}
+        withJournal {journal->
+            if(!foreground){directPromptOpen=false;return@withJournal}
+            if(proposal.expectedRevision!=null && proposal.expectedRevision!=journal.state.revision) {
+                reportDirect(proposal,"FAILED",journal.state.revision,false)
+                return@withJournal
+            }
+            if(proposal.type=="POINT_FOCUS") {
+                val rendered=renderer.centerOnLocation(proposal.point)
+                reportDirect(proposal,if(rendered)"DISPLAY_REQUESTED" else "FAILED",journal.state.revision,false)
+                return@withJournal
+            }
+            val pinId="go-direct-"+proposal.commandId.replace("-","")
+            val known=journal.state.pins[pinId]
+            if(known!=null){
+                val same=known.point==proposal.point && known.label==proposal.label
+                reportDirect(proposal,if(same)"APPLIED" else "FAILED",journal.state.revision,same)
+                return@withJournal
+            }
+            AlertDialog.Builder(this)
+                .setTitle("GO เสนอหมุดใหม่")
+                .setMessage((proposal.label?:"ไม่ระบุชื่อ")+"\n"+
+                    proposal.point.latitude+", "+proposal.point.longitude+
+                    "\n\nพิกัดจาก GO ยังไม่ใช่การยืนยันหน้างาน บันทึกเป็นข้อมูลรอตรวจเท่านั้น")
+                .setNegativeButton("ไม่รับ"){_,_->
+                    reportDirect(proposal,"DECLINED",journal.state.revision,false)
+                }
+                .setOnCancelListener {
+                    reportDirect(proposal,"DECLINED",journal.state.revision,false)
+                }
+                .setPositiveButton("เพิ่มหมุด"){_,_->
+                    worker.execute {
+                        val saved=runCatching {
+                            val pin=Pin(pinId,requireNotNull(proposal.label),proposal.point,"",
+                                Evidence(EvidenceStatus.UNKNOWN,"go-direct-proposal"))
+                            val batch=GeoJsonBatch(listOf(pin),packageId="go-direct-"+proposal.commandId,
+                                packageVersion=1,baseVersion=proposal.expectedRevision)
+                            val preview=store.previewUpdate(batch,proposal.commandId)
+                            store.approveUpdate(preview)
+                        }
+                        handler.post {
+                            if(!destroyed) {
+                                saved.onSuccess {receipt->
+                                    if(receipt.readbackVerified && receipt.status in setOf("SAVED","DUPLICATE")) {
+                                        renderer.reloadStyle()
+                                        reportDirect(proposal,"APPLIED",receipt.revision,true)
+                                    } else {
+                                        // Persisted outcome may be uncertain. Never resend the edit blindly.
+                                        directPromptOpen=false
+                                        directStatus.text="GO Direct · บันทึกอาจสำเร็จ · เปิดผลอัปเดตเพื่อตรวจอ่านกลับ"
+                                    }
+                                }.onFailure {
+                                    reportDirect(proposal,"FAILED",readJournal()?.state?.revision?:journal.state.revision,false)
+                                }
+                            }
+                        }
+                    }
+                }.show()
+        }
+    }
+
     private fun enqueue(vararg commands:MapCommand){commands.forEach {this.commands.addLast(it)};pump()}
     private fun pump(){
         if(storageUnavailable||importing||busy||commands.isEmpty()||!renderer.foregroundReady)return
@@ -499,8 +635,8 @@ class OutsideViewActivity : Activity() {
     private fun scroll(row:LinearLayout)=HorizontalScrollView(this).apply {isHorizontalScrollBarEnabled=false;addView(row,ViewGroup.LayoutParams(-2,-2))}
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==42&&resultCode==RESULT_OK){importGeoJson(uri);return};if(requestCode==43&&resultCode==RESULT_OK){exportGeoJson(uri);return};if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
-    override fun onResume(){super.onResume();foreground=true;busy=true;renderer.onResume();location.resume();handler.post(statusTick);updateSharingStatus()}
-    override fun onPause(){foreground=false;commandRendererReady=false;handler.removeCallbacks(statusTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
+    override fun onResume(){super.onResume();foreground=true;busy=true;renderer.onResume();location.resume();handler.post(statusTick);handler.post(directTick);updateSharingStatus()}
+    override fun onPause(){foreground=false;commandRendererReady=false;handler.removeCallbacks(statusTick);handler.removeCallbacks(directTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
     override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdown();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
