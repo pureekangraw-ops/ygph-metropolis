@@ -16,9 +16,10 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 282px;height:calc(100dvh -
 aside{border-left:1px solid #28425a;background:#111d2a;padding:13px;overflow:auto}
 label{display:block;font-size:12px;color:#a9c9df;margin:9px 0 5px}
 input[type="checkbox"]{width:auto;max-width:none;vertical-align:middle;margin-right:4px}
-input{background:#08131d;color:#f0f7ff;border:1px solid #39556b;border-radius:8px;padding:9px;max-width:100%;width:100%;font:inherit;font-size:13px}
+input,textarea{background:#08131d;color:#f0f7ff;border:1px solid #39556b;border-radius:8px;padding:9px;max-width:100%;width:100%;font:inherit;font-size:13px}
+textarea{min-height:62px;resize:vertical}
 button{background:#1e3447;border:1px solid #426783;color:#f4faff;border-radius:9px;padding:8px 10px;font:inherit;font-size:12px;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:2px solid #6ee1c7;outline-offset:2px}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #6ee1c7;outline-offset:2px}
 button:hover{background:#2b4b65}button.active,button.primary{background:#77dfb8;border-color:#77dfb8;color:#072c2c;font-weight:750}
 button.danger{border-color:#9c525a;color:#ffd0d3}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -95,6 +96,9 @@ small{font-size:11px;color:#9bb6ce}
   <label for="bridgeUrl">GOVIEW Cloudflare Worker (HTTPS)</label>
   <input id="bridgeUrl" type="url" value="https://goview-package-bridge.pureekangraw.workers.dev" placeholder="https://goview-package-bridge.pureekangraw.workers.dev" autocorrect="off" autocomplete="off" spellcheck="false">
   <small>ตั้งค่าปลายทางของเราไว้แล้ว · คีย์อ่านต้องกรอกจากเจ้าของเครื่องเท่านั้น</small>
+  <label for="goReceiptJson">ใบรับส่งจาก GO (JSON เฉพาะ mapId, version, sha256, transferId)</label>
+  <textarea id="goReceiptJson" autocomplete="off" autocorrect="off" spellcheck="false" placeholder='{"mapId":"...","version":1,"sha256":"...","transferId":"..."}'></textarea>
+  <button id="useGoReceipt">↳ เติมข้อมูลจากใบรับ GO</button>
   <label for="bridgeMapId">Map ID ที่ GO เตรียมไว้</label>
   <input id="bridgeMapId" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="go_synthetic_route_demo">
   <label for="bridgeVersion">Exact version from GO receipt</label><input id="bridgeVersion" inputmode="numeric">
@@ -336,6 +340,25 @@ $("library").onclick=()=>{
  window.GoviewStudio.receiveMapList(JSON.stringify(entries));
 };
 $("myGps").onclick=()=>native?window.GoviewHost.locate():status("GPS ในเวอร์ชันเว็บตัวอย่างต้องใช้ผ่านแอป Android");
+$("useGoReceipt").onclick=()=>{
+ const raw=$("goReceiptJson").value.trim();
+ if(!raw || raw.length>10000)return status("กรุณาวางใบรับ GO แบบ JSON ขนาดไม่เกิน 10 KB");
+ let receipt;
+ try{receipt=JSON.parse(raw);if(receipt&&receipt.result&&typeof receipt.result==="object")receipt=receipt.result;}
+ catch{return status("ใบรับ GO ต้องเป็น JSON ที่ถูกต้อง");}
+ if(!receipt || typeof receipt!=="object" || Array.isArray(receipt))return status("ใบรับ GO ไม่ถูกต้อง");
+ const {mapId,version,sha256,transferId}=receipt;
+ const ver=String(version);
+ if(typeof mapId!=="string"||!/^[a-zA-Z0-9_-]{1,70}$/.test(mapId)||
+    !/^[1-9][0-9]{0,5}$/.test(ver)||Number(ver)>999999||
+    typeof sha256!=="string"||!/^[a-f0-9]{64}$/.test(sha256)||
+    typeof transferId!=="string"||!/^[a-zA-Z0-9_-]{1,80}$/.test(transferId))
+   return status("ใบรับ GO ต้องมี Map ID, Version, SHA-256 เต็ม และ Transfer ID");
+ $("bridgeMapId").value=mapId;$("bridgeVersion").value=ver;
+ $("bridgeSha").value=sha256;$("bridgeTransfer").value=transferId;
+ $("goReceiptJson").value="";
+ status("เตรียมใบรับ GO แล้ว · ใส่คีย์อ่านส่วนตัว จากนั้นเลือกดาวน์โหลดเพื่อดู Diff ก่อนอนุมัติ");
+};
 $("pullFromGo").onclick=()=>{
  if(!native)return status("GO Access ต้องเปิดผ่านแอป Android");
  const url=$("bridgeUrl").value.trim(),id=$("bridgeMapId").value.trim(),token=$("bridgeToken").value;
