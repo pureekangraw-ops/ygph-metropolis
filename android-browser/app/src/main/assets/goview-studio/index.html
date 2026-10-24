@@ -47,9 +47,12 @@ small{font-size:11px;color:#9bb6ce}
  /* Mobile zoom controls get their own dock; no button sits atop map roads/POIs. */
  .map-actions{position:static;flex:0 0 auto;flex-direction:row;justify-content:flex-end;padding:6px 10px;background:#101f30;border-top:1px solid #28425a}
  .map-actions button{min-height:40px}
- #mobileToolsSlot:not([hidden]){position:sticky;top:0;z-index:3;background:#111d2a;border-bottom:1px solid #28425a;overflow-x:auto}
- #mobileToolsSlot #tools{display:flex;gap:6px;width:max-content;min-width:100%;padding:8px 10px}
+ #mobileToolsSlot:not([hidden]){position:sticky;top:0;z-index:3;display:flex;align-items:center;background:#111d2a;border-bottom:1px solid #28425a;overflow-x:auto}
+ #mobileToolsSlot #tools{display:flex;flex:0 0 auto;gap:6px;width:max-content;padding:8px 10px}
  #mobileToolsSlot #tools button{flex:0 0 auto;min-height:44px;white-space:nowrap}
+ #mobileToolsSlot #toolActions{flex:0 0 auto;flex-wrap:nowrap;margin:0!important;padding:0 10px 0 0}
+ #mobileToolsSlot #toolActions button{min-height:44px;white-space:nowrap}
+ #toolLabel{display:none}
  aside{border-left:0;border-top:1px solid #28425a;max-height:none;padding:12px}
  .group{grid-template-columns:repeat(3,1fr)}
 }
@@ -79,7 +82,7 @@ small{font-size:11px;color:#9bb6ce}
   <span class="stat" id="version"></span>
   <button id="save">บันทึก</button><button id="geoexport">ส่ง GeoJSON</button>
  </div>
- <label>เครื่องมือวาด</label>
+ <label id="toolLabel">เครื่องมือวาด</label>
  <div class="group" id="tools">
   <button data-mode="pan" class="active">✋ เลื่อน</button>
   <button data-mode="node">＋ จุดถนน</button>
@@ -90,7 +93,7 @@ small{font-size:11px;color:#9bb6ce}
   <button data-mode="edit">✎ แก้ไข</button>
   <button data-mode="erase">⌫ ลบส่วน</button>
  </div>
- <div class="row" style="margin-top:8px"><button id="finishArea">จบรูปพื้นที่</button><button class="danger" id="undo">ย้อนแก้ไข</button></div>
+ <div class="row" id="toolActions" style="margin-top:8px"><button id="finishArea">จบรูปพื้นที่</button><button class="danger" id="undo">ย้อนแก้ไข</button></div>
  <div class="stat" id="counts"></div>
  <label>ค้นหาสถานที่</label><input id="search" type="search" placeholder="ค้นหาชื่อหมุด...">
  <div class="stat">ชั้นข้อมูล: <label><input id="roadsLayer" type="checkbox" checked> ถนน</label><label><input id="areasLayer" type="checkbox" checked> พื้นที่</label><label><input id="poisLayer" type="checkbox" checked> สถานที่</label></div>
@@ -137,11 +140,13 @@ small{font-size:11px;color:#9bb6ce}
 "use strict";
 const G=window.GoviewEngine,$=id=>document.getElementById(id),svg=$("map");
 const NS="http://www.w3.org/2000/svg",native=typeof window.GoviewHost!=="undefined",LOCAL_KEY="goview-studio-drawn-map-v1";
-const mobileSlot=$("mobileToolsSlot"),drawTools=$("tools"),originalToolParent=drawTools.parentNode,originalToolNext=drawTools.nextSibling;
+const mobileSlot=$("mobileToolsSlot"),drawTools=$("tools"),toolActions=$("toolActions");
+const originalToolParent=drawTools.parentNode,originalToolNext=drawTools.nextSibling;
+const originalActionParent=toolActions.parentNode,originalActionNext=toolActions.nextSibling;
 const phoneQuery=window.matchMedia("(max-width:750px)");
 function placeDrawingTools(){
- if(phoneQuery.matches){mobileSlot.hidden=false;mobileSlot.appendChild(drawTools);}
- else{originalToolParent.insertBefore(drawTools,originalToolNext);mobileSlot.hidden=true;}
+ if(phoneQuery.matches){mobileSlot.hidden=false;mobileSlot.append(drawTools,toolActions);}
+ else{originalToolParent.insertBefore(drawTools,originalToolNext);originalActionParent.insertBefore(toolActions,originalActionNext);mobileSlot.hidden=true;}
 }
 placeDrawingTools();
 phoneQuery.addEventListener("change",placeDrawingTools);
