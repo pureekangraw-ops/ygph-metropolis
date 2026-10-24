@@ -180,4 +180,31 @@ class GoviewStudioAndroidTest {
         assertFalse("Download validation must not commit", File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json").exists())
     }
 
+    @Test fun inactiveDestinationCancelAndExactBytesSurviveApproval() {
+        await("Studio ready") { js("Boolean(window.GoviewEngine && window.GoviewHost)") == true }
+        val suffix = System.nanoTime().toString()
+        val id = "synthetic_inactive_$suffix"
+        fun payload(version: Int) = js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';m.version=$version;return GoviewEngine.pack(m)})()") as String
+        val original = payload(5)
+        val file = File(screen.activity.filesDir, "goview-studio-maps/$id.goview.json")
+        js("GoviewHost.savePackage(" + JSONObject.quote(original) + ");true")
+        await("Saved inactive fixture") { file.exists() && file.readText() == original }
+        js("(()=>{const m=GoviewEngine.demo();m.mapId='active_$suffix';GoviewHost.savePackage(GoviewEngine.pack(m));GoviewStudio.receiveNativePackage(GoviewEngine.pack(m));})()")
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(payload(2)) + ");true")
+        await("Inactive destination preview") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalOk').click();true")
+        await("Downgrade rejected against B v5 while A open") { (js("document.getElementById('message').textContent") as? String ?: "").contains("STALE_VERSION") }
+        assertEquals(original, file.readText())
+        val exact = JSONObject(payload(6)).toString(4)
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(exact) + ");true")
+        await("New proposal preview") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalCancel').click();true")
+        assertEquals(original, file.readText())
+        js("GoviewStudio.receiveImport(" + JSONObject.quote(exact) + ");true")
+        await("Proposal preview again") { js("document.getElementById('modal').classList.contains('open')") == true }
+        js("document.getElementById('modalOk').click();true")
+        await("Exact original imported bytes retained, including whitespace") { file.readText() == exact }
+        assertEquals(original, File(file.parentFile, "$id.v5.backup.json").readText())
+    }
+
 }

@@ -70,6 +70,7 @@ class RemoteBrowserActivity : Activity() {
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
         }, weighted())
+        switcher.addView(action("ⓘ Updates") { startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }, weighted())
         root.addView(switcher)
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         address = EditText(this).apply {
@@ -398,6 +399,8 @@ class RemoteBrowserActivity : Activity() {
             val result=runCatching { JSONObject(StationHttp.request(service+path,method,body,token)).also {
                 if (it.has("error")) throw IllegalStateException(it.optString("error"))
             }}
+            prefs.edit().putString("diagnostic-status", if(result.isSuccess) "CONNECTED" else "REQUEST_FAILED")
+                .putString("diagnostic-id", java.util.UUID.randomUUID().toString()).apply()
             main.post {busy=false;if(!destroyed)onDone(result)}
         }
     }

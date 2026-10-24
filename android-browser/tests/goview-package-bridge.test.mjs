@@ -89,3 +89,22 @@ test("oversize map streams fail before reaching private R2",async()=>{
   assert.equal(response.status,413);
   assert.equal(env.PACKAGES.items.size,0);
 });
+
+import {invokeGoview} from '../../goview-package-bridge/go-adapter.mjs';
+test('GO adapter publishes exact artifact and reads old version after latest advances',async()=>{
+ const env=setup(),map=Engine.demo(),raw=Engine.pack(map);
+ const args={mapId:map.mapId,version:1,sha256:Engine.hash(raw),transferId:'transfer_one',package:raw};
+ const receipt=await invokeGoview(env,'goview_publish',args);
+ assert.equal(receipt.ok,true);assert.equal(receipt.package,raw);
+ assert.equal(receipt.androidStatus,'NOT_OBSERVED_OWNER_APPROVAL_REQUIRED');
+ map.version=2;const newer=Engine.pack(map);
+ assert.equal((await invokeGoview(env,'goview_publish',{...args,version:2,sha256:Engine.hash(newer),package:newer})).ok,true);
+ assert.equal((await invokeGoview(env,'goview_readback',args)).package,raw);
+ assert.equal((await invokeGoview(env,'goview_readback',{...args,sha256:'0'.repeat(64)})).status,'READBACK_MISMATCH');
+});
+test('GO adapter rejects artifact substitution and fails closed without storage',async()=>{
+ const raw=Engine.pack(Engine.demo()), args={mapId:'other_map',version:1,sha256:Engine.hash(raw),transferId:'transfer_two',package:raw};
+ assert.equal((await invokeGoview(setup(),'goview_publish',args)).status,'ARTIFACT_MISMATCH');
+ assert.equal((await invokeGoview({},'goview_readback',args)).ok,false);
+ assert.equal((await invokeGoview(setup(),'goview_delete',args)).status,'UNSUPPORTED');
+});

@@ -50,6 +50,7 @@ class GoviewStudioActivity : Activity() {
     }
     // All Activity instances coordinate read/modify/write, including rotation.
     companion object { private val storageLock = Any() }
+    private val transferDirectory by lazy { File(filesDir, "goview-transfers").apply { mkdirs() } }
     private var pendingExport: ByteArray? = null
     private var webReady = false
     private var pendingIncoming: Intent? = null
@@ -65,6 +66,7 @@ class GoviewStudioActivity : Activity() {
             textSize = 14f
             setPadding(18, 10, 18, 10)
         })
+        host.addView(com.big.gobrowser.ui.ObservatoryBuildStamp.view(this))
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = false
@@ -268,7 +270,17 @@ class GoviewStudioActivity : Activity() {
                         "Committed bytes do not match file readback"
                     }
                     check(preferences.edit().putString("activeMap", id).commit()) { "could not store active map id" }
-                    digest.digest(readback).joinToString("") { "%02x".format(it.toInt() and 255) }
+                    val savedDigest = sha256(readback)
+                    transferDirectory.listFiles()?.filter { it.name.endsWith(".json") }?.forEach { file ->
+                        val receiptFile = AtomicFile(file)
+                        val receipt = JSONObject(receiptFile.openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
+                        if (receipt.getString("mapId") == id && receipt.getString("sha256") == savedDigest) {
+                            receipt.put("status", "OWNER_APPROVED_FILE_READBACK_VERIFIED")
+                                .put("readbackSha256", savedDigest).put("savedAt", System.currentTimeMillis())
+                            writeReceipt(receiptFile, receipt)
+                        }
+                    }
+                    savedDigest
                 }
             }
             if (result.isFailure) callback("nativeStatus", "บันทึกข้อมูลอาจสำเร็จแต่ตรวจอ่านกลับไม่ได้ · ตรวจไฟล์ก่อนกดซ้ำ")
@@ -340,7 +352,38 @@ class GoviewStudioActivity : Activity() {
             }
         }
 
-        @JavascriptInterface fun downloadLatest(endpoint: String, mapId: String, token: String) {
+        @JavascriptInterface fun exportReceipt() {
+            val result = synchronized(storageLock) { runCatching {
+                val file = transferDirectory.listFiles()?.filter { it.name.endsWith(".json") }
+                    ?.maxByOrNull { it.lastModified() } ?: error("NO_RECEIPT")
+                val receipt = JSONObject(AtomicFile(file).openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
+                val stored = mapStorage(receipt.getString("mapId")).openRead().use { readLimited(it) }
+                receipt.put("currentReadbackSha256", sha256(stored))
+                    .put("matchesTransferredArtifact", sha256(stored) == receipt.getString("sha256"))
+                receipt.toString(2).toByteArray(StandardCharsets.UTF_8)
+            } }
+            result.onSuccess { bytes ->
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this@GoviewStudioActivity).setTitle("Transfer receipt / current readback")
+                        .setMessage(String(bytes, StandardCharsets.UTF_8))
+                        .setPositiveButton("Export receipt") { _, _ ->
+                            pendingExport = bytes
+                            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"
+                                putExtra(Intent.EXTRA_TITLE, "goview-transfer-receipt.json")
+                            }, 702)
+                        }.setNegativeButton("Close", null).show()
+                }
+            }.onFailure { callback("nativeStatus", "Receipt/readback unavailable · no data changed") }
+        }
+
+        @JavascriptInterface fun downloadExact(endpoint: String, mapId: String, token: String,
+            expectedVersion: String, expectedSha256: String, transferId: String) {
+            if (expectedVersion.toIntOrNull() !in 1..1000000 ||
+                !Regex("[a-f0-9]{64}").matches(expectedSha256) ||
+                !Regex("[a-zA-Z0-9_-]{1,80}").matches(transferId)) {
+                callback("nativeStatus", "Exact version, full SHA-256 and transfer ID required"); return
+            }
             // GO access is optional. No token is embedded in the APK, preference file, or map package.
             // A redirect must never forward a bearer credential to another host.
             val uri = runCatching { URI(endpoint.trim()) }.getOrNull()
@@ -359,7 +402,7 @@ class GoviewStudioActivity : Activity() {
                 .followRedirects(false).followSslRedirects(false)
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS).build()
-            val url = endpoint.trim().trimEnd('/') + "/v1/maps/" + mapId + "/packages/latest"
+            val url = endpoint.trim().trimEnd('/') + "/v1/maps/" + mapId + "/packages/" + expectedVersion
             Thread {
                 val result = runCatching {
                     val request = Request.Builder().url(url)
@@ -373,10 +416,23 @@ class GoviewStudioActivity : Activity() {
                         val text = String(bytes, StandardCharsets.UTF_8)
                         validateDownloadedPackage(text, mapId,
                             response.header("x-goview-version"), response.header("x-goview-sha256"))
+                        check(JSONObject(text).getJSONObject("map").getInt("version").toString() == expectedVersion) { "EXPECTED_VERSION_MISMATCH" }
+                        check(sha256(bytes) == expectedSha256) { "EXPECTED_UPLOAD_DIGEST_MISMATCH" }
+                        synchronized(storageLock) {
+                            val receipt = JSONObject().put("transferId", transferId).put("mapId", mapId)
+                                .put("version", expectedVersion.toInt()).put("sha256", expectedSha256)
+                                .put("endpoint", uri.host).put("status", "DOWNLOADED_VERIFIED_NOT_APPLIED")
+                            val file = AtomicFile(File(transferDirectory, "$transferId.json"))
+                            if (file.baseFile.exists()) {
+                                val prior = JSONObject(file.openRead().use { String(readLimited(it), StandardCharsets.UTF_8) })
+                                check(prior.getString("sha256") == expectedSha256 && prior.getString("mapId") == mapId &&
+                                    prior.getInt("version") == expectedVersion.toInt()) { "TRANSFER_ID_CONFLICT" }
+                            } else writeReceipt(file, receipt)
+                        }
                         text
                     }
                 }
-                result.onSuccess { callback("receiveDownload", it, java.util.UUID.randomUUID().toString()) }
+                result.onSuccess { callback("receiveDownload", it, transferId) }
                     .onFailure { callback("nativeStatus", "GO Download ไม่สำเร็จ: " + (it.message ?: "network error")) }
             }.start()
         }
@@ -392,6 +448,17 @@ class GoviewStudioActivity : Activity() {
         val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 255) }
         check(sha256 == digest) { "DOWNLOAD_DIGEST_MISMATCH" }
+    }
+
+    private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(it.toInt() and 255) }
+
+    private fun writeReceipt(file: AtomicFile, receipt: JSONObject) {
+        val bytes = receipt.toString().toByteArray(StandardCharsets.UTF_8)
+        val out = file.startWrite()
+        try { out.write(bytes); file.finishWrite(out) }
+        catch (failure: Exception) { file.failWrite(out); throw failure }
+        check(file.openRead().use { readLimited(it) }.contentEquals(bytes)) { "RECEIPT_READBACK_FAILED" }
     }
 
     private fun readLimited(input: java.io.InputStream): ByteArray {

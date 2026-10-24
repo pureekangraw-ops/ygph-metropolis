@@ -96,6 +96,10 @@ small{font-size:11px;color:#9bb6ce}
   <input id="bridgeUrl" type="url" placeholder="https://goview-package-bridge.…workers.dev" autocorrect="off" autocomplete="off" spellcheck="false">
   <label for="bridgeMapId">Map ID ที่ GO เตรียมไว้</label>
   <input id="bridgeMapId" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="go_synthetic_route_demo">
+  <label for="bridgeVersion">Exact version from GO receipt</label><input id="bridgeVersion" inputmode="numeric">
+  <label for="bridgeSha">Full upload SHA-256</label><input id="bridgeSha" autocomplete="off">
+  <label for="bridgeTransfer">Transfer ID from GO receipt</label><input id="bridgeTransfer" autocomplete="off">
+  <button id="transferReceipt">Read back / export saved receipt</button>
   <label for="bridgeToken">คีย์อ่านแพ็กเกจ (ไม่บันทึกลงไฟล์)</label>
   <input id="bridgeToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Android read token">
   <div class="row" style="margin-top:8px"><button id="pullFromGo">↓ ดาวน์โหลดแพ็กเกจจาก GO</button></div>
@@ -136,9 +140,9 @@ function showDialog(title,text,inputValue,okLabel,callback) {
 }
 function nextId(prefix,items){let n=1;const used=new Set(items.map(x=>x.id));while(used.has(prefix+n))n++;return prefix+n;}
 function snap(){undoStack.push(JSON.stringify(map));if(undoStack.length>35)undoStack.shift();}
-function persist(expectedBase) {
+function persist(expectedBase, exactBytes) {
  try{
-  const payload=G.pack(map);
+  const payload=exactBytes || G.pack(map);
   if(native){
    pendingWrite={id:map.mapId,version:map.version,digest:G.hash(payload)};
    if(expectedBase!==undefined)window.GoviewHost.saveApprovedPackage(payload,expectedBase);
@@ -303,7 +307,8 @@ $("export").onclick=()=>{try{exportText(G.pack(map),filename(".goview.json"),"ap
 $("geoexport").onclick=()=>{try{exportText(JSON.stringify(G.toGeoJson(map),null,2),filename(".geojson"),"application/geo+json");status("ส่งข้อมูล Geometry ออก (GeoJSON ไม่มี graph metadata)");}catch(e){status(e.message);}};
 function offer(raw,existing){
  let next;try{const file=JSON.parse(raw);next=file.type==="FeatureCollection"?G.fromGeoJson(file):G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
- if(native && arguments.length===1){window.GoviewHost.prepareImport(G.pack(next));return;}
+ if(JSON.parse(raw).type==="FeatureCollection")raw=G.pack(next);
+ if(native && arguments.length===1){window.GoviewHost.prepareImport(raw);return;}
  let baseline=map;
  if(native){try{baseline=existing?G.unpack(existing):G.fresh();}catch(e){return status("Preview อ่านแผนที่เดิมไม่ได้: "+e.message);}}
  const counts=G.diff(baseline,next),lines=Object.entries(counts).map(([key,v])=>key+": +"+v.added+" / เปลี่ยน "+v.changed+" / ลบ "+v.removed);
@@ -314,9 +319,9 @@ function offer(raw,existing){
   (sameId && next.version<=baseline.version?"\nคำเตือน: เวอร์ชันนี้ไม่ใหม่กว่าในเครื่อง":"")+
   "\n\nไฟล์ที่ดาวน์โหลดมาไม่เปลี่ยนแผนที่จนกว่าจะกดอนุมัติ",null,"อนุมัติ Update",yes=>{
    if(!yes)return;
-   try{if(G.updateDecision(baseline,next)==="DUPLICATE")return status("แพ็กเกจซ้ำ ไม่มีการเปลี่ยนแปลง");}
+   try{if(G.updateDecision(baseline,next)==="DUPLICATE" && !native)return status("แพ็กเกจซ้ำ ไม่มีการเปลี่ยนแปลง");}
    catch(e){return status("ปฏิเสธ Update: "+e.message);}
-   snap();map=next;start=null;finish=null;path=null;poly=[];persist(native?(existing||""):undefined);render();$("fit").click();
+   snap();map=next;start=null;finish=null;path=null;poly=[];persist(native?(existing||""):undefined,raw);render();$("fit").click();
   });
 }
 $("file").onchange=async(ev)=>{const f=ev.target.files?.[0];if(!f)return;try{if(f.size>1049000)throw Error("ขนาดไฟล์เกิน");offer(await f.text());}catch(e){status(e.message);}ev.target.value="";};
@@ -337,9 +342,10 @@ $("pullFromGo").onclick=()=>{
  if(!/^https:\/\//i.test(url))return status("ต้องใช้ HTTPS เท่านั้น");
  // Forget the visible credential as soon as the request is passed into the native process.
  $("bridgeToken").value="";
- window.GoviewHost.downloadLatest(url,id,token);
+ window.GoviewHost.downloadExact(url,id,token,$("bridgeVersion").value.trim(),$("bridgeSha").value.trim(),$("bridgeTransfer").value.trim());
  status("กำลังขอแพ็กเกจจาก GO · จะยังไม่แก้แผนที่จนกว่าจะอนุมัติ");
 };
+$("transferReceipt").onclick=()=>native?window.GoviewHost.exportReceipt():status("Android only");
 for(const id of ["roadsLayer","areasLayer","poisLayer"])$(id).onchange=draw;
 $("search").oninput=event=>{
  const query=event.target.value.trim().toLocaleLowerCase();if(!query)return;

@@ -83,6 +83,8 @@ jobs:
           installer="app/build/outputs/apk/debug/YGG-Observatory-Remote.apk"
           cp "$apk" "$installer"
           sha256sum "$installer" | tee "$installer.sha256"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$installer" | tee "$installer.signing.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$installer" > "$installer.package.txt"
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -90,6 +92,8 @@ jobs:
           path: |
             android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk
             android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.sha256
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.signing.txt
+            android-browser/app/build/outputs/apk/debug/YGG-Observatory-Remote.apk.package.txt
           retention-days: 14
 
       - name: Build compact ARM64 installer

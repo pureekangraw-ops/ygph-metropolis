@@ -9,6 +9,7 @@
  * Requires a deployed, owner-configured Worker + R2 bucket.
  * A successful upload does NOT approve Android Update: handset still previews the diff.
  */
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Engine from "../android-browser/app/src/main/assets/goview-studio/engine.js";
 
@@ -46,7 +47,7 @@ async function main() {
   const text=await read.text();
   if (Engine.hash(text)!==Engine.hash(bytes) || Engine.unpack(text).mapId!==map.mapId)
     throw Error("Remote map differs from the locally generated package");
-  console.log(JSON.stringify({status:"UPLOADED_AND_READBACK_VERIFIED",mapId:map.mapId,
+  console.log(JSON.stringify({status:"UPLOADED_AND_READBACK_VERIFIED",transferId:randomUUID(),mapId:map.mapId,
     version:map.version,sha256:Engine.hash(bytes),endpoint:base.origin},null,2));
 }
 main().catch(error=>{console.error("GO Map Push failed:",error.message);process.exitCode=1;});
