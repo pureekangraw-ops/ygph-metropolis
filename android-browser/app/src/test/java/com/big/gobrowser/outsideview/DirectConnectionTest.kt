@@ -50,6 +50,19 @@ class DirectConnectionTest {
         assertTrue(restored.validate(restored.beginValidation(),candidate))
         assertTrue(restored.canPoll());assertFalse(d.blocked)
     }
+    @Test fun reconnectRestoresCommandReadAndReceiptTransport() {
+        val d=Disk(old,true);var reads=0;var receipts=0
+        val c=connection(d){ token ->
+            assertEquals(candidate,token);reads++;listOf("synthetic-proposal")
+        }
+        assertThrows(IllegalStateException::class.java){c.pending()}
+        assertTrue(c.validate(c.beginValidation(),candidate))
+        assertEquals(1,reads);assertEquals(0,receipts)
+        assertEquals(listOf("synthetic-proposal"),c.pending())
+        // The owner-approved receipt path uses the same guarded request boundary.
+        val result=c.request { token -> assertEquals(candidate,token);receipts++;"receipt-stored" }
+        assertEquals("receipt-stored",result);assertEquals(2,reads);assertEquals(1,receipts)
+    }
     @Test fun temporaryFailureDoesNotPermanentlySuspend() {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(503)}
         assertThrows(DirectHttpFailure::class.java){c.pending()}
