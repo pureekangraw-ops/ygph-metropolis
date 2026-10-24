@@ -20,6 +20,22 @@
                 android:resource="@xml/observatory_share_paths" />
         </provider>
         <activity android:name=".outsideview.OutsideViewActivity" android:exported="false" />
+        <activity android:name=".outsideview.GoviewStudioActivity" android:exported="true">
+            <!-- File ingress only: no update is applied until the owner reviews the diff. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/geo+json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/geo+json" />
+            </intent-filter>
+        </activity>
         <service android:name=".outsideview.GoviewLocationService" android:exported="false" android:foregroundServiceType="location" android:stopWithTask="true" />
         <service android:name=".browser.GeckoObserverService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Owner-initiated Observatory browser observation" />

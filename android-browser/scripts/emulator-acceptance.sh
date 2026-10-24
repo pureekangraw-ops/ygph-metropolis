@@ -17,6 +17,7 @@ collect_evidence() {
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-renderer-smoke.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-mobile-browser.png app/build/emulator-evidence/ || true
   timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/observatory-mobile-location.png app/build/emulator-evidence/ || true
+  timeout 15 adb pull /sdcard/Android/data/com.big.gobrowser/files/goview-studio-go-drawn.png app/build/emulator-evidence/ || true
 }
 trap collect_evidence EXIT
 set +e

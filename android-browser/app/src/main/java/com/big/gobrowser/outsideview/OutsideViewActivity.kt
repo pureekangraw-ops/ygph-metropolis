@@ -65,6 +65,8 @@ class OutsideViewActivity : Activity() {
         tools.addView(button("ตำแหน่งฉัน"){requestMyLocation()})
         tools.addView(button("เพิ่มเติม"){showMapTools()})
         root.addView(scroll(tools))
+        // New Map Studio is a standalone action: do not crowd the original phone toolbar.
+        root.addView(button("✎ GO Map Studio · สร้างแผนที่"){startActivity(Intent(this,GoviewStudioActivity::class.java))})
         shareButton=button("GOVIEW · เลือก Snapshot / ไฟล์ให้ GO"){selectSnapshot()}
         root.addView(shareButton)
         root.addView(gpsStatus)
