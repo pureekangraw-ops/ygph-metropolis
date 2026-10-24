@@ -256,7 +256,11 @@ class OutsideViewActivity : Activity() {
                         if(!destroyed && foreground && generation==directGeneration) {
                             result.onSuccess { accepted ->
                                 if(accepted) directStatus.text="GO Direct · ยืนยันการเชื่อมแล้ว · รอรอบรับคำสั่ง"
-                            }.onFailure {directStatus.text="GO Direct · ตรวจการเชื่อมไม่ผ่าน · "+directSafeError(it)}
+                            }.onFailure {
+                                directStatus.text=if(it is DirectActivationIncomplete)
+                                    "GO Direct · การบันทึก/เปิดรับคำสั่งยังไม่ครบ · เชื่อมใหม่ · "+directSafeError(it)
+                                else "GO Direct · ตรวจการเชื่อมไม่ผ่าน · "+directSafeError(it)
+                            }
                         }
                     }
                 }

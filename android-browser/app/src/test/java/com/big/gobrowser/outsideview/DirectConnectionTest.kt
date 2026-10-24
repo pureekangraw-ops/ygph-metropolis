@@ -63,6 +63,33 @@ class DirectConnectionTest {
         val result=c.request { token -> assertEquals(candidate,token);receipts++;"receipt-stored" }
         assertEquals("receipt-stored",result);assertEquals(2,reads);assertEquals(1,receipts)
     }
+    @Test fun activationPersistenceFailureReportsSavedCredentialAndCanRecover() {
+        val d=Disk(old,true);var failActivation=true
+        val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={ value ->
+                if(failActivation)throw IllegalStateException("synthetic storage error")
+                d.blocked=value
+            },readPending={ _:String -> listOf("synthetic-command") })
+        val failure=assertThrows(DirectActivationIncomplete::class.java){
+            c.validate(c.beginValidation(),candidate)
+        }
+        assertTrue(failure.credentialSaved);assertEquals(candidate,d.token)
+        assertEquals("CREDENTIAL_SAVED_ACTIVATION_PENDING_RECONNECT",directSafeError(failure))
+        assertTrue(c.blocked());assertFalse(c.canPoll())
+        c.cancel();assertFalse(c.canPoll())
+        failActivation=false
+        assertTrue(c.validate(c.beginValidation(),candidate))
+        assertEquals(listOf("synthetic-command"),c.pending());assertFalse(c.blocked())
+    }
+    @Test fun uncertainCredentialStoreFailureDoesNotClaimRejectionOrConnection() {
+        val d=Disk(old)
+        val c=DirectConnection(load={d.token},save={ _:String -> error("synthetic store failure")},
+            revoke={d.token=null},suspended={d.blocked},suspendPolling={d.blocked=it},
+            readPending={ _:String -> emptyList<String>() })
+        val failure=assertThrows(DirectActivationIncomplete::class.java){c.validate(c.beginValidation(),candidate)}
+        assertFalse(failure.credentialSaved);assertEquals(old,d.token);assertFalse(c.canPoll())
+        assertEquals("CREDENTIAL_STORAGE_UNCERTAIN_RECONNECT",directSafeError(failure))
+    }
     @Test fun temporaryFailureDoesNotPermanentlySuspend() {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(503)}
         assertThrows(DirectHttpFailure::class.java){c.pending()}
