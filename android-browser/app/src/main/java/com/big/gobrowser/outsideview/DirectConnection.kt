@@ -15,6 +15,7 @@ class DirectConnection<T>(
     @Synchronized fun configured() = !load().isNullOrBlank()
     @Synchronized fun blocked() = activationIncomplete || suspended()
     @Synchronized fun canPoll() = configured() && !blocked() && !validating
+    @Synchronized fun validationInProgress() = validating
     @Synchronized fun beginValidation(): Long { validating = true; return ++generation }
     @Synchronized fun cancel() { generation++; validating = false }
     @Synchronized fun disconnect() { cancel(); revoke(); suspendPolling(false); activationIncomplete = false }
@@ -24,6 +25,17 @@ class DirectConnection<T>(
         try {
             synchronized(this) { if (ticket != generation || !validating) return false }
             require(candidate.length in 20..512 && candidate.all { it > ' ' && it < '\u007f' })
+            synchronized(this) {
+                if (ticket != generation || !validating) return false
+                // Rechecking the saved token can reject the very credential polling
+                // would reuse. Arm before validation too; a different candidate must
+                // not suspend the unrelated working credential on rejection.
+                if (candidate == load()) {
+                    activationIncomplete = true
+                    try { suspendPolling(true) }
+                    catch (_: Exception) { throw DirectRequestPersistenceFailure() }
+                }
+            }
             readPending(candidate)
             synchronized(this) {
                 if (ticket != generation || !validating) return false

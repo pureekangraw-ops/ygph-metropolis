@@ -272,12 +272,15 @@ class OutsideViewActivity : Activity() {
 
     /** No network request is executed on Android's UI thread. */
     private fun pollDirect() {
-        if(foreground && !destroyed && directClient.requiresReconnect()) {
-            directStatus.text="GO Direct · ต้องตรวจการเชื่อมใหม่ · แผนที่ยังใช้งานด้วยมือได้"
+        // An armed write-ahead guard is expected while work is in flight.
+        // Leave its status alone; authorization is still checked by the client.
+        if(!foreground || destroyed || storageUnavailable || directFetching || directPromptOpen || directSettingsOpen)return
+        if(directClient.validationInProgress())return
+        if(directClient.requiresReconnect()) {
+            directStatus.text="GO Direct · เปิด GO Direct แล้วเชื่อมใหม่เพื่อตรวจคีย์ · แผนที่ยังใช้งานด้วยมือได้"
             return
         }
-        if(!foreground || destroyed || storageUnavailable || directFetching || directPromptOpen || directSettingsOpen ||
-            !directClient.canPoll())return
+        if(!directClient.canPoll())return
         val generation=directGeneration
         directFetching=true
         worker.execute {

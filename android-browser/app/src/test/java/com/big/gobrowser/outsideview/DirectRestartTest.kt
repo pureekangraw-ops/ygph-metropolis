@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit
 /** Separate JVMs retain only synthetic file bytes, not coordinator/static state. */
 class DirectRestartTest {
     @Test fun failedWritesAfter401SurviveActualProcessExit() = restart("401")
+    @Test fun savedCredentialValidation401SurvivesActualProcessExit() = restart("validate401")
     @Test fun processDeathDuringRequestRetainsReconnectGuard() = restart("halt")
 
     private fun restart(mode:String) {
@@ -53,7 +54,10 @@ object DirectRestartProbe {
             check(connection.blocked());check(!connection.canPoll())
             check(runCatching {connection.pending()}.exceptionOrNull() is IllegalStateException)
         } else {
-            check(runCatching {connection.pending()}.exceptionOrNull() is DirectHttpFailure)
+            check(runCatching {
+                if(mode=="validate401")connection.validate(connection.beginValidation(),"synthetic-persisted-credential")
+                else connection.pending()
+            }.exceptionOrNull() is DirectHttpFailure)
         }
     }
 }

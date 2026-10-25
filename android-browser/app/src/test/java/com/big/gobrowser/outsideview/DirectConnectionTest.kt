@@ -18,8 +18,8 @@ class DirectConnectionTest {
         val d=Disk(old);var calls=0
         val c=connection(d){assertEquals(old,d.token);calls++;listOf("must-not-apply")}
         val ticket=c.beginValidation()
-        assertFalse(c.canPoll())
-        assertTrue(c.validate(ticket,candidate))
+        assertFalse(c.canPoll());assertTrue(c.validationInProgress())
+        assertTrue(c.validate(ticket,candidate));assertFalse(c.validationInProgress())
         assertEquals(candidate,d.token);assertEquals(1,calls);assertTrue(c.canPoll())
         // validate returns only Boolean: there is no proposal/receipt dispatch callback.
     }
@@ -27,6 +27,20 @@ class DirectConnectionTest {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(401)}
         assertThrows(DirectHttpFailure::class.java){c.validate(c.beginValidation(),candidate)}
         assertEquals(old,d.token);assertFalse(d.blocked);assertTrue(c.canPoll())
+    }
+    @Test fun sameSavedCandidateRejectionBlocksCurrentAndRestartedClient() {
+        val d=Disk(old);var failWrites=false;var calls=0
+        val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic failed write after validation rejection")
+                d.blocked=value
+            },readPending={ _:String -> calls++;failWrites=true;throw DirectHttpFailure(401) })
+        assertThrows(DirectHttpFailure::class.java){c.validate(c.beginValidation(),old)}
+        assertFalse(c.canPoll());assertEquals(old,d.token)
+        val restored=connection(d){calls++;emptyList()}
+        assertFalse(restored.canPoll())
+        assertThrows(IllegalStateException::class.java){restored.pending()}
+        assertEquals(1,calls)
     }
     @Test fun failurePreservesPreviouslySuspendedState() {
         val d=Disk(old,true);val c=connection(d){throw DirectHttpFailure(403)}
