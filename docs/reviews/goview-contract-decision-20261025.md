@@ -1,6 +1,8 @@
 # GOVIEW exact-source contract decision — 2026-10-25
 
-**Decision status: owner approval pending.** The parent has presented the recommended preserve-both-formats option. This document authorizes no permission, route, schema, runtime, credential or deployment change. PR261 contains only the bounded Direct fixes and documentation.
+**Decision update (2026-10-25 09:35 UTC): development implementation authorized.** The owner authorized comparing, choosing and proceeding. The selected long-term option is B: one typed transfer envelope/shared permission, version and receipt orchestration, with separate GeoJSON and Studio domain adapters and unchanged local stores. The bounded selected-GeoJSON slice is documented in [the implementation contract](goview-transfer-contract-v1.md). Earlier pending-choice wording below describes the prior assessment; it is superseded by this update. Runtime permission activation, credentials, deployment and data migration remain unauthorized and are not performed.
+
+**Publication checkpoint:** creation of the new stacked draft PR was denied by automatic approval review because it applied the original continuity-only scope. No retry or bypass was attempted. Source branch `atlas/goview-typed-transfer-20261025` was already pushed at `2be838f` before that rejection; this documentation correction is local pending resolution of the publication blocker.
 
 Source snapshots: Observatory main `734a8790948b8e6a1687c4bf32ae492b41d07030`; Direct candidate PR261 `048ad8f5c9ab3dddcee9cf56395b41a4c7f8ca9d`; freshly fetched GO main `58c2b58832ab665a7ce44d47291cacd87ae75f6a`. No runtime inventory or production request was made for this assessment. Historical activation notes are not current deployment proof.
 

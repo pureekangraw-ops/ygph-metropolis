@@ -1,3 +1,4 @@
+import {typedTransferRouter} from './typed-transfers.mjs';
 import Engine from "../android-browser/app/src/main/assets/goview-studio/engine.js";
 import {directCommandRouter} from "./direct-commands.mjs";
 
@@ -138,8 +139,9 @@ async function saveMap(bucket, id, version, request) {
 }
 
 /** Private package exchange only; unauthenticated clients cannot discover map IDs. */
-export default {
+const worker = {
   async fetch(request, env) {
+    if(new URL(request.url).pathname.startsWith("/v1/transfers/"))return typedTransferRouter(request,env,req=>worker.fetch(req,env));
     if (!env?.PACKAGES || !env?.GO_WRITE_TOKEN || !env?.ANDROID_READ_TOKEN ||
         env.GO_WRITE_TOKEN === env.ANDROID_READ_TOKEN) return notConfigured();
     const url = new URL(request.url);
@@ -170,3 +172,5 @@ export default {
     return reply(405,{error:"METHOD_NOT_ALLOWED"});
   }
 };
+
+export default worker;
