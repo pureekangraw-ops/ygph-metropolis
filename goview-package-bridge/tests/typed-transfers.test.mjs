@@ -82,3 +82,60 @@ test('device receipt cannot fabricate readback or overwrite existing report',asy
  assert.equal((await call(p.transferId+'/receipt','read','POST',r)).status,201);
  assert.equal((await call(p.transferId+'/receipt','read','POST',{...r,revision:5})).status,409);
 });
+
+test('publish readback rejects identity substitution even with unchanged proposal bytes and hash',async()=>{
+ const {invokeTransfer}=await import('../go-transfer-adapter.mjs');
+ const original=proposal(snapshot());
+ const substitute=structuredClone(original);substitute.identity.snapshotSha256='0'.repeat(64);
+ const fake={fetch:async req=>new Response(JSON.stringify(req.method==='PUT'?original:substitute),{status:200,headers:{'content-type':'application/json'}})};
+ const result=await invokeTransfer({GO_WRITE_TOKEN:'G'.repeat(32)},'goview_transfer_publish',{envelope:original},fake);
+ assert.equal(result.ok,false);assert.equal(result.status,'TRANSFER_READBACK_MISMATCH');
+});
+
+test('cross-type losing Studio race cannot write canonical map or latest pointer',{timeout:3000},async()=>{
+ const t=setup(),s=snapshot(),map=Engine.demo();
+ const studio=envelope('STUDIO',Engine.pack(map),{mapId:map.mapId,version:map.version},capture);
+ let release,entered;const paused=new Promise(r=>entered=r),resume=new Promise(r=>release=r);
+ const get=t.env.PACKAGES.get;let first=true;
+ t.env.PACKAGES.get=async key=>{
+  if(key===`goview/typed-transfers/${capture}.json`&&first){first=false;const value=await get(key);entered();await resume;return value;}
+  return get(key);
+ };
+ const losing=t.call(capture,'go','PUT',studio);
+ try {
+  await paused;
+  assert.equal((await t.call(capture,'upload','PUT',s)).status,201);
+ }finally{release();}
+ const lost=await losing;assert.equal(lost.status,409);assert.equal((await lost.json()).error,'TRANSFER_CONFLICT');
+ assert.deepEqual(await (await t.call(capture,'go')).json(),s);
+ assert.equal([...t.data.keys()].some(k=>k.startsWith(`goview/${map.mapId}/`)),false);
+ assert.equal(t.data.has(`goview/transfers/${capture}.json`),false);
+});
+
+test('reserved Studio ID blocks other types and reports pending until canonical readback completes',async()=>{
+ const t=setup(),s=snapshot(),map=Engine.demo();
+ const studio=envelope('STUDIO',Engine.pack(map),{mapId:map.mapId,version:map.version},capture);
+ const put=t.env.PACKAGES.put;let failed=false;
+ t.env.PACKAGES.put=async(key,value,options)=>{
+  if(key.startsWith(`goview/${map.mapId}/versions/`)&&!failed){failed=true;throw Error('synthetic stop before canonical write');}
+  return put(key,value,options);
+ };
+ assert.equal((await t.call(capture,'go','PUT',studio)).status,503);
+ assert.equal((await t.call(capture,'upload')).status,403);
+ const pending=await t.call(capture,'read');assert.equal(pending.status,503);assert.equal((await pending.json()).error,'TRANSFER_RESERVED_READBACK_REQUIRED');
+ assert.equal((await t.call(capture,'upload','PUT',s)).status,409);
+ assert.equal([...t.data.keys()].some(k=>k.startsWith(`goview/${map.mapId}/`)),false);
+ // Explicit identical retry resumes the immutable reservation; GET never dispatches PUT.
+ assert.equal((await t.call(capture,'go','PUT',studio)).status,200);
+ assert.deepEqual(await (await t.call(capture,'read')).json(),studio);
+});
+
+test('Studio canonical commit followed by lost response recovers through GET without mutation replay',async()=>{
+ const t=setup(),map=Engine.demo();const e=envelope('STUDIO',Engine.pack(map),{mapId:map.mapId,version:map.version},'synthetic-lost-response');
+ const put=t.env.PACKAGES.put;let fail=true;
+ t.env.PACKAGES.put=async(k,v,o)=>{const value=await put(k,v,o);if(k===`goview/${map.mapId}/latest.json`&&fail){fail=false;throw Error('synthetic response lost after canonical commit');}return value;};
+ const response=await t.call(e.transferId,'go','PUT',e);
+ // Router can reconcile the legacy adapter's 503 from canonical bytes/index/binding.
+ assert.equal(response.status,200);
+ const writes=t.writes();assert.deepEqual(await (await t.call(e.transferId,'read')).json(),e);assert.equal(t.writes(),writes);
+});

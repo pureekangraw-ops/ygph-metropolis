@@ -1,4 +1,4 @@
-import {validateTransfer,idValid} from './transfer-contract.mjs';
+import {validateTransfer,idValid,sameTransfer} from './transfer-contract.mjs';
 export const transferTools=['goview_transfer_read','goview_transfer_publish','goview_transfer_receipt'];
 export async function invokeTransfer(env,name,args,worker){
  if(!args||typeof args!=='object'||Array.isArray(args))return {ok:false,status:'INVALID_TRANSFER_ARGUMENTS'};
@@ -26,7 +26,7 @@ export async function invokeTransfer(env,name,args,worker){
   const result=await response.json();
   if(name==='goview_transfer_receipt')return {ok:true,status:'DEVICE_REPORTED_RECEIPT',receipt:result,independentlyVerified:false};
   const e=validateTransfer(result);
-  if(e.transferId!==id||e.sha256!==(expected?.sha256??args.sha256)||(expected&&e.payload!==expected.payload))return {ok:false,status:'TRANSFER_READBACK_MISMATCH'};
+  if(e.transferId!==id||e.sha256!==(expected?.sha256??args.sha256)||(expected&&!sameTransfer(e,expected)))return {ok:false,status:'TRANSFER_READBACK_MISMATCH'};
   return {ok:true,status:'REMOTE_EXACT_READBACK_VERIFIED',envelope:e,androidStatus:'NOT_OBSERVED_OWNER_APPROVAL_REQUIRED'};
  }catch{return {ok:false,status:'TRANSFER_UNCERTAIN_READ_EXACT_BEFORE_RETRY',transferId:id,...(expected?{sha256:expected.sha256}:{})};}
 }

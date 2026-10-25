@@ -56,3 +56,8 @@ export function validateTransfer(e){
 export function envelope(operation,payload,identity,transferId){
  return validateTransfer({schema:'goview.transfer.v1',transferId,operation,payloadType:operation==='STUDIO'?'goview.map.package.v1':'goview.map-update',identity,sha256:Engine.hash(payload),payload});
 }
+
+/** Exact immutable envelope equality, independent of JSON member ordering. */
+export function sameTransfer(a,b){
+ return a.schema===b.schema&&a.transferId===b.transferId&&a.operation===b.operation&&a.payloadType===b.payloadType&&a.sha256===b.sha256&&a.payload===b.payload&&Object.keys(a.identity).length===Object.keys(b.identity).length&&Object.keys(a.identity).every(k=>a.identity[k]===b.identity[k]);
+}

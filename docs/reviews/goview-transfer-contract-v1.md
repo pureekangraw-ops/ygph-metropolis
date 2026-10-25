@@ -35,3 +35,12 @@ Worker schema/router, existing GO bridge adapter, native transfer codec/coordina
 Local evidence at development checkpoint: existing map JVM suites plus four new transfer tests pass (32 total); Worker/legacy package/Direct Node suites pass (22 total). The new cross-runtime test executes the actual Kotlin coordinator against the actual Worker and GoviewGoBridge adapter through a loopback-only HTTP fixture with synthetic credentials and storage. It covers selected upload, GO exact read, bound proposal publish, Android download, unchanged pins before approval, owner Update/readback, separate device receipt and reopened local storage. Additional cases cover private payload rejection before dispatch, wrong source digest, uncertain PUT resolved by GET without replay, and receipt-only retry after process-object recreation. Android UI compile/emulator and independent review remain gates; this is not a production or physical-device pass.
 
 No new service, runtime binding, credential provisioning or deployment was performed. The optional upload authority exists only as fail-closed source configuration. Device readback is a device report; GO receipt tools explicitly return `independentlyVerified:false`.
+
+## Local independent-review corrections (not yet published)
+
+Two deterministic regressions fail against checkpoint2be838f and pass locally:
+
+1. GO publish readback now compares all immutable envelope fields, including operation, payload type and every identity field. Matching payload bytes/hash alone cannot substitute snapshotSha256.
+2. A Studio transfer now conditionally reserves the typed ID and reads the winning reservation before touching canonical Studio storage. A different-type loser returns conflict with no canonical version, latest-pointer or legacy transfer-binding write. A Studio reservation alone is not successful transfer evidence: GET reconciles canonical exact bytes, legacy identity/digest binding and a valid latest index. Incomplete state returns TRANSFER_RESERVED_READBACK_REQUIRED; it neither claims success nor frees the ID for another type. An explicit identical PUT can resume the reservation using existing conditional version semantics; GET never replays mutation. A lost response after complete canonical commit resolves through readback.
+
+The tests use promise barriers, not timing sleeps, and confirm existing Studio version-conflict rules remain enforced. No deployed data or credentials were accessed. Remote branch checkpoint remains2be838f while publication approval is pending.

@@ -1,11 +1,25 @@
-import {validateTransfer,MAX_ENVELOPE,idValid} from './transfer-contract.mjs';
+import {validateTransfer,MAX_ENVELOPE,idValid,sameTransfer} from './transfer-contract.mjs';
 const json=(status,data)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json','cache-control':'no-store'}});
 const key=id=>'goview/typed-transfers/'+id+'.json';
 const receiptKey=id=>'goview/typed-receipts/'+id+'.json';
 const sameRecord=(a,b)=>Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>a[k]===b[k]);
-const same=(a,b)=>a.schema===b.schema&&a.transferId===b.transferId&&a.operation===b.operation&&a.payloadType===b.payloadType&&a.sha256===b.sha256&&a.payload===b.payload&&sameRecord(a.identity,b.identity);
 const validReceipt=(r,id,sha)=>r&&typeof r==='object'&&!Array.isArray(r)&&Object.keys(r).sort().join(',')==='operation,readbackVerified,revision,sha256,status,transferId'&&r.transferId===id&&r.sha256===sha&&r.operation==='UPDATE'&&['SAVED','DUPLICATE','COMMITTED_READBACK_UNAVAILABLE'].includes(r.status)&&Number.isSafeInteger(r.revision)&&r.revision>=0&&typeof r.readbackVerified==='boolean'&&r.readbackVerified===(r.status!=='COMMITTED_READBACK_UNAVAILABLE');
-async function read(bucket,id){const item=await bucket.get(key(id));if(!item)return null;if(item.size>MAX_ENVELOPE)throw Error('oversize');return validateTransfer(JSON.parse(await item.text()));}
+class PendingTransfer extends Error {}
+async function readReservation(bucket,id){const item=await bucket.get(key(id));if(!item)return null;if(item.size>MAX_ENVELOPE)throw Error('oversize');const e=validateTransfer(JSON.parse(await item.text()));if(e.transferId!==id)throw Error('identity');return e;}
+// Studio's typed record reserves identity; it is not a commit receipt. Resolve
+// against canonical immutable bytes, the existing transfer binding and index.
+async function studioReady(bucket,e){
+ const {mapId,version}=e.identity;
+ const [file,binding,pointer]=await Promise.all([
+  bucket.get(`goview/${mapId}/versions/${String(version).padStart(7,'0')}.json`),
+  bucket.get(`goview/transfers/${e.transferId}.json`),bucket.get(`goview/${mapId}/latest.json`)]);
+ if(!file||!binding||!pointer)return false;
+ if(file.size>MAX_ENVELOPE||await file.text()!==e.payload)return false;
+ const b=JSON.parse(await binding.text()),p=JSON.parse(await pointer.text());
+ return b.mapId===mapId&&b.version===version&&b.sha256===e.sha256&&p.mapId===mapId&&Number.isSafeInteger(p.version)&&p.version>=version;
+}
+async function read(bucket,id){const e=await readReservation(bucket,id);if(e?.operation==='STUDIO'&&!await studioReady(bucket,e))throw new PendingTransfer();return e;}
+
 async function bounded(req){
  const reader=req.body?.getReader();if(!reader)throw Error('empty');const chunks=[];let size=0;
  for(;;){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>MAX_ENVELOPE){await reader.cancel();throw Error('oversize');}chunks.push(part.value);}
@@ -48,8 +62,9 @@ export async function typedTransferRouter(req,env,studioRequest){
    return sameRecord(JSON.parse(await saved.text()),r)?json(201,r):json(409,{error:'RECEIPT_CONFLICT'});
   }
   if(req.method==='GET'){
-   const e=await read(env.PACKAGES,id);if(!e)return json(404,{error:'TRANSFER_NOT_FOUND'});
+   const e=await readReservation(env.PACKAGES,id);if(!e)return json(404,{error:'TRANSFER_NOT_FOUND'});
    if((e.operation==='SNAPSHOT'&&who==='read')||(e.operation!=='SNAPSHOT'&&who==='upload'))return json(403,{error:'ROLE_REQUIRED'});
+   if(e.operation==='STUDIO'&&!await studioReady(env.PACKAGES,e))throw new PendingTransfer();
    return json(200,e);
   }
   if(req.method!=='PUT')return json(405,{error:'METHOD_NOT_ALLOWED'});
@@ -61,15 +76,25 @@ export async function typedTransferRouter(req,env,studioRequest){
    const source=await read(env.PACKAGES,e.identity.captureId);
    if(!source||source.operation!=='SNAPSHOT'||source.sha256!==e.identity.snapshotSha256||source.identity.baseVersion!==e.identity.baseVersion)return json(409,{error:'SNAPSHOT_BASE_MISMATCH'});
   }
-  const prior=await read(env.PACKAGES,id);if(prior)return same(prior,e)?json(200,prior):json(409,{error:'TRANSFER_CONFLICT'});
+  const prior=await readReservation(env.PACKAGES,id);
+  if(prior&&!sameTransfer(prior,e))return json(409,{error:'TRANSFER_CONFLICT'});
+  if(!prior)await env.PACKAGES.put(key(id),JSON.stringify(e),{onlyIf:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
+  const reserved=await readReservation(env.PACKAGES,id);
+  if(!reserved)return json(503,{error:'TRANSFER_RESERVATION_UNCERTAIN'});
+  if(!sameTransfer(reserved,e))return json(409,{error:'TRANSFER_CONFLICT'});
+  // Only the winner of the cross-type reservation may touch the domain store.
   if(e.operation==='STUDIO'){
-   if(!studioRequest)return json(503,{error:'STUDIO_ADAPTER_NOT_CONFIGURED'});
+   if(await studioReady(env.PACKAGES,e))return json(200,e);
+   if(!studioRequest)return json(503,{error:'STUDIO_ADAPTER_NOT_CONFIGURED',transferState:'RESERVED'});
    const result=await studioRequest(new Request(`https://goview.internal/v1/maps/${e.identity.mapId}/packages/${e.identity.version}`,{method:'PUT',headers:{authorization:'Bearer '+env.GO_WRITE_TOKEN,'content-type':'application/json','x-goview-transfer-id':e.transferId},body:e.payload}));
-   if(!result.ok)return result;
-   if((await result.json()).sha256!==e.sha256)return json(503,{error:'STUDIO_READBACK_UNCERTAIN'});
+   if(!result.ok){
+    if(await studioReady(env.PACKAGES,e))return json(200,e);
+    const failure=await result.json();
+    const knownRejection=['STALE_VERSION','VERSION_ALREADY_EXISTS','TRANSFER_ID_CONFLICT','INDEX_VERSION_CONFLICT'].includes(failure.error);
+    return json(knownRejection?409:503,{error:knownRejection?failure.error:'STUDIO_OUTCOME_UNCERTAIN',transferState:'RESERVED',transferId:id});
+   }
+   if((await result.json()).sha256!==e.sha256||!await studioReady(env.PACKAGES,e))return json(503,{error:'STUDIO_READBACK_UNCERTAIN',transferState:'RESERVED'});
   }
-  await env.PACKAGES.put(key(id),JSON.stringify(e),{onlyIf:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'}});
-  const saved=await read(env.PACKAGES,id);if(!saved)return json(503,{error:'TRANSFER_UNCERTAIN'});
-  return same(saved,e)?json(201,saved):json(409,{error:'TRANSFER_CONFLICT'});
- }catch{return json(503,{error:'TRANSFER_STORAGE_UNCERTAIN'});}
+  return json(prior?200:201,e);
+ }catch(error){return json(503,{error:error instanceof PendingTransfer?'TRANSFER_RESERVED_READBACK_REQUIRED':'TRANSFER_STORAGE_UNCERTAIN'});}
 }
