@@ -27,6 +27,8 @@ class OutsideViewActivity : Activity() {
     private lateinit var directStatus:TextView
     private val directClient by lazy { GoviewDirectClient(this) }
     private var directFetching=false
+    private var directGeneration=0L
+    private var directSettingsOpen=false
     private var directPromptOpen=false
     private val directTick=object:Runnable { override fun run(){
         if(foreground && !destroyed) {
@@ -222,6 +224,10 @@ class OutsideViewActivity : Activity() {
     }
     /** The GO bridge is set once in Settings. GPS and saved maps are never uploaded. */
     private fun showDirectSettings() {
+        if(directSettingsOpen)return
+        directSettingsOpen=true
+        directGeneration++
+        directClient.cancelPending()
         val connected=directClient.configured()
         val input=EditText(this).apply {
             hint="Android read token จากเจ้าของ Cloudflare"
@@ -230,29 +236,55 @@ class OutsideViewActivity : Activity() {
         }
         AlertDialog.Builder(this).setTitle("GOVIEW · GO Direct")
             .setMessage(if(connected)
-                "เชื่อมไว้แล้ว · แผนที่จะอ่านเฉพาะคำสั่งขณะเปิด GOVIEW · ไม่ส่ง GPS ขึ้น Cloud · เจ้าของอนุมัติหมุดก่อนบันทึก"
+                "มีข้อมูลการเชื่อมที่บันทึกไว้ · ต้องตรวจการเชื่อมก่อนยืนยัน · แยกจากสิทธิ์ GO อ่านใน Browser"
                 else "ตั้งค่าคีย์อ่านของอุปกรณ์ครั้งเดียว · เก็บด้วย Android Keystore ไม่แสดงในหน้าแผนที่")
             .setView(input).setNegativeButton("ปิด",null)
-            .setNeutralButton("ยกเลิกการเชื่อม"){_,_->runCatching {directClient.disconnect()}
-                directStatus.text="GO Direct · ปิดแล้ว"
+            .setNeutralButton("ยกเลิกการเชื่อม"){_,_->
+                runCatching {directClient.disconnect()}
+                    .onSuccess {directStatus.text="GO Direct · ปิดแล้ว"}
+                    .onFailure {directStatus.text="GO Direct · ยกเลิกไม่สำเร็จ · "+directSafeError(it)}
             }
             .setPositiveButton("เชื่อม / อัปเดตคีย์"){_,_->
-                runCatching {directClient.configure(input.text.toString().trim())}
-                    .onSuccess {directStatus.text="GO Direct · เชื่อมแล้ว · รอคำสั่ง";pollDirect()}
-                    .onFailure {directStatus.text="GO Direct · คีย์ไม่ถูกต้องหรือบันทึกไม่ได้"}
-            }.show()
+                val candidate=input.text.toString().trim()
+                input.text.clear()
+                val generation=++directGeneration
+                val ticket=directClient.beginValidation()
+                directStatus.text="GO Direct · กำลังตรวจการเชื่อม · ยังไม่รับคำสั่ง"
+                worker.execute {
+                    val result=runCatching {directClient.validate(ticket,candidate)}
+                    handler.post {
+                        if(!destroyed && foreground && generation==directGeneration) {
+                            result.onSuccess { accepted ->
+                                if(accepted) directStatus.text="GO Direct · ยืนยันการเชื่อมแล้ว · รอรอบรับคำสั่ง"
+                            }.onFailure {
+                                directStatus.text=if(it is DirectActivationIncomplete)
+                                    "GO Direct · การบันทึก/เปิดรับคำสั่งยังไม่ครบ · เชื่อมใหม่ · "+directSafeError(it)
+                                else "GO Direct · ตรวจการเชื่อมไม่ผ่าน · "+directSafeError(it)
+                            }
+                        }
+                    }
+                }
+            }.create().also { dialog ->
+                dialog.setOnDismissListener { directSettingsOpen=false; input.text.clear() }
+                dialog.show()
+            }
     }
 
     /** No network request is executed on Android's UI thread. */
     private fun pollDirect() {
-        if(!foreground || destroyed || storageUnavailable || directFetching || directPromptOpen ||
-            !directClient.configured())return
+        if(foreground && !destroyed && directClient.requiresReconnect()) {
+            directStatus.text="GO Direct · ต้องตรวจการเชื่อมใหม่ · แผนที่ยังใช้งานด้วยมือได้"
+            return
+        }
+        if(!foreground || destroyed || storageUnavailable || directFetching || directPromptOpen || directSettingsOpen ||
+            !directClient.canPoll())return
+        val generation=directGeneration
         directFetching=true
         worker.execute {
             val received=runCatching {directClient.pending()}
             handler.post {
                 directFetching=false
-                if(!destroyed && foreground) {
+                if(!destroyed && foreground && generation==directGeneration) {
                     received.onSuccess {commands->
                         directStatus.text=if(commands.isEmpty())"GO Direct · เชื่อมอยู่ · รอคำสั่ง"
                             else "GO Direct · มีคำสั่งจาก GO"
@@ -260,7 +292,7 @@ class OutsideViewActivity : Activity() {
                             directPromptOpen=true
                             openDirectProposal(commands.first())
                         }
-                    }.onFailure {directStatus.text="GO Direct · ตรวจคำสั่งไม่ได้ · "+(it.message?:"CONNECTION_ERROR")}
+                    }.onFailure {directStatus.text="GO Direct · ตรวจคำสั่งไม่ได้ · "+directSafeError(it)}
                 }
             }
         }
@@ -636,9 +668,9 @@ class OutsideViewActivity : Activity() {
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);val uri=data?.data?:return;if(requestCode==42&&resultCode==RESULT_OK){importGeoJson(uri);return};if(requestCode==43&&resultCode==RESULT_OK){exportGeoJson(uri);return};if(requestCode==40&&resultCode==RESULT_OK){status.text="กำลังนำเข้าแผนที่…";worker.execute {val result=runCatching {packageStore.import(uri)};handler.post {if(!destroyed)result.onSuccess {renderer.reloadStyle();status.text="นำเข้า ${it.attribution}"}.onFailure {status.text="นำเข้าไม่ได้: ${it.message}"}}}}}
     override fun onStart(){super.onStart();renderer.onStart()}
     override fun onResume(){super.onResume();foreground=true;busy=true;renderer.onResume();location.resume();handler.post(statusTick);handler.post(directTick);updateSharingStatus()}
-    override fun onPause(){foreground=false;commandRendererReady=false;handler.removeCallbacks(statusTick);handler.removeCallbacks(directTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
+    override fun onPause(){foreground=false;directGeneration++;directClient.cancelPending();commandRendererReady=false;handler.removeCallbacks(statusTick);handler.removeCallbacks(directTick);location.pause();mapShare.stop();renderer.onPause();updateSharingStatus();super.onPause()}
     override fun onStop(){renderer.onStop();super.onStop()}
-    override fun onDestroy(){destroyed=true;handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdown();renderer.onDestroy();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;directGeneration++;directClient.cancelPending();handler.removeCallbacks(statusTick);location.pause();mapShare.close();worker.shutdown();renderer.onDestroy();super.onDestroy()}
     override fun onLowMemory(){super.onLowMemory();renderer.onLowMemory()}
     override fun onSaveInstanceState(outState:Bundle){super.onSaveInstanceState(outState);renderer.onSaveInstanceState(outState);outState.putString("goview.selectedExport",pendingExportPath)}
 }
