@@ -178,8 +178,29 @@ export class BrowserWorkspace {
     }
     return state;
   }
+  assertGoRead(state,current,...urls) {
+    if(current.browserSessionId!==state.browserSessionId || current.targetId!==state.targetId)
+      throw new Error("EXACT_PAGE_UNAVAILABLE");
+    if(!sameGrant(current) || urls.some(url=>!sameGrant(current,url) ||
+        !mayGoUseSite(url,this.env.GO_ALLOWED_HOSTS,current.sitePermissions)))
+      throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
+  }
+  async withReadPage(state,role,work) {
+    // Provider work may already be in flight when the owner revokes. Recheck
+    // after disconnect too: no captured DOM/image is released on a stale grant.
+    let startUrl,endUrl;
+    const result=await this.withPage(state,async page=>{
+      startUrl=page.url();
+      if(role==="GO")this.assertGoRead(state,await this.state(),startUrl);
+      const value=await work(page);
+      endUrl=page.url();
+      return value;
+    });
+    if(role==="GO")this.assertGoRead(state,await this.state(),startUrl,endUrl,...(result.url?[result.url]:[]));
+    return result;
+  }
   async observe(state,role) {
-    return this.withPage(state, async page => {
+    return this.withReadPage(state, role, async page => {
       if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
       const snapshot=await page.evaluate(() => ({
         title:document.title,
@@ -194,6 +215,7 @@ export class BrowserWorkspace {
           })).filter(x => !["password","hidden"].includes(x.type))
       }));
       const current=await this.state();
+      if(role==="GO")this.assertGoRead(state,current,snapshot.url,page.url());
       const browserUrl=validPageUrl(snapshot.url);
       if(browserUrl && browserUrl!==current.url) {
         current.url=browserUrl;
@@ -450,7 +472,7 @@ export class BrowserWorkspace {
       if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
       if (method==="GET" && path==="/v1/screenshot") {
         const state=await this.state();
-        return reply(await this.withPage(state,async page=>{
+        return reply(await this.withReadPage(state,role,async page=>{
           if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
           const raw=await page.screenshot({type:"jpeg",quality:52,fullPage:false});
           const bytes=new Uint8Array(raw);
