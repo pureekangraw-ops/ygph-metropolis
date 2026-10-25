@@ -90,6 +90,34 @@ class DirectConnectionTest {
         assertFalse(failure.credentialSaved);assertEquals(old,d.token);assertFalse(c.canPoll())
         assertEquals("CREDENTIAL_STORAGE_UNCERTAIN_RECONNECT",directSafeError(failure))
     }
+    @Test fun failed401SuspensionWriteBlocksCurrentInstanceUntilOwnerReconnect() {
+        val d=Disk(old)
+        var calls=0
+        val c=DirectConnection(
+            load={d.token}, save={d.token=it}, revoke={d.token=null},
+            suspended={d.blocked},
+            suspendPolling={ paused ->
+                if(paused)throw IllegalStateException("synthetic disk write failed")
+                d.blocked=paused
+            },
+            readPending={ token:String ->
+                calls++
+                if(token==old)throw DirectHttpFailure(401)
+                emptyList<String>()
+            }
+        )
+        val error=assertThrows(DirectSuspensionIncomplete::class.java) { c.pending() }
+        assertEquals("AUTH_REJECTED_PAUSE_NOT_PERSISTED_RECONNECT",directSafeError(error))
+        assertFalse(d.blocked) // The durable write did not happen.
+        assertTrue(c.blocked()) // This live instance fails closed regardless.
+        assertFalse(c.canPoll())
+        assertThrows(IllegalStateException::class.java) { c.pending() }
+        assertEquals(1,calls) // Never retry rejected credentials silently.
+        assertTrue(c.validate(c.beginValidation(),candidate))
+        assertFalse(c.blocked())
+        assertTrue(c.canPoll())
+        assertEquals(2,calls) // Explicit validation is the only retry.
+    }
     @Test fun temporaryFailureDoesNotPermanentlySuspend() {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(503)}
         assertThrows(DirectHttpFailure::class.java){c.pending()}
