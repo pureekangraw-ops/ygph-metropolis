@@ -15,6 +15,15 @@ class UpdatePolicyTest {
             { update.verify(update.packageName,17,setOf(signer),update.packageName,18,setOf(signer),signer) })
         cases.forEach { assertTrue(runCatching(it).exceptionOrNull() is IllegalArgumentException) }
     }
+    @Test fun candidate20AdvancesKnownVersionsWithoutBypassingEqualOrNewerCheck() {
+        val candidate=update.copy(versionCode=20)
+        for(installed in listOf(17L,18L,19L))
+            candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,20,setOf(signer),sha)
+        for(installed in listOf(20L,21L))
+            assertTrue(runCatching {
+                candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,20,setOf(signer),sha)
+            }.exceptionOrNull() is IllegalArgumentException)
+    }
     @Test fun credentialsAndUntrustedUrlsReject() {
         listOf("http://yggmetro.com/a", "https://evil.com/a", "https://yggmetro.com.evil.com/a", "https://user:secret@yggmetro.com/a", "https://yggmetro.com/a?token=secret").forEach {
             assertTrue(runCatching { AppUpdate.trustedUrl(it) }.isFailure)

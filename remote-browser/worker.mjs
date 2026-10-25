@@ -23,6 +23,9 @@ async function bodyOf(request) {
   } finally {reader.releaseLock();}
   return text ? JSON.parse(text) : {};
 }
+function isSessionExpired(error) {
+  return error?.sessionExpired===true || /session.*(?:closed|not found|does not exist)|browser.*disconnect|Target closed/i.test(String(error));
+}
 function sameGrant(s,url=s.url) {
   try {return s.allowGoRead===true && !!s.grantedHost && new URL(url).hostname===s.grantedHost;}
   catch {return false;}
@@ -138,14 +141,15 @@ export class BrowserWorkspace {
     try {
       try {browser=await puppeteer.connect(this.env.BROWSER, state.browserSessionId);}
       catch(error) {throw Object.assign(new Error("SESSION_UNAVAILABLE"),{
-        sessionExpired:/session.*(?:closed|not found|does not exist)|browser.*disconnect|Target closed/i.test(String(error))
+        sessionExpired:isSessionExpired(error)
       });}
       let pages;
-      try {pages=await browser.pages();} catch {throw new Error("SESSION_UNAVAILABLE");}
+      try {pages=await browser.pages();} catch(error) {throw Object.assign(new Error("SESSION_UNAVAILABLE"),{sessionExpired:isSessionExpired(error)});}
       const page=state.targetId ? pages.find(p => p.target()._targetId === state.targetId) : null;
       if (!page) throw new Error("EXACT_PAGE_UNAVAILABLE");
       return await work(page);
     } catch (error) {
+      if(isSessionExpired(error)) error=Object.assign(new Error("SESSION_UNAVAILABLE"),{sessionExpired:true});
       if (error.sessionExpired===true || /session.*(?:closed|not found|does not exist)|browser.*disconnect|ECONN|Target closed/i.test(String(error))) {
         const fresh=await this.state();
         if(fresh.browserSessionId===state.browserSessionId){
@@ -174,8 +178,29 @@ export class BrowserWorkspace {
     }
     return state;
   }
+  assertGoRead(state,current,...urls) {
+    if(current.browserSessionId!==state.browserSessionId || current.targetId!==state.targetId)
+      throw new Error("EXACT_PAGE_UNAVAILABLE");
+    if(!sameGrant(current) || urls.some(url=>!sameGrant(current,url) ||
+        !mayGoUseSite(url,this.env.GO_ALLOWED_HOSTS,current.sitePermissions)))
+      throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
+  }
+  async withReadPage(state,role,work) {
+    // Provider work may already be in flight when the owner revokes. Recheck
+    // after disconnect too: no captured DOM/image is released on a stale grant.
+    let startUrl,endUrl;
+    const result=await this.withPage(state,async page=>{
+      startUrl=page.url();
+      if(role==="GO")this.assertGoRead(state,await this.state(),startUrl);
+      const value=await work(page);
+      endUrl=page.url();
+      return value;
+    });
+    if(role==="GO")this.assertGoRead(state,await this.state(),startUrl,endUrl,...(result.url?[result.url]:[]));
+    return result;
+  }
   async observe(state,role) {
-    return this.withPage(state, async page => {
+    return this.withReadPage(state, role, async page => {
       if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
       const snapshot=await page.evaluate(() => ({
         title:document.title,
@@ -190,6 +215,7 @@ export class BrowserWorkspace {
           })).filter(x => !["password","hidden"].includes(x.type))
       }));
       const current=await this.state();
+      if(role==="GO")this.assertGoRead(state,current,snapshot.url,page.url());
       const browserUrl=validPageUrl(snapshot.url);
       if(browserUrl && browserUrl!==current.url) {
         current.url=browserUrl;
@@ -210,25 +236,40 @@ export class BrowserWorkspace {
     return this.withPage(state, async page => {
       if(role==="GO" && (!sameGrant(state,page.url()) ||
         (step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost)))throw new Error("GO_GRANT_ORIGIN_MISMATCH");
+      // Revalidate after provider awaits, immediately before each mutation. Once
+      // invoked, a provider command is in flight and cannot be undone by revoke.
+      const dispatch=async command=>{
+        const fresh=await this.state();
+        if(fresh.browserSessionId!==state.browserSessionId || fresh.targetId!==state.targetId)
+          throw new Error("EXACT_PAGE_UNAVAILABLE");
+        if(fresh.controller!==role)throw new Error("CONTROLLER_MISMATCH");
+        if(role==="GO" && (fresh.status==="STOP_REQUESTED" ||
+          fresh.job?.status==="STOP_REQUESTED" || !sameGrant(fresh,page.url()) ||
+          !mayGoUseSite(page.url(),this.env.GO_ALLOWED_HOSTS,fresh.sitePermissions) ||
+          (step.type==="navigate" && (new URL(step.url).hostname!==fresh.grantedHost ||
+            !mayGoUseSite(step.url,this.env.GO_ALLOWED_HOSTS,fresh.sitePermissions)))))
+          throw new Error("OWNER_GO_GRANT_REVOKED");
+        return command();
+      };
       switch(step.type) {
-        case "navigate": await page.goto(step.url,{waitUntil:"domcontentloaded",timeout:20000});break;
-        case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "forward": await page.goForward({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "reload": await page.reload({waitUntil:"domcontentloaded",timeout:20000});break;
-        case "scroll": await scrollRemotePage(page,step.y);break;
+        case "navigate": await dispatch(()=>page.goto(step.url,{waitUntil:"domcontentloaded",timeout:20000}));break;
+        case "back": await dispatch(()=>page.goBack({waitUntil:"domcontentloaded",timeout:20000}));break;
+        case "forward": await dispatch(()=>page.goForward({waitUntil:"domcontentloaded",timeout:20000}));break;
+        case "reload": await dispatch(()=>page.reload({waitUntil:"domcontentloaded",timeout:20000}));break;
+        case "scroll": await scrollRemotePage(page,step.y,dispatch);break;
         case "click": {
           const risk=await page.$eval(step.selector, el => ({
             text:(el.innerText || el.getAttribute("aria-label") || el.value || "").slice(0,160),
             type:el.getAttribute("type") || "",form:!!el.closest("form"),contenteditable:el.isContentEditable
           }));
           if (/pay|buy|purchase|delete|remove|submit|confirm|transfer|checkout|sign out|logout|send|ยืนยัน|ชำระ|ลบ|ส่ง/i.test(risk.text) || risk.form || risk.type==="submit" || risk.contenteditable) throw new Error("SENSITIVE_ACTION_NEEDS_OWNER");
-          await page.click(step.selector);break;
+          await dispatch(()=>page.click(step.selector));break;
         }
         case "type": {
           const type=await page.$eval(step.selector, el => el.getAttribute("type") || "text");
           if (["password","hidden","file"].includes(type)) throw new Error("PROTECTED_INPUT");
-          await page.$eval(step.selector, el => { el.value=""; el.dispatchEvent(new Event("input",{bubbles:true}));});
-          await page.type(step.selector,step.value,{delay:20});break;
+          await dispatch(()=>page.$eval(step.selector, el => { el.value=""; el.dispatchEvent(new Event("input",{bubbles:true}));}));
+          await dispatch(()=>page.type(step.selector,step.value,{delay:20}));break;
         }
       }
       const latest=await this.state(); // Preserve a BIG takeover that occurred during a slow navigation.
@@ -431,7 +472,7 @@ export class BrowserWorkspace {
       if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
       if (method==="GET" && path==="/v1/screenshot") {
         const state=await this.state();
-        return reply(await this.withPage(state,async page=>{
+        return reply(await this.withReadPage(state,role,async page=>{
           if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
           const raw=await page.screenshot({type:"jpeg",quality:52,fullPage:false});
           const bytes=new Uint8Array(raw);
