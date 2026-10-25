@@ -59,7 +59,11 @@ class DirectConnection<T>(
         } catch (e: Exception) {
             synchronized(this) {
                 if (snapshot.first == generation && e is DirectHttpFailure && e.status == 401) {
-                    suspendPolling(true)
+                    // Fail closed in memory before writing persistent suspension.
+                    // If disk fails, never allow this live instance to poll again silently.
+                    activationIncomplete = true
+                    try { suspendPolling(true) }
+                    catch (_: Exception) { throw DirectSuspensionIncomplete() }
                 }
             }
             throw e
@@ -74,8 +78,10 @@ class DirectConnection<T>(
  * Both require explicit revalidation in this instance; restart follows persisted stores.
  */
 class DirectActivationIncomplete(val credentialSaved: Boolean) : Exception("DIRECT_ACTIVATION_INCOMPLETE")
+class DirectSuspensionIncomplete : Exception("DIRECT_401_SUSPENSION_PERSISTENCE_UNCERTAIN")
 class DirectHttpFailure(val status: Int) : Exception("DIRECT_HTTP_$status")
 fun directSafeError(error: Throwable): String = when {
+    error is DirectSuspensionIncomplete -> "AUTH_REJECTED_PAUSE_NOT_PERSISTED_RECONNECT"
     error is DirectActivationIncomplete && error.credentialSaved -> "CREDENTIAL_SAVED_ACTIVATION_PENDING_RECONNECT"
     error is DirectActivationIncomplete -> "CREDENTIAL_STORAGE_UNCERTAIN_RECONNECT"
     error is DirectHttpFailure && error.status == 401 -> "AUTH_REJECTED_RECONNECT_REQUIRED"
