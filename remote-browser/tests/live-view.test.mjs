@@ -9,7 +9,7 @@ const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
 const id='11111111-2222-4333-8444-555555555555';
 function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected',controller='BIG',actualUrl='https://example.com/',inputType='text',sensitiveClick=false,cleanupFails=false}={}) {
  let state={browserSessionId:'synthetic',targetId,controller,mode:'OBSERVE',status:'RUNNING',allowGoRead:goRead,url:'https://example.com/',grantedHost:goRead?'example.com':null},calls=0,cdpCalls=0,navigations=0,launches=0,observations=0,clicks=0,typed=[],closed=0;
- const liveSessions=new Set(['synthetic']);
+ const liveSessions=new Set(mode==='expired'?[]:['synthetic']);
  const privateError=()=>Error('PRIVATE_TOKEN https://live.browser.run/?jwt=PRIVATE_URL');
  const page=t=>({target:()=>({_targetId:t}),url:()=>actualUrl,
   goto:async url=>{navigations++;actualUrl=url;},
@@ -18,7 +18,8 @@ function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected
   evaluate:async()=>{observations++;return {title:'synthetic',url:actualUrl,text:'fixture only',controls:[]};},
   createCDPSession:async()=>{if(mode==='cdp')throw privateError();return {send:async()=>{cdpCalls++;if(mode==='provider')throw privateError();return {devtoolsFrontendUrl:mode==='url'?'https://attacker.invalid/':'https://live.browser.run/synthetic'};},detach:async()=>{}};}});
  const browser=()=>({pages:async()=>{if(mode==='pages')throw privateError();return targets.map(page);},disconnect:async()=>{},close:async()=>{if(cleanupFails)throw privateError();closed++;liveSessions.delete('synthetic');},sessionId:()=> 'new-synthetic-session'});
- const puppeteer={connect:async()=>{calls++;if(mode==='connect')throw privateError();return browser();},
+ const puppeteer={sessions:async()=>{if(mode==='sessionlist')throw privateError();return [...liveSessions].map(sessionId=>({sessionId}));},
+  connect:async()=>{calls++;if(mode==='connect'||mode==='expired')throw privateError();return browser();},
   launch:async()=>{assert.equal(liveSessions.size,0,'old session must be closed before replacement');liveSessions.add('new-synthetic-session');launches++;targets=['explicit-new-target'];return browser();}};
  const deps={puppeteer,...policy,...sites,WorkerEntrypoint:class {}};
  const {worker,BrowserWorkspace}=new Function(...Object.keys(deps),source+';return {worker,BrowserWorkspace};')(...Object.values(deps));
@@ -97,4 +98,41 @@ test('owner recovery retains tracked old session and never launches if cleanup f
  const r=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/selected"}'});
  assert.equal(r.status,400);const text=await r.text();assert.equal(JSON.parse(text).error,'SESSION_CLEANUP_FAILED');assert.doesNotMatch(text,/PRIVATE|jwt|https:/);
  assert.equal(f.launches,0);assert.equal(f.closed,0);assert.deepEqual(f.liveSessions,['synthetic']);assert.equal(f.state.browserSessionId,'synthetic');assert.equal(f.state.targetId,'selected');
+});
+
+test('expired Browser Run is reconciled without restarting, leaking GO grant or losing owner sites',async()=>{
+ const f=fixture({mode:'expired',goRead:true,controller:'GO'});
+ const first=await f.call({path:'/v1/session'});
+ assert.equal(first.status,200);
+ const snapshot=await first.json();
+ assert.equal(snapshot.sessionId,null);
+ assert.equal(snapshot.status,'EXPIRED');
+ assert.equal(snapshot.mode,'IDLE');
+ assert.equal(snapshot.controller,'BIG');
+ assert.equal(snapshot.goCanObserve,false);
+ assert.equal(f.state.browserSessionId,null);
+ assert.equal(f.state.allowGoRead,false);
+ assert.equal(f.launches,0,'polling must not start a billed session');
+ const site=await f.call({path:'/v1/site-permissions'});
+ assert.equal(site.status,200);
+ const perms=await site.json();
+ assert.equal(perms.pageHost,null);
+ assert.equal(perms.canInviteGo,false);
+ assert.equal(perms.sessionGranted,false);
+ const opened=await f.call({path:'/v1/session',method:'POST',body:'{"url":"https://example.com/again"}'});
+ assert.equal(opened.status,200);
+ assert.equal(f.launches,1,'explicit owner action starts one session');
+ assert.equal(f.state.status,'RUNNING');
+ assert.equal(f.state.allowGoRead,false,'invitation requires new explicit owner approval');
+ assert.equal(f.state.browserSessionId,'new-synthetic-session');
+});
+
+test('session-list provider outage never deletes tracked session or GO grant',async()=>{
+ const f=fixture({mode:'sessionlist',goRead:true});
+ const read=await f.call({path:'/v1/session'});
+ assert.equal(read.status,200);
+ assert.equal((await read.json()).status,'RUNNING');
+ assert.equal(f.state.browserSessionId,'synthetic');
+ assert.equal(f.state.allowGoRead,true);
+ assert.equal(f.launches,0);
 });

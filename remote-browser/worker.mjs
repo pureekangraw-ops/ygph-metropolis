@@ -98,12 +98,40 @@ export default {
 };
 
 export class BrowserWorkspace {
-  constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; }
+  constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; this.sessionProbe=null; }
   async state() {
     return (await this.ctx.storage.get("browser")) ||
       {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false,recentRequests:[]};
   }
   async save(state) { state.version=(state.version || 0)+1;state.updatedAt=new Date().toISOString();await this.ctx.storage.put("browser",state);return state; }
+
+  /** A persisted RUNNING flag is not proof Browser Run still owns that session.
+   * Read provider session IDs before claiming liveness; never launch on a GET.
+   * An unavailable provider must not trigger destructive cleanup.
+   */
+  async reconcileBrowserSession(state, force=false) {
+    const sessionId=state.browserSessionId;
+    if(!sessionId || ["RUNNING","STOP_REQUESTED"].includes(state.job?.status))
+      return state; // Never bypass the durable work queue's UNKNOWN/no-replay rules.
+    if(!force && this.sessionProbe?.id===sessionId &&
+        Date.now()-this.sessionProbe.at<15000) return state;
+    let sessions;
+    try {sessions=await puppeteer.sessions(this.env.BROWSER);}
+    catch {return state;} // Unknown provider state is not evidence of expiry.
+    if(!Array.isArray(sessions) ||
+        !sessions.every(s=>s && typeof s.sessionId==="string")) return state;
+    this.sessionProbe={id:sessionId,at:Date.now()};
+    if(sessions.some(s=>s.sessionId===sessionId)) return state;
+    const fresh=await this.state();
+    if(fresh.browserSessionId!==sessionId) return fresh;
+    fresh.lastClosedSessionId=sessionId;
+    fresh.browserSessionId=null;fresh.targetId=null;
+    fresh.controller="BIG";fresh.mode="IDLE";fresh.status="EXPIRED";
+    fresh.allowGoRead=false;fresh.grantedHost=null;fresh.note=null;
+    await this.save(fresh);
+    return fresh;
+  }
+
   async withPage(state, work) {
     if (!state.browserSessionId) throw new Error("SESSION_NOT_STARTED");
     let browser;
@@ -217,7 +245,7 @@ export class BrowserWorkspace {
     const url=validPageUrl(raw.url || "https://shop.yggmetro.com/");
     if (!url) throw new Error("HTTPS_PUBLIC_URL_REQUIRED");
     const recording=raw.recording===true;
-    let state=await this.state();
+    let state=await this.reconcileBrowserSession(await this.state(),true);
     if (state.browserSessionId && state.url &&
         (new URL(state.url).hostname!==new URL(url).hostname || !!state.recording!==recording)) {
       // Restrict a Browser Run session to its original domain; a new site receives a fresh session
@@ -259,6 +287,7 @@ export class BrowserWorkspace {
   }
   async closeSession(state) {
     if(state.job?.status==="RUNNING" || state.job?.status==="STOP_REQUESTED")throw new Error("STOP_JOB_BEFORE_CLOSING");
+    state=await this.reconcileBrowserSession(state,true);
     if(state.browserSessionId){
       try {
         const browser=await puppeteer.connect(this.env.BROWSER,state.browserSessionId);
@@ -390,11 +419,14 @@ export class BrowserWorkspace {
       }
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
       if(method==="GET" && path==="/v1/site-permissions" && role==="BIG") {
-        const state=await this.state();
+        const state=await this.reconcileBrowserSession(await this.state());
         if(state.browserSessionId)await this.refreshPageAddress(state);
-        return reply(sitePermissionsView(state,this.env.GO_ALLOWED_HOSTS));
+        // A closed browser cannot have an active origin or GO invitation.
+        const visible=state.browserSessionId?state:{...state,url:null,allowGoRead:false,grantedHost:null};
+        return reply(sitePermissionsView(visible,this.env.GO_ALLOWED_HOSTS));
       }
-      if (method==="GET" && path==="/v1/session") return reply(summarize(await this.state()));
+      if (method==="GET" && path==="/v1/session")
+        return reply(summarize(await this.reconcileBrowserSession(await this.state())));
       if (method==="GET" && path==="/v1/job") return reply({job:(await this.state()).job || null});
       if (method==="GET" && path==="/v1/observe") return reply(await this.observe(await this.state(),role));
       if (method==="GET" && path==="/v1/screenshot") {
