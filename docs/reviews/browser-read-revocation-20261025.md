@@ -6,7 +6,7 @@ Why this: the accepted mutation guard prevents later GO actions, but observation
 
 Remote main inspected before edits: `734a8790948b8e6a1687c4bf32ae492b41d07030`. PR #259 remains OPEN/DRAFT at `c40beec69f1db5f60d4f6a84333f0e9e12c3ebe7`; this branch builds on that accepted source, not on an older browser lane. No existing fixes were redone. No AGENTS.md or applicable local .agents/skills were present. Existing browser handoff, shared-browser plan and diagnostics checkpoint were read.
 
-Owned edits: remote-browser/worker.mjs, browser-specific regression tests and this document only. No Android, GOVIEW, outsideview, transport, database or import/export edits. Greenhouse and Vault remain paused.
+Initial owned edits: remote-browser/worker.mjs, browser-specific regression tests and this document. The subsequently coordinated diagnostics change owns StationHttp.kt and Browser-only Android callers/tests. No GOVIEW, outsideview, database or import/export edits. Greenhouse and Vault remain paused.
 
 ## Reproduction and fix
 
@@ -26,11 +26,15 @@ Boundary: revocation committed while provider work or disconnect awaits prevents
 
 Validation commands: `node --test remote-browser/tests/*.test.mjs` (62 tests); `npm test` (3 web + 47 DOM tests). These execute source with synthetic provider/storage and are local regression evidence, not production or device proof. CI results must be tied to the final published head separately.
 
-## Shared transport coordination proposal — pending, unchanged
+## Coordinated diagnostics follow-up
 
-Source still shows StationHttp.request returning only a String after verifying HTTP status/correlation. RemoteBrowserActivity.query then parses JSON and validates the view URL; those later exceptions no longer carry status/correlation and diagnostics report unknown/unconfirmed. This is a source trace, not a completed executable Android reproduction in this lane.
+Parent authorized ownership of StationHttp.kt and GOVIEW confirmed its lane leaves transport/browser/build files untouched. No GOVIEW callers or global build files changed.
 
-Proposed bounded follow-up for agreement with GOVIEW transport owner: add a response envelope API containing body, exact HTTP status and verified request ID/correlation; preserve the existing String request API for other callers. Browser parsing/URL validation would attach that metadata to safe StationFailure results. Test valid correlated 2xx with malformed JSON/invalid view URL, non-2xx, missing/mismatched correlation, and oversized body. Do not log body, token, view URL or page data. No shared file has been edited; implementation and executable reproduction are pending coordination, not denied.
+Executable baseline reproduction on the original StationHttp/StationDiagnostics JVM source used a synthetic HTTPS connection returning correlated HTTP 200. Both malformed JSON and invalid Live View URL subsequently produced exceptions with null HTTP status and correlation. The reproducer copied the exact pre-change Browser query validation flow; no real HTTP or credentials were used.
+
+Additive StationHttp.requestResponse returns body, exact HTTP status, request ID and verified correlation. Existing StationHttp.request keeps its signature and delegates to return the body for existing callers. BrowserResponse parses/validates inside the envelope so later errors retain transport facts as safe StationFailure values. Browser diagnostics now persist exact success status as well. Oversized/unreadable successful bodies also retain known status/correlation. Default envelope string rendering and failure causes do not expose response body, token or signed view URL.
+
+Focused Kotlin/JUnit tests execute actual transport and Browser parser with synthetic HttpURLConnection: malformed JSON, invalid view URL, valid view, error body, missing/mismatched echo, no-request-ID caller, HTTP error and oversized/unreadable body, plus existing StationDiagnostics tests. Local standalone Kotlin 2.0.21/JVM validation passes 11 tests; this is not an Android Activity build or device test. The normal Android CI compiles the full Activity and runs the same tests; report its final-head outcome separately.
 
 ## Required real acceptance, not executed
 
