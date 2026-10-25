@@ -26,6 +26,13 @@ class OutsideViewActivity : Activity() {
     private lateinit var gpsStatus:TextView
     private lateinit var directStatus:TextView
     private val directClient by lazy { GoviewDirectClient(this) }
+    private val transferClient by lazy {GoviewTransferClient(this)}
+    private val selectedTransfer by lazy {GoviewSelectedTransfer(java.io.File(filesDir,"outside-view/transfers"),store,transferClient)}
+    private val transferUi by lazy {GoviewTransferUi(this,store,selectedTransfer,transferClient,worker,handler,
+        {!destroyed&&foreground},{status.text=it},{selectSnapshot(true)},{preview->
+            if(!busy&&!importing&&!storageUnavailable){busy=true;importing=true;showUpdatePreview(preview)}
+            else status.text="รอแผนที่พร้อม แล้ว Download เพื่อตรวจ Preview ใหม่"
+        })}
     private var directFetching=false
     private var directGeneration=0L
     private var directSettingsOpen=false
@@ -196,7 +203,7 @@ class OutsideViewActivity : Activity() {
             }.show()
     }
     private fun showMapTools() {
-        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "กลับ Browser", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด", "GO Direct · ตั้งค่าการเชื่อม", "อัปเดตแอป Observatory")
+        val labels=arrayOf("ไลร่า", "ส่งแผนที่ให้ GO", "ส่งภาพแผนที่", "กลับ Browser", "เก็บช่วงนี้", "ที่เก็บไว้", "นำเข้า PMTiles", "ลองแสดงใหม่", "โน้ต", "กลับ", "นำเข้า GeoJSON", "ค้นหาหมุด", "ชั้นข้อมูล", "ส่งออก GeoJSON · GOVIEW", "ผลอัปเดต GOVIEW", "สำรอง / กู้คืน GOVIEW", "หมวดหมู่หมุด", "GPS ต่อเนื่อง · เริ่ม / หยุด", "GO Direct · ตั้งค่าการเชื่อม", "อัปเดตแอป Observatory", "GO · Upload / Download ที่เลือก")
         AlertDialog.Builder(this).setTitle("GOVIEW · เครื่องมือแผนที่").setItems(labels){_,choice->
             when(choice){
                 0->LyraDialog.show(this,"OUTSIDE"){context()}
@@ -219,6 +226,7 @@ class OutsideViewActivity : Activity() {
                 17->locationSessionDialog()
                 18->showDirectSettings()
                 19->startActivity(Intent(this,com.big.gobrowser.update.AppMaintenanceActivity::class.java))
+                20->transferUi.show()
             }
         }.setNegativeButton("ปิด",null).show()
     }
@@ -436,6 +444,12 @@ class OutsideViewActivity : Activity() {
             handler.post {
                 if(destroyed)return@post
                 prepared.onSuccess {preview->
+                    showUpdatePreview(preview)
+                }.onFailure {importing=false;busy=false;status.text="ไม่อัปเดต · ${it.message}";worker.execute {readJournal()}}
+            }
+        }
+    }
+    private fun showUpdatePreview(preview:MapUpdatePreview) {
                     val recenter=CheckBox(this).apply {text="เลื่อนไปหมุดที่นำเข้า · แผนที่ออนไลน์อาจขอภาพถนนบริเวณนั้นจากผู้ให้บริการ";isChecked=false}
                     val previewForm=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(16,8,16,8)}
                     val details=TextView(this).apply {text="อ่านไฟล์แล้ว แต่ยังไม่บันทึกหมุด\nเพิ่ม ${preview.added} · ซ้ำ ${preview.duplicates} · ไม่แทนข้อมูลที่ขัดแย้ง\npackage v${preview.packageVersion} · base ${preview.expectedRevision} · capture ${preview.batch.sourceCaptureId?:"local-file"}\ncorrelation ${preview.correlationId}\nข้อมูลไฟล์ยังไม่ใช่การยืนยันหน้างาน\n${preview.batch.pins.joinToString("\n") {"${it.id} · ${it.label} · ${it.point.longitude}, ${it.point.latitude}"}}\nอนุมัติเพื่อบันทึกและตรวจอ่านกลับ";setTextIsSelectable(true)}
@@ -446,9 +460,6 @@ class OutsideViewActivity : Activity() {
                         .setNegativeButton("ยกเลิก"){_,_->importing=false;busy=false;pump()}
                         .setOnCancelListener {importing=false;busy=false;pump()}
                         .setPositiveButton("อนุมัติ Update"){_,_->approveUpdate(preview,recenter.isChecked)}.show()
-                }.onFailure {importing=false;busy=false;status.text="ไม่อัปเดต · ${it.message}";worker.execute {readJournal()}}
-            }
-        }
     }
     private fun approveUpdate(preview:MapUpdatePreview,recenter:Boolean) {
         worker.execute {
@@ -458,13 +469,14 @@ class OutsideViewActivity : Activity() {
                 if(destroyed)return@post
                 importing=false;busy=false
                 saved.onSuccess {receipt->
+                    if(receipt.correlationId.endsWith("-proposal"))transferUi.report(receipt)
                     val shown=GeoJsonImport.present({if(recenter)renderer.fitPoints(preview.batch.pins.map {it.point})},{renderer.reloadStyle()})
                     status.text="UPDATE ${receipt.status} · readback ${receipt.readbackVerified} · receipt ${receipt.id}"+if(shown)" · กำลังแสดง" else " · แสดงผลไม่สำเร็จ กดลองแสดงใหม่"
                 }.onFailure {status.text="Update ไม่สำเร็จ · ${it.message}";worker.execute {readJournal()}}
             }
         }
     }
-    private fun selectSnapshot() {
+    private fun selectSnapshot(uploadToGo:Boolean=false) {
         worker.execute {
             val journal=readJournal()?:return@execute
             val pins=journal.state.pins.values.toList()
@@ -477,8 +489,8 @@ class OutsideViewActivity : Activity() {
                         val selected=pins.filterIndexed {i,_->checked[i]}
                         if(selected.isEmpty()){status.text="ยังไม่ได้เลือกหมุด";return@setPositiveButton}
                         AlertDialog.Builder(this).setTitle("Snapshot ${selected.size} หมุด · v${journal.state.revision}")
-                            .setMessage(selected.joinToString("\n") {"${it.label} · ${it.point.longitude}, ${it.point.latitude}"}+"\nไฟล์มีเฉพาะ ID ชื่อ พิกัดที่เลือก ไม่รวม GPS ประวัติ โน้ต หรือ viewport · ยังไม่ส่งไปบริการใด")
-                            .setNegativeButton("ยกเลิก",null).setPositiveButton("สร้าง Snapshot และเลือกไฟล์"){_,_->
+                            .setMessage(selected.joinToString("\n") {"${it.label} · ${it.point.longitude}, ${it.point.latitude}"}+"\nมีเฉพาะ ID ชื่อ พิกัดที่เลือก ไม่รวม GPS ประวัติ โน้ต หรือ viewport"+if(uploadToGo)" · กด Upload เพื่อส่งข้อมูลที่เลือกไปบริการ GOVIEW ให้ GO อ่าน" else " · ยังไม่ส่งไปบริการใด")
+                            .setNegativeButton("ยกเลิก",null).setPositiveButton(if(uploadToGo)"อนุมัติ Upload ที่เลือก" else "สร้าง Snapshot และเลือกไฟล์"){_,_->
                                 worker.execute {
                                     val result=runCatching {
                                         val snapshot=store.selectedSnapshot(selected.map {it.id}.toSet(),journal.state.revision)
@@ -487,8 +499,11 @@ class OutsideViewActivity : Activity() {
                                         snapshot to file.absolutePath
                                     }
                                     handler.post {if(!destroyed)result.onSuccess {(snapshot,path)->
+                                        if(uploadToGo)transferUi.upload(snapshot)
+                                        else {
                                         pendingExportPath=path;status.text="SNAPSHOT CAPTURED_LOCAL · ${snapshot.captureId} · receipt ${snapshot.receipt.id} · Upload ยังไม่เกิดขึ้น"
                                         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/geo+json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"goview-selected.geojson"),43)
+                                        }
                                     }.onFailure {status.text="Snapshot ไม่สำเร็จ · ${it.message}"}}
                                 }
                             }.show()

@@ -65,6 +65,16 @@ class MapStateStore(private val root:File,private val backend:JournalBackend?=nu
         }
     }
 
+    /** Transport readback never asserts that map Update or rendering has occurred. */
+    fun recordTransferPhase(operation:String,status:String,correlationId:String,sha256:String,version:Long):MapUpdateReceipt = synchronized(transactionLock) {
+        require(operation=="UPLOAD" && status=="REMOTE_EXACT_READBACK_VERIFIED")
+        require(sha256.matches(Regex("[a-f0-9]{64}")))
+        val journal=readStrict()
+        journal.updates.firstOrNull {it.operation==operation && it.correlationId==correlationId && it.packageId==sha256 && it.status==status}?.let {return@synchronized it}
+        val receipt=MapUpdateReceipt(java.util.UUID.randomUUID().toString(),sha256,version,status,journal.state.revision,operation=operation,correlationId=correlationId)
+        commit(withReceipt(journal,receipt));receipt
+    }
+
     fun recordPhaseFailure(operation:String,correlationId:String,message:String):MapUpdateReceipt = synchronized(transactionLock) {
         require(operation in setOf("SNAPSHOT","UPLOAD","DOWNLOAD","UPDATE","STORAGE"))
         val journal=readStrict()
