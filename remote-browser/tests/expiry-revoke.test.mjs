@@ -8,17 +8,24 @@ const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
 function barrier(){let enter,release;return {entered:new Promise(r=>enter=r),wait:()=>{enter();return new Promise(r=>release=r)},release:()=>release()};}
 function fixture({expiry,hold,stage}={}){
- const events=[];let failed=false,inspections=0;
+ const events=[];let failed=false,inspections=0,inputValue="existing text";
  const db=new Map([['browser',{browserSessionId:'old',targetId:'selected',controller:'GO',mode:'LIVE',status:'RUNNING',allowGoRead:true,grantedHost:'example.com',url:'https://example.com/'}]]);
  async function provider(at){if(stage===at)await hold.wait();if(expiry===at&&!failed){failed=true;events.push('expired:'+at);throw Error('Target closed');}}
- const page={target:()=>({_targetId:'selected'}),url:()=> 'https://example.com/',goto:async()=>{await provider('goto');events.push('navigate');},$eval:async()=>{await provider(inspections++?'clear':'inspect');return {text:'Open details',type:'text',form:false,contenteditable:false};},click:async()=>{events.push('click');if(stage==='dispatched')await hold.wait();},type:async()=>events.push('type'),viewport:()=>({width:100,height:100}),mouse:{move:async()=>{await provider('move');events.push('move')},wheel:async()=>events.push('wheel')}};
+ const input={
+  get value(){return inputValue},
+  set value(value){inputValue=value;events.push('clear')},
+  getAttribute:key=>key==='type'?'text':null,
+  innerText:'Open details',closest:()=>null,isContentEditable:false,
+  dispatchEvent:event=>{events.push('input:'+event.type)}
+ };
+ const page={target:()=>({_targetId:'selected'}),url:()=> 'https://example.com/',goto:async()=>{await provider('goto');events.push('navigate');},$eval:async(selector,callback)=>{const clearing=inspections++>0;if(!clearing)await provider('inspect');const result=callback(input);if(clearing)await provider('clear');return result;},click:async()=>{events.push('click');if(stage==='dispatched')await hold.wait();},type:async(selector,value)=>{events.push('type');inputValue+=value;},viewport:()=>({width:100,height:100}),mouse:{move:async()=>{await provider('move');events.push('move')},wheel:async()=>events.push('wheel')}};
  const browser={pages:async()=>{await provider('pages');return [page]},disconnect:async()=>{},close:async()=>events.push('close'),sessionId:()=> 'new'};
  const puppeteer={sessions:async()=>[{sessionId:'old'}],connect:async()=>{await provider('connect');return browser},launch:async()=>{events.push('launch');assert.ok(events.includes('close'),'cleanup must precede replacement');return browser}};
  const deps={puppeteer,...policy,...sites,scrollRemotePage,WorkerEntrypoint:class {}};
  const Workspace=new Function(...Object.keys(deps),source+';return BrowserWorkspace;')(...Object.values(deps));
  const instance=new Workspace({storage:{get:async k=>structuredClone(db.get(k)),put:async(k,v)=>db.set(k,structuredClone(v)),delete:async k=>db.delete(k),setAlarm:async()=>{}}},{GO_ALLOWED_HOSTS:'example.com'});
  const revoke=()=>instance.fetch(new Request('https://fixture/v1/observe-access',{method:'POST',headers:{'x-observatory-role':'BIG'},body:'{"allow":false}'}));
- return {instance,events,revoke};
+ return {instance,events,revoke,get inputValue(){return inputValue}};
 }
 for(const expiry of ['connect','pages','goto'])test(`explicit owner recovery classifies ${expiry} expiry and cleans up before replacement`,async()=>{
  const f=fixture({expiry});await f.instance.beginSession({url:'https://example.com/'});
@@ -40,8 +47,6 @@ test('revocation after dispatch preserves takeover and prevents subsequent queue
 
 for(const [stage,step,prohibited] of [
  ['connect',{type:'navigate',url:'https://example.com/next'},'navigate'],
- ['inspect',{type:'type',selector:'#query',value:'hello'},'type'],
- ['clear',{type:'type',selector:'#query',value:'hello'},'type'],
  ['move',{type:'scroll',y:100},'wheel']
 ])test(`revoke during ${step.type}/${stage} blocks the next mutation`,async()=>{
  const hold=barrier(),f=fixture({hold,stage});
@@ -49,4 +54,31 @@ for(const [stage,step,prohibited] of [
  await hold.entered;assert.equal((await f.revoke()).status,200);hold.release();
  await assert.rejects(running,/CONTROLLER_MISMATCH|OWNER_GO_GRANT_REVOKED/);
  assert.equal(f.events.includes(prohibited),false);
+});
+
+const typingStep={type:'type',selector:'#query',value:'hello'};
+test('typing revoked during inspection neither clears input nor types',async()=>{
+ const hold=barrier(),f=fixture({hold,stage:'inspect'});
+ const running=f.instance.action(await f.instance.state(),typingStep,'GO');
+ await hold.entered;assert.equal((await f.revoke()).status,200);hold.release();
+ await assert.rejects(running,/CONTROLLER_MISMATCH|OWNER_GO_GRANT_REVOKED/);
+ assert.deepEqual(f.events,[]);
+ assert.equal(f.inputValue,'existing text');
+});
+test('typing revoked after clear executes its callback but never dispatches type',async()=>{
+ const hold=barrier(),f=fixture({hold,stage:'clear'});
+ const running=f.instance.action(await f.instance.state(),typingStep,'GO');
+ await hold.entered;
+ assert.deepEqual(f.events,['clear','input:input']);
+ assert.equal(f.inputValue,'');
+ assert.equal((await f.revoke()).status,200);hold.release();
+ await assert.rejects(running,/CONTROLLER_MISMATCH|OWNER_GO_GRANT_REVOKED/);
+ assert.deepEqual(f.events,['clear','input:input']);
+ assert.equal(f.inputValue,'');
+});
+test('authorized typing executes clear callback and input event before typing',async()=>{
+ const f=fixture();
+ await f.instance.action(await f.instance.state(),typingStep,'GO');
+ assert.deepEqual(f.events,['clear','input:input','type']);
+ assert.equal(f.inputValue,'hello');
 });
