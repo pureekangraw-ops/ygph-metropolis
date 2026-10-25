@@ -13,17 +13,25 @@ This candidate assembles accepted work for one Android Browser/GOVIEW applicatio
 | Typed GOVIEW PR262 | c484fcd974bb5da921480c87b1793532dd45a70a |
 | Matching GO PR22 (separate repository/runtime) | d9eb7ef4ea06f758f05b3edbb1e2ca6e0a96a4d8 |
 
-Ancestry checks confirm both stack relationships. The integration merges only PR260 and PR262 into an isolated branch from main; it does not cherry-pick their parent fixes again. Browser changes cover 10 files, map changes 23, with zero overlapping paths. Byte comparisons confirm every changed file equals its accepted tip; the combined source tree has no extra or missing changed files. This document is the only additional tracked change. Existing update/info UI, package identity, storage and build workflows are retained.
+Ancestry checks confirm both stack relationships. The integration merges only PR260 and PR262 into an isolated branch from main; it does not cherry-pick their parent fixes again. Browser changes cover 10 files, map changes 23, with zero overlapping paths. Byte comparisons confirm every changed file equals its accepted tip; the combined source tree has no extra or missing changed files. That initial integration added only this document. The subsequent delivery follow-up advances the build version and matching unsigned-release assertion to 0.7.4/code20, and adds a focused updater boundary test; accepted feature source is unchanged. Existing update/info UI, package identity, storage and build workflows are retained.
 
 ## Build and upgrade evidence boundary
 
-Existing package/version: com.big.gobrowser, versionName 0.7.3, versionCode 19, minSdk26, targetSdk36. Repository history identifies 0.7.1/code17 and 0.7.2/code18; code19 advances both and introduces no downgrade. The installed device version and signer must still be read from its About/Updates public metadata. An already-installed code19 cannot be upgraded with an equal code19 under the existing updater; do not bypass its check.
+Current candidate package/version: com.big.gobrowser, versionName 0.7.4, versionCode 20, minSdk26, targetSdk36. Fresh source inspection of main and all 21 open PR heads found maximum code19 and no active 0.7.4 assignment; current release metadata lists only unrelated historical LIGHTHOUSE releases. Code20 advances known repository code17/18/19 candidates, including the owner's possible installed 0.7.3/code19. The actual installed version and public signer still require verification. An equal or newer installed code20/21 remains rejected by the unchanged updater. No downgrade or signer bypass is introduced.
+
+Historical 0.7.3/code19 artifacts and passing CI at source072cb9fd remain documented separately in observatory-zone3-delivery-20261025.md; they are not relabeled as code20 artifacts. The new artifact must carry a new source SHA and fresh build provenance. AndroidManifest inherits version metadata from Gradle; no separately maintained manifest version was found.
 
 Existing CI `observatory-release-unsigned.yml` builds a primary release, checks exact package/version, verifies it is unsigned, and emits APK SHA256, package badging, source SHA and run ID. That is the primary staged candidate, not an installable signed upgrade. No owner-compatible release-signing workflow was found. Private signing keys are neither requested nor accessed.
 
 Existing Android CI additionally generates debug APKs and an ARM64 com.big.gobrowser.preview test variant signed with an ephemeral test certificate. A fresh test signer is not evidence of compatibility with an installed primary or older preview. The preview has independent storage and does not inherit owner maps/credentials. Its explicit source/run/hash and public signer report must accompany it. No uninstall, data clear, re-signing with a different owner identity, or install is performed here.
 
 The existing updater checks package, increasing version, full APK digest and signer equality before explicit installer consent. A data-preserving primary upgrade remains blocked until the final APK is signed by an authorized signer compatible with the installed app, and the public certificate digests are compared. Metadata comparisons do not establish actual upgrade success.
+
+## Expected public signing reference — parent-relayed receipt
+
+Signing support reports an existing owner-managed Google Drive PKCS12 local signing route, not a CI/GitHub-secret path. Its public receipt records signed 0.7.3/code19 from source8dc44fb4 and certificate SHA256 `31bf91b925558771a03bdc81d258cd4d1024a3bb48702bb08534f216e88d0624`, matching the previous release. Support reports v2/content-digest verification; official apksigner was NOT RUN and physical-device installation was NOT PERFORMED. This lane received the public receipt summary through the parent and did not inspect Drive key material or independently verify that receipt.
+
+That fingerprint is the expected owner certificate reference for a future authorized signing/comparison step. It is not the certificate of this new unsigned candidate, and it does not prove the currently installed device certificate. Parent handles any explicit secret-access/signing approval separately. No private key/password is read, copied, requested in chat, or provisioned here. PR248's unsigned workflow is already integrated; PR248 must not be merged separately for this delivery.
 
 ## Validation and artifact provenance
 

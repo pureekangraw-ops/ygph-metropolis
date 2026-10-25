@@ -1,4 +1,6 @@
-# Observatory integration delivery checkpoint
+# Historical Observatory code19 integration delivery checkpoint
+
+This records the superseded 0.7.3/code19 build. The current candidate advances to 0.7.4/code20; see observatory-zone3-candidate-20261025.md. These artifact hashes, runs and source pins remain historical and unchanged.
 
 Source: `072cb9fd2b1b50092942024e036c73d8af457659` — [draft PR263](https://github.com/pureekangraw-ops/ygph-metropolis/pull/263). Base main `734a8790948b8e6a1687c4bf32ae492b41d07030`. Accepted Browser tip `7be7d6d376d1b431901f5c6224b2d17a2c53c037` includes PR259; accepted GOVIEW tip `c484fcd974bb5da921480c87b1793532dd45a70a` includes PR261. Matching GO PR22: `d9eb7ef4ea06f758f05b3edbb1e2ca6e0a96a4d8`. All 33 accepted changed files match their stack tips; no source conflicts or omitted changes. Only the B2E delivery document was added.
 
