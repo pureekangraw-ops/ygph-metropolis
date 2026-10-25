@@ -139,3 +139,18 @@ test('Studio canonical commit followed by lost response recovers through GET wit
  assert.equal(response.status,200);
  const writes=t.writes();assert.deepEqual(await (await t.call(e.transferId,'read')).json(),e);assert.equal(t.writes(),writes);
 });
+
+test('Studio typed boundary matches canonical six-digit route before reserving identity',async()=>{
+ const t=setup(),map={...Engine.demo(),version:999999};
+ const last=envelope('STUDIO',Engine.pack(map),{mapId:map.mapId,version:999999},'synthetic-max-version');
+ assert.equal((await t.call(last.transferId,'go','PUT',last)).status,201);
+ assert.equal((await (await t.call(last.transferId,'read')).json()).identity.version,999999);
+ const beyond={...map,version:1000000},raw=Engine.pack(beyond);
+ const invalid={...last,transferId:'synthetic-invalid-version',identity:{mapId:map.mapId,version:1000000},payload:raw,sha256:Engine.hash(raw)};
+ const writes=t.writes();
+ assert.equal((await t.call(invalid.transferId,'go','PUT',invalid)).status,422);
+ assert.equal(t.writes(),writes);
+ assert.equal(t.data.has(`goview/typed-transfers/${invalid.transferId}.json`),false);
+ assert.equal(t.data.has(`goview/${map.mapId}/versions/1000000.json`),false);
+ assert.throws(()=>envelope('STUDIO',raw,invalid.identity,invalid.transferId));
+});

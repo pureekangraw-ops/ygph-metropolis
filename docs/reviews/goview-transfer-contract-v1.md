@@ -8,7 +8,7 @@ Envelope fields (exact): `schema:"goview.transfer.v1"`, `transferId`, `operation
 |---|---|---|---|
 | SNAPSHOT | goview.map-update | captureId, baseVersion | captureId (max71 chars) |
 | PROPOSAL | goview.map-update | captureId, baseVersion, snapshotSha256 | captureId + `-proposal` |
-| STUDIO | goview.map.package.v1 | mapId, version | explicit immutable ID |
+| STUDIO | goview.map.package.v1 | mapId, version (integer1–999999, matching canonical HTTP route) | explicit immutable ID |
 
 Snapshot payload is the existing exact `MapStateStore.selectedSnapshot` export: explicit-pins-only; strict allowed fields, no notes/category/private evidence/GPS/history. Proposal payload is the existing `{contractVersion:1,operation:"propose-update",sourceCaptureId,baseVersion,package}` file envelope. The server binds proposals to a stored snapshot and its SHA/revision; the phone must independently bind to its local selected snapshot. One immutable proposal per capture; conflicting changes require a fresh explicit capture. Studio uses its existing codec/version guards; no conversion into pins.
 
@@ -44,3 +44,5 @@ Two deterministic regressions fail against checkpoint2be838f and pass locally:
 2. A Studio transfer now conditionally reserves the typed ID and reads the winning reservation before touching canonical Studio storage. A different-type loser returns conflict with no canonical version, latest-pointer or legacy transfer-binding write. A Studio reservation alone is not successful transfer evidence: GET reconciles canonical exact bytes, legacy identity/digest binding and a valid latest index. Incomplete state returns TRANSFER_RESERVED_READBACK_REQUIRED; it neither claims success nor frees the ID for another type. An explicit identical PUT can resume the reservation using existing conditional version semantics; GET never replays mutation. A lost response after complete canonical commit resolves through readback.
 
 The tests use promise barriers, not timing sleeps, and confirm existing Studio version-conflict rules remain enforced. No deployed data or credentials were accessed. Remote branch checkpoint remains2be838f while publication approval is pending.
+
+Studio boundary correction: typed validation rejects version1000000 before ID reservation or canonical dispatch, although the in-memory Studio engine permits that value. The existing HTTP route accepts at most six digits, so typed Worker/native/GO adapters must cap Studio at999999. GeoJSON baseVersion semantics and existing routes are unchanged. Boundary tests cover999999 success and1000000 rejection with zero new storage writes.

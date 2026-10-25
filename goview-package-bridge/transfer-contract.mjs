@@ -33,7 +33,7 @@ export function validateTransfer(e){
  ensure(typeof e.sha256==='string'&&/^[a-f0-9]{64}$/.test(e.sha256)&&Engine.hash(e.payload)===e.sha256);
  const p=JSON.parse(e.payload),i=e.identity;
  if(e.payloadType==='goview.map.package.v1'){
-  ensure(e.operation==='STUDIO'&&exact(i,['mapId','version']));
+  ensure(e.operation==='STUDIO'&&exact(i,['mapId','version'])&&Number.isInteger(i.version)&&i.version>=1&&i.version<=999999);
   const map=Engine.unpack(e.payload);ensure(map.mapId===i.mapId&&map.version===i.version);
  }else{
   ensure(e.payloadType==='goview.map-update');

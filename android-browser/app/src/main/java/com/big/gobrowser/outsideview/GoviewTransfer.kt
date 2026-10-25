@@ -31,6 +31,7 @@ data class GoviewTransfer(val transferId:String,val operation:String,val payload
             val i=e.identity
             if(e.payloadType=="goview.map.package.v1") {
                 require(e.operation=="STUDIO"&&i.keys().asSequence().toSet()==setOf("mapId","version"))
+                require(i.get("version") is Number&&i.getInt("version") in 1..999999&&i.get("version").toString()==i.getInt("version").toString())
                 GoviewArtifact.verify(e.payload.toByteArray(Charsets.UTF_8),i.getString("mapId"),i.getInt("version"),e.sha256)
             }else {
                 require(e.payloadType=="goview.map-update")

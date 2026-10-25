@@ -64,6 +64,15 @@ class GoviewSelectedTransferTest {
             assertTrue(runCatching {exchange.download(s.transferId)}.isFailure);assertEquals(state,store.load().state)
         }finally{root.deleteRecursively()}
     }
+    @Test fun studioVersionBoundaryMatchesTheCanonicalHttpRoute() {
+        fun packet(version:Int):String {
+            val map="""{"schema":1,"mapId":"synthetic-empty-map","title":"Synthetic","version":$version,"origin":{"lat":0,"lng":0},"nodes":[],"roads":[],"areas":[],"pois":[]}"""
+            val payload="""{"format":"goview.map.package.v1","checksum":"sha256:${GoviewTransfer.digest(map)}","map":$map}"""
+            return GoviewTransfer("synthetic-version-limit","STUDIO","goview.map.package.v1",JSONObject().put("mapId","synthetic-empty-map").put("version",version),GoviewTransfer.digest(payload),payload).json()
+        }
+        assertEquals(999999,GoviewTransfer.parse(packet(999999)).identity.getInt("version"))
+        assertThrows(IllegalArgumentException::class.java){GoviewTransfer.parse(packet(1000000))}
+    }
     @Test fun actualKotlinAndWorkerAdaptersCompleteSyntheticSelectedRoundtrip() {
         var repository=File(System.getProperty("user.dir")).absoluteFile
         while(!File(repository,"goview-package-bridge/tests/typed-server-fixture.mjs").isFile)repository=repository.parentFile?:error("Repository fixture missing")
