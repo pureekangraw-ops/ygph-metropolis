@@ -18,6 +18,8 @@ import android.webkit.WebViewClient
 import android.widget.*
 import com.big.gobrowser.outsideview.OutsideViewActivity
 import com.big.gobrowser.transport.AndroidDeviceCredentialStore
+import com.big.gobrowser.transport.StationDiagnostics
+import com.big.gobrowser.transport.StationFailure
 import com.big.gobrowser.transport.StationHttp
 import com.big.gobrowser.ui.ObservatoryTheme
 import com.big.gobrowser.ui.PhoneLayout
@@ -521,19 +523,27 @@ class RemoteBrowserActivity : Activity() {
             status.text="🤖 GO: "+note.optString("message").take(240)
         }
     }
-    private fun readableError(t: Throwable): String = (t.message ?: "ไม่ทราบสาเหตุ").take(120)
+    private fun readableError(t: Throwable): String = StationDiagnostics.safeFailure(t)
     private fun query(method: String,path: String,body: JSONObject?,onDone:(Result<JSONObject>)->Unit) {
         val service=serviceUrl()
         val token=credentials.load()
         if(service==null || token.isNullOrBlank()){status.text="ตั้งค่า Worker และ OWNER_TOKEN ก่อน";return}
         if(busy){status.text="กำลังดำเนินการคำสั่งก่อนหน้า";return}
         busy=true
+        val requestId=java.util.UUID.randomUUID().toString()
         io.execute {
-            val result=runCatching { JSONObject(StationHttp.request(service+path,method,body,token)).also {
-                if (it.has("error")) throw IllegalStateException(it.optString("error"))
+            val result=runCatching { JSONObject(StationHttp.request(service+path,method,body,token,requestId)).also {
+                if(path=="/v1/view" && !allowedViewerUrl(it.optString("url"))) throw IllegalStateException("LIVE_VIEW_UNAVAILABLE")
+                if (it.has("error")) throw IllegalStateException(StationDiagnostics.safeCode(it.optString("error")) ?: "STATION_REQUEST_FAILED")
             }}
-            prefs.edit().putString("diagnostic-status", if(result.isSuccess) "CONNECTED" else "REQUEST_FAILED")
-                .putString("diagnostic-id", java.util.UUID.randomUUID().toString()).apply()
+            val key=StationDiagnostics.diagnosticKey(path)
+            val failure=result.exceptionOrNull()
+            prefs.edit().putString("$key-status", if(result.isSuccess) "REQUEST_SUCCEEDED" else readableError(requireNotNull(failure)))
+                .putString("$key-request-id",requestId)
+                .putBoolean("$key-server-correlated",result.isSuccess || (failure as? StationFailure)?.correlationConfirmed==true)
+                .putString("$key-time",java.time.Instant.now().toString())
+                .putString("$key-method",method).putString("$key-path",path)
+                .putString("$key-http",(failure as? StationFailure)?.httpStatus?.toString() ?: if(result.isSuccess) "2xx" else "unknown").apply()
             main.post {busy=false;if(!destroyed)onDone(result)}
         }
     }

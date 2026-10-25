@@ -66,18 +66,28 @@ class AppMaintenanceActivity : Activity() {
     private fun diagnostics(): String {
         val remote = getSharedPreferences("observatory-remote-ui", MODE_PRIVATE)
         val mapConnection = getSharedPreferences("goview-studio-map-library", MODE_PRIVATE)
+        val directConnection = getSharedPreferences("goview-direct-connection", MODE_PRIVATE)
         val endpoint = runCatching { Uri.parse(remote.getString("service", "")).host }.getOrNull() ?: "not configured"
         val maps = File(filesDir,"goview-studio-maps").listFiles()?.filter { it.name.endsWith(".goview.json") }
             ?.mapNotNull { f -> runCatching { JSONObject(f.readText()).getJSONObject("map").let {
                 "schema ${it.getInt("schema")} / data v${it.getInt("version")}" } }.getOrNull() }.orEmpty()
         return ObservatoryBuildStamp.detail() + "\nPackage: $packageName\nSigner SHA-256: " + signers(ownInfo()).joinToString(", ") +
             "\nMap packages: ${maps.size}\n" + maps.joinToString("\n") +
-            "\nBrowser endpoint: $endpoint\nLast endpoint check: " + remote.getString("diagnostic-status", "not checked") +
-            "\nCorrelation ID: " + remote.getString("diagnostic-id", "none") +
-            "\nMap endpoint: " + mapConnection.getString("endpoint", "not configured") +
-            "\nMap endpoint status: " + mapConnection.getString("endpointStatus", "not checked") +
-            "\nMap transfer ID: " + mapConnection.getString("transferId", "none") +
-            "\nLast update check: " + prefs.getString("result", "not checked") +
+            "\n\nBrowser — request results (not live-session health)\nEndpoint: $endpoint" +
+            listOf("browser-view" to "Live View", "browser-session" to "Session polling/open", "browser-command" to "Other Browser request").joinToString("") { (key,label) ->
+                "\n$label: " + remote.getString("$key-status", "not checked in this version") +
+                "\nTime UTC: " + remote.getString("$key-time", "unknown") +
+                " · HTTP: " + remote.getString("$key-http", "unknown") +
+                "\nRequest: " + remote.getString("$key-method", "") + " " + remote.getString("$key-path", "") +
+                "\nRequest ID: " + remote.getString("$key-request-id", "none") +
+                " · server echo: " + remote.getBoolean("$key-server-correlated",false)
+            } +
+            "\n\nGO Direct — separate connection\nState: " +
+            (if(directConnection.getBoolean("authRejected",false)) "AUTH_REJECTED_RECONNECT_REQUIRED" else "NOT_VERIFIED — no current connectivity proof") +
+            "\n\nPackage download history — not Browser/GO Direct health\nPackage endpoint: " + mapConnection.getString("endpoint", "not configured") +
+            "\nPackage endpoint status (historical): " + mapConnection.getString("endpointStatus", "not checked") +
+            "\nPackage transfer ID: " + mapConnection.getString("transferId", "none") +
+            "\nLast APK update check: " + prefs.getString("result", "not checked") +
             "\nUpdate correlation ID: " + prefs.getString("correlation", "none")
     }
     private fun work(action: () -> String) {

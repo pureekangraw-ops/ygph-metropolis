@@ -11,8 +11,16 @@ const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-contr
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
 async function bodyOf(request) {
   if (+(request.headers.get("content-length") || 0) > 12000) throw new Error("BODY_TOO_LARGE");
-  const text=await request.text();
-  if (text.length > 12000) throw new Error("BODY_TOO_LARGE");
+  const reader=request.body?.getReader();let text="",bytes=0;
+  const decoder=new TextDecoder("utf-8",{fatal:true});
+  if(reader)try {
+    for(;;){const {done,value}=await reader.read();if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>12000){void reader.cancel().catch(()=>{});throw new Error("BODY_TOO_LARGE");}
+      text+=decoder.decode(value,{stream:true});
+    }
+    text+=decoder.decode();
+  } finally {reader.releaseLock();}
   return text ? JSON.parse(text) : {};
 }
 function sameGrant(s,url=s.url) {
@@ -26,7 +34,7 @@ function summarize(s) {
     recording:!!s.recording, lastClosedSessionId:s.lastClosedSessionId || null,
     version:s.version || 0, updatedAt:s.updatedAt || null, job:s.job || null };
 }
-export default {
+const station = {
   async fetch(request, env) {
     const path=new URL(request.url).pathname;
     if (path==="/console" && request.method==="GET") {
@@ -64,10 +72,28 @@ export default {
     }
     if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
     if (go && !["/v1/session","/v1/observe","/v1/screenshot","/v1/action","/v1/job","/v1/run","/v1/note"].includes(path)) return reply({error:"OWNER_ONLY"},403);
-    const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json"}});
+    const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json","x-request-id":request.headers.get("x-request-id")}});
     const result=await stub.fetch(upstream);
     // A DO receives role from a trusted internal request, never a client-supplied header.
     return result;
+  }
+};
+
+// Correlate the request before execution; never include URLs or upstream messages.
+export default {
+  async fetch(request, env) {
+    const supplied=request.headers.get("x-request-id") || "";
+    const requestId=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(supplied)?supplied:crypto.randomUUID();
+    const headers=new Headers(request.headers);headers.set("x-request-id",requestId);
+    let response;
+    try {response=await station.fetch(new Request(request,{headers}),env);}
+    catch {response=reply({error:"REQUEST_FAILED"},503);}
+    if(new URL(request.url).pathname==="/v1/view") {
+      // Fixed metadata only: never log headers, page/session IDs or signed view URLs.
+      console.info(JSON.stringify({event:"browser_view_request",requestId,httpStatus:response.status}));
+    }
+    const out=new Headers(response.headers);out.set("x-request-id",requestId);
+    return new Response(response.body,{status:response.status,headers:out});
   }
 };
 
@@ -82,14 +108,17 @@ export class BrowserWorkspace {
     if (!state.browserSessionId) throw new Error("SESSION_NOT_STARTED");
     let browser;
     try {
-      browser=await puppeteer.connect(this.env.BROWSER, state.browserSessionId);
-      const pages=await browser.pages();
-      const page=pages.find(p => p.target()._targetId === state.targetId) ||
-        (pages.length===1 ? pages[0] : null);
+      try {browser=await puppeteer.connect(this.env.BROWSER, state.browserSessionId);}
+      catch(error) {throw Object.assign(new Error("SESSION_UNAVAILABLE"),{
+        sessionExpired:/session.*(?:closed|not found|does not exist)|browser.*disconnect|Target closed/i.test(String(error))
+      });}
+      let pages;
+      try {pages=await browser.pages();} catch {throw new Error("SESSION_UNAVAILABLE");}
+      const page=state.targetId ? pages.find(p => p.target()._targetId === state.targetId) : null;
       if (!page) throw new Error("EXACT_PAGE_UNAVAILABLE");
       return await work(page);
     } catch (error) {
-      if (/session.*(?:closed|not found|does not exist)|browser.*disconnect|ECONN|Target closed/i.test(String(error))) {
+      if (error.sessionExpired===true || /session.*(?:closed|not found|does not exist)|browser.*disconnect|ECONN|Target closed/i.test(String(error))) {
         const fresh=await this.state();
         if(fresh.browserSessionId===state.browserSessionId){
           fresh.status="EXPIRED";fresh.controller="BIG";fresh.mode="IDLE";
@@ -203,7 +232,13 @@ export class BrowserWorkspace {
         });
         state.controller="BIG";state.mode="OBSERVE";state.status="RUNNING";state.url=finalUrl;state.allowGoRead=false;state.grantedHost=null;state.note=null;await this.save(state);
         return summarize(state);
-      } catch { state.browserSessionId=null; }
+      } catch(error) {
+        // Owner explicitly reopened a URL. Retire the old session before replacing
+        // it; a missing target does not mean its browser has stopped billing/running.
+        if(error.message!=="EXACT_PAGE_UNAVAILABLE" && error.sessionExpired!==true) throw error;
+        try {await this.closeSession(state);} catch {throw new Error("SESSION_CLEANUP_FAILED");}
+        state=await this.state();
+      }
     }
     const host=new URL(url).hostname;
     const extras=String(this.env.PUBLIC_ASSET_HOSTS || "").split(",")
@@ -240,11 +275,14 @@ export class BrowserWorkspace {
   }
   async view(state) {
     const url=await this.withPage(state,async page => {
-      const cdp=await page.createCDPSession();
+      let cdp;
+      try {cdp=await page.createCDPSession();} catch {throw new Error("LIVE_VIEW_CDP_UNAVAILABLE");}
       try {const result=await cdp.send("Cloudflare.getLiveView",{mode:"tab",expiresInMs:300000});return result.devtoolsFrontendUrl;}
+      catch {throw new Error("LIVE_VIEW_PROVIDER_ERROR");}
       finally {await cdp.detach().catch(()=>{});}
     });
-    if (!url || !url.startsWith("https://live.browser.run/")) throw new Error("LIVE_VIEW_UNAVAILABLE");
+    let parsed;try {parsed=new URL(url);} catch {throw new Error("LIVE_VIEW_UNAVAILABLE");}
+    if (parsed.protocol!=="https:" || parsed.hostname!=="live.browser.run" || parsed.username || parsed.password || parsed.port) throw new Error("LIVE_VIEW_UNAVAILABLE");
     return {url,validForStartMs:300000,warning:"View URL grants access. Never log or share it."};
   }
 
@@ -370,7 +408,15 @@ export class BrowserWorkspace {
             observedAt:new Date().toISOString()};
         }));
       }
-      if (method==="GET" && path==="/v1/view" && role==="BIG") return reply(await this.view(await this.state()));
+      if (method==="GET" && path==="/v1/view" && role==="BIG") {
+        try {return reply(await this.view(await this.state()));}
+        catch(error) {
+          const codes={SESSION_NOT_STARTED:[409,"session"],SESSION_UNAVAILABLE:[503,"connect"],EXACT_PAGE_UNAVAILABLE:[409,"target"],LIVE_VIEW_CDP_UNAVAILABLE:[502,"cdp"],LIVE_VIEW_PROVIDER_ERROR:[502,"provider"],LIVE_VIEW_UNAVAILABLE:[502,"response"]};
+          const code=Object.hasOwn(codes,error?.message)?error.message:"LIVE_VIEW_UNAVAILABLE";
+          const [status,stage]=codes[code];
+          return reply({error:code,stage,requestId:request.headers.get("x-request-id")},status);
+        }
+      }
       if(method!=="POST")return reply({error:"NOT_FOUND"},404);
       const body=await bodyOf(request),state=await this.state();
       if(path==="/v1/note" && role==="GO") {
@@ -467,7 +513,13 @@ export class BrowserWorkspace {
         return reply(summarize(st));
       }
       return reply({error:"NOT_FOUND"},404);
-    }catch(error) {return reply({error:String(error?.message || error).slice(0,160)},400);}
+    }catch(error) {
+      const safe=new Set(["BODY_TOO_LARGE","SESSION_NOT_STARTED","SESSION_UNAVAILABLE","SESSION_CLEANUP_FAILED","EXACT_PAGE_UNAVAILABLE",
+        "OBSERVE_GRANT_ORIGIN_MISMATCH","CONTROLLER_MISMATCH","GO_DOMAIN_NOT_ALLOWED","GO_GRANT_ORIGIN_MISMATCH",
+        "SENSITIVE_ACTION_NEEDS_OWNER","PROTECTED_INPUT","HTTPS_PUBLIC_URL_REQUIRED","STOP_JOB_BEFORE_CLOSING",
+        "JOB_ALREADY_RUNNING","SCREENSHOT_TOO_LARGE"]);
+      return reply({error:safe.has(error?.message)?error.message:"REQUEST_FAILED"},400);
+    }
   }
 }
 

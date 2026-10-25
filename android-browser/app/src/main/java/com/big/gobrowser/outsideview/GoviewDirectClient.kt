@@ -41,32 +41,50 @@ class GoviewDirectClient(context: Context) {
     private val base="https://goview-package-bridge.pureekangraw.workers.dev"
     private val json="application/json; charset=utf-8".toMediaType()
 
-    fun configured()=!credential.load().isNullOrBlank()
-    fun configure(token:String){
-        require(token.length in 20..512 && token.all {it>' '&&it!='\u007f'})
-        credential.save(token)
-    }
-    fun disconnect()=credential.revoke()
+    private val connectionPrefs=context.applicationContext.getSharedPreferences("goview-direct-connection",Context.MODE_PRIVATE)
+    private val connection=DirectConnection(
+        load={credential.load()}, save={credential.save(it)}, revoke={credential.revoke()},
+        suspended={connectionPrefs.getBoolean("authRejected",false)},
+        suspendPolling={check(connectionPrefs.edit().putBoolean("authRejected",it).commit())},
+        readPending={token:String -> readPending(token)}
+    )
+    fun configured()=connection.configured()
+    fun canPoll()=connection.canPoll()
+    fun requiresReconnect()=connection.blocked()
+    fun beginValidation()=connection.beginValidation()
+    fun validate(ticket:Long,token:String)=connection.validate(ticket,token)
+    fun cancelPending()=connection.cancel()
+    fun disconnect()=connection.disconnect()
 
-    private fun call(path:String,body:JSONObject?=null):JSONObject {
+    private fun call(token:String,path:String,body:JSONObject?=null):JSONObject {
         require(path.startsWith("/v1/direct/commands"))
-        val token=credential.load() ?: error("DIRECT_CONNECTION_NOT_CONFIGURED")
         val builder=Request.Builder().url(base+path).header("Authorization","Bearer "+token)
             .header("Cache-Control","no-store")
         if(body==null)builder.get()
         else builder.post(body.toString().toRequestBody(json))
         client.newCall(builder.build()).execute().use {response->
-            if(!response.isSuccessful)error("DIRECT_HTTP_"+response.code)
-            val text=response.body?.string() ?: error("EMPTY_DIRECT_RESPONSE")
-            require(text.length<=16384){"DIRECT_RESPONSE_TOO_LARGE"}
+            if(!response.isSuccessful)throw DirectHttpFailure(response.code)
+            val body=response.body ?: error("EMPTY_DIRECT_RESPONSE")
+            val text=body.byteStream().use { input ->
+                val out=java.io.ByteArrayOutputStream()
+                val buffer=ByteArray(2048)
+                while(true) {
+                    val count=input.read(buffer)
+                    if(count<0)break
+                    require(out.size()+count<=16384){"DIRECT_RESPONSE_TOO_LARGE"}
+                    out.write(buffer,0,count)
+                }
+                out.toString("UTF-8")
+            }
             val result=JSONObject(text)
             check(result.optBoolean("ok")){"DIRECT_RESPONSE_REJECTED"}
             return result
         }
     }
     /** Must run off the UI thread and only while GOVIEW is visible. */
-    fun pending():List<GoviewDirectProposal>{
-        val response=call("/v1/direct/commands/pending")
+    fun pending():List<GoviewDirectProposal> = connection.pending()
+    private fun readPending(token:String):List<GoviewDirectProposal>{
+        val response=call(token,"/v1/direct/commands/pending")
         val array=response.getJSONArray("commands")
         require(array.length()<=5)
         return (0 until array.length()).map { GoviewDirectProposal.parse(array.getJSONObject(it)) }
@@ -78,6 +96,6 @@ class GoviewDirectClient(context: Context) {
         require(status!="APPLIED"||readback)
         val message=JSONObject().put("commandId",proposal.commandId).put("status",status)
             .put("revision",revision).put("readbackVerified",readback)
-        call("/v1/direct/commands/"+proposal.commandId+"/receipt",message)
+        connection.request { token -> call(token,"/v1/direct/commands/"+proposal.commandId+"/receipt",message) }
     }
 }
