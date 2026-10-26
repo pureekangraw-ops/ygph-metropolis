@@ -116,6 +116,8 @@ small{font-size:11px;color:#9bb6ce}
   <label for="bridgeSha">Full upload SHA-256</label><input id="bridgeSha" autocomplete="off">
   <label for="bridgeTransfer">Transfer ID from GO receipt</label><input id="bridgeTransfer" autocomplete="off">
   <button id="transferReceipt">Read back / export saved receipt</button>
+  <div class="row"><button id="pullTyped">↓ Typed transfer · Preview</button><button id="reportTyped">ส่ง / ลองส่ง Receipt ให้ GO</button></div>
+  <small>Typed ใช้สิทธิ์ Read ที่บันทึกจาก GOVIEW · ระบุ Transfer ID / Map ID / Version / SHA256 ให้ตรงใบรับ · ส่ง Receipt หลังอนุมัติและตรวจไฟล์จริงเท่านั้น</small>
   <label for="bridgeToken">คีย์อ่านแพ็กเกจ (ไม่บันทึกลงไฟล์)</label>
   <input id="bridgeToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Android read token">
   <div class="row" style="margin-top:8px"><button id="pullFromGo">↓ ดาวน์โหลดแพ็กเกจจาก GO</button></div>
@@ -391,6 +393,12 @@ $("pullFromGo").onclick=()=>{
  status("กำลังขอแพ็กเกจจาก GO · จะยังไม่แก้แผนที่จนกว่าจะอนุมัติ");
 };
 $("transferReceipt").onclick=()=>native?window.GoviewHost.exportReceipt():status("Android only");
+$("pullTyped").onclick=()=>{
+ if(!native)return status("Typed transfer ต้องเปิดผ่าน Android");
+ window.GoviewHost.downloadTyped($("bridgeTransfer").value.trim(),$("bridgeMapId").value.trim(),$("bridgeVersion").value.trim(),$("bridgeSha").value.trim());
+ status("กำลังตรวจ Typed transfer ที่ระบุ · Preview ไม่ใช่ Update");
+};
+$("reportTyped").onclick=()=>native?window.GoviewHost.reportTypedReceipt():status("Android only");
 for(const id of ["roadsLayer","areasLayer","poisLayer"])$(id).onchange=draw;
 $("search").oninput=event=>{
  const query=event.target.value.trim().toLocaleLowerCase();if(!query)return;

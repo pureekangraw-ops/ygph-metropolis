@@ -69,7 +69,12 @@ class GoviewTypedChainTest {
         }
         assertTrue("Studio JS callback",latch.await(12,TimeUnit.SECONDS));return JSONTokener(value.get()?:"null").nextValue()
     }
-    private fun typedReceipt(e:GoviewTransfer)=JSONObject().put("transferId",e.transferId).put("sha256",e.sha256).put("operation","UPDATE").put("status","SAVED").put("revision",e.identity.getInt("version")).put("readbackVerified",true)
+    private fun studioExchange():GoviewStudioTransfer {
+        val lock=GoviewStudioActivity::class.java.getDeclaredField("storageLock").apply {isAccessible=true}.get(null)
+        return GoviewStudioTransfer(File(context.filesDir,"goview-typed-studio"),File(context.filesDir,"goview-transfers"),transport,
+            {id->android.util.AtomicFile(File(context.filesDir,"goview-studio-maps/$id.goview.json")).openRead().use {it.readBytes()}},lock,
+            {file->android.util.AtomicFile(file).openRead().use {it.readBytes()}})
+    }
     @Test fun selectedAndStudioGoApplyReceiptsSurviveProcessRestart() {
         val phase=args.getString("goviewTypedPhase")
         assumeTrue("Only explicit emulator host driver runs synthetic transport",phase=="before"||phase=="after")
@@ -103,18 +108,18 @@ class GoviewTypedChainTest {
         val raw=(js("(()=>{const m=GoviewEngine.demo();m.mapId='$id';return GoviewEngine.pack(m)})()") as String)+"\n"
         val e=GoviewTransfer.parse(GoviewTransfer("${id}_transfer","STUDIO","goview.map.package.v1",JSONObject().put("mapId",id).put("version",1),GoviewTransfer.digest(raw),raw).json())
         assertTrue(go("goview_transfer_publish",JSONObject().put("envelope",JSONObject(e.json()))).getBoolean("ok"))
-        val downloaded=GoviewTransfer.parse(transport.get(e.transferId));assertEquals(e.payload,downloaded.payload);assertEquals(e.sha256,downloaded.sha256)
+        val studio=studioExchange()
+        val downloaded=studio.download(e.transferId,id,1,e.sha256);assertEquals(e.payload,downloaded.payload);assertEquals(e.sha256,downloaded.sha256)
         val file=File(context.filesDir,"goview-studio-maps/$id.goview.json");assertFalse(file.exists())
-        // Test-only download boundary supplies the exact receipt production downloadExact creates.
-        val studioReceipt=File(File(context.filesDir,"goview-transfers").apply {mkdirs()},"${e.transferId}.json")
-        studioReceipt.writeText(JSONObject().put("transferId",e.transferId).put("mapId",id).put("version",1).put("sha256",e.sha256).put("status","DOWNLOADED_VERIFIED_NOT_APPLIED").toString())
+        val studioReceipt=File(context.filesDir,"goview-transfers/${e.transferId}.json")
+        assertTrue(runCatching {studio.report(e.transferId)}.isFailure)
         js("GoviewStudio.receiveImport("+JSONObject.quote(downloaded.payload)+");true")
         await("Studio preview before owner confirmation"){js("document.getElementById('modal').classList.contains('open')")==true}
         assertFalse(file.exists());assertEquals(saved,map.load())
         js("document.getElementById('modalOk').click();true")
         await("Native exact Studio save/readback"){file.exists()&&file.readText()==raw&&JSONObject(studioReceipt.readText()).optString("status")=="OWNER_APPROVED_FILE_READBACK_VERIFIED"}
         assertEquals(e.sha256,JSONObject(studioReceipt.readText()).getString("readbackSha256"));assertEquals(saved,map.load())
-        transport.receipt(e.transferId,typedReceipt(e).toString())
+        studio.report(e.transferId)
         val studioReport=go("goview_transfer_receipt",JSONObject().put("transferId",e.transferId))
         assertTrue(studioReport.getBoolean("ok"));assertFalse(studioReport.getBoolean("independentlyVerified"))
         checkpoint.writeText(JSONObject().put("pid",Process.myPid()).put("snapshot",s.transferId).put("proposal",p.transferId).put("revision",saved.state.revision).put("receipt",receipt.id).put("studio",e.json()).toString())
@@ -131,7 +136,7 @@ class GoviewTypedChainTest {
         val e=GoviewTransfer.parse(expected.getString("studio"))
         val file=File(context.filesDir,"goview-studio-maps/${e.identity.getString("mapId")}.goview.json")
         assertEquals(e.payload,file.readText());assertEquals(e.sha256,GoviewTransfer.digest(file.readText()))
-        transport.receipt(e.transferId,typedReceipt(e).toString())
+        studioExchange().report(e.transferId)
         assertTrue(go("goview_transfer_receipt",JSONObject().put("transferId",e.transferId)).getBoolean("ok"));assertEquals(saved,map.load())
     }
 }
