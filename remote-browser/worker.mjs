@@ -166,6 +166,13 @@ export class BrowserWorkspace {
   async refreshPageAddress(state) {
     if(!state.browserSessionId)throw Error("SESSION_NOT_STARTED");
     const actual=await this.withPage(state,page=>page.url());
+    const fresh=await this.state();
+    // Origin inspection is a provider await. An older allow/control request
+    // must never restore permission after a newer revoke, takeover or close.
+    if(fresh.browserSessionId!==state.browserSessionId || fresh.targetId!==state.targetId ||
+        (fresh.accessVersion||0)!==(state.accessVersion||0))
+      throw Error("OWNER_GO_GRANT_REVOKED");
+    Object.assign(state,fresh);
     const current=validPageUrl(actual);
     if(!current)throw Error("CURRENT_PAGE_NOT_PUBLIC_HTTPS");
     if(current!==state.url){
@@ -181,7 +188,7 @@ export class BrowserWorkspace {
   assertGoRead(state,current,...urls) {
     if(current.browserSessionId!==state.browserSessionId || current.targetId!==state.targetId)
       throw new Error("EXACT_PAGE_UNAVAILABLE");
-    if(!sameGrant(current) || urls.some(url=>!sameGrant(current,url) ||
+    if((current.accessVersion||0)!==(state.accessVersion||0) || !sameGrant(current) || urls.some(url=>!sameGrant(current,url) ||
         !mayGoUseSite(url,this.env.GO_ALLOWED_HOSTS,current.sitePermissions)))
       throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
   }
@@ -243,7 +250,7 @@ export class BrowserWorkspace {
         if(fresh.browserSessionId!==state.browserSessionId || fresh.targetId!==state.targetId)
           throw new Error("EXACT_PAGE_UNAVAILABLE");
         if(fresh.controller!==role)throw new Error("CONTROLLER_MISMATCH");
-        if(role==="GO" && (fresh.status==="STOP_REQUESTED" ||
+        if(role==="GO" && ((fresh.accessVersion||0)!==(state.accessVersion||0) || fresh.status==="STOP_REQUESTED" ||
           fresh.job?.status==="STOP_REQUESTED" || !sameGrant(fresh,page.url()) ||
           !mayGoUseSite(page.url(),this.env.GO_ALLOWED_HOSTS,fresh.sitePermissions) ||
           (step.type==="navigate" && (new URL(step.url).hostname!==fresh.grantedHost ||
@@ -258,11 +265,33 @@ export class BrowserWorkspace {
         case "reload": await dispatch(()=>page.reload({waitUntil:"domcontentloaded",timeout:20000}));break;
         case "scroll": await scrollRemotePage(page,step.y,dispatch);break;
         case "click": {
-          const risk=await page.$eval(step.selector, el => ({
-            text:(el.innerText || el.getAttribute("aria-label") || el.value || "").slice(0,160),
-            type:el.getAttribute("type") || "",form:!!el.closest("form"),contenteditable:el.isContentEditable
-          }));
-          if (/pay|buy|purchase|delete|remove|submit|confirm|transfer|checkout|sign out|logout|send|ยืนยัน|ชำระ|ลบ|ส่ง/i.test(risk.text) || risk.form || risk.type==="submit" || risk.contenteditable) throw new Error("SENSITIVE_ACTION_NEEDS_OWNER");
+          const risk=await page.$eval(step.selector, el => {
+            // Inspect the activated control, including a span/icon inside a
+            // button. Merely being inside a form does not submit that form.
+            const control=el.closest("button,input,a,[role=button]") || el;
+            const form=control.closest("form");
+            const tag=(control.tagName || "").toLowerCase();
+            const type=(control.type || control.getAttribute("type") || (tag==="button"?"submit":"")).toLowerCase();
+            const submits=type==="submit" || type==="image";
+            const text=[control.innerText,control.getAttribute("aria-label"),
+              tag==="input" && ["submit","button","reset"].includes(type)?control.value:"",
+              control.getAttribute("title")].filter(Boolean).join(" ").slice(0,500);
+            const formAction=form?(control.getAttribute("formaction")?control.formAction:form.action):"";
+            const searchSubmit=!!form && submits &&
+              (control.getAttribute("formmethod") || form.method || "get").toLowerCase()==="get" &&
+              /search|ค้นหา/i.test(text) &&
+              (form.getAttribute("role")==="search" || !!form.querySelector('input[type="search"]') ||
+                /\/search\/?(?:\?|$)/i.test(formAction || ""));
+            return {text,type,submits,searchSubmit,formAction,
+              contenteditable:el.isContentEditable || control.isContentEditable};
+          });
+          const searchTarget=risk.searchSubmit?validPageUrl(risk.formAction):null;
+          if (/pay|buy|purchase|delete|remove|confirm|transfer|checkout|sign out|logout|send|ยืนยัน|ชำระ|ลบ|ส่ง/i.test(risk.text) ||
+              (risk.searchSubmit && (!searchTarget || /pay|buy|purchase|delete|remove|confirm|transfer|checkout|logout|send/i.test(new URL(searchTarget).pathname))) ||
+              (/submit/i.test(risk.text) && !risk.searchSubmit) ||
+              ["password","hidden","file","reset"].includes(risk.type) ||
+              ((risk.submits || risk.type==="submit" || risk.type==="image") && !risk.searchSubmit) ||
+              risk.contenteditable) throw new Error("SENSITIVE_ACTION_NEEDS_OWNER");
           await dispatch(()=>page.click(step.selector));break;
         }
         case "type": {
@@ -372,7 +401,7 @@ export class BrowserWorkspace {
     // the explicit scoped session grant throughout their entire execution.
     if(kind==="PAGE_AUDIT"){state.controller="BIG";state.allowGoRead=false;state.grantedHost=null;}
     state.recentRequests=[...(state.recentRequests||[]).slice(-19),{requestId,jobId:job.id}];
-    await this.ctx.storage.put("pending-job",{jobId:job.id,kind,items,index:0,phase:"READY"});
+    await this.ctx.storage.put("pending-job",{jobId:job.id,kind,items,index:0,phase:"READY",accessVersion:state.accessVersion||0});
     await this.save(state);
     await this.ctx.storage.setAlarm(Date.now()+500);
     return {jobId:job.id,status:"RUNNING",total:items.length};
@@ -400,7 +429,8 @@ export class BrowserWorkspace {
       await this.finishJob("UNKNOWN","PREVIOUS_ACTION_OUTCOME_UNKNOWN_NO_REPLAY");
       return;
     }
-    if(pending.kind==="GO_SCRIPT" && (state.controller!=="GO" || !sameGrant(state))) {
+    if(pending.kind==="GO_SCRIPT" && (state.controller!=="GO" || !sameGrant(state) ||
+        (pending.accessVersion||0)!==(state.accessVersion||0))) {
       await this.finishJob("STOPPED","OWNER_GO_GRANT_REVOKED");return;
     }
     pending.phase="DISPATCHING";
@@ -506,11 +536,12 @@ export class BrowserWorkspace {
         try {return reply(await this.beginSession(body));}finally{this.inFlight=false;}
       }
       if(path==="/v1/site-permissions" && role==="BIG") {
-        if(this.inFlight || !["allow","revoke"].includes(body.action) ||
+        if((this.inFlight && body.action!=="revoke") || !["allow","revoke"].includes(body.action) ||
             typeof body.host!=="string")return reply({error:"INVALID_OR_BUSY_PERMISSION_REQUEST"},422);
         // The session owner approves only the tab origin actually on screen.
         if(body.action==="allow")await this.refreshPageAddress(state);
         updateOwnerSitePermission(state,body.action,body.host);
+        if(body.action==="revoke")state.accessVersion=(state.accessVersion||0)+1;
         await this.save(state);
         return reply(sitePermissionsView(state,this.env.GO_ALLOWED_HOSTS));
       }
@@ -521,18 +552,21 @@ export class BrowserWorkspace {
         if(body.allow && !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))
           return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
         state.allowGoRead=body.allow;state.grantedHost=body.allow?new URL(state.url).hostname:null;
+        state.accessVersion=(state.accessVersion||0)+1;
         if(!body.allow && state.controller==="GO") {state.controller="BIG";state.mode="OBSERVE";}
         await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/control" && role==="BIG") {
-        if(this.inFlight)return reply({error:"BUSY"},409);
         const next=body.controller;
         if(!["BIG","GO"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
+        // Taking the browser back never waits for GO's provider preflight.
+        if(this.inFlight && next==="GO")return reply({error:"BUSY"},409);
         if(state.mode==="HEADLESS" && next==="BIG"){
           state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
         }
         if(next==="GO")await this.refreshPageAddress(state);
         if(next==="GO" && !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
+        state.accessVersion=(state.accessVersion||0)+1;
         state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";state.grantedHost=next==="GO"?new URL(state.url).hostname:null;await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/action") {
@@ -571,7 +605,16 @@ export class BrowserWorkspace {
         finally{this.inFlight=false;}
       }
       if(path==="/v1/close" && role==="BIG") {
-        if(this.inFlight)return reply({error:"BUSY"},409);
+        // Revoke first, including while a provider call is pending. A busy or
+        // stopping job still needs an explicit close retry; never report CLOSED
+        // until Browser Run cleanup actually finishes.
+        state.accessVersion=(state.accessVersion||0)+1;
+        state.allowGoRead=false;state.grantedHost=null;state.controller="BIG";
+        if(["RUNNING","STOP_REQUESTED"].includes(state.job?.status)) {
+          state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
+        }
+        await this.save(state);
+        if(this.inFlight)return reply({error:"BUSY",goAccessRevoked:true,closed:false},409);
         this.inFlight=true;
         try{return reply(await this.closeSession(state));}finally{this.inFlight=false;}
       }
@@ -580,6 +623,7 @@ export class BrowserWorkspace {
         if(!st.job || !["RUNNING","STOP_REQUESTED"].includes(st.job.status))
           return reply({error:"NO_ACTIVE_JOB"},409);
         st.allowGoRead=false;st.grantedHost=null;
+        st.accessVersion=(st.accessVersion||0)+1;
         st.controller="BIG";st.status="STOP_REQUESTED";
         if(st.job?.status==="RUNNING")st.job.status="STOP_REQUESTED";
         await this.save(st);
@@ -589,7 +633,7 @@ export class BrowserWorkspace {
     }catch(error) {
       const safe=new Set(["BODY_TOO_LARGE","SESSION_NOT_STARTED","SESSION_UNAVAILABLE","SESSION_CLEANUP_FAILED","EXACT_PAGE_UNAVAILABLE",
         "OBSERVE_GRANT_ORIGIN_MISMATCH","CONTROLLER_MISMATCH","GO_DOMAIN_NOT_ALLOWED","GO_GRANT_ORIGIN_MISMATCH",
-        "SENSITIVE_ACTION_NEEDS_OWNER","PROTECTED_INPUT","HTTPS_PUBLIC_URL_REQUIRED","STOP_JOB_BEFORE_CLOSING",
+        "SENSITIVE_ACTION_NEEDS_OWNER","PROTECTED_INPUT","HTTPS_PUBLIC_URL_REQUIRED","STOP_JOB_BEFORE_CLOSING","OWNER_GO_GRANT_REVOKED",
         "JOB_ALREADY_RUNNING","SCREENSHOT_TOO_LARGE"]);
       return reply({error:safe.has(error?.message)?error.message:"REQUEST_FAILED"},400);
     }
@@ -605,3 +649,4 @@ export class ObservatoryGoBridge extends WorkerEntrypoint {
     return invokeObservatoryGo(this.env,name,args);
   }
 }
+

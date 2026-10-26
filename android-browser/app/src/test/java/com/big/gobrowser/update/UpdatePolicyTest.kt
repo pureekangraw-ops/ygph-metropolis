@@ -15,13 +15,13 @@ class UpdatePolicyTest {
             { update.verify(update.packageName,17,setOf(signer),update.packageName,18,setOf(signer),signer) })
         cases.forEach { assertTrue(runCatching(it).exceptionOrNull() is IllegalArgumentException) }
     }
-    @Test fun candidate20AdvancesKnownVersionsWithoutBypassingEqualOrNewerCheck() {
-        val candidate=update.copy(versionCode=20)
-        for(installed in listOf(17L,18L,19L))
-            candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,20,setOf(signer),sha)
-        for(installed in listOf(20L,21L))
+    @Test fun candidate21AdvancesKnownVersionsWithoutBypassingEqualOrNewerCheck() {
+        val candidate=update.copy(versionCode=21)
+        for(installed in listOf(17L,18L,19L,20L))
+            candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,21,setOf(signer),sha)
+        for(installed in listOf(21L,22L))
             assertTrue(runCatching {
-                candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,20,setOf(signer),sha)
+                candidate.verify(candidate.packageName,installed,setOf(signer),candidate.packageName,21,setOf(signer),sha)
             }.exceptionOrNull() is IllegalArgumentException)
     }
     @Test fun credentialsAndUntrustedUrlsReject() {

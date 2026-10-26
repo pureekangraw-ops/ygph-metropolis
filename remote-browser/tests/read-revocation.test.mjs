@@ -80,3 +80,13 @@ test('planned owner invitation → GO eyes/hands → takeover uses the same auth
  assert.equal((await owner('observe')).status,200);
  assert.equal(f.reads.filter(x=>x==='click').length,1);
 });
+
+test('captured DOM from an earlier invitation is discarded after revoke and reinvite',async()=>{
+ const hold=barrier(),f=fixture({hold,stage:'read'}),pending=f.request('observe');
+ await hold.entered;
+ await f.request('observe-access',{allow:false},'BIG');
+ assert.equal((await f.request('observe-access',{allow:true},'BIG')).status,200);
+ hold.release();const response=await pending;
+ assert.notEqual(response.status,200);assert.doesNotMatch(await response.text(),/PRIVATE_SYNTHETIC_DOM/);
+});
+

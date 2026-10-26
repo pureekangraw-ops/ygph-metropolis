@@ -63,7 +63,7 @@ class DirectConnection<T>(
         val snapshot = synchronized(this) {
             check(canPoll()) { "DIRECT_RECONNECT_REQUIRED" }
             val token = load() ?: error("DIRECT_CONNECTION_NOT_CONFIGURED")
-            // Write ahead: a killed process or a failed write after a 401 must
+            // Write ahead: a killed process or a failed write after an auth rejection must
             // never revive the old credential. No network dispatch before commit.
             activationIncomplete = true
             try { suspendPolling(true) }
@@ -80,7 +80,7 @@ class DirectConnection<T>(
         } catch (e: Exception) {
             synchronized(this) {
                 if (snapshot.first == generation && e !is DirectRequestPersistenceFailure &&
-                    !(e is DirectHttpFailure && e.status == 401)) {
+                    !(e is DirectHttpFailure && e.status in setOf(401, 403))) {
                     // A completed non-auth failure may retry, but only after the
                     // durable guard is cleared. Stale responses cannot clear it.
                     finishRequest()
@@ -117,3 +117,4 @@ fun directSafeError(error: Throwable): String = when {
     error is IllegalArgumentException -> "INVALID_CONNECTION_OR_RESPONSE"
     else -> "CONNECTION_CHECK_FAILED"
 }
+

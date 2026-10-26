@@ -77,6 +77,37 @@ class DirectConnectionTest {
         val result=c.request { token -> assertEquals(candidate,token);receipts++;"receipt-stored" }
         assertEquals("receipt-stored",result);assertEquals(2,reads);assertEquals(1,receipts)
     }
+    @Test fun forbiddenRoleStopsPollingAcrossRestartUntilExplicitValidation() {
+        val d=Disk(old);var calls=0
+        val c=connection(d){calls++;throw DirectHttpFailure(403)}
+        assertThrows(DirectHttpFailure::class.java){c.pending()}
+        c.cancel()
+        assertFalse(c.canPoll());assertTrue(d.blocked);assertEquals(old,d.token)
+        val restored=connection(d){calls++;emptyList()}
+        assertFalse(restored.canPoll())
+        assertThrows(IllegalStateException::class.java){restored.pending()}
+        assertEquals(1,calls)
+        assertTrue(restored.validate(restored.beginValidation(),candidate))
+        assertTrue(restored.canPoll());assertFalse(d.blocked)
+        assertEquals(2,calls);assertEquals(candidate,d.token)
+    }
+    @Test fun forbiddenReceiptRetainsGuardEvenIfLaterStorageWritesFail() {
+        val d=Disk(old);var failWrites=false;var mutations=0
+        fun client()=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic failed disk after role rejection")
+                d.blocked=value
+            },readPending={ _:String -> emptyList<String>() })
+        val first=client()
+        val error=assertThrows(DirectHttpFailure::class.java){first.request {
+            mutations++;failWrites=true;throw DirectHttpFailure(403)
+        }}
+        assertEquals(403,error.status);assertFalse(first.canPoll())
+        val restarted=client()
+        assertFalse(restarted.canPoll())
+        assertThrows(IllegalStateException::class.java){restarted.request {mutations++}}
+        assertEquals(1,mutations);assertEquals(old,d.token)
+    }
     @Test fun activationPersistenceFailureReportsSavedCredentialAndCanRecover() {
         val d=Disk(old,true);var failActivation=true
         val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
@@ -220,3 +251,4 @@ class DirectConnectionTest {
         assertEquals("DEVICE_ROLE_REQUIRED",directSafeError(DirectHttpFailure(403)))
     }
 }
+

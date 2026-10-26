@@ -45,22 +45,36 @@ class OutsideViewFlowTest {
         instrumentation.runOnMainSync {
             val root=rule.activity.window.decorView
             val buttons=views(root).filterIsInstance<Button>()
-            val send=buttons.single {it.text.toString()=="GOVIEW · เลือก Snapshot / ไฟล์ให้ GO"}
+            val send=buttons.single {it.text.toString()=="GO · แชร์ / รับ"}
             val position=IntArray(2);send.getLocationOnScreen(position)
             assertTrue(position[0]>=0&&position[0]+send.width<=root.width)
             assertTrue(send.height>=ObservatoryTheme.dp(rule.activity,48))
             assertTrue(views(root).any {it is org.maplibre.android.maps.MapView&&it.height>=ObservatoryTheme.dp(rule.activity,200)})
         }
-        onView(withText("บันทึกจุด")).perform(click())
+        onView(withText("จุดของฉัน")).perform(click())
+        onView(withText("บันทึกจุดตรงกลางแผนที่")).inRoot(isDialog()).perform(click())
         onView(isAssignableFrom(EditText::class.java)).inRoot(isDialog()).perform(replaceText("Owner flow pin"),closeSoftKeyboard())
         onView(withText("บันทึก")).inRoot(isDialog()).perform(click())
         rendered(store){store.load().state.pins.size==before+1}
         onView(withText("จุดของฉัน")).perform(click())
+        onView(withText("จุดที่บันทึก / โน้ต")).inRoot(isDialog()).perform(click())
         androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.equalTo("Owner flow pin")).inRoot(isDialog()).perform(click())
         onView(withText("ดูบนแผนที่")).inRoot(isDialog()).perform(click())
         rendered(store){store.load().state.focused!=null}
         val focused=store.load().state.focused
         assertTrue(store.load().state.pins.containsKey(focused))
+        // Actual SDK map tap reads the focused rendered pin, without creating a new pin.
+        val revisionBeforeTap=store.load().state.revision
+        onView(isAssignableFrom(org.maplibre.android.maps.MapView::class.java)).perform(click())
+        onView(withText("ยังไม่มีโน้ต")).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()))
+        assertEquals(revisionBeforeTap,store.load().state.revision)
+        onView(withText("เพิ่ม / แก้โน้ต")).inRoot(isDialog()).perform(click())
+        onView(isAssignableFrom(EditText::class.java)).inRoot(isDialog()).perform(replaceText("Owner pin note"),closeSoftKeyboard())
+        onView(withText("บันทึก")).inRoot(isDialog()).perform(click())
+        rendered(store){store.load().state.notes[focused]=="Owner pin note"}
+        onView(isAssignableFrom(org.maplibre.android.maps.MapView::class.java)).perform(click())
+        onView(withText("Owner pin note")).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()))
+        onView(withText("ปิด")).inRoot(isDialog()).perform(click())
         onView(withText("เพิ่มเติม")).perform(click())
         onView(withText("ลองแสดงใหม่")).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(isDisplayed()))
         instrumentation.uiAutomation.takeScreenshot()?.let {image->

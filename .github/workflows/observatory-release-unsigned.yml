@@ -47,7 +47,7 @@ jobs:
           sha256sum app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk > app/build/outputs/release-delivery/SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > app/build/outputs/release-delivery/package.txt
           # This candidate must advance the current owner app without changing its package identity.
-          grep -F "package: name='com.big.gobrowser' versionCode='20' versionName='0.7.4'" app/build/outputs/release-delivery/package.txt
+          grep -F "package: name='com.big.gobrowser' versionCode='21' versionName='0.7.5'" app/build/outputs/release-delivery/package.txt
           # CI must not substitute its ephemeral debug signing identity into a primary release.
           if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk" >/dev/null 2>&1; then
             echo "ERROR: Expected an unsigned primary release APK" >&2
