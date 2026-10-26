@@ -119,4 +119,33 @@ class OutsideViewFlowTest {
         file.delete()
     }
 
+    @Test fun journalUiReadCompletedAfterPauseDoesNotOpenBackgroundUi() {
+        val activity=rule.activity
+        val type=OutsideViewActivity::class.java
+        val queue=type.getDeclaredField("worker").apply {isAccessible=true}.get(activity) as java.util.concurrent.ExecutorService
+        val entered=java.util.concurrent.CountDownLatch(1)
+        val release=java.util.concurrent.CountDownLatch(1)
+        val called=java.util.concurrent.atomic.AtomicBoolean(false)
+        val revision=MapStateStore(activity).load().state.revision
+        var paused=false
+        try {
+            queue.submit {entered.countDown();check(release.await(5,TimeUnit.SECONDS))}
+            assertTrue(entered.await(5,TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                val callback:(MapJournal)->Unit={called.set(true)}
+                type.getDeclaredMethod("withJournal",kotlin.jvm.functions.Function1::class.java).apply {isAccessible=true}.invoke(activity,callback)
+                instrumentation.callActivityOnPause(activity)
+                paused=true
+            }
+            release.countDown()
+            queue.submit {}.get(5,TimeUnit.SECONDS)
+            instrumentation.waitForIdleSync()
+            assertFalse("late read must not launch UI after Activity pause",called.get())
+            assertEquals("background UI read never mutates owner data",revision,MapStateStore(activity).load().state.revision)
+        } finally {
+            release.countDown()
+            if(paused)instrumentation.runOnMainSync {instrumentation.callActivityOnResume(activity)}
+        }
+    }
+
 }

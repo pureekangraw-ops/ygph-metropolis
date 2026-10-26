@@ -78,13 +78,13 @@ class RemoteBrowserActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val switcher = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val switcher = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         switcher.addView(action("🌐 Browser") { toggleNativeChrome() }, weighted())
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
         }, weighted())
         switcher.addView(action("ⓘ Updates") { startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }, weighted())
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         address = EditText(this).apply {
             hint = "https://shop.yggmetro.com/"
             setSingleLine()
@@ -97,7 +97,7 @@ class RemoteBrowserActivity : Activity() {
         row.addView(address, LinearLayout.LayoutParams(0, dp(48), 1f))
         row.addView(action("ไป") { openAddress() }, LinearLayout.LayoutParams(dp(62), dp(48)))
         addressRow = row
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         controls.addView(action("‹") { step("back") }, weighted())
         controls.addView(action("›") { step("forward") }, weighted())
         controls.addView(action("↻") { step("reload") }, weighted())
@@ -163,10 +163,10 @@ class RemoteBrowserActivity : Activity() {
         host.addView(touchBlock, FrameLayout.LayoutParams(-1, -1))
         root.addView(workspace, LinearLayout.LayoutParams(-1, 0, 1f))
         toolbar = workspace.commands
-        val primary = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val primary = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         primary.addView(action("GO · ดู / ทำ") { showGoMenu() }, weighted())
         primary.addView(action("เพิ่มเติม") { showBrowserTools() }, weighted())
-        val safety = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val safety = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         safety.addView(action("✋ ฉันควบคุมเอง") { takeOver() }, weighted())
         safety.addView(action("⏹ หยุด GO") { showStopMenu() }, weighted())
         toolbar.addView(safety)

@@ -44,7 +44,7 @@ jobs:
           apk="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -type f | head -n 1)"
           test -n "$apk" && test -f "$apk"
           cp "$apk" app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk
-          sha256sum app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk > app/build/outputs/release-delivery/SHA256SUMS.txt
+          sha256sum app/build/outputs/release-delivery/YGG-Observatory-Release-UNSIGNED.apk | tee app/build/outputs/release-delivery/SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > app/build/outputs/release-delivery/package.txt
           # This candidate must advance the current owner app without changing its package identity.
           grep -F "package: name='com.big.gobrowser' versionCode='21' versionName='0.7.5'" app/build/outputs/release-delivery/package.txt

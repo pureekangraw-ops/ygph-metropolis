@@ -79,11 +79,11 @@ class OutsideViewActivity : Activity() {
         val workspace=AdaptiveWorkspace(this)
         val host=workspace.canvas
         root.addView(workspace,LinearLayout.LayoutParams(-1,0,1f))
-        val locationAndPins=LinearLayout(this)
+        val locationAndPins=LinearLayout(this).apply {isBaselineAligned=false}
         locationAndPins.addView(button("ตำแหน่งฉัน"){requestMyLocation()},LinearLayout.LayoutParams(0,-2,1f))
         locationAndPins.addView(button("จุดของฉัน"){showPinTools()},LinearLayout.LayoutParams(0,-2,1f))
         workspace.commands.addView(locationAndPins)
-        val goAndMore=LinearLayout(this)
+        val goAndMore=LinearLayout(this).apply {isBaselineAligned=false}
         shareButton=button("GO · แชร์ / รับ"){showMapGoTools()}
         goAndMore.addView(shareButton,LinearLayout.LayoutParams(0,-2,1f))
         goAndMore.addView(button("เพิ่มเติม"){showMapTools()},LinearLayout.LayoutParams(0,-2,1f))
@@ -422,7 +422,7 @@ class OutsideViewActivity : Activity() {
         }.show()
     }
     private fun withJournal(action:(MapJournal)->Unit) {
-        worker.execute {val journal=readJournal()?:return@execute;handler.post {if(!destroyed)action(journal)}}
+        worker.execute {val journal=readJournal()?:return@execute;handler.post {if(!destroyed && foreground && !isFinishing)action(journal)}}
     }
     private fun showPinNote(id:String) {withJournal {journal->
         val pin=journal.state.pins[id]?:return@withJournal

@@ -102,7 +102,12 @@ class RemoteBrowserActivityTest {
                 assertSame(web,all(root).filterIsInstance<WebView>().single())
                 val safety=labels.single {it.text.toString()=="⏹ หยุด GO"}
                 assertTrue(safety.height>=48*density)
-                assertTrue("safety starts within the scrollable panel",safety.top==0)
+                val row=safety.parent as ViewGroup
+                assertSame("safety is the first command group",row,workspace.commands.getChildAt(0))
+                assertEquals(0,row.top)
+                val visible=android.graphics.Rect()
+                assertTrue("safety remains reachable",safety.getGlobalVisibleRect(visible))
+                assertTrue("visible safety touch target",visible.width()>=48*density && visible.height()>=48*density)
             } finally {
                 labels.forEachIndexed {i,v->v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,originalSizes[i])}
                 root.requestLayout()
