@@ -20,9 +20,11 @@ import com.big.gobrowser.outsideview.OutsideViewActivity
 import com.big.gobrowser.transport.AndroidDeviceCredentialStore
 import com.big.gobrowser.transport.StationDiagnostics
 import com.big.gobrowser.transport.StationFailure
+import com.big.gobrowser.transport.StationResponse
 import com.big.gobrowser.transport.StationHttp
 import com.big.gobrowser.ui.ObservatoryTheme
 import com.big.gobrowser.ui.PhoneLayout
+import com.big.gobrowser.ui.AdaptiveWorkspace
 import com.big.gobrowser.ui.ObservatoryBuildStamp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,6 +39,8 @@ import java.util.concurrent.Executors
 class RemoteBrowserActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
+    private val safetyIo = Executors.newFixedThreadPool(2)
+    private val requestEpoch = BrowserRequestEpoch()
     private val credentials by lazy { AndroidDeviceCredentialStore(this,
         "observatory-remote-owner-key", "observatory-remote-owner") }
     private val prefs by lazy { getSharedPreferences("observatory-remote-ui", MODE_PRIVATE) }
@@ -55,6 +59,7 @@ class RemoteBrowserActivity : Activity() {
     private var foreground = false
     private var destroyed = false
     private var busy = false
+    private var safetyPending = 0
     private var session = false
     private var goControls = false
     private var jobId: String? = null
@@ -73,15 +78,13 @@ class RemoteBrowserActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ObservatoryTheme.title(this, "YGG OBSERVATORY · Browser"))
-        val switcher = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val switcher = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         switcher.addView(action("🌐 Browser") { toggleNativeChrome() }, weighted())
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
         }, weighted())
         switcher.addView(action("ⓘ Updates") { startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }, weighted())
-        root.addView(switcher)
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         address = EditText(this).apply {
             hint = "https://shop.yggmetro.com/"
             setSingleLine()
@@ -94,19 +97,16 @@ class RemoteBrowserActivity : Activity() {
         row.addView(address, LinearLayout.LayoutParams(0, dp(48), 1f))
         row.addView(action("ไป") { openAddress() }, LinearLayout.LayoutParams(dp(62), dp(48)))
         addressRow = row
-        root.addView(row)
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         controls.addView(action("‹") { step("back") }, weighted())
         controls.addView(action("›") { step("forward") }, weighted())
         controls.addView(action("↻") { step("reload") }, weighted())
         controls.addView(action("⚙") { openSettings() }, weighted())
         navigationRow = controls
-        root.addView(controls)
         status = ObservatoryTheme.status(this).apply { text = "ยังไม่ได้เชื่อม Cloudflare · แตะ ⚙ เพื่อตั้งค่า" }
         controller = ObservatoryTheme.status(this).apply { text = "ผู้ควบคุม: BIG · ยังไม่มีเซสชัน" }
-        root.addView(status)
-        root.addView(controller)
-        val host = FrameLayout(this)
+        val workspace = AdaptiveWorkspace(this)
+        val host = workspace.canvas
         page = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -161,26 +161,22 @@ class RemoteBrowserActivity : Activity() {
             visibility = View.GONE
         }
         host.addView(touchBlock, FrameLayout.LayoutParams(-1, -1))
-        root.addView(host, LinearLayout.LayoutParams(-1, 0, 1f))
-        toolbar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val assist = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        assist.addView(action("👁 เรียก GO") { inviteGo() }, weighted())
-        assist.addView(action("🖐 ให้ GO ทำ") { grantGo() }, weighted())
-        toolbar.addView(assist)
-        val permissionRow=LinearLayout(this).apply {orientation=LinearLayout.HORIZONTAL}
-        permissionRow.addView(action("🔐 สิทธิ์เว็บไซต์ · GO"){sitePermissionManager()},
-            LinearLayout.LayoutParams(-1,dp(44)))
-        toolbar.addView(permissionRow)
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(action("✋ ฉันควบคุมเอง") { takeOver() }, weighted())
-        actions.addView(action("🌙 เบื้องหลัง") { backgroundMenu() }, weighted())
-        toolbar.addView(actions)
-        val evidence = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        evidence.addView(action("▶ ดูสด") { viewLive() }, weighted())
-        evidence.addView(action("☷ ผลงาน") { showJob() }, weighted())
-        evidence.addView(action("⏹ ปิด") { closeSession() }, weighted())
-        toolbar.addView(evidence)
-        root.addView(toolbar)
+        root.addView(workspace, LinearLayout.LayoutParams(-1, 0, 1f))
+        toolbar = workspace.commands
+        val primary = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
+        primary.addView(action("GO · ดู / ทำ") { showGoMenu() }, weighted())
+        primary.addView(action("เพิ่มเติม") { showBrowserTools() }, weighted())
+        val safety = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
+        safety.addView(action("✋ ฉันควบคุมเอง") { takeOver() }, weighted())
+        safety.addView(action("⏹ หยุด GO") { showStopMenu() }, weighted())
+        toolbar.addView(safety)
+        toolbar.addView(primary)
+        toolbar.addView(switcher)
+        toolbar.addView(addressRow)
+        toolbar.addView(navigationRow)
+        toolbar.addView(controller)
+        toolbar.addView(status)
+        toolbar.addView(ObservatoryTheme.title(this, "YGG OBSERVATORY · Browser"))
         ObservatoryTheme.apply(this, root)
         PhoneLayout.fitSystemBars(root)
         setContentView(root)
@@ -196,15 +192,48 @@ class RemoteBrowserActivity : Activity() {
         val show = addressRow.visibility != View.VISIBLE
         addressRow.visibility = if (show) View.VISIBLE else View.GONE
         navigationRow.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) address.post { address.requestFocus(); address.requestRectangleOnScreen(android.graphics.Rect(0, 0, address.width, address.height)) }
     }
     private fun hideDuplicateChrome() {
         addressRow.visibility = View.GONE
         navigationRow.visibility = View.GONE
     }
-    private fun weighted() = LinearLayout.LayoutParams(0, dp(48), 1f)
+    private fun weighted() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
     private fun action(label: String, click: () -> Unit) = ObservatoryTheme.button(this,label,click).apply {
-        textSize = 12f
-        setPadding(dp(4),0,dp(4),0)
+        textSize = 13f
+        minHeight = dp(48)
+        setPadding(dp(6),dp(6),dp(6),dp(6))
+    }
+    private fun showGoMenu() {
+        AlertDialog.Builder(this).setTitle("GO · Browser")
+            .setItems(arrayOf("👁 เชิญ GO ดู", "🖐 ให้ GO ควบคุม", "อ่านหน้าเว็บ", "🔐 สิทธิ์เว็บไซต์ · GO")) { _, choice ->
+                when (choice) { 0 -> inviteGo(); 1 -> grantGo(); 2 -> readPage(); 3 -> sitePermissionManager() }
+            }.setNegativeButton("ปิด", null).show()
+    }
+    private fun showBrowserTools() {
+        AlertDialog.Builder(this).setTitle("Browser · เพิ่มเติม")
+            .setItems(arrayOf("▶ ดูสด / กู้คืนภาพ", "☷ ผลงาน", "🌙 เบื้องหลัง", "ที่อยู่ / การนำทาง", "⚙ การเชื่อมต่อ", "ⓘ อัปเดตแอป")) { _, choice ->
+                when (choice) {
+                    0 -> viewLive(); 1 -> showJob(); 2 -> backgroundMenu(); 3 -> toggleNativeChrome()
+                    4 -> openSettings()
+                    5 -> startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java))
+                }
+            }.setNegativeButton("ปิด", null).show()
+    }
+    private fun showStopMenu() {
+        AlertDialog.Builder(this).setTitle("หยุด GO / ปิด Browser")
+            .setItems(arrayOf("หยุดงานที่กำลังรอ", "รับการควบคุมกลับ", "เพิกถอนสิทธิ์ GO ดู", "ปิดเซสชัน Browser")) { _, choice ->
+                when (choice) {
+                    0 -> query("POST", "/v1/stop", JSONObject()) { result ->
+                        result.onSuccess { renderSession(it) }.onFailure { status.text = "หยุดไม่ได้ · " + readableError(it) }
+                    }
+                    1 -> takeOver()
+                    2 -> query("POST", "/v1/observe-access", JSONObject().put("allow", false)) { result ->
+                        result.onSuccess { renderSession(it) }.onFailure { status.text = "เพิกถอนไม่ได้ · " + readableError(it) }
+                    }
+                    3 -> closeSession()
+                }
+            }.setNegativeButton("ยกเลิก", null).show()
     }
     private fun configured() = serviceUrl() != null && !credentials.load().isNullOrBlank()
     private fun serviceUrl(): String? = validServiceUrl(prefs.getString("service", null))
@@ -217,10 +246,7 @@ class RemoteBrowserActivity : Activity() {
               host == "yggmetro.com" || host.endsWith(".yggmetro.com"))) return null
         "https://" + host
     }.getOrNull()
-    private fun allowedViewerUrl(url: String): Boolean = runCatching {
-        val u = URI(url)
-        u.scheme == "https" && u.host == "live.browser.run"
-    }.getOrDefault(false)
+    private fun allowedViewerUrl(url: String): Boolean = BrowserResponse.allowedViewerUrl(url)
     private fun validWebUrl(raw: String): String? {
         val text = raw.trim().let { if (it.contains("://")) it else "https://" + it }
         return runCatching {
@@ -524,27 +550,57 @@ class RemoteBrowserActivity : Activity() {
         }
     }
     private fun readableError(t: Throwable): String = StationDiagnostics.safeFailure(t)
-    private fun query(method: String,path: String,body: JSONObject?,onDone:(Result<JSONObject>)->Unit) {
+    private fun query(method: String,path: String,body: JSONObject?,safetyRefresh:Boolean=false,onDone:(Result<JSONObject>)->Unit) {
         val service=serviceUrl()
         val token=credentials.load()
         if(service==null || token.isNullOrBlank()){status.text="ตั้งค่า Worker และ OWNER_TOKEN ก่อน";return}
-        if(busy){status.text="กำลังดำเนินการคำสั่งก่อนหน้า";return}
-        busy=true
+        val safetyMutation=method=="POST" && (
+            path=="/v1/stop" || path=="/v1/close" ||
+            (path=="/v1/control" && body?.optString("controller")=="BIG") ||
+            (path=="/v1/observe-access" && body?.optBoolean("allow",true)==false) ||
+            (path=="/v1/site-permissions" && body?.optString("action")=="revoke"))
+        val safety=safetyMutation||safetyRefresh
+        if((busy||safetyPending>0)&&!safety){status.text="กำลังดำเนินการคำสั่งก่อนหน้า";return}
+        if(!safety)busy=true else safetyPending++
+        val epoch=requestEpoch.begin(safetyMutation)
         val requestId=java.util.UUID.randomUUID().toString()
-        io.execute {
-            val result=runCatching { JSONObject(StationHttp.request(service+path,method,body,token,requestId)).also {
-                if(path=="/v1/view" && !allowedViewerUrl(it.optString("url"))) throw IllegalStateException("LIVE_VIEW_UNAVAILABLE")
-                if (it.has("error")) throw IllegalStateException(StationDiagnostics.safeCode(it.optString("error")) ?: "STATION_REQUEST_FAILED")
-            }}
+        (if(safety)safetyIo else io).execute {
+            // An older queued command must not be sent after takeover/revocation.
+            if(!requestEpoch.current(epoch)) {
+                main.post {if(!safety)busy=false else safetyPending--}
+                return@execute
+            }
+            var response:StationResponse?=null
+            val result=runCatching {
+                val received=StationHttp.requestResponse(service+path,method,body,token,requestId)
+                response=received
+                BrowserResponse.parse(received,path)
+            }
             val key=StationDiagnostics.diagnosticKey(path)
             val failure=result.exceptionOrNull()
             prefs.edit().putString("$key-status", if(result.isSuccess) "REQUEST_SUCCEEDED" else readableError(requireNotNull(failure)))
                 .putString("$key-request-id",requestId)
-                .putBoolean("$key-server-correlated",result.isSuccess || (failure as? StationFailure)?.correlationConfirmed==true)
+                .putBoolean("$key-server-correlated",response?.correlationConfirmed ?: ((failure as? StationFailure)?.correlationConfirmed==true))
                 .putString("$key-time",java.time.Instant.now().toString())
                 .putString("$key-method",method).putString("$key-path",path)
-                .putString("$key-http",(failure as? StationFailure)?.httpStatus?.toString() ?: if(result.isSuccess) "2xx" else "unknown").apply()
-            main.post {busy=false;if(!destroyed)onDone(result)}
+                .putString("$key-http",(failure as? StationFailure)?.httpStatus?.toString() ?: response?.httpStatus?.toString() ?: "unknown").apply()
+            main.post {
+                if(!safety)busy=false else safetyPending--
+                if(!destroyed&&requestEpoch.current(epoch)) {
+                    onDone(result)
+                    // Site revoke/stop responses differ from session responses. Read the real state
+                    // on the safety lane even while an older ordinary request is still waiting.
+                    val httpStatus=(failure as? StationFailure)?.httpStatus ?: response?.httpStatus
+                    if(requestEpoch.needsReadback(safetyMutation,path,result.isSuccess,httpStatus)) {
+                        val originalFailure=if(result.isFailure)status.text.toString() else null
+                        query("GET","/v1/session",null,safetyRefresh=true) {fresh->fresh.onSuccess {
+                            renderSession(it)
+                            // Readback repairs control UI, never upgrades a failed close to CLOSED.
+                            if(originalFailure!=null)status.text=originalFailure
+                        }}
+                    }
+                }
+            }
         }
     }
     override fun onResume(){
@@ -560,5 +616,5 @@ class RemoteBrowserActivity : Activity() {
         navigationRow.visibility = View.VISIBLE
         super.onPause()
     }
-    override fun onDestroy(){destroyed=true;main.removeCallbacks(poll);io.shutdownNow();page.stopLoading();page.destroy();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;main.removeCallbacks(poll);io.shutdownNow();safetyIo.shutdownNow();page.stopLoading();page.destroy();super.onDestroy()}
 }

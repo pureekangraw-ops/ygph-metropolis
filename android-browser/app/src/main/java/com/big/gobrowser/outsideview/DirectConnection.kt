@@ -15,6 +15,7 @@ class DirectConnection<T>(
     @Synchronized fun configured() = !load().isNullOrBlank()
     @Synchronized fun blocked() = activationIncomplete || suspended()
     @Synchronized fun canPoll() = configured() && !blocked() && !validating
+    @Synchronized fun validationInProgress() = validating
     @Synchronized fun beginValidation(): Long { validating = true; return ++generation }
     @Synchronized fun cancel() { generation++; validating = false }
     @Synchronized fun disconnect() { cancel(); revoke(); suspendPolling(false); activationIncomplete = false }
@@ -24,13 +25,24 @@ class DirectConnection<T>(
         try {
             synchronized(this) { if (ticket != generation || !validating) return false }
             require(candidate.length in 20..512 && candidate.all { it > ' ' && it < '\u007f' })
+            synchronized(this) {
+                if (ticket != generation || !validating) return false
+                // Rechecking the saved token can reject the very credential polling
+                // would reuse. Arm before validation too; a different candidate must
+                // not suspend the unrelated working credential on rejection.
+                if (candidate == load()) {
+                    activationIncomplete = true
+                    try { suspendPolling(true) }
+                    catch (_: Exception) { throw DirectRequestPersistenceFailure() }
+                }
+            }
             readPending(candidate)
             synchronized(this) {
                 if (ticket != generation || !validating) return false
                 // These are two durable stores, not an atomic transaction. Never report
                 // a credential rejection after a verified replacement has been saved.
                 activationIncomplete = true
-                try { save(candidate) }
+                try { suspendPolling(true); save(candidate) }
                 catch (_: Exception) { throw DirectActivationIncomplete(false) }
                 try { suspendPolling(false) }
                 catch (_: Exception) { throw DirectActivationIncomplete(true) }
@@ -50,38 +62,52 @@ class DirectConnection<T>(
     fun <R> request(action: (String) -> R): R {
         val snapshot = synchronized(this) {
             check(canPoll()) { "DIRECT_RECONNECT_REQUIRED" }
-            generation to (load() ?: error("DIRECT_CONNECTION_NOT_CONFIGURED"))
+            val token = load() ?: error("DIRECT_CONNECTION_NOT_CONFIGURED")
+            // Write ahead: a killed process or a failed write after an auth rejection must
+            // never revive the old credential. No network dispatch before commit.
+            activationIncomplete = true
+            try { suspendPolling(true) }
+            catch (_: Exception) { throw DirectRequestPersistenceFailure() }
+            generation to token
         }
         try {
             val result = action(snapshot.second)
-            synchronized(this) { check(snapshot.first == generation) { "DIRECT_REQUEST_CANCELLED" } }
+            synchronized(this) {
+                check(snapshot.first == generation) { "DIRECT_REQUEST_CANCELLED" }
+                finishRequest()
+            }
             return result
         } catch (e: Exception) {
             synchronized(this) {
-                if (snapshot.first == generation && e is DirectHttpFailure && e.status == 401) {
-                    // Fail closed in memory before writing persistent suspension.
-                    // If disk fails, never allow this live instance to poll again silently.
-                    activationIncomplete = true
-                    try { suspendPolling(true) }
-                    catch (_: Exception) { throw DirectSuspensionIncomplete() }
+                if (snapshot.first == generation && e !is DirectRequestPersistenceFailure &&
+                    !(e is DirectHttpFailure && e.status in setOf(401, 403))) {
+                    // A completed non-auth failure may retry, but only after the
+                    // durable guard is cleared. Stale responses cannot clear it.
+                    finishRequest()
                 }
             }
             throw e
         }
     }
+    private fun finishRequest() {
+        try { suspendPolling(false) }
+        catch (_: Exception) { throw DirectRequestPersistenceFailure() }
+        activationIncomplete = false
+    }
+
     fun pending(): T = request(readPending)
 }
 
 /** Only this fixed status crosses into UI; never response bodies, URLs or exception messages. */
 /** Saved=true means credential commit succeeded but activation persistence did not.
  * Saved=false means the credential store outcome is uncertain. No secret is retained here.
- * Both require explicit revalidation in this instance; restart follows persisted stores.
+ * Both require explicit revalidation; the guard is committed before credential changes.
  */
 class DirectActivationIncomplete(val credentialSaved: Boolean) : Exception("DIRECT_ACTIVATION_INCOMPLETE")
-class DirectSuspensionIncomplete : Exception("DIRECT_401_SUSPENSION_PERSISTENCE_UNCERTAIN")
+class DirectRequestPersistenceFailure : Exception("DIRECT_REQUEST_PERSISTENCE_UNCERTAIN")
 class DirectHttpFailure(val status: Int) : Exception("DIRECT_HTTP_$status")
 fun directSafeError(error: Throwable): String = when {
-    error is DirectSuspensionIncomplete -> "AUTH_REJECTED_PAUSE_NOT_PERSISTED_RECONNECT"
+    error is DirectRequestPersistenceFailure -> "REQUEST_STORAGE_UNCERTAIN_RECONNECT"
     error is DirectActivationIncomplete && error.credentialSaved -> "CREDENTIAL_SAVED_ACTIVATION_PENDING_RECONNECT"
     error is DirectActivationIncomplete -> "CREDENTIAL_STORAGE_UNCERTAIN_RECONNECT"
     error is DirectHttpFailure && error.status == 401 -> "AUTH_REJECTED_RECONNECT_REQUIRED"
@@ -91,3 +117,4 @@ fun directSafeError(error: Throwable): String = when {
     error is IllegalArgumentException -> "INVALID_CONNECTION_OR_RESPONSE"
     else -> "CONNECTION_CHECK_FAILED"
 }
+

@@ -1,0 +1,59 @@
+# Observatory continuation — 2026-10-26
+
+## Source and dependency decisions
+
+Owner request authorizes source fixes, unsigned builds and scoped tests, including independent review; it does not itself release merge/deploy, credentials, billing or signing guards. Main remains `734a8790948b8e6a1687c4bf32ae492b41d07030`. This candidate continues PR263 `2f81d39c344cb9fddfc2cfb3c4aa5900d4f59fdd`, which already includes Browser PR259/260 and GOVIEW PR261/262. No AGENTS.md exists in the candidate recursive tree. Workspace checkouts were stale; git fetch failed because the configured proxy refused connection. Candidate files were exported through native GitHub at exact blob SHAs, with untouched bytes checked against the recursive tree. No legacy GeckoView or PANTHEON architecture was restored.
+
+Dependency order: reconcile current source/checkpoints → Browser authorization and Direct regressions → adaptive native UI → paired GO typed integration on active PR25 → independent review → exact-head Android build/emulator → artifact provenance/hash → Factory signing handoff → separate physical-device acceptance. Work is split by files; Factory source is read-only in this lane.
+
+## Requirement coverage and current evidence
+
+| Area | Current implementation/evidence | Remaining boundary |
+|---|---|---|
+| Browser ordinary click | policy.mjs and actual DOM control classification in worker.mjs; focus/non-submit and bounded GET search submit allowed; sensitive selectors/password/file/reset/important submit denied | Real invited tab and new deployed Worker |
+| Invitation, view/control, takeover/revoke | accessVersion binds reads/actions/queued jobs to grant generation; latest-state check prevents an awaited grant overwriting newer revoke; takeover and site revoke bypass provider preflight BUSY | Already-dispatched provider effects cannot be recalled |
+| Close, pending/UNKNOWN | Close revokes first and reports BUSY/STOP_JOB_BEFORE_CLOSING until explicit retry finishes actual cleanup; durable DISPATCHING/UNKNOWN no replay preserved | Owner must retry close after work stops; no false CLOSED |
+| Expiry/reconnect/diagnostics | PR259/260 retained; exact target, expiry cleanup, HTTP/correlation and error parsing preserved | Production session recovery and owner phone |
+| Scroll/duplicate chrome | Existing RemoteSwipeScroll and hideDuplicateChrome retained; Issue249 comment6384535018 records owner acceptance on 0.7.2 | New candidate handset acceptance is separate |
+| GOVIEW local state | Existing pin/note/zone/layer/GPS/save/reopen and journal contracts retained; pin tap now opens saved note without writing | Physical GPS, OS lifecycle and saved owner data |
+| GO Direct | Existing validated connection and write-ahead guard retained; HTTP403 now keeps guard like401 across restart; explicit reconnect required | Kotlin tests/build via CI; actual rejected credentials not used |
+| Both typed formats | PR262 exact selected GeoJSON vs Studio contracts retained, independent stores/preview/owner Update/receipt | Runtime activation and GO→Android→GO real readback |
+| GO tools | Separate additive GO candidate on latest PR25, preserving Hub/provider/Factory files; typed read/publish/receipt and bounded public/internal MCP transport | Deployed Hub transport, catalog exposure and service binding not proven |
+| Places/routing | Existing Studio shortest-path graph is local design routing; OSM raster is a basemap | No verified real Places or external routing provider. Do not advertise either as delivered; provider choice/activation remains separate |
+| Adaptive UI | Owner plan Brain48db96d7 revision1 (2026-10-26T02:32:31.577Z): grouped tasks, live canvas, primary safety, separate Studio; commands scroll independently and reflow by measured dp; all21 map actions retained | Emulator tests first; actual split-screen/IME/font/insets on physical device later |
+
+## Tests and review
+
+Browser `node --test --test-isolation=none remote-browser/tests/*.test.mjs`:89 passed. Independent reviewer reproduced and required fixes for stale grant/revoke races; final independent89 passed. Map/DOM/typed bridge combined61 passed. Paired GO suite101 passed with GOVIEW_CONTRACT_ROOT selecting this candidate's actual Worker/adapter, zero skips. Reviewer found both public MCP and source app MCP size mismatches; both fixed with exact1MiB escaped payload and deny/overflow regressions. Existing suites overlap; counts must not be added into one total. Android/Kotlin build and runtime evidence must be taken from the exact published head; no local SDK/compiler exists here. New BrowserRequestEpoch unit tests and adaptive/menu/pin-note instrumentation are included, not yet claimed executed.
+
+Live read-only Browser status at2026-10-26T11:10:05Z: CONNECTED but LOCKED/OWNER_INVITATION_REQUIRED, no sessionId and no observe grant. No page/action was attempted. Current host exposes no GOVIEW tools. Neither connected status nor fixture results prove live activation.
+
+## Existing APK and new unsigned candidate
+
+Existing0.7.4/code20 source2f81d39, unsigned run40188657718/artifact12596477876: unsigned44,255,303bytes SHA256`f07e6bd7d3dcf141db0c9555f7908b686b5aafb3d628a9c471ff0017567de32c`. Factory PR53 document `docs/observatory-074-real-owner-signing-proof-20261026.md` records signed44,263,995bytes SHA256`753dbdc527d28cc4ccad3195606ecf5d94dc9350bfd13152d29b55d39ba83339`, official v2/v3 and zipalign verification, historical public certificate SHA256`31bf91b925558771a03bdc81d258cd4d1024a3bb48702bb08534f216e88d0624`. This lane read the public source receipt, not private keys or signed bytes. Physical installation/data acceptance remains unproven.
+
+New fixes intentionally advance to0.7.5/code21: the strict updater rejects equal20 and the signed074 candidate already exists. Package remains com.big.gobrowser. No signer/key/migration/storage permission changes; no private-key operations, uninstall, data clearing, release unlock or live deploy. Existing unsigned release workflow must publish exact new source SHA/run/APK hash. Never relabel074 bytes as the new build. Factory remains sole Assembly/Signing executor for any new signed receipt.
+
+## Release/rollback and physical acceptance
+
+Until existing merge/deploy authorization is positively established, keep the candidate draft and preserve production/main. Rollback before release is to retain the existing deployed Worker/app and unsigned/signed074 artifacts. After an installed code21, do not downgrade or uninstall to restore code20; use a compatible higher-version corrective build with the existing signer and retained data. Browser Worker rollback must preserve state schema/default accessVersion0 and exact current binding topology; no credential changes.
+
+Handset acceptance: first independently inspect installed package/version/certificate and compare with the Factory signed receipt; install in-place only after compatibility; retain saved maps/notes/layers. Then verify invited Browser read→grant→ordinary click/type/scroll→takeover→revoke→regrant rejects old commands→close/recovery, and both map formats selected upload→GO exact digest→proposal→Android preview(no write)→owner Update→durable save→restart/reopen→device receipt→GO readback. GPS grant/deny/revoke/stale/continuous notification stop, real keyboard/split resize/font2/insets, and menu/pin-note usability need actual phone evidence. Emulator or CI cannot close these gates.
+
+## First exact-head runtime correction
+
+PR264 first head7adec66 built unsigned successfully (run40314210093/artifact12646865226), and JVM/lint/instrumentation compilation passed (run40314210092). Emulator job121544218419 failed two cases: an exactButton.top assertion was invalid under large-text baseline alignment; and GoviewStorageFailureTest left worker reads queued while deleting its synthetic journal, leading to an unattached Activity note dialog crash during a later Studio test. The next head disables baseline alignment in command rows, verifies the first safety group and visible48dp target instead of a fixed text baseline, fences fixture work before cleanup, and suppresses journal UI callbacks after pause/finish. A real Activity pause barrier regression verifies no late callback or data mutation. This is a correction/retest, not removal of the failed behavior. The first head/artifact is superseded and must not be signed as the final candidate.
+
+Artifact ZIP metadata digest for the first head is e0186318af5732e561fa74770e8c2fdb2f9e8de397e91d1356105ef8e65dd8a0. Native GitHub returned a File Service reference, but local retrieval through its temporary URL returned403, including the refreshed attempt; no further retry or alternate bypass is used. The final unsigned producer now prints its APK SHA256 with tee, so public native job logs and artifact provenance can supply the producer digest. ZIP digest and APK digest remain explicitly distinct; independent local byte inspection is not claimed.
+
+## Executable typed cross-runtime proof
+
+The e9d9086 checkpoint passed all exact-head checks including emulator and both original B2E process phases. Those original B2E phases still explicitly mark live Upload/Download BLOCKED, so their local-file proof is not promoted to full typed delivery. The continued candidate adds a host-only loopback fixture using actual pinned GO7ca2f268 goviewDirect, real GOVIEW Worker/go-adapter and Android typed codecs/selected store/Studio approval and AtomicFile save. Two explicit instrumentation phases retain fixture storage across an actual Android force-stop/new PID. They cover selected minimized upload/read/proposal, preview without mutation, explicit approval/durable receipt/GO readback, duplicate/reopen and separate Studio exact-byte approval/readback. The test transport is a synthetic loopback Socket implementation of the native interface; production HTTPS client, real Hub, credentials, service bindings and phone are not exercised or weakened. The host rejects non-emulator targets and skipped/missing phases, records source hashes, cleans adb reverse and fixture process.
+
+A separate close409 UI correction reads back real session state on the safety lane when close already revoked GO but returns BUSY, retaining the original failure diagnostic. It does not retry401/403 or claim CLOSED before cleanup.
+
+## Studio production receipt gap closed in source
+
+Independent review correctly rejected a test-only synthesized Studio receipt as evidence of a production rail. The native Studio now has a narrow typed download coordinator and explicit receipt/report retry controls alongside legacy downloadExact. It persists the exact immutable envelope and a compatible download receipt, invokes the existing owner preview/Update path, and derives SAVED only after native approval receipt and actual AtomicFile map bytes independently match identity/version/hash. Receipt retry does not call save/Update; duplicate download preserves existing approval evidence. Fault tests cover unapproved/changed/missing bytes, immutable conflicts and lost-ack retry. The cross-runtime test now invokes these production download/report methods, with actual native owner approval. Production HTTPS client/credentials and actual Hub remain separately untested.
+
+Read-only independent Hub inspection found a separate response-size boundary: canonical Hub src/net.js limitedText and src/protocols.js mcpResult/SSE default to1048576 bytes. A maximum-size typed payload plus envelope/escaping can exceed this after the GO entrypoint fixes. No Hub source was changed from this lane. Hub owner must review a narrow GOVIEW response allowance and test actual transport; the loopback fixture deliberately is not proof of the real Hub path or its1MiB boundary. This dependency remains open even when small synthetic transfers and Android receipt readback pass.

@@ -18,8 +18,8 @@ class DirectConnectionTest {
         val d=Disk(old);var calls=0
         val c=connection(d){assertEquals(old,d.token);calls++;listOf("must-not-apply")}
         val ticket=c.beginValidation()
-        assertFalse(c.canPoll())
-        assertTrue(c.validate(ticket,candidate))
+        assertFalse(c.canPoll());assertTrue(c.validationInProgress())
+        assertTrue(c.validate(ticket,candidate));assertFalse(c.validationInProgress())
         assertEquals(candidate,d.token);assertEquals(1,calls);assertTrue(c.canPoll())
         // validate returns only Boolean: there is no proposal/receipt dispatch callback.
     }
@@ -27,6 +27,20 @@ class DirectConnectionTest {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(401)}
         assertThrows(DirectHttpFailure::class.java){c.validate(c.beginValidation(),candidate)}
         assertEquals(old,d.token);assertFalse(d.blocked);assertTrue(c.canPoll())
+    }
+    @Test fun sameSavedCandidateRejectionBlocksCurrentAndRestartedClient() {
+        val d=Disk(old);var failWrites=false;var calls=0
+        val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic failed write after validation rejection")
+                d.blocked=value
+            },readPending={ _:String -> calls++;failWrites=true;throw DirectHttpFailure(401) })
+        assertThrows(DirectHttpFailure::class.java){c.validate(c.beginValidation(),old)}
+        assertFalse(c.canPoll());assertEquals(old,d.token)
+        val restored=connection(d){calls++;emptyList()}
+        assertFalse(restored.canPoll())
+        assertThrows(IllegalStateException::class.java){restored.pending()}
+        assertEquals(1,calls)
     }
     @Test fun failurePreservesPreviouslySuspendedState() {
         val d=Disk(old,true);val c=connection(d){throw DirectHttpFailure(403)}
@@ -63,11 +77,42 @@ class DirectConnectionTest {
         val result=c.request { token -> assertEquals(candidate,token);receipts++;"receipt-stored" }
         assertEquals("receipt-stored",result);assertEquals(2,reads);assertEquals(1,receipts)
     }
+    @Test fun forbiddenRoleStopsPollingAcrossRestartUntilExplicitValidation() {
+        val d=Disk(old);var calls=0
+        val c=connection(d){calls++;throw DirectHttpFailure(403)}
+        assertThrows(DirectHttpFailure::class.java){c.pending()}
+        c.cancel()
+        assertFalse(c.canPoll());assertTrue(d.blocked);assertEquals(old,d.token)
+        val restored=connection(d){calls++;emptyList()}
+        assertFalse(restored.canPoll())
+        assertThrows(IllegalStateException::class.java){restored.pending()}
+        assertEquals(1,calls)
+        assertTrue(restored.validate(restored.beginValidation(),candidate))
+        assertTrue(restored.canPoll());assertFalse(d.blocked)
+        assertEquals(2,calls);assertEquals(candidate,d.token)
+    }
+    @Test fun forbiddenReceiptRetainsGuardEvenIfLaterStorageWritesFail() {
+        val d=Disk(old);var failWrites=false;var mutations=0
+        fun client()=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic failed disk after role rejection")
+                d.blocked=value
+            },readPending={ _:String -> emptyList<String>() })
+        val first=client()
+        val error=assertThrows(DirectHttpFailure::class.java){first.request {
+            mutations++;failWrites=true;throw DirectHttpFailure(403)
+        }}
+        assertEquals(403,error.status);assertFalse(first.canPoll())
+        val restarted=client()
+        assertFalse(restarted.canPoll())
+        assertThrows(IllegalStateException::class.java){restarted.request {mutations++}}
+        assertEquals(1,mutations);assertEquals(old,d.token)
+    }
     @Test fun activationPersistenceFailureReportsSavedCredentialAndCanRecover() {
         val d=Disk(old,true);var failActivation=true
         val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
             suspended={d.blocked},suspendPolling={ value ->
-                if(failActivation)throw IllegalStateException("synthetic storage error")
+                if(failActivation && !value)throw IllegalStateException("synthetic storage error")
                 d.blocked=value
             },readPending={ _:String -> listOf("synthetic-command") })
         val failure=assertThrows(DirectActivationIncomplete::class.java){
@@ -77,6 +122,7 @@ class DirectConnectionTest {
         assertEquals("CREDENTIAL_SAVED_ACTIVATION_PENDING_RECONNECT",directSafeError(failure))
         assertTrue(c.blocked());assertFalse(c.canPoll())
         c.cancel();assertFalse(c.canPoll())
+        assertFalse(connection(d){emptyList()}.canPoll())
         failActivation=false
         assertTrue(c.validate(c.beginValidation(),candidate))
         assertEquals(listOf("synthetic-command"),c.pending());assertFalse(c.blocked())
@@ -90,34 +136,68 @@ class DirectConnectionTest {
         assertFalse(failure.credentialSaved);assertEquals(old,d.token);assertFalse(c.canPoll())
         assertEquals("CREDENTIAL_STORAGE_UNCERTAIN_RECONNECT",directSafeError(failure))
     }
-    @Test fun failed401SuspensionWriteBlocksCurrentInstanceUntilOwnerReconnect() {
+    @Test fun uncertainCredentialSaveCannotActivateAfterRestart() {
         val d=Disk(old)
-        var calls=0
-        val c=DirectConnection(
-            load={d.token}, save={d.token=it}, revoke={d.token=null},
-            suspended={d.blocked},
-            suspendPolling={ paused ->
-                if(paused)throw IllegalStateException("synthetic disk write failed")
-                d.blocked=paused
-            },
-            readPending={ token:String ->
-                calls++
-                if(token==old)throw DirectHttpFailure(401)
-                emptyList<String>()
-            }
-        )
-        val error=assertThrows(DirectSuspensionIncomplete::class.java) { c.pending() }
-        assertEquals("AUTH_REJECTED_PAUSE_NOT_PERSISTED_RECONNECT",directSafeError(error))
-        assertFalse(d.blocked) // The durable write did not happen.
-        assertTrue(c.blocked()) // This live instance fails closed regardless.
-        assertFalse(c.canPoll())
-        assertThrows(IllegalStateException::class.java) { c.pending() }
-        assertEquals(1,calls) // Never retry rejected credentials silently.
-        assertTrue(c.validate(c.beginValidation(),candidate))
-        assertFalse(c.blocked())
-        assertTrue(c.canPoll())
-        assertEquals(2,calls) // Explicit validation is the only retry.
+        val c=DirectConnection(load={d.token},save={d.token=it;error("synthetic ambiguous save")},
+            revoke={d.token=null},suspended={d.blocked},suspendPolling={d.blocked=it},
+            readPending={ _:String -> emptyList<String>() })
+        assertThrows(DirectActivationIncomplete::class.java){c.validate(c.beginValidation(),candidate)}
+        assertEquals(candidate,d.token)
+        val restored=connection(d){emptyList()}
+        assertFalse(restored.canPoll())
+        assertTrue(restored.validate(restored.beginValidation(),candidate))
+        assertTrue(restored.canPoll())
     }
+    @Test fun failedWriteAheadGuardNeverDispatchesAndRequiresExplicitReconnect() {
+        val d=Disk(old);var calls=0;var failWrites=true
+        val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic disk failure")
+                d.blocked=value
+            },readPending={ _:String -> calls++;emptyList<String>() })
+        val failure=assertThrows(DirectRequestPersistenceFailure::class.java){c.pending()}
+        assertEquals("REQUEST_STORAGE_UNCERTAIN_RECONNECT",directSafeError(failure))
+        assertFalse(c.canPoll());assertEquals(0,calls);assertEquals(old,d.token)
+        assertThrows(IllegalStateException::class.java){c.pending()}
+        failWrites=false
+        assertTrue(c.validate(c.beginValidation(),candidate))
+        assertTrue(c.canPoll());assertEquals(1,calls)
+    }
+    @Test fun interruptedRequestLeavesDurableGuardWithoutDeletingCredential() {
+        val d=Disk(old)
+        val c=connection(d){
+            assertFalse(connection(d){emptyList()}.canPoll())
+            throw AssertionError("synthetic process death")
+        }
+        assertThrows(AssertionError::class.java){c.pending()}
+        assertFalse(connection(d){emptyList()}.canPoll());assertEquals(old,d.token)
+    }
+    @Test fun failedCompletionWriteSurvivesRestartAndDoesNotReplayReceipt() {
+        val d=Disk(old);var mutations=0
+        val c=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(!value)error("synthetic completion failure")
+                d.blocked=value
+            },readPending={ _:String -> emptyList<String>() })
+        assertThrows(DirectRequestPersistenceFailure::class.java){c.request {mutations++;"synthetic-receipt"}}
+        assertFalse(connection(d){emptyList()}.canPoll());assertEquals(1,mutations)
+    }
+    @Test fun failedWritesAfter401AndProcessRestartNeverReuseRejectedCredential() {
+        val d=Disk(old);var failWrites=false;var calls=0
+        fun client()=DirectConnection(load={d.token},save={d.token=it},revoke={d.token=null},
+            suspended={d.blocked},suspendPolling={value ->
+                if(failWrites)error("synthetic failed disk")
+                d.blocked=value
+            },readPending={ _:String -> calls++;failWrites=true;throw DirectHttpFailure(401) })
+        val first=client()
+        assertTrue(runCatching {first.pending()}.isFailure)
+        // Discard the entire coordinator, retaining only synthetic durable bytes.
+        val restarted=client()
+        assertFalse(restarted.canPoll())
+        assertThrows(IllegalStateException::class.java){restarted.pending()}
+        assertEquals(1,calls);assertEquals(old,d.token)
+    }
+
     @Test fun temporaryFailureDoesNotPermanentlySuspend() {
         val d=Disk(old);val c=connection(d){throw DirectHttpFailure(503)}
         assertThrows(DirectHttpFailure::class.java){c.pending()}
@@ -155,6 +235,7 @@ class DirectConnectionTest {
         val d=Disk(old);lateinit var c:DirectConnection<List<String>>
         c=connection(d){c.cancel();listOf("stale-command")}
         assertThrows(IllegalStateException::class.java){c.pending()}
+        assertFalse(connection(d){emptyList()}.canPoll())
     }
     @Test fun disconnectDuringValidationCannotRestoreCredential() {
         val d=Disk(old);lateinit var c:DirectConnection<List<String>>
@@ -170,3 +251,4 @@ class DirectConnectionTest {
         assertEquals("DEVICE_ROLE_REQUIRED",directSafeError(DirectHttpFailure(403)))
     }
 }
+

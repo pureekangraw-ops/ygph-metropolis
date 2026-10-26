@@ -161,6 +161,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Checkout pinned GO typed adapter for cross-runtime proof
+        uses: actions/checkout@v5
+        with:
+          repository: pureekangraw-ops/Go-Together
+          ref: 7ca2f26890ece1b8ab0d24ceb52a655ef52bcf84
+          path: .goview-go-contract
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -172,6 +181,8 @@ jobs:
         run: |
           sudo chmod 666 /dev/kvm
       - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOVIEW_GO_ADAPTER: ${{ github.workspace }}/.goview-go-contract/worker/goview-direct.mjs
         with:
           api-level: 35
           arch: x86_64

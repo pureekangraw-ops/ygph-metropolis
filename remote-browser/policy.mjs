@@ -24,7 +24,12 @@ export function allowedAction(action) {
   if (operation === "navigate") return !!validPageUrl(action.url);
   if (["click", "type"].includes(operation)) {
     if (typeof action.selector !== "string" || action.selector.length > 150 || !/^[a-zA-Z0-9_#.\[\]="':*()\- >+~,]+$/.test(action.selector)) return false;
-    if (/password|submit|delete|remove|purchase|pay|confirm|checkout|token|otp|secret|transfer|withdraw/i.test(action.selector)) return false;
+    // A submit selector may be an ordinary search. Classify that actual
+    // control in the page; retain the existing other sensitive-selector guards.
+    const protectedSelector=operation==="click"
+      ? /password|delete|remove|purchase|pay|confirm|checkout|token|otp|secret|transfer|withdraw/i
+      : /password|submit|delete|remove|purchase|pay|confirm|checkout|token|otp|secret|transfer|withdraw/i;
+    if (protectedSelector.test(action.selector)) return false;
   }
   if (operation === "type" && (typeof action.value !== "string" || action.value.length > 500)) return false;
   if (operation === "scroll" && (!Number.isFinite(action.y) || Math.abs(action.y) > 1800)) return false;
@@ -34,3 +39,4 @@ export function cleanStep(step) {
   if (!allowedAction(step)) throw new Error("ACTION_NOT_ALLOWED");
   return { type:step.type, url:step.url, selector:step.selector, value:step.value, y:step.y };
 }
+
