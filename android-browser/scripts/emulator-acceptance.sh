@@ -28,6 +28,10 @@ if [ "$status" -eq 0 ]; then
   bash scripts/goview-b2e-emulator.sh
   status=$?
 fi
+if [ "$status" -eq 0 ]; then
+  bash scripts/goview-typed-emulator.sh
+  status=$?
+fi
 if [ "$status" -ne 0 ]; then
   grep -E '(FAILURES|There were failing tests|FAILED|Exception|AssertionError|Process crashed|Test run failed|No tests found|INSTRUMENTATION_STATUS: stack)' app/build/emulator-evidence/emulator-test.log | tail -n 80 | while IFS= read -r line; do
     safe="${line//'%'/'%25'}"

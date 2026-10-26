@@ -40,4 +40,15 @@ class BrowserRequestEpochTest {
         assertFalse(epochs.current(stop))
         assertTrue(epochs.current(close))
     }
+    @Test fun closeBusyRefreshesRevokedControlWithoutRetryingUnauthorizedFailures() {
+        val epochs=BrowserRequestEpoch()
+        assertTrue(epochs.needsReadback(true,"/v1/close",false,409))
+        assertTrue(epochs.needsReadback(true,"/v1/stop",true,200))
+        for(status in listOf(401,403,404,500))
+            assertFalse("failure $status must not issue another authenticated request",epochs.needsReadback(true,"/v1/close",false,status))
+        assertFalse(epochs.needsReadback(true,"/v1/control",false,409))
+        assertFalse(epochs.needsReadback(false,"/v1/close",false,409))
+        assertFalse(epochs.needsReadback(false,"/v1/session",true,200))
+    }
+
 }

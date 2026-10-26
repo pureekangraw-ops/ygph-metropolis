@@ -590,8 +590,15 @@ class RemoteBrowserActivity : Activity() {
                     onDone(result)
                     // Site revoke/stop responses differ from session responses. Read the real state
                     // on the safety lane even while an older ordinary request is still waiting.
-                    if(safetyMutation&&result.isSuccess)
-                        query("GET","/v1/session",null,safetyRefresh=true) {fresh->fresh.onSuccess {renderSession(it)}}
+                    val httpStatus=(failure as? StationFailure)?.httpStatus ?: response?.httpStatus
+                    if(requestEpoch.needsReadback(safetyMutation,path,result.isSuccess,httpStatus)) {
+                        val originalFailure=if(result.isFailure)status.text.toString() else null
+                        query("GET","/v1/session",null,safetyRefresh=true) {fresh->fresh.onSuccess {
+                            renderSession(it)
+                            // Readback repairs control UI, never upgrades a failed close to CLOSED.
+                            if(originalFailure!=null)status.text=originalFailure
+                        }}
+                    }
                 }
             }
         }
