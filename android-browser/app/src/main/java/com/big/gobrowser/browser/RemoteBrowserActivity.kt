@@ -220,11 +220,12 @@ class RemoteBrowserActivity : Activity() {
     }
     private fun showBrowserTools() {
         AlertDialog.Builder(this).setTitle("Browser · เพิ่มเติม")
-            .setItems(arrayOf("▶ ดูสด / กู้คืนภาพ", "☷ ผลงาน", "🌙 เบื้องหลัง", "ที่อยู่ / การนำทาง", "⚙ การเชื่อมต่อ", "ⓘ อัปเดตแอป")) { _, choice ->
+            .setItems(arrayOf("▶ ดูสด / กู้คืนภาพ", "☷ ผลงาน", "🌙 เบื้องหลัง", "ที่อยู่ / การนำทาง", "⚙ การเชื่อมต่อ", "ⓘ อัปเดตแอป", "🏭 Standalone Workroom")) { _, choice ->
                 when (choice) {
                     0 -> viewLive(); 1 -> showJob(); 2 -> backgroundMenu(); 3 -> toggleNativeChrome()
                     4 -> openSettings()
                     5 -> startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java))
+                    6 -> startActivity(Intent(this, StandaloneWorkplaceActivity::class.java))
                 }
             }.setNegativeButton("ปิด", null).show()
     }

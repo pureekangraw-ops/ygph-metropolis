@@ -33,6 +33,22 @@ class RemoteBrowserActivityTest {
         assertEquals("https://observatory-web.pureekangraw.workers.dev/", RemoteBrowserActivity.OBSERVATORY_WEB_MAP_URL)
         assertTrue(UrlPolicy.isAllowed(RemoteBrowserActivity.OBSERVATORY_WEB_MAP_URL))
     }
+    @Test fun standaloneWorkplaceIsAvailableOnlyAsAnOwnerOpenedFirstPartyScreen() {
+        assertEquals("https://factory-district-standalone.pureekangraw.workers.dev/",
+            StandaloneWorkplacePolicy.URL)
+        assertTrue(StandaloneWorkplacePolicy.allowsUrl(StandaloneWorkplacePolicy.URL))
+        runCatching {
+            androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("ยกเลิก"))
+                .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                .perform(androidx.test.espresso.action.ViewActions.click())
+        }
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("เพิ่มเติม"))
+            .perform(androidx.test.espresso.action.ViewActions.click())
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("🏭 Standalone Workroom"))
+            .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+            .check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()))
+        androidx.test.espresso.Espresso.pressBack()
+    }
     @Test fun groupedMenusKeepControlRecoveryAndBackgroundReachable() {
         // A fresh app opens connection settings; dismiss only that UI before exercising controls.
         runCatching {

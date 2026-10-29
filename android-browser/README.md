@@ -1,11 +1,13 @@
 # YGG Observatory — Android Browser + GOVIEW
 
-The Android application exposes exactly two modes, Browser and GOVIEW. The new Browser launcher is RemoteBrowserActivity; target websites run in Cloudflare Browser Run, not GeckoView or an on-device website WebView. Android WebView here only renders the hosted Live View.
+The Android application exposes two core modes, Browser and GOVIEW, plus a dedicated first-party Standalone Workroom screen. Browser is RemoteBrowserActivity; target websites run in Cloudflare Browser Run, not GeckoView or an on-device website WebView. Android WebView in Browser mode only renders the hosted Live View.
 
 ## Browser Mode
 The Browser header has address input, navigation, a **Web Map** shortcut to `https://observatory-web.pureekangraw.workers.dev/`, Observe / invite GO, grant GO control, owner takeover, headless audit, and job receipts. The shortcut opens the map inside the owner-initiated Cloudflare Browser Run session, not an on-device website WebView. The Web Map's pins remain in that remote browser's local storage; they do not automatically sync with native GOVIEW records.
 
 The **Updates** section is available from Browser and GOVIEW. It checks an owner-configured HTTPS manifest, verifies package identity, version, SHA-256, and signing certificate, then asks for Android's installer consent. It does not silently install updates. Production signing and a release manifest must be configured and verified before app updates can be delivered.
+
+The **Standalone Workroom** entry opens the Factory District PWA in a separate WebView restricted to its configured HTTPS host. Its task/design `localStorage` is local to that WebView and does not sync with Chrome or another device. The existing PWA handoff/import preview remains the source of truth: JSON handoffs and backups, plus SVG/PNG design exports, are written only after the owner chooses a destination in Android's document picker. JSON import uses the platform picker and the PWA still requires owner preview/confirmation before applying results. The bridge imposes a 4 MiB ceiling and accepts only validated JSON, passive SVG, and PNG data; it grants no general filesystem access. This is file-mediated transfer, not live sync or Cloudflare API access.
 
 The owner may hide the view while a cloud job works. API session and GO permissions are enforced in a standalone Cloudflare Worker with a Durable Object. The owner token is encrypted in Android Keystore and the UI only accepts HTTPS on workers.dev or yggmetro.com. Without the Worker configured the app shows an explicit setup dialog; GOVIEW stays reachable.
 
