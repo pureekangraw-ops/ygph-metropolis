@@ -7,8 +7,8 @@ This repository contains **Observatory only**.
 - `android-browser/` — standalone Android Observatory app with Cloudflare shared Browser and native/offline GOVIEW, including tests, docs, and build scripts.
 - `remote-browser/` — Cloudflare Browser Run session, invitation/control/revoke and bounded GO tools. Android WebView displays its Live View; GeckoView is historical.
 - `goview-package-bridge/` — existing typed selected GeoJSON/Studio transport, with separate role and receipt contracts.
-- `observatory-web/worker.mjs` — local-first Observatory map Cloudflare Worker.
-- `tests/greenfield-observatory-web.test.cjs` — Observatory Web regression tests.
+- `observatory-web/worker.mjs` — local-first Observatory map Cloudflare Worker with browser-friendly pin editing and preview-first GeoJSON Point import. Imports remain in browser-local storage; no map upload/sync is added.
+- `tests/greenfield-observatory-web.test.cjs`, `tests/geojson-import.test.cjs` — Observatory Web and GeoJSON import regression tests.
 - `.github/workflows/android-browser.yml` — Android CI and emulator acceptance.
 - `.github/workflows/observatory-web.yml` — Web smoke tests.
 - `docs/superpowers/*observatory*` — Observatory engineering design history.
@@ -16,6 +16,8 @@ This repository contains **Observatory only**.
 ## Test
 
 Run `npm test` for local Node-based tests. Run `cd android-browser && gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` with Android SDK and Gradle installed. Android emulator acceptance runs in CI.
+
+GeoJSON Web Map import behavior and limits: `docs/observatory-web-map-geojson-import.md`.
 
 Current integration and release boundaries: `docs/reviews/observatory-completion-20261026.md` and `docs/reviews/observatory-backlog-inventory-20261026.md`. Source/build/emulator proof is separate from live activation, signing, in-place installation and physical-device acceptance. Map Studio stays a separate design workspace; external Places/routing providers are not yet implemented.
 

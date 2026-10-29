@@ -29,6 +29,14 @@ test('Observatory Web Map serves safe HTML with parseable client code', async ()
   assert.match(html, /OpenStreetMap/);
   assert.match(html, /localStorage/);
   assert.match(html, /GeoJSON/);
+  assert.match(html, /id="geojson-file"/);
+  assert.match(html, /ตรวจสอบและแสดงตัวอย่าง/);
+  assert.match(html, /id="geojson-apply"[^>]*disabled/);
+  assert.match(html, /id="pin-lat"[^>]*aria-label="ละติจูด"/);
+  assert.match(html, /pageSize=25/);
+  assert.match(html, /const planGeoJSONMerge=/);
+  assert.match(html, /file!==importFile.files/);
+  assert.match(html, /เก็บไว้เฉพาะในเบราว์เซอร์นี้/);
   assert.match(html, /เฉพาะในเบราว์เซอร์นี้/);
   const inline = html.split('<script>')[1]?.split('</script>')[0];
   assert.ok(inline);
