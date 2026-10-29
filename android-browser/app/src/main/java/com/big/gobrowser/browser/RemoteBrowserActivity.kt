@@ -37,6 +37,10 @@ import java.util.concurrent.Executors
  * No GeckoRuntime or GeckoView is instantiated or packaged.
  */
 class RemoteBrowserActivity : Activity() {
+    companion object {
+        const val OBSERVATORY_WEB_MAP_URL = "https://observatory-web.pureekangraw.workers.dev/"
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val safetyIo = Executors.newFixedThreadPool(2)
@@ -82,6 +86,10 @@ class RemoteBrowserActivity : Activity() {
         switcher.addView(action("🌐 Browser") { toggleNativeChrome() }, weighted())
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
+        }, weighted())
+        switcher.addView(action("◉ Web Map") {
+            address.setText(OBSERVATORY_WEB_MAP_URL)
+            openAddress()
         }, weighted())
         switcher.addView(action("ⓘ Updates") { startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }, weighted())
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }

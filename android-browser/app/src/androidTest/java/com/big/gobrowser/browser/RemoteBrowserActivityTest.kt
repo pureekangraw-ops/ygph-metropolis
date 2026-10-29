@@ -23,9 +23,15 @@ class RemoteBrowserActivityTest {
         val labels=views.filterIsInstance<TextView>().map{it.text.toString()}
         assertTrue(labels.any{it.contains("GOVIEW")})
         assertTrue(labels.any{it.contains("Browser")})
+        assertTrue(labels.any{it.contains("Web Map")})
+        assertTrue(labels.any{it.contains("Updates")})
         assertTrue(labels.any{it.contains("GO")})
         assertTrue(labels.any{it.contains("ฉันควบคุมเอง")})
         assertTrue(labels.any{it.contains("หยุด GO")})
+    }
+    @Test fun observatoryWebMapShortcutUsesThePublishedHttpsRoute() {
+        assertEquals("https://observatory-web.pureekangraw.workers.dev/", RemoteBrowserActivity.OBSERVATORY_WEB_MAP_URL)
+        assertTrue(UrlPolicy.isAllowed(RemoteBrowserActivity.OBSERVATORY_WEB_MAP_URL))
     }
     @Test fun groupedMenusKeepControlRecoveryAndBackgroundReachable() {
         // A fresh app opens connection settings; dismiss only that UI before exercising controls.
