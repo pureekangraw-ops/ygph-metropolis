@@ -4,7 +4,7 @@ This is the non-Play-Store release path. It does not use a customer license key 
 
 ## Release workflow
 
-`.github/workflows/observatory-release-signed.yml` is a manual release workflow. It only runs on `main`, builds the release APK, signs it in a protected `observatory-release` GitHub Environment, verifies package/version/alignment/certificate, and emits a signed APK plus the exact `update-manifest.json` as a short-lived workflow artifact. The workflow does not publish a GitHub Release, upload to Cloudflare, or change the app's configured update URL.
+`.github/workflows/observatory-release-signed.yml` is a manual release workflow. It only runs on `main`, builds the release APK, signs it in the dedicated `observatory-release` GitHub Environment, verifies package/version/alignment/certificate, and emits a signed APK plus the exact `update-manifest.json` as a short-lived workflow artifact. Naming an environment in YAML does not enable its protection rules: configure required reviewers and protect `main` before adding secrets. The workflow does not publish a GitHub Release, upload to Cloudflare, or change the app's configured update URL.
 
 The manifest URL must be the final direct HTTPS URL for the exact APK and must be on `github.com`, `raw.githubusercontent.com`, or `yggmetro.com` / a subdomain. Avoid redirects for a self-hosted yggmetro URL. The Android updater validates package identity, strictly newer version, SHA-256, signer certificate, and the source commit before handing the APK to Android's installer for owner consent.
 
