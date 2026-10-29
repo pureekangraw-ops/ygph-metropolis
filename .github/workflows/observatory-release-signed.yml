@@ -1,0 +1,146 @@
+name: Observatory Signed Release (self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: HTTPS URL where this exact signed APK will be hosted
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: observatory-signed-release
+  cancel-in-progress: false
+
+jobs:
+  signed-release:
+    # Signing is only permitted from the protected default branch. PR workflows never receive release keys.
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: observatory-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: android-browser
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build unsigned release candidate
+        env:
+          OBSERVATORY_SOURCE_SHA: ${{ github.sha }}
+          OBSERVATORY_BUILD_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:assembleRelease
+          apk="$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -type f | head -n 1)"
+          test -n "$apk" && test -f "$apk"
+          mkdir -p app/build/outputs/release-delivery-signed
+          cp "$apk" app/build/outputs/release-delivery-signed/unsigned.apk
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk" >/dev/null 2>&1; then
+            echo "::error::Release build was unexpectedly signed before the controlled signing step"
+            exit 1
+          fi
+      - name: Sign and create verified update manifest
+        env:
+          OBSERVATORY_SIGNING_KEYSTORE_B64: ${{ secrets.OBSERVATORY_SIGNING_KEYSTORE_B64 }}
+          OBSERVATORY_SIGNING_KEYSTORE_PASSWORD: ${{ secrets.OBSERVATORY_SIGNING_KEYSTORE_PASSWORD }}
+          OBSERVATORY_SIGNING_KEY_ALIAS: ${{ secrets.OBSERVATORY_SIGNING_KEY_ALIAS }}
+          OBSERVATORY_SIGNING_KEY_PASSWORD: ${{ secrets.OBSERVATORY_SIGNING_KEY_PASSWORD }}
+          OBSERVATORY_APK_URL: ${{ inputs.apk_url }}
+          OBSERVATORY_SOURCE_SHA: ${{ github.sha }}
+          OBSERVATORY_BUILD_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          set +x
+          for name in OBSERVATORY_SIGNING_KEYSTORE_B64 OBSERVATORY_SIGNING_KEYSTORE_PASSWORD OBSERVATORY_SIGNING_KEY_ALIAS OBSERVATORY_SIGNING_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then echo "::error::Required protected environment secret is not configured: $name"; exit 1; fi
+          done
+          python3 - "$OBSERVATORY_APK_URL" <<'PY'
+          import sys
+          from urllib.parse import urlsplit
+          value = sys.argv[1]
+          u = urlsplit(value)
+          host = (u.hostname or "").lower()
+          allowed = host in {"github.com", "raw.githubusercontent.com", "yggmetro.com"} or host.endswith(".yggmetro.com")
+          if u.scheme != "https" or not allowed or u.username or u.password or u.port is not None or u.query or u.fragment:
+              raise SystemExit("APK URL must be HTTPS on github.com or an approved yggmetro.com host, with no credentials, port, query, or fragment")
+          PY
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          out="app/build/outputs/release-delivery-signed"
+          unsigned="$out/unsigned.apk"
+          aligned="$RUNNER_TEMP/observatory-release-aligned.apk"
+          signed="$out/YGG-Observatory-Release.apk"
+          keystore="$RUNNER_TEMP/observatory-release.jks"
+          trap 'rm -f "$keystore" "$aligned"' EXIT
+          printf '%s' "$OBSERVATORY_SIGNING_KEYSTORE_B64" | base64 --decode > "$keystore"
+          test -s "$keystore"
+          "$build_tools/zipalign" -f 4 "$unsigned" "$aligned"
+          "$build_tools/apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$OBSERVATORY_SIGNING_KEY_ALIAS" \
+            --ks-pass env:OBSERVATORY_SIGNING_KEYSTORE_PASSWORD \
+            --key-pass env:OBSERVATORY_SIGNING_KEY_PASSWORD \
+            --out "$signed" "$aligned"
+          "$build_tools/zipalign" -c 4 "$signed"
+          "$build_tools/apksigner" verify --verbose --print-certs "$signed" > "$out/signing-public-certificate.txt"
+          signer_sha="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$out/signing-public-certificate.txt" | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          [[ "$signer_sha" =~ ^[a-f0-9]{64}$ ]]
+          "$build_tools/aapt" dump badging "$signed" > "$out/package.txt"
+          python3 - "$out/package.txt" app/build.gradle.kts "$RUNNER_TEMP/observatory-package-values.txt" <<'PY'
+          import pathlib, re, sys
+          package_line = pathlib.Path(sys.argv[1]).read_text().splitlines()[0]
+          gradle = pathlib.Path(sys.argv[2]).read_text()
+          def capture(pattern, text, label):
+              match = re.search(pattern, text)
+              if not match: raise SystemExit(f"Cannot verify {label}")
+              return match.group(1)
+          actual_package = capture(r"name='([^']+)'", package_line, "APK package")
+          actual_code = capture(r"versionCode='([0-9]+)'", package_line, "APK version code")
+          actual_name = capture(r"versionName='([^']+)'", package_line, "APK version name")
+          expected_package = capture(r'applicationId\s*=\s*"([^"]+)"', gradle, "Gradle applicationId")
+          expected_code = capture(r'versionCode\s*=\s*([0-9]+)', gradle, "Gradle versionCode")
+          expected_name = capture(r'versionName\s*=\s*"([^"]+)"', gradle, "Gradle versionName")
+          if (actual_package, actual_code, actual_name) != (expected_package, expected_code, expected_name):
+              raise SystemExit("APK identity/version does not match Gradle configuration")
+          pathlib.Path(sys.argv[3]).write_text(
+              f"{actual_package}\n{actual_code}\n{actual_name}\n", encoding="utf-8")
+          PY
+          mapfile -t package_values < "$RUNNER_TEMP/observatory-package-values.txt"
+          package_name="${package_values[0]}"
+          version_code="${package_values[1]}"
+          version_name="${package_values[2]}"
+          apk_sha="$(sha256sum "$signed" | awk '{print $1}')"
+          jq -n \
+            --arg packageName "$package_name" \
+            --argjson versionCode "$version_code" \
+            --arg url "$OBSERVATORY_APK_URL" \
+            --arg sha256 "$apk_sha" \
+            --arg signerSha256 "$signer_sha" \
+            --arg sourceCommit "$OBSERVATORY_SOURCE_SHA" \
+            '{schema:1,packageName:$packageName,versionCode:$versionCode,url:$url,sha256:$sha256,signerSha256:$signerSha256,sourceCommit:$sourceCommit}' \
+            > "$out/update-manifest.json"
+          jq -e '(.schema == 1) and (.versionCode > 0) and (.sha256 | test("^[a-f0-9]{64}$")) and (.signerSha256 | test("^[a-f0-9]{64}$")) and (.sourceCommit | test("^[a-f0-9]{40}$"))' "$out/update-manifest.json" >/dev/null
+          printf 'source_sha=%s\nrun_id=%s\npackage=%s\nversion_name=%s\nversion_code=%s\nsigned=true\napk_sha256=%s\nsigner_sha256=%s\n' \
+            "$OBSERVATORY_SOURCE_SHA" "$OBSERVATORY_BUILD_RUN_ID" "$package_name" "$version_name" "$version_code" "$apk_sha" "$signer_sha" > "$out/provenance.txt"
+          rm -f "$out/unsigned.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YGG-Observatory-Signed-Release
+          path: android-browser/app/build/outputs/release-delivery-signed/*
+          retention-days: 14
