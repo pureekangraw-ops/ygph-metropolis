@@ -165,7 +165,8 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: pureekangraw-ops/Go-Together
-          ref: 7ca2f26890ece1b8ab0d24ceb52a655ef52bcf84
+          # Exact open PR #22 candidate, paired to Observatory typed-transfer contract PR #262.
+          ref: bef8e0334663b33db92b3c748971bbc3d821dd17
           path: .goview-go-contract
       - uses: actions/setup-node@v4
         with:
