@@ -35,6 +35,8 @@ test('Observatory Web Map serves safe HTML with parseable client code', async ()
   assert.match(html, /id="pin-lat"[^>]*aria-label="ละติจูด"/);
   assert.match(html, /pageSize=25/);
   assert.match(html, /const planGeoJSONMerge=/);
+  assert.match(html, /const pinsToGeoJSONFeatureCollection=/);
+  assert.match(html, /JSON.stringify\(pinsToGeoJSONFeatureCollection\(pins\),null,2\)/);
   assert.match(html, /file!==importFile.files/);
   assert.match(html, /เก็บไว้เฉพาะในเบราว์เซอร์นี้/);
   assert.match(html, /เฉพาะในเบราว์เซอร์นี้/);

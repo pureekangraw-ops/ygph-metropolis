@@ -82,7 +82,9 @@ export async function parseGeoJSONImport(text) {
     if (feature.id === undefined) id = await fallbackId(feature);
     else if ((typeof feature.id === "string" && feature.id.length > 0 && feature.id.length <= 110) ||
              (typeof feature.id === "number" && Number.isFinite(feature.id))) {
-      id = "geojson:" + String(feature.id);
+      const sourceId = String(feature.id);
+      // Preserve IDs emitted by this app so export → import remains idempotent.
+      id = sourceId.startsWith("geojson:") ? sourceId : "geojson:" + sourceId;
     } else throw new Error("feature " + (index + 1) + " has an invalid id");
     if (id.length > MAX_ID_LENGTH) throw new Error("feature " + (index + 1) + " id exceeds " + MAX_ID_LENGTH + " characters");
     if (seen.has(id)) throw new Error("duplicate feature id: " + id);
@@ -115,4 +117,25 @@ export function planGeoJSONMerge(existingPins, incomingPins, maxPins = 500) {
   const overflow = Math.max(0, existingPins.length + additions.length - maxPins);
   const canApply = conflicts === 0 && overflow === 0 && additions.length > 0;
   return { pinsToAdd: canApply ? additions : [], duplicates, conflicts, overflow, canApply };
+}
+
+/** Serialize local map pins without changing their identity or source properties. */
+export function pinsToGeoJSONFeatureCollection(pins) {
+  if (!Array.isArray(pins)) throw new Error("pins must be an array");
+  return {
+    type: "FeatureCollection",
+    features: pins.map(pin => {
+      const properties = { ...(pin.properties || {}) };
+      const hasDisplayName = ["name", "title", "label"].some(key =>
+        typeof properties[key] === "string" && properties[key].trim().length > 0
+      );
+      if (!hasDisplayName) properties.name = pin.name;
+      return {
+        type: "Feature",
+        id: pin.id,
+        properties,
+        geometry: { type: "Point", coordinates: [pin.lng, pin.lat] }
+      };
+    })
+  };
 }

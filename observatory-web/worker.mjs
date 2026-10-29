@@ -1,4 +1,4 @@
-import { parseGeoJSONImport, planGeoJSONMerge } from "./geojson-import.mjs";
+import { parseGeoJSONImport, planGeoJSONMerge, pinsToGeoJSONFeatureCollection } from "./geojson-import.mjs";
 
 const PAGE = `<!doctype html>
 <html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -56,6 +56,7 @@ footer{padding:10px 12px;border-top:1px solid #344750;font-size:12px;line-height
 const KEY='observatory-web-map-v1',list=document.querySelector('#pins'),filter=document.querySelector('#filter'),msg=document.querySelector('#feedback');
 const parseGeoJSON=${parseGeoJSONImport.toString()};
 const planGeoJSONMerge=${planGeoJSONMerge.toString()};
+const pinsToGeoJSONFeatureCollection=${pinsToGeoJSONFeatureCollection.toString()};
 let pins=[],selectedPinId=null,pinPage=0,importPreview=null,importRevision=0;
 const pinName=document.querySelector('#pin-name'),pinLat=document.querySelector('#pin-lat'),pinLng=document.querySelector('#pin-lng'),pinSave=document.querySelector('#pin-save'),pinCancel=document.querySelector('#pin-cancel'),editState=document.querySelector('#edit-state');
 const importFile=document.querySelector('#geojson-file'),importStatus=document.querySelector('#geojson-status'),importApply=document.querySelector('#geojson-apply'),importPreviewButton=document.querySelector('#geojson-preview');
@@ -125,8 +126,7 @@ document.querySelector('#share').onclick=async()=>{
  try{await navigator.clipboard.writeText(url);notify('คัดลอกลิงก์หมุดแล้ว')}catch{prompt('คัดลอกลิงก์นี้',url)}
 };
 document.querySelector('#export').onclick=()=>{
- const features=pins.map(p=>({type:'Feature',id:p.id,properties:{...(p.properties||{}),name:p.name},geometry:{type:'Point',coordinates:[p.lng,p.lat]}}));
- const blob=new Blob([JSON.stringify({type:'FeatureCollection',features},null,2)],{type:'application/geo+json'});
+ const blob=new Blob([JSON.stringify(pinsToGeoJSONFeatureCollection(pins),null,2)],{type:'application/geo+json'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='observatory-pins.geojson';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
 };
 document.querySelector('#clear').onclick=()=>{if(pins.length&&confirm('ลบหมุดทั้งหมดในเบราว์เซอร์นี้?')){pins=[];save();render()}};

@@ -52,6 +52,57 @@ test('GeoJSON importer rejects duplicate IDs, unsafe properties, and oversize fi
   await assert.rejects(parseGeoJSONImport(JSON.stringify({ type: 'FeatureCollection', features: Array(501).fill(duplicate) })), /exceeds 500 features/);
 });
 
+test('GeoJSON export → import → readback preserves IDs and properties and is idempotent', async () => {
+  const { parseGeoJSONImport, planGeoJSONMerge, pinsToGeoJSONFeatureCollection } =
+    await import('../observatory-web/geojson-import.mjs');
+  const first = await parseGeoJSONImport(collection([{
+    type: 'Feature', id: 'pin-17', properties: { title: 'Market', category: 'food' },
+    geometry: { type: 'Point', coordinates: [100.5, 13.7] }
+  }]));
+  const exported = pinsToGeoJSONFeatureCollection(first.pins);
+  assert.equal(exported.features[0].id, 'geojson:pin-17');
+  assert.deepEqual(exported.features[0].properties, { title: 'Market', category: 'food' });
+
+  const readback = await parseGeoJSONImport(JSON.stringify(exported));
+  assert.deepEqual(JSON.parse(JSON.stringify(readback.pins)), JSON.parse(JSON.stringify(first.pins)));
+  const duplicatePlan = planGeoJSONMerge(first.pins, readback.pins);
+  assert.equal(duplicatePlan.duplicates, 1);
+  assert.equal(duplicatePlan.conflicts, 0);
+  assert.equal(duplicatePlan.canApply, false);
+  assert.deepEqual(duplicatePlan.pinsToAdd, []);
+});
+
+test('GeoJSON round-trip is stable for generated IDs and pins without source properties', async () => {
+  const { parseGeoJSONImport, pinsToGeoJSONFeatureCollection } =
+    await import('../observatory-web/geojson-import.mjs');
+  const imported = await parseGeoJSONImport(collection([{
+    type: 'Feature', properties: { title: 'Park', category: 'green' },
+    geometry: { type: 'Point', coordinates: [100, 13] }
+  }]));
+  const firstReadback = await parseGeoJSONImport(
+    JSON.stringify(pinsToGeoJSONFeatureCollection(imported.pins))
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(firstReadback.pins)), JSON.parse(JSON.stringify(imported.pins)));
+
+  const nativePin = { id: 'native-pin-1', name: 'Station', lat: 13.75, lng: 100.5 };
+  const crossMapImport = await parseGeoJSONImport(
+    JSON.stringify(pinsToGeoJSONFeatureCollection([nativePin]))
+  );
+  assert.equal(crossMapImport.pins[0].name, 'Station');
+  assert.equal(crossMapImport.pins[0].id, 'geojson:native-pin-1');
+  const secondReadback = await parseGeoJSONImport(
+    JSON.stringify(pinsToGeoJSONFeatureCollection(crossMapImport.pins))
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(secondReadback.pins)), JSON.parse(JSON.stringify(crossMapImport.pins)));
+});
+
+test('GeoJSON importer rejects malformed JSON and non-FeatureCollection documents', async () => {
+  await assert.rejects(parseGeoJSONImport('{"type":"FeatureCollection","features":['), /invalid JSON/);
+  await assert.rejects(parseGeoJSONImport(JSON.stringify({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [100, 13] }
+  })), /expected a GeoJSON FeatureCollection/);
+});
+
 test('GeoJSON merge skips exact duplicates, blocks conflicts, and refuses partial overflow', async () => {
   const { planGeoJSONMerge } = await import('../observatory-web/geojson-import.mjs');
   const pin = { id: 'geojson:p1', name: 'Market', lat: 13.7, lng: 100.5, properties: { name: 'Market', kind: 'food' } };
