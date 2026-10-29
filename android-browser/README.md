@@ -16,6 +16,8 @@ Important: tapping 'ให้ GO ทำ' does not automatically register a ChatG
 ## GOVIEW
 Existing native map, Map Studio, GPS, route engine, local owner data and update preview remain in the same APK. GOVIEW source is stacked from Draft PR #245 and has not been merged or deployed.
 
+Web Map pins and GOVIEW Studio graph data remain separate. Use the explicit Point-only GeoJSON bridge when transferring Web Map pins to Studio POIs or Studio POIs back to Web Map; roads/areas remain in Studio. Conversion rules and limitations: [`docs/map-format-bridge.md`](docs/map-format-bridge.md).
+
 ## Replacement
 Removed obsolete GeckoRuntime/GeckoView dependency and launcher, Gecko observer service, extension assets, and Gecko-only tests. The Cloudflare controller is in remote-browser; do not paste Cloudflare Secrets into the repository or into chat.
 

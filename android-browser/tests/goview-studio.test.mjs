@@ -65,6 +65,35 @@ test("GeoJSON contains road LineStrings, polygons and points with WGS84 position
   const p=collection.features[0].geometry.coordinates[0];
   assert.ok(p[0]>=-180&&p[0]<=180&&p[1]>=-90&&p[1]<=90);
 });
+test("Web Map bridge exports only Studio POIs as Point features and imports them as POIs",()=>{
+  const source=G.demo(),points=G.toWebMapGeoJson(source);
+  assert.equal(points.type,"FeatureCollection");
+  assert.equal(points.features.length,source.pois.length);
+  assert.ok(points.features.every(f=>f.geometry.type==="Point"&&f.properties.kind===undefined));
+  assert.ok(points.features.every(f=>typeof f.properties.name==="string"));
+  const imported=G.fromGeoJson(points);
+  assert.equal(imported.pois.length,source.pois.length);
+  assert.equal(imported.roads.length,0);
+  assert.equal(imported.areas.length,0);
+  assert.equal(imported.nodes.length,source.pois.length);
+  assert.ok(imported.pois.every(p=>imported.nodes.some(n=>n.id===p.nodeId)));
+  const coords=points.features.map(f=>f.geometry.coordinates);
+  const restored=imported.pois.map(p=>{
+    const node=imported.nodes.find(n=>n.id===p.nodeId);
+    return G.lonLat(imported,node);
+  });
+  restored.forEach((point,i)=>{
+    assert.ok(Math.abs(point[0]-coords[i][0])<1e-8);
+    assert.ok(Math.abs(point[1]-coords[i][1])<1e-8);
+  });
+});
+test("Web Map bridge refuses Studio POIs outside WGS84 bounds",()=>{
+  const map=G.fresh("bad edge");
+  map.origin={lat:0,lng:179.9};
+  map.nodes=[{id:"n1",x:2000000,y:0}];
+  map.pois=[{id:"p1",name:"outside",nodeId:"n1"}];
+  assert.throws(()=>G.toWebMapGeoJson(map),/outside WGS84 bounds/);
+});
 test("reject package that claims unsupported future version",()=>{
   const map=G.demo();map.schema=2;
   assert.throws(()=>G.pack(map),/unsupported map schema/);
