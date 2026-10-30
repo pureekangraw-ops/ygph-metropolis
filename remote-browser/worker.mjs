@@ -2,6 +2,8 @@ import puppeteer from "@cloudflare/puppeteer";
 import { validPageUrl, allowedAction, mayGoAct, cleanStep } from "./policy.mjs";
 import { mcpResponse } from "./mcp.mjs";
 import { consoleHtml } from "./console.mjs";
+import * as webauthn from "@simplewebauthn/server";
+import * as passkeyUtils from "./passkey-utils.mjs";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { invokeObservatoryGo } from "./go-bridge.mjs";
 import { scrollRemotePage } from "./scroll.mjs";
@@ -30,6 +32,37 @@ function sameGrant(s,url=s.url) {
   try {return s.allowGoRead===true && !!s.grantedHost && new URL(url).hostname===s.grantedHost;}
   catch {return false;}
 }
+function internalAuthRequest(request, path, role, body) {
+  return new Request(new URL(path, request.url), {
+    method: "POST",
+    headers: {"x-observatory-role": role, "content-type": "application/json"},
+    body: JSON.stringify(body || {}),
+  });
+}
+async function authResult(stub, request, path, role, body) {
+  const response = await stub.fetch(internalAuthRequest(request, path, role, body));
+  let data;
+  try { data = await response.json(); } catch { data = {error:"INVALID_AUTH_RESPONSE"}; }
+  return {response, data};
+}
+function authReply(data, status=200, headers={}) {
+  const responseHeaders=new Headers(HEADERS);
+  for(const [name,value] of Object.entries(headers)) {
+    if(Array.isArray(value))for(const item of value)responseHeaders.append(name,item);
+    else responseHeaders.set(name,value);
+  }
+  return new Response(JSON.stringify(data), {
+    status,
+    headers:responseHeaders,
+  });
+}
+async function sessionIsValid(stub, request, sessionId) {
+  if (!sessionId || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)) return false;
+  const {response, data} = await authResult(
+    stub, request, "/_auth/session/verify", "AUTH", {sessionId},
+  );
+  return response.ok && data.valid === true;
+}
 function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
     controller:s.controller || "BIG", mode:s.mode || "IDLE", status:s.status || "IDLE", goCanObserve:sameGrant(s),
@@ -55,11 +88,121 @@ const station = {
     if (path==="/health") return reply({ service:"observatory-shared-browser", configured:!!env.OWNER_TOKEN && !!env.SESSIONS && !!env.BROWSER });
     const authorization=request.headers.get("authorization") || "";
     if (!env.OWNER_TOKEN || !env.SESSIONS || !env.BROWSER) return reply({ error:"NOT_CONFIGURED" },503);
-    const owner=authorization==="Bearer "+env.OWNER_TOKEN;
     const go=!!env.GO_TOKEN && env.GO_TOKEN!==env.OWNER_TOKEN && authorization==="Bearer "+env.GO_TOKEN;
-    if (!owner && !go) return reply({ error:"UNAUTHORIZED" },401);
     const id=env.SESSIONS.idFromName("owner-browser-v1");
     const stub=env.SESSIONS.get(id);
+    const ownerToken=authorization==="Bearer "+env.OWNER_TOKEN;
+    const ownerSessionId=passkeyUtils.readCookie(
+      request.headers.get("cookie"), passkeyUtils.PASSKEY_SESSION_COOKIE,
+    );
+    const ownerSession=!ownerToken && !go &&
+      await sessionIsValid(stub,request,ownerSessionId);
+    const owner=ownerToken || ownerSession;
+
+    if (path.startsWith("/auth/")) {
+      if (request.method==="POST" && !passkeyUtils.hasSameOrigin(request))
+        return reply({error:"SAME_ORIGIN_REQUIRED"},403);
+
+      if (path==="/auth/passkey/login/options" && request.method==="POST") {
+        const flowId=passkeyUtils.randomBase64Url();
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/login/options","AUTH",{flowId},
+        );
+        if(!response.ok)return authReply(data,response.status);
+        return authReply(data,response.status,{
+          "set-cookie":passkeyUtils.makeSecureCookie(
+            passkeyUtils.PASSKEY_FLOW_COOKIE,flowId,120,"/auth",
+          ),
+        });
+      }
+      if (path==="/auth/passkey/login/verify" && request.method==="POST") {
+        const flowId=passkeyUtils.readCookie(
+          request.headers.get("cookie"),passkeyUtils.PASSKEY_FLOW_COOKIE,
+        );
+        if(!passkeyUtils.validFlowId(flowId))return reply({error:"PASSKEY_FLOW_EXPIRED"},400);
+        const body=await bodyOf(request);
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/login/verify","AUTH",{...body,flowId},
+        );
+        if(!response.ok)return authReply(data,response.status,{
+          "set-cookie":passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_FLOW_COOKIE,"/auth"),
+        });
+        const sessionId=data.sessionId;
+        if(!/^[A-Za-z0-9_-]{43}$/u.test(sessionId||""))
+          return reply({error:"PASSKEY_SESSION_FAILED"},502,{
+            "set-cookie":passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_FLOW_COOKIE,"/auth"),
+          });
+        return authReply(
+          {authenticated:true,expiresAt:data.expiresAt},
+          response.status,
+          {"set-cookie":[
+            passkeyUtils.makeSecureCookie(
+              passkeyUtils.PASSKEY_SESSION_COOKIE,sessionId,
+              passkeyUtils.PASSKEY_SESSION_TTL_SECONDS,"/",
+            ),
+            passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_FLOW_COOKIE,"/auth"),
+          ]},
+        );
+      }
+      if (path==="/auth/logout" && request.method==="POST") {
+        if(ownerSessionId) {
+          await authResult(stub,request,"/_auth/session/revoke","AUTH",{sessionId:ownerSessionId});
+        }
+        return authReply(
+          {loggedOut:true},
+          200,
+          {"set-cookie":[
+            passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_SESSION_COOKIE),
+            passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_FLOW_COOKIE,"/auth"),
+          ]},
+        );
+      }
+
+      if(!owner)return reply({error:go?"OWNER_ONLY":"UNAUTHORIZED"},go?403:401);
+      if (request.method==="POST" && path==="/auth/passkey/register/options") {
+        const body=await bodyOf(request);
+        const flowId=passkeyUtils.randomBase64Url();
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/register/options","BIG",
+          {...body,flowId},
+        );
+        if(!response.ok)return authReply(data,response.status);
+        return authReply(data,response.status,{
+          "set-cookie":passkeyUtils.makeSecureCookie(
+            passkeyUtils.PASSKEY_FLOW_COOKIE,flowId,120,"/auth",
+          ),
+        });
+      }
+      if (request.method==="POST" && path==="/auth/passkey/register/verify") {
+        const flowId=passkeyUtils.readCookie(
+          request.headers.get("cookie"),passkeyUtils.PASSKEY_FLOW_COOKIE,
+        );
+        if(!passkeyUtils.validFlowId(flowId))return reply({error:"PASSKEY_FLOW_EXPIRED"},400);
+        const body=await bodyOf(request);
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/register/verify","BIG",
+          {...body,flowId},
+        );
+        return authReply(data,response.status,{
+          "set-cookie":passkeyUtils.clearSecureCookie(passkeyUtils.PASSKEY_FLOW_COOKIE,"/auth"),
+        });
+      }
+      if (request.method==="GET" && path==="/auth/passkey/status") {
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/status","BIG",
+        );
+        return authReply(data,response.status);
+      }
+      if (request.method==="POST" && path==="/auth/passkey/remove") {
+        const body=await bodyOf(request);
+        const {response,data}=await authResult(
+          stub,request,"/_auth/passkey/remove","BIG",body,
+        );
+        return authReply(data,response.status);
+      }
+      return reply({error:"NOT_FOUND"},404);
+    }
+
     if (path==="/mcp") {
       if(!go)return reply({error:"GO_TOOL_TOKEN_REQUIRED"},403);
       return mcpResponse(request,async(method,toolPath,args)=>{
@@ -73,8 +216,11 @@ const station = {
         return data;
       });
     }
+    if (!owner && !go) return reply({ error:"UNAUTHORIZED" },401);
     if (!path.startsWith("/v1/")) return reply({error:"NOT_FOUND"},404);
     if (go && !["/v1/session","/v1/observe","/v1/screenshot","/v1/action","/v1/job","/v1/run","/v1/note"].includes(path)) return reply({error:"OWNER_ONLY"},403);
+    if(ownerSession && request.method==="POST" && !passkeyUtils.hasSameOrigin(request))
+      return reply({error:"SAME_ORIGIN_REQUIRED"},403);
     const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json","x-request-id":request.headers.get("x-request-id")}});
     const result=await stub.fetch(upstream);
     // A DO receives role from a trusted internal request, never a client-supplied header.
@@ -417,6 +563,202 @@ export class BrowserWorkspace {
     await this.save(current);
     await this.ctx.storage.delete("pending-job");
   }
+  async passkeyCredentials() {
+    return await this.ctx.storage.get("owner-passkeys") || [];
+  }
+  async storePasskeyFlow(flowId,flow) {
+    const pending=await this.ctx.storage.list({prefix:"passkey-flow:",limit:100});
+    for(const [key,value] of pending) {
+      if(!value || value.expiresAt<=Date.now())await this.ctx.storage.delete(key);
+    }
+    const active=[...pending.values()].filter(value=>value?.expiresAt>Date.now()).length;
+    if(active>=16)return false;
+    await this.ctx.storage.put(`passkey-flow:${flowId}`,flow);
+    return true;
+  }
+  async passkeyFlow(flowId,purpose,request) {
+    if(!passkeyUtils.validFlowId(flowId))return null;
+    const key=`passkey-flow:${flowId}`;
+    const flow=await this.ctx.storage.get(key);
+    await this.ctx.storage.delete(key);
+    if(!flow || flow.purpose!==purpose || flow.expiresAt<Date.now())return null;
+    const url=new URL(request.url);
+    if(url.protocol!=="https:" || flow.origin!==url.origin || flow.rpId!==url.hostname)return null;
+    return flow;
+  }
+  async passkeyAuth(request,role,path) {
+    const method=request.method;
+    const body=method==="POST"?await bodyOf(request):{};
+    const credentials=await this.passkeyCredentials();
+
+    if(path==="/_auth/passkey/status" && method==="POST" && role==="BIG") {
+      return reply({credentials:credentials.map(item=>({
+        id:item.id,label:item.label,createdAt:item.createdAt,
+        deviceType:item.deviceType,backedUp:item.backedUp,
+      }))});
+    }
+    if(path==="/_auth/passkey/register/options" && method==="POST" && role==="BIG") {
+      if(credentials.length>=10)return reply({error:"PASSKEY_LIMIT_REACHED"},409);
+      const url=new URL(request.url);
+      if(url.protocol!=="https:" || !body.label ||
+          typeof body.label!=="string" || body.label.trim().length>40)
+        return reply({error:"INVALID_PASSKEY_LABEL"},422);
+      let userId=await this.ctx.storage.get("passkey-user-id");
+      if(!userId) {
+        userId=passkeyUtils.randomBase64Url();
+        await this.ctx.storage.put("passkey-user-id",userId);
+      }
+      const options=await webauthn.generateRegistrationOptions({
+        rpName:"YGG Observatory",
+        rpID:url.hostname,
+        userName:"BIG",
+        userDisplayName:"Observatory owner",
+        userID:passkeyUtils.base64UrlToBytes(userId),
+        timeout:120000,
+        attestationType:"none",
+        authenticatorSelection:{residentKey:"preferred",userVerification:"required"},
+        excludeCredentials:credentials.map(item=>({
+          id:item.id,transports:item.transports,
+        })),
+      });
+      if(!passkeyUtils.validFlowId(body.flowId))return reply({error:"INVALID_PASSKEY_FLOW"},422);
+      const stored=await this.storePasskeyFlow(body.flowId,{
+        purpose:"register",challenge:options.challenge,origin:url.origin,rpId:url.hostname,
+        label:body.label.trim(),expiresAt:Date.now()+passkeyUtils.PASSKEY_FLOW_TTL_MS,
+      });
+      if(!stored)return reply({error:"PASSKEY_BUSY"},429);
+      return reply(options);
+    }
+    if(path==="/_auth/passkey/register/verify" && method==="POST" && role==="BIG") {
+      const flow=await this.passkeyFlow(body.flowId,"register",request);
+      if(!flow)return reply({error:"PASSKEY_FLOW_EXPIRED"},400);
+      let verification;
+      try {
+        verification=await webauthn.verifyRegistrationResponse({
+          response:body.credential,
+          expectedChallenge:flow.challenge,
+          expectedOrigin:flow.origin,
+          expectedRPID:flow.rpId,
+          requireUserVerification:true,
+        });
+      } catch {
+        return reply({error:"PASSKEY_VERIFICATION_FAILED"},400);
+      }
+      if(!verification.verified || !verification.registrationInfo ||
+          verification.registrationInfo.userVerified!==true)
+        return reply({error:"PASSKEY_VERIFICATION_FAILED"},400);
+      const info=verification.registrationInfo;
+      const credential=info.credential;
+      if(credentials.some(item=>item.id===credential.id))
+        return reply({error:"PASSKEY_ALREADY_REGISTERED"},409);
+      if(credentials.length>=10)return reply({error:"PASSKEY_LIMIT_REACHED"},409);
+      const item={
+        id:credential.id,
+        publicKey:passkeyUtils.bytesToBase64Url(credential.publicKey),
+        counter:credential.counter,
+        transports:Array.isArray(body.credential?.response?.transports)
+          ?body.credential.response.transports.filter(value=>typeof value==="string").slice(0,8)
+          :[],
+        deviceType:info.credentialDeviceType,
+        backedUp:info.credentialBackedUp,
+        label:flow.label,
+        createdAt:new Date().toISOString(),
+      };
+      await this.ctx.storage.put("owner-passkeys",[...credentials,item]);
+      return reply({registered:true,label:item.label,createdAt:item.createdAt});
+    }
+    if(path==="/_auth/passkey/login/options" && method==="POST" && role==="AUTH") {
+      if(credentials.length===0)return reply({error:"PASSKEY_NOT_ENROLLED"},409);
+      const url=new URL(request.url);
+      if(url.protocol!=="https:" || !passkeyUtils.validFlowId(body.flowId))
+        return reply({error:"INVALID_PASSKEY_FLOW"},422);
+      const options=await webauthn.generateAuthenticationOptions({
+        rpID:url.hostname,
+        allowCredentials:credentials.map(item=>({
+          id:item.id,transports:item.transports,
+        })),
+        timeout:120000,
+        userVerification:"required",
+      });
+      const stored=await this.storePasskeyFlow(body.flowId,{
+        purpose:"login",challenge:options.challenge,origin:url.origin,rpId:url.hostname,
+        expiresAt:Date.now()+passkeyUtils.PASSKEY_FLOW_TTL_MS,
+      });
+      if(!stored)return reply({error:"PASSKEY_BUSY"},429);
+      return reply(options);
+    }
+    if(path==="/_auth/passkey/login/verify" && method==="POST" && role==="AUTH") {
+      const flow=await this.passkeyFlow(body.flowId,"login",request);
+      if(!flow)return reply({error:"PASSKEY_FLOW_EXPIRED"},400);
+      const response=body.credential;
+      const credential=credentials.find(item=>item.id===response?.id);
+      if(!credential)return reply({error:"PASSKEY_NOT_FOUND"},401);
+      let verification;
+      try {
+        verification=await webauthn.verifyAuthenticationResponse({
+          response,
+          expectedChallenge:flow.challenge,
+          expectedOrigin:flow.origin,
+          expectedRPID:flow.rpId,
+          requireUserVerification:true,
+          credential:{
+            id:credential.id,
+            publicKey:passkeyUtils.base64UrlToBytes(credential.publicKey),
+            counter:credential.counter,
+            transports:credential.transports,
+          },
+        });
+      } catch {
+        return reply({error:"PASSKEY_VERIFICATION_FAILED"},401);
+      }
+      if(!verification.verified ||
+          verification.authenticationInfo?.userVerified!==true ||
+          verification.authenticationInfo.credentialID!==credential.id)
+        return reply({error:"PASSKEY_VERIFICATION_FAILED"},401);
+      const updated=credentials.map(item=>item.id===credential.id
+        ?{...item,counter:verification.authenticationInfo.newCounter,
+          deviceType:verification.authenticationInfo.credentialDeviceType,
+          backedUp:verification.authenticationInfo.credentialBackedUp}
+        :item);
+      await this.ctx.storage.put("owner-passkeys",updated);
+      const sessionId=passkeyUtils.randomBase64Url();
+      const key=await passkeyUtils.sha256Base64Url(sessionId);
+      const expiresAt=Date.now()+passkeyUtils.PASSKEY_SESSION_TTL_SECONDS*1000;
+      await this.ctx.storage.put(`passkey-session:${key}`,{
+        expiresAt,credentialId:credential.id,
+      });
+      return reply({authenticated:true,sessionId,expiresAt:new Date(expiresAt).toISOString()});
+    }
+    if(path==="/_auth/session/verify" && method==="POST" && role==="AUTH") {
+      if(!/^[A-Za-z0-9_-]{43}$/u.test(body.sessionId||""))return reply({valid:false});
+      const key=await passkeyUtils.sha256Base64Url(body.sessionId);
+      const storageKey=`passkey-session:${key}`;
+      const session=await this.ctx.storage.get(storageKey);
+      if(!session || session.expiresAt<=Date.now()) {
+        if(session)await this.ctx.storage.delete(storageKey);
+        return reply({valid:false});
+      }
+      return reply({valid:true,expiresAt:new Date(session.expiresAt).toISOString()});
+    }
+    if(path==="/_auth/session/revoke" && method==="POST" && role==="AUTH") {
+      if(/^[A-Za-z0-9_-]{43}$/u.test(body.sessionId||"")) {
+        const key=await passkeyUtils.sha256Base64Url(body.sessionId);
+        await this.ctx.storage.delete(`passkey-session:${key}`);
+      }
+      return reply({revoked:true});
+    }
+    if(path==="/_auth/passkey/remove" && method==="POST" && role==="BIG") {
+      if(typeof body.id!=="string")return reply({error:"INVALID_PASSKEY_ID"},422);
+      const remaining=credentials.filter(item=>item.id!==body.id);
+      if(remaining.length===credentials.length)return reply({error:"PASSKEY_NOT_FOUND"},404);
+      await this.ctx.storage.put("owner-passkeys",remaining);
+      // Removing an authenticator also ends existing passkey sessions.
+      const sessions=await this.ctx.storage.list({prefix:"passkey-session:"});
+      await this.ctx.storage.delete([...sessions.keys()]);
+      return reply({removed:true,remaining:remaining.length});
+    }
+    return reply({error:"NOT_FOUND"},404);
+  }
   async alarm() {
     const pending=await this.ctx.storage.get("pending-job");
     if(!pending)return;
@@ -473,9 +815,11 @@ export class BrowserWorkspace {
     await this.ctx.storage.setAlarm(Date.now()+1000);
   }
   async fetch(request) {
-    const role=request.headers.get("x-observatory-role") === "BIG" ? "BIG" : "GO";
+    const suppliedRole=request.headers.get("x-observatory-role");
+    const role=["BIG","GO","AUTH"].includes(suppliedRole)?suppliedRole:"GO";
     const method=request.method,path=new URL(request.url).pathname;
     try {
+      if(path.startsWith("/_auth/"))return await this.passkeyAuth(request,role,path);
       const access=await this.state();
       if(role==="GO" && !sameGrant(access)) {
         if(method==="GET" && path==="/v1/job" && access.job?.originRole==="GO")

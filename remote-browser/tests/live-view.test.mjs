@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
+import * as webauthn from '@simplewebauthn/server';
+import * as passkeyUtils from '../passkey-utils.mjs';
 // Execute actual Worker/DO methods with synthetic provider/storage; no network.
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
@@ -21,7 +23,7 @@ function fixture({goRead=false,mode='ok',targets=['selected'],targetId='selected
  const puppeteer={sessions:async()=>{if(mode==='sessionlist')throw privateError();return [...liveSessions].map(sessionId=>({sessionId}));},
   connect:async()=>{calls++;if(mode==='connect'||mode==='expired')throw privateError();return browser();},
   launch:async()=>{assert.equal(liveSessions.size,0,'old session must be closed before replacement');liveSessions.add('new-synthetic-session');launches++;targets=['explicit-new-target'];return browser();}};
- const deps={puppeteer,...policy,...sites,WorkerEntrypoint:class {}};
+ const deps={puppeteer,...policy,...sites,webauthn,passkeyUtils,WorkerEntrypoint:class {}};
  const {worker,BrowserWorkspace}=new Function(...Object.keys(deps),source+';return {worker,BrowserWorkspace};')(...Object.values(deps));
  const env={OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{},GO_ALLOWED_HOSTS:'example.com'};
  const instance=new BrowserWorkspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v);}}},env);

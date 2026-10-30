@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
+import * as webauthn from '@simplewebauthn/server';
+import * as passkeyUtils from '../passkey-utils.mjs';
 import {scrollRemotePage} from '../scroll.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
@@ -21,7 +23,7 @@ function fixture({expiry,hold,stage,sitesGranted=false}={}){
  const page={target:()=>({_targetId:'selected'}),url:()=> 'https://example.com/',goto:async()=>{await provider('goto');events.push('navigate');},$eval:async(selector,callback)=>{const clearing=inspections++>0;if(!clearing)await provider('inspect');const result=callback(input);if(clearing)await provider('clear');return result;},click:async()=>{events.push('click');if(stage==='dispatched')await hold.wait();},type:async(selector,value)=>{events.push('type');inputValue+=value;},viewport:()=>({width:100,height:100}),mouse:{move:async()=>{await provider('move');events.push('move')},wheel:async()=>events.push('wheel')}};
  const browser={pages:async()=>{await provider('pages');return [page]},disconnect:async()=>{},close:async()=>events.push('close'),sessionId:()=> 'new'};
  const puppeteer={sessions:async()=>[{sessionId:'old'}],connect:async()=>{await provider('connect');return browser},launch:async()=>{events.push('launch');assert.ok(events.includes('close'),'cleanup must precede replacement');return browser}};
- const deps={puppeteer,...policy,...sites,scrollRemotePage,WorkerEntrypoint:class {}};
+ const deps={puppeteer,...policy,...sites,scrollRemotePage,webauthn,passkeyUtils,WorkerEntrypoint:class {}};
  const Workspace=new Function(...Object.keys(deps),source+';return BrowserWorkspace;')(...Object.values(deps));
  const instance=new Workspace({storage:{get:async k=>structuredClone(db.get(k)),put:async(k,v)=>db.set(k,structuredClone(v)),delete:async k=>db.delete(k),setAlarm:async()=>{}}},{GO_ALLOWED_HOSTS:'example.com'});
  const revoke=()=>instance.fetch(new Request('https://fixture/v1/observe-access',{method:'POST',headers:{'x-observatory-role':'BIG'},body:'{"allow":false}'}));

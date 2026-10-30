@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
+import * as webauthn from '@simplewebauthn/server';
+import * as passkeyUtils from '../passkey-utils.mjs';
 import {invokeObservatoryGo} from '../go-bridge.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
@@ -17,7 +19,7 @@ function fixture({stage,hold,role='GO',target='selected'}={}){
   evaluate:async()=>{reads.push('observe');await wait('read');return {url:'https://example.com/',text:'PRIVATE_SYNTHETIC_DOM',controls:[]}},
   screenshot:async()=>{reads.push('screenshot');await wait('read');return Buffer.from('PRIVATE_SYNTHETIC_IMAGE')}};
  const puppeteer={connect:async()=>{await wait('connect');return {pages:async()=>{await wait('pages');return [page]},disconnect:async()=>wait('disconnect')}}};
- const deps={puppeteer,...policy,...sites,WorkerEntrypoint:class {}};
+ const deps={puppeteer,...policy,...sites,webauthn,passkeyUtils,WorkerEntrypoint:class {}};
  const {BrowserWorkspace:Workspace,worker}=new Function(...Object.keys(deps),source+';return {BrowserWorkspace,worker};')(...Object.values(deps));
  const env={GO_ALLOWED_HOSTS:'example.com',OWNER_TOKEN:'synthetic-owner',GO_TOKEN:'synthetic-go',BROWSER:{}};
  const instance=new Workspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>{state=structuredClone(v)}}},env);
