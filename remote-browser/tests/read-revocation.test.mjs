@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
-import * as webauthn from '@simplewebauthn/server';
 import * as passkeyUtils from '../passkey-utils.mjs';
+const webauthn={};
 import {invokeObservatoryGo} from '../go-bridge.mjs';
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
-import * as webauthn from '@simplewebauthn/server';
 import * as passkeyUtils from '../passkey-utils.mjs';
+const webauthn={};
 // Execute actual Worker/DO methods with synthetic provider/storage; no network.
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
