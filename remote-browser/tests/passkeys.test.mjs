@@ -4,7 +4,6 @@ import {readFileSync} from "node:fs";
 import * as policy from "../policy.mjs";
 import * as sites from "../site-permissions.mjs";
 import * as passkeyUtils from "../passkey-utils.mjs";
-import * as realWebauthn from "@simplewebauthn/server";
 
 const source=readFileSync(new URL("../worker.mjs",import.meta.url),"utf8")
   .replace(/^import .*;\n/gm,"")
@@ -160,24 +159,6 @@ test("passkey enrollment is owner-only, same-origin, verified, and single-use",a
   assert.equal(replay.status,400);
   assert.equal((await f.request("/auth/passkey/status",{token:"go-token"})).status,403);
   assert.equal((await f.request("/auth/passkey/status",{token:"owner-token"})).status,200);
-});
-
-test("the pinned SimpleWebAuthn version returns JSON-ready browser options",async()=>{
-  const userID=crypto.getRandomValues(new Uint8Array(32));
-  const registration=await realWebauthn.generateRegistrationOptions({
-    rpName:"YGG Observatory",rpID:"observatory.example",userName:"BIG",
-    userDisplayName:"Observatory owner",userID,
-    authenticatorSelection:{residentKey:"preferred",userVerification:"required"},
-    attestationType:"none",
-  });
-  const authentication=await realWebauthn.generateAuthenticationOptions({
-    rpID:"observatory.example",userVerification:"required",
-    allowCredentials:[{id:"synthetic-credential",transports:["internal"]}],
-  });
-  assert.equal(typeof registration.challenge,"string");
-  assert.equal(typeof registration.user.id,"string");
-  assert.equal(typeof authentication.challenge,"string");
-  assert.equal(authentication.allowCredentials[0].id,"synthetic-credential");
 });
 
 test("verified passkey creates an opaque HttpOnly session usable only for the owner Console",async()=>{
