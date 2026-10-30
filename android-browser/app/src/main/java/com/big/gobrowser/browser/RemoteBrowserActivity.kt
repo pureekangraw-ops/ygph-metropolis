@@ -37,6 +37,10 @@ import java.util.concurrent.Executors
  * No GeckoRuntime or GeckoView is instantiated or packaged.
  */
 class RemoteBrowserActivity : Activity() {
+    companion object {
+        const val OBSERVATORY_WEB_MAP_URL = "https://observatory-web.pureekangraw.workers.dev/"
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val safetyIo = Executors.newFixedThreadPool(2)
@@ -82,6 +86,10 @@ class RemoteBrowserActivity : Activity() {
         switcher.addView(action("🌐 Browser") { toggleNativeChrome() }, weighted())
         switcher.addView(action("🗺 GOVIEW") {
             startActivity(Intent(this, OutsideViewActivity::class.java))
+        }, weighted())
+        switcher.addView(action("◉ Web Map") {
+            address.setText(OBSERVATORY_WEB_MAP_URL)
+            openAddress()
         }, weighted())
         switcher.addView(action("ⓘ Updates") { startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java)) }, weighted())
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
@@ -212,11 +220,12 @@ class RemoteBrowserActivity : Activity() {
     }
     private fun showBrowserTools() {
         AlertDialog.Builder(this).setTitle("Browser · เพิ่มเติม")
-            .setItems(arrayOf("▶ ดูสด / กู้คืนภาพ", "☷ ผลงาน", "🌙 เบื้องหลัง", "ที่อยู่ / การนำทาง", "⚙ การเชื่อมต่อ", "ⓘ อัปเดตแอป")) { _, choice ->
+            .setItems(arrayOf("▶ ดูสด / กู้คืนภาพ", "☷ ผลงาน", "🌙 เบื้องหลัง", "ที่อยู่ / การนำทาง", "⚙ การเชื่อมต่อ", "ⓘ อัปเดตแอป", "🏭 Standalone Workroom")) { _, choice ->
                 when (choice) {
                     0 -> viewLive(); 1 -> showJob(); 2 -> backgroundMenu(); 3 -> toggleNativeChrome()
                     4 -> openSettings()
                     5 -> startActivity(Intent(this, com.big.gobrowser.update.AppMaintenanceActivity::class.java))
+                    6 -> startActivity(Intent(this, StandaloneWorkplaceActivity::class.java))
                 }
             }.setNegativeButton("ปิด", null).show()
     }

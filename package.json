@@ -4,7 +4,7 @@
   "description": "Standalone YGG Observatory Android browser and web map",
   "scripts": {
     "test": "npm run test:web && npm run test:dom",
-    "test:web": "node --test tests/greenfield-observatory-web.test.cjs",
+    "test:web": "node --test tests/greenfield-observatory-web.test.cjs tests/geojson-import.test.cjs",
     "test:dom": "node --test android-browser/tests/*.test.mjs"
   }
 }

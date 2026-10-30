@@ -80,7 +80,7 @@ small{font-size:11px;color:#9bb6ce}
  <label for="title">ชื่อแผนที่</label><input id="title" maxlength="140" aria-label="ชื่อแผนที่">
  <div class="row">
   <span class="stat" id="version"></span>
-  <button id="save">บันทึก</button><button id="geoexport">ส่ง GeoJSON</button>
+  <button id="save">บันทึก</button><button id="geoexport">ส่ง GeoJSON</button><button id="webmapExport">ส่งเฉพาะจุด (Web Map)</button>
  </div>
  <label id="toolLabel">เครื่องมือวาด</label>
  <div class="group" id="tools">
@@ -333,10 +333,20 @@ function exportText(raw,name,type){
 }
 $("export").onclick=()=>{try{exportText(G.pack(map),filename(".goview.json"),"application/json");status("เตรียมแพ็กเกจพร้อม SHA-256");}catch(e){status(e.message);}};
 $("geoexport").onclick=()=>{try{exportText(JSON.stringify(G.toGeoJson(map),null,2),filename(".geojson"),"application/geo+json");status("ส่งข้อมูล Geometry ออก (GeoJSON ไม่มี graph metadata)");}catch(e){status(e.message);}};
+$("webmapExport").onclick=()=>{try{
+ const points=G.toWebMapGeoJson(map);
+ if(!points.features.length)return status("ยังไม่มี POI · เพิ่มเฉพาะ POI เป็นจุดใน Web Map ได้");
+ exportText(JSON.stringify(points,null,2),filename(".webmap-points.geojson"),"application/geo+json");
+ status("ส่งออกเฉพาะ POI เป็น GeoJSON Point · ถนนและพื้นที่ไม่รวม");
+}catch(e){status(e.message);}};
 function offer(raw,existing){
- let next;try{const file=JSON.parse(raw);next=file.type==="FeatureCollection"?G.fromGeoJson(file):G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
- if(JSON.parse(raw).type==="FeatureCollection")raw=G.pack(next);
- if(native && arguments.length===1){window.GoviewHost.prepareImport(raw);return;}
+ let next,file,isGeoJson=false;try{file=JSON.parse(raw);isGeoJson=file.type==="FeatureCollection";next=isGeoJson?G.fromGeoJson(file):G.unpack(raw);}catch(e){status("นำเข้าไม่ได้: "+e.message);return;}
+ if(isGeoJson)raw=G.pack(next);
+ if(native && arguments.length===1){
+  window.GoviewHost.prepareImport(raw);
+  if(isGeoJson)status("GeoJSON → แผนที่ Studio ใหม่: Point→POI/Node, LineString→ถนน, Polygon วงนอก→พื้นที่ · ใช้ชื่อและพิกัด; ID/คุณสมบัติอื่นไม่คงเดิม · แผนที่เดิมไม่เปลี่ยนจนกว่าอนุมัติ");
+  return;
+ }
  let baseline=map;
  if(native){try{baseline=existing?G.unpack(existing):G.fresh();}catch(e){return status("Preview อ่านแผนที่เดิมไม่ได้: "+e.message);}}
  const counts=G.diff(baseline,next),lines=Object.entries(counts).map(([key,v])=>key+": +"+v.added+" / เปลี่ยน "+v.changed+" / ลบ "+v.removed);

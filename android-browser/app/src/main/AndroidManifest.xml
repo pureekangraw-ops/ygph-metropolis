@@ -20,6 +20,7 @@
         </provider>
         <activity android:name=".update.AppMaintenanceActivity" android:exported="false" />
         <activity android:name=".outsideview.OutsideViewActivity" android:exported="false" />
+        <activity android:name=".browser.StandaloneWorkplaceActivity" android:exported="false" />
         <activity android:name=".outsideview.GoviewStudioActivity" android:exported="true">
             <!-- File ingress only: no update is applied until the owner reviews the diff. -->
             <intent-filter>

@@ -187,6 +187,17 @@
       ...map.pois.map(p=>feature(p.id,{type:"Point",coordinates:lonLat(map,nodes.get(p.nodeId))},{name:p.name,kind:"poi"}))
     ]};
   }
+  /** Web Map accepts Points only; keep roads and areas in the full Studio export. */
+  function toWebMapGeoJson(data){
+    const map=normalize(data),nodes=new Map(map.nodes.map(n=>[n.id,n]));
+    return {type:"FeatureCollection",name:map.title,features:map.pois.map(p=>{
+      const coordinates=lonLat(map,nodes.get(p.nodeId));
+      assert(coordinates.every(Number.isFinite)&&Math.abs(coordinates[0])<=180&&Math.abs(coordinates[1])<=90,
+        "POI coordinate outside WGS84 bounds");
+      return {type:"Feature",id:p.id,properties:{name:p.name},
+        geometry:{type:"Point",coordinates}};
+    })};
+  }
   /**
    * Import geographic lines/polygons/points as editable drawn features.
    * Only shared explicit LineString vertices create graph junctions.
@@ -257,5 +268,5 @@
     }
     return "UPDATE";
   }
-  return {updateDecision,FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,fromGeoJson,lonLat};
+  return {updateDecision,FORMAT,hash,normalize,fresh,pack,unpack,route,nearestNode,demo,diff,toGeoJson,toWebMapGeoJson,fromGeoJson,lonLat};
 });
