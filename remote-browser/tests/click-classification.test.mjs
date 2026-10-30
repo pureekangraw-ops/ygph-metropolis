@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as policy from '../policy.mjs';
 import * as sites from '../site-permissions.mjs';
+import * as passkeyUtils from '../passkey-utils.mjs';
+const webauthn={};
 const source=readFileSync(new URL('../worker.mjs',import.meta.url),'utf8')
  .replace(/^import .*;\n/gm,'').replace('export default {','const worker = {').replaceAll('export class ','class ');
 function fixture({tag='BUTTON',type='button',text='Open details',form=false,role='',method='get',action='/search',search=false,parent=false,formMethod='',formAction='',value=''}={}) {
@@ -13,7 +15,7 @@ function fixture({tag='BUTTON',type='button',text='Open details',form=false,role
  const element=parent?{innerText:'',getAttribute:()=>null,closest:selector=>selector==='form'?formElement:control,isContentEditable:false}:control;
  const state={browserSessionId:'test',targetId:'target',controller:'GO',mode:'LIVE',allowGoRead:true,grantedHost:'example.com',url:'https://example.com/'};
  const page={target:()=>({_targetId:'target'}),url:()=>state.url,$eval:async(selector,callback)=>callback(element),click:async()=>events.push('click')};
- const deps={puppeteer:{connect:async()=>({pages:async()=>[page],disconnect:async()=>{}})},...policy,...sites,WorkerEntrypoint:class {}};
+ const deps={puppeteer:{connect:async()=>({pages:async()=>[page],disconnect:async()=>{}})},...policy,...sites,webauthn,passkeyUtils,WorkerEntrypoint:class {}};
  const Workspace=new Function(...Object.keys(deps),source+';return BrowserWorkspace;')(...Object.values(deps));
  const instance=new Workspace({storage:{get:async()=>structuredClone(state),put:async(k,v)=>Object.assign(state,v)}},{GO_ALLOWED_HOSTS:'example.com'});
  return {events,click:selector=>instance.action(state,{type:'click',selector},'GO')};
