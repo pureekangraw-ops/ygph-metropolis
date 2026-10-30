@@ -27,6 +27,8 @@ button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-v
 <label for="secret">OWNER_TOKEN ของ Worker (ใช้บนหน้านี้เท่านั้น ไม่บันทึกลงเครื่อง)</label>
 <input id="secret" type="password" autocomplete="off" placeholder="วางคีย์เจ้าของที่ตั้งไว้ใน Cloudflare">
 <div class="row"><button class="primary" id="connect">เชื่อมต่อ</button><button id="clear">ล้างคีย์</button></div>
+<div class="row"><button id="passkeyLogin">🔐 เข้าด้วย Passkey</button></div>
+<p id="loginInfo" class="status" role="status" aria-live="polite"></p>
 <p class="muted">คีย์ไม่ถูกบันทึกใน LocalStorage หรือ Cookie อย่าส่งคีย์ผ่านแชตหรือภาพหน้าจอ</p></section>
 <div id="workspace" hidden>
 <section><div class="row"><div><h2>เซสชันเดียวกับ GO และมือถือ</h2><div class="muted" id="who">ผู้ควบคุม: BIG</div></div><button id="disconnect">ออกจากหน้าควบคุม</button></div>
@@ -35,6 +37,12 @@ button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-v
 </div><label><input type="checkbox" id="recording">บันทึกเซสชันไว้ดูย้อนหลังบน Cloudflare (อาจมีข้อมูลหน้าเว็บ)</label>
 <div class="row"><button id="live">▶ ดูสด</button><button id="observe">👁 อ่านหน้า</button><button id="invite">เรียก GO มาดู</button></div>
 <p id="pageInfo" class="status" role="status" aria-live="polite">ยังไม่มีเซสชัน</p></section>
+<section><h2>🔐 Passkey ของเจ้าของ</h2>
+<label for="passkeyLabel">ชื่อ Passkey สำหรับจำอุปกรณ์</label>
+<input id="passkeyLabel" maxlength="40" value="อุปกรณ์ของฉัน" autocomplete="off">
+<div class="row"><button id="registerPasskey">เพิ่ม Passkey ในอุปกรณ์นี้</button></div>
+<div id="passkeyList" class="status">กำลังตรวจ Passkey…</div>
+<p class="muted">Passkey ใช้เข้าสู่ Console ได้โดยไม่ต้องวาง Token ทุกครั้ง · OWNER_TOKEN ยังคงเป็นทางกู้คืน</p></section>
 <div class="stack">
 <section><h2>🖐️ สลับการควบคุม</h2>
 <div class="row"><button id="delegate">ให้ GO ทำแทน</button><button id="takeover">ฉันควบคุมเอง</button></div>
@@ -51,20 +59,68 @@ button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-v
 (()=>{"use strict";
 const q=id=>document.getElementById(id);
 let token="",connected=false,busy=false,refresh=null,noteAt="",jobSeen="";
-const show=(message)=>{q("pageInfo").textContent=String(message);};
+const show=(message)=>{if(q("pageInfo"))q("pageInfo").textContent=String(message);};
 const tell=(message)=>{q("note").textContent=String(message);};
 async function api(method,path,body){
-  if(!token)throw Error("ยังไม่ได้เชื่อม OWNER_TOKEN");
-  const response=await fetch(path,{method,headers:{"Authorization":"Bearer "+token,"Accept":"application/json","Content-Type":"application/json"},
+  const headers={"Accept":"application/json","Content-Type":"application/json"};
+  if(token)headers.Authorization="Bearer "+token;
+  const response=await fetch(path,{method,credentials:"same-origin",headers,
     ...(body?{body:JSON.stringify(body)}:{})});
-  const data=await response.json();
+  let data;try{data=await response.json()}catch{data={error:"INVALID_RESPONSE"}}
   if(!response.ok||data.error)throw Error(String(data.error||"HTTP "+response.status));
   return data;
 }
 async function op(fn){
   if(busy)return;
-  busy=true;try{await fn()}catch(e){show("ทำไม่สำเร็จ · "+String(e.message||e).slice(0,130))}
+  busy=true;try{await fn()}catch(e){
+    const message="ทำไม่สำเร็จ · "+String(e.message||e).slice(0,130);
+    show(message);if(q("loginInfo"))q("loginInfo").textContent=message;
+  }
   finally{busy=false}
+}
+function base64UrlToBuffer(value){
+  const base64=String(value).replaceAll("-","+").replaceAll("_","/");
+  const binary=atob(base64+"=".repeat((4-base64.length%4)%4));
+  return Uint8Array.from(binary,character=>character.charCodeAt(0)).buffer;
+}
+function bufferToBase64Url(value){
+  const bytes=new Uint8Array(value);let binary="";
+  for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+  return btoa(binary).replaceAll("+","-").replaceAll("/","_").replace(/=+$/u,"");
+}
+function credentialToJSON(credential){
+  const response=credential.response;
+  const result={
+    id:credential.id,rawId:bufferToBase64Url(credential.rawId),type:credential.type,
+    authenticatorAttachment:credential.authenticatorAttachment||undefined,
+    clientExtensionResults:credential.getClientExtensionResults(),
+    response:{clientDataJSON:bufferToBase64Url(response.clientDataJSON)},
+  };
+  if("attestationObject" in response){
+    result.response.attestationObject=bufferToBase64Url(response.attestationObject);
+    if(typeof response.getTransports==="function")result.response.transports=response.getTransports();
+  }else{
+    result.response.authenticatorData=bufferToBase64Url(response.authenticatorData);
+    result.response.signature=bufferToBase64Url(response.signature);
+    if(response.userHandle)result.response.userHandle=bufferToBase64Url(response.userHandle);
+  }
+  return result;
+}
+function decodeCreationOptions(options){
+  return {...options,challenge:base64UrlToBuffer(options.challenge),
+    user:{...options.user,id:base64UrlToBuffer(options.user.id)},
+    excludeCredentials:(options.excludeCredentials||[]).map(item=>({...item,id:base64UrlToBuffer(item.id)}))};
+}
+function decodeRequestOptions(options){
+  return {...options,challenge:base64UrlToBuffer(options.challenge),
+    allowCredentials:(options.allowCredentials||[]).map(item=>({...item,id:base64UrlToBuffer(item.id)}))};
+}
+async function enterWorkspace(){
+  const data=await api("GET","/v1/session");
+  connected=true;q("login").hidden=true;q("workspace").hidden=false;
+  q("connection").textContent="● CONNECTED";render(data);
+  if(refresh)clearInterval(refresh);refresh=setInterval(refreshState,5000);
+  await loadPasskeys();
 }
 function render(data){
   if(data.pageUrl){q("address").value=data.pageUrl}
@@ -82,15 +138,52 @@ q("connect").addEventListener("click",()=>op(async()=>{
   const raw=q("secret").value.trim();
   if(raw.length<32||raw.length>256)throw Error("ความยาว OWNER_TOKEN ไม่ถูกต้อง");
   token=raw;q("secret").value="";
-  const data=await api("GET","/v1/session");
-  connected=true;q("login").hidden=true;q("workspace").hidden=false;
-  q("connection").textContent="● CONNECTED";render(data);
-  if(refresh)clearInterval(refresh);refresh=setInterval(refreshState,5000);
+  try{await enterWorkspace()}catch(error){token="";throw error}
+}));
+q("passkeyLogin").addEventListener("click",()=>op(async()=>{
+  if(!navigator.credentials?.get)throw Error("อุปกรณ์หรือเบราว์เซอร์นี้ยังไม่รองรับ Passkey");
+  token="";
+  const options=await api("POST","/auth/passkey/login/options",{});
+  const credential=await navigator.credentials.get({publicKey:decodeRequestOptions(options)});
+  if(!credential)throw Error("ยกเลิกการยืนยัน Passkey");
+  await api("POST","/auth/passkey/login/verify",{credential:credentialToJSON(credential)});
+  await enterWorkspace();
 }));
 function exit(){token="";connected=false;if(refresh)clearInterval(refresh);refresh=null;noteAt="";jobSeen="";
   q("login").hidden=false;q("workspace").hidden=true;q("connection").textContent="ไม่ได้เชื่อม";}
-q("clear").addEventListener("click",()=>{q("secret").value="";exit()});
-q("disconnect").addEventListener("click",exit);
+q("clear").addEventListener("click",()=>op(async()=>{
+  q("secret").value="";
+  try{await api("POST","/auth/logout",{})}finally{exit()}
+}));
+q("disconnect").addEventListener("click",()=>op(async()=>{await api("POST","/auth/logout",{});exit()}));
+async function loadPasskeys(){
+  const list=q("passkeyList");list.textContent="กำลังตรวจ Passkey…";
+  const data=await api("GET","/auth/passkey/status");
+  list.replaceChildren();
+  if(!data.credentials?.length){list.textContent="ยังไม่มี Passkey · เพิ่มได้หลังเชื่อมต่อด้วย OWNER_TOKEN";}
+  for(const item of data.credentials||[]){
+    const row=document.createElement("div");row.className="row";
+    const label=document.createElement("span");
+    label.textContent=item.label+" · "+new Date(item.createdAt).toLocaleString();
+    const remove=document.createElement("button");remove.type="button";remove.textContent="ลบ Passkey";
+    remove.addEventListener("click",()=>op(async()=>{
+      if(!confirm("ลบ Passkey นี้หรือไม่? เซสชันที่เข้าด้วย Passkey จะถูกออกจากระบบทั้งหมด"))return;
+      await api("POST","/auth/passkey/remove",{id:item.id});await loadPasskeys();
+    }));
+    row.append(label,remove);list.append(row);
+  }
+}
+q("registerPasskey").addEventListener("click",()=>op(async()=>{
+  if(!navigator.credentials?.create)throw Error("อุปกรณ์หรือเบราว์เซอร์นี้ยังไม่รองรับ Passkey");
+  const label=q("passkeyLabel").value.trim();
+  if(!label||label.length>40)throw Error("ใส่ชื่อ Passkey 1–40 ตัวอักษร");
+  const options=await api("POST","/auth/passkey/register/options",{label});
+  const credential=await navigator.credentials.create({publicKey:decodeCreationOptions(options)});
+  if(!credential)throw Error("ยกเลิกการสร้าง Passkey");
+  await api("POST","/auth/passkey/register/verify",{credential:credentialToJSON(credential)});
+  show("เพิ่ม Passkey แล้ว · OWNER_TOKEN ยังคงใช้กู้คืนได้");
+  await loadPasskeys();
+}));
 q("open").addEventListener("click",()=>op(async()=>{
  const address=q("address").value.trim();
  if(!address.startsWith("https://"))throw Error("ใช้ HTTPS เท่านั้น");
