@@ -7,7 +7,9 @@ import * as passkeyUtils from "./passkey-utils.mjs";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { invokeObservatoryGo } from "./go-bridge.mjs";
 import { scrollRemotePage } from "./scroll.mjs";
-import {mayGoUseSite,sitePermissionsView,updateOwnerSitePermission} from "./site-permissions.mjs";
+import {mayGoUseSite,sitePermissionsView,updateOwnerSitePermission,publicSiteHost} from "./site-permissions.mjs";
+import {invokeObservatoryHub} from "./hub-bridge.mjs";
+import {computeHubRequestDigest,decodeHubContext} from "./hub-contract.mjs";
 
 const HEADERS = { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-content-type-options":"nosniff" };
 function reply(body, code=200) { return new Response(JSON.stringify(body), { status:code, headers:HEADERS }); }
@@ -29,6 +31,34 @@ function sameGrant(s,url=s.url) {
   try {return s.allowGoRead===true && !!s.grantedHost && new URL(url).hostname===s.grantedHost;}
   catch {return false;}
 }
+function sameHubGrant(state,principal,now=Date.now()) {
+  const grant=state?.hubGrant;
+  return !!grant && !!state.browserSessionId &&
+    grant.issuer===principal?.issuer && grant.audience===principal?.audience &&
+    grant.subject===principal?.subject &&
+    grant.browserSessionId===state.browserSessionId &&
+    grant.hostname===publicSiteHost(state.url) &&
+    Number.isFinite(grant.expiresAt) && grant.expiresAt>now;
+}
+const uuidPattern=/^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/u;
+const HUB_PATHS=Object.freeze({
+  observatory_session:"/v1/session",
+  observatory_observe:"/v1/observe",
+  observatory_screenshot:"/v1/screenshot",
+  observatory_action:"/v1/action",
+  observatory_run:"/v1/run",
+  observatory_job:"/v1/job",
+  observatory_note:"/v1/note",
+});
+const HUB_METHODS=Object.freeze({
+  observatory_session:"GET",
+  observatory_observe:"GET",
+  observatory_screenshot:"GET",
+  observatory_action:"POST",
+  observatory_run:"POST",
+  observatory_job:"GET",
+  observatory_note:"POST",
+});
 function internalAuthRequest(request, path, role, body) {
   return new Request(new URL(path, request.url), {
     method: "POST",
@@ -53,12 +83,13 @@ function authReply(data, status=200, headers={}) {
     headers:responseHeaders,
   });
 }
-async function sessionIsValid(stub, request, sessionId) {
-  if (!sessionId || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)) return false;
+async function ownerSessionIdentity(stub, request, sessionId) {
+  if (!sessionId || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)) return null;
   const {response, data} = await authResult(
     stub, request, "/_auth/session/verify", "AUTH", {sessionId},
   );
-  return response.ok && data.valid === true;
+  return response.ok && data.valid === true &&
+    typeof data.credentialId==="string" ? {credentialId:data.credentialId} : null;
 }
 function summarize(s) {
   return { sessionId:s.browserSessionId || null, pageUrl:s.url || null,
@@ -92,9 +123,22 @@ const station = {
     const ownerSessionId=passkeyUtils.readCookie(
       request.headers.get("cookie"), passkeyUtils.PASSKEY_SESSION_COOKIE,
     );
-    const ownerSession=!ownerToken && !go &&
-      await sessionIsValid(stub,request,ownerSessionId);
-    const owner=ownerToken || ownerSession;
+    const ownerSession=!ownerToken && !go
+      ? await ownerSessionIdentity(stub,request,ownerSessionId)
+      : null;
+    const owner=ownerToken || !!ownerSession;
+
+    if(path==="/v1/hub-invitations") {
+      if(!ownerSession?.credentialId)return reply({error:"PASSKEY_OWNER_SESSION_REQUIRED"},403);
+      if(request.method==="POST" && !passkeyUtils.hasSameOrigin(request))
+        return reply({error:"SAME_ORIGIN_REQUIRED"},403);
+      if(!["GET","POST"].includes(request.method))return reply({error:"METHOD_NOT_ALLOWED"},405);
+      const headers=new Headers(request.headers);
+      headers.set("x-observatory-role","BIG");
+      headers.set("x-observatory-owner-id",ownerSession.credentialId);
+      headers.set("content-type","application/json");
+      return await stub.fetch(new Request(request,{headers}));
+    }
 
     if (path.startsWith("/auth/")) {
       if (request.method==="POST" && !passkeyUtils.hasSameOrigin(request))
@@ -218,7 +262,13 @@ const station = {
     if (go && !["/v1/session","/v1/observe","/v1/screenshot","/v1/action","/v1/job","/v1/run","/v1/note"].includes(path)) return reply({error:"OWNER_ONLY"},403);
     if(ownerSession && request.method==="POST" && !passkeyUtils.hasSameOrigin(request))
       return reply({error:"SAME_ORIGIN_REQUIRED"},403);
-    const upstream=new Request(request,{headers:{"x-observatory-role":owner?"BIG":"GO","content-type":"application/json","x-request-id":request.headers.get("x-request-id")}});
+    const headers=new Headers(request.headers);
+    headers.set("x-observatory-role",owner?"BIG":"GO");
+    headers.set("content-type","application/json");
+    headers.set("x-request-id",request.headers.get("x-request-id")||"");
+    if(ownerSession?.credentialId)headers.set("x-observatory-owner-id",ownerSession.credentialId);
+    else headers.delete("x-observatory-owner-id");
+    const upstream=new Request(request,{headers});
     const result=await stub.fetch(upstream);
     // A DO receives role from a trusted internal request, never a client-supplied header.
     return result;
@@ -244,12 +294,303 @@ export default {
 };
 
 export class BrowserWorkspace {
-  constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; this.sessionProbe=null; }
+  constructor(ctx, env) { this.ctx=ctx; this.env=env; this.inFlight=false; this.cancelAudit=false; this.sessionProbe=null; this.hubRpcTail=Promise.resolve(); }
   async state() {
     return (await this.ctx.storage.get("browser")) ||
-      {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false,recentRequests:[]};
+      {controller:"BIG",mode:"IDLE",status:"IDLE",version:0,allowGoRead:false,recentRequests:[],
+        hubGrant:null,hubPendingInvitations:[],hubRpcReceipts:[]};
   }
   async save(state) { state.version=(state.version || 0)+1;state.updatedAt=new Date().toISOString();await this.ctx.storage.put("browser",state);return state; }
+  async ownerCredentialIsActive(credentialId) {
+    if(typeof credentialId!=="string"||!credentialId)return false;
+    return (await this.passkeyCredentials()).some(item=>item.id===credentialId);
+  }
+  async validateHubContext(request,path,args) {
+    const context=decodeHubContext(
+      request.headers.get("x-observatory-hub-context"),
+    );
+    const teamDomain=String(this.env.CF_ACCESS_TEAM_DOMAIN||"").trim().toLowerCase();
+    const expectedIssuer=teamDomain?`https://${teamDomain}`:"";
+    const expectedAudience=String(this.env.CF_ACCESS_AUD||"").trim();
+    if(!context||!Object.keys(context).every(key=>[
+        "name","issuer","audience","subject","issuedAt","expiresAt",
+        "browserSessionId","grantId","requestId","digest",
+      ].includes(key))||
+      context.issuer!==expectedIssuer||!expectedIssuer||
+      context.audience!==expectedAudience||!expectedAudience||
+      typeof context.subject!=="string"||!context.subject||
+      !Number.isSafeInteger(context.issuedAt)||!Number.isSafeInteger(context.expiresAt)||
+      context.expiresAt<=Math.floor(Date.now()/1000)||
+      context.issuedAt>Math.floor(Date.now()/1000)+60||
+      !uuidPattern.test(context.requestId||"")||
+      !uuidPattern.test(context.grantId||"")&&context.grantId!==null||
+      !(typeof context.browserSessionId==="string"&&/^[A-Za-z0-9_-]{1,256}$/u.test(context.browserSessionId))&&
+        context.browserSessionId!==null||
+      (context.grantId===null)!==(context.browserSessionId===null)||
+      !Object.hasOwn(HUB_PATHS,context.name)||HUB_PATHS[context.name]!==path||
+      !/^[A-Za-z0-9_-]{43}$/u.test(context.digest||"")) {
+      return {error:"HUB_CONTEXT_INVALID"};
+    }
+    if((context.grantId===null||context.browserSessionId===null)&&
+        context.name!=="observatory_session")return {error:"OWNER_INVITATION_REQUIRED"};
+    const digest=await computeHubRequestDigest(context,args);
+    if(digest!==context.digest)return {error:"HUB_REQUEST_DIGEST_MISMATCH"};
+    return {context};
+  }
+  async consumeHubRequest(context) {
+    const previous=this.hubRpcTail||Promise.resolve();
+    let release;
+    this.hubRpcTail=new Promise(resolve=>{release=resolve;});
+    await previous;
+    try {
+      const state=await this.state();
+      const receipts=(state.hubRpcReceipts||[]).filter(item=>item.expiresAt>Date.now());
+      const prior=receipts.find(item=>item.requestId===context.requestId);
+      if(prior)return {error:prior.digest===context.digest?"REQUEST_REPLAYED":"REQUEST_ID_REUSED"};
+      if(receipts.length>=4096)return {error:"HUB_REQUEST_CAPACITY"};
+      receipts.push({
+        requestId:context.requestId,digest:context.digest,
+        expiresAt:Math.max(Date.now()+60_000,context.expiresAt*1000),
+      });
+      state.hubRpcReceipts=receipts;
+      await this.save(state);
+      return null;
+    } finally {release();}
+  }
+  async hubGrantFailure(state,context) {
+    if(!context?.expiresAt||context.expiresAt*1000<=Date.now())return "HUB_ASSERTION_EXPIRED";
+    const grant=state.hubGrant;
+    if(!grant)return "OWNER_INVITATION_REQUIRED";
+    if(context.grantId!==grant.grantId)return "GRANT_MISMATCH";
+    if(context.browserSessionId!==state.browserSessionId||
+        grant.browserSessionId!==state.browserSessionId)return "SESSION_MISMATCH";
+    if(!sameHubGrant(state,context))return "HOST_NOT_GRANTED";
+    if(!mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))
+      return "HOST_NOT_GRANTED";
+    if(!await this.ownerCredentialIsActive(grant.ownerCredentialId))
+      return "OWNER_GRANT_REVOKED";
+    return null;
+  }
+  async hubBootstrap(state,context) {
+    state=await this.reconcileBrowserSession(state);
+    if(!state.browserSessionId||!publicSiteHost(state.url))
+      return {response:reply({status:"SESSION_NOT_READY"},409)};
+    const grant=state.hubGrant;
+    if(sameHubGrant(state,context)&&
+        await this.ownerCredentialIsActive(grant.ownerCredentialId)&&
+        mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) {
+      return {state,grant};
+    }
+    const now=Date.now();
+    const current=Array.isArray(state.hubPendingInvitations)
+      ? state.hubPendingInvitations.filter(item=>item.expiresAt>now &&
+        item.browserSessionId===state.browserSessionId &&
+        item.hostname===publicSiteHost(state.url))
+      : [];
+    let pending=current.find(item=>item.issuer===context.issuer&&
+      item.audience===context.audience&&item.subject===context.subject);
+    if(!pending) {
+      if(current.length>=8)return {response:reply({status:"INVITATION_QUEUE_FULL"},429)};
+      pending={
+        invitationRequestId:crypto.randomUUID(),
+        issuer:context.issuer,audience:context.audience,subject:context.subject,
+        browserSessionId:state.browserSessionId,hostname:publicSiteHost(state.url),
+        createdAt:now,expiresAt:Math.min(now+5*60_000,context.expiresAt*1000),
+      };
+      current.push(pending);
+    }
+    state.hubPendingInvitations=current;
+    await this.save(state);
+    return {response:reply({
+      status:"OWNER_INVITATION_REQUIRED",
+      invitationRequestId:pending.invitationRequestId,
+    },403)};
+  }
+  async ownerHubInvitationView(request) {
+    const ownerCredentialId=request.headers.get("x-observatory-owner-id");
+    if(!await this.ownerCredentialIsActive(ownerCredentialId))
+      return reply({error:"PASSKEY_OWNER_SESSION_REQUIRED"},403);
+    let state=await this.reconcileBrowserSession(await this.state());
+    const now=Date.now(),host=publicSiteHost(state.url);
+    const pending=(state.hubPendingInvitations||[]).filter(item=>
+      item.expiresAt>now&&item.browserSessionId===state.browserSessionId&&
+      item.hostname===host);
+    let grant=state.hubGrant;
+    if(grant&&(!sameHubGrant(state,grant)||!await this.ownerCredentialIsActive(grant.ownerCredentialId))) {
+      state.hubGrant=null;
+      if(state.controller==="HUB"){state.controller="BIG";state.mode="OBSERVE";}
+      await this.save(state);
+      grant=null;
+    }
+    state.hubPendingInvitations=pending;
+    return reply({
+      pending:pending.map(item=>({
+        invitationRequestId:item.invitationRequestId,issuer:item.issuer,
+        audience:item.audience,subject:item.subject,
+        browserSessionId:item.browserSessionId,hostname:item.hostname,
+        expiresAt:new Date(item.expiresAt).toISOString(),
+      })),
+      grant:grant?{
+        grantId:grant.grantId,issuer:grant.issuer,audience:grant.audience,
+        subject:grant.subject,browserSessionId:grant.browserSessionId,
+        hostname:grant.hostname,expiresAt:new Date(grant.expiresAt).toISOString(),
+      }:null,
+    });
+  }
+  async ownerHubInvitationMutation(request,body) {
+    const ownerCredentialId=request.headers.get("x-observatory-owner-id");
+    if(!await this.ownerCredentialIsActive(ownerCredentialId))
+      return reply({error:"PASSKEY_OWNER_SESSION_REQUIRED"},403);
+    let state=await this.state();
+    if(this.inFlight)return reply({error:"BUSY"},409);
+    const action=body.action;
+    if(action==="approve") {
+      const invitationRequestId=body.invitationRequestId;
+      if(!uuidPattern.test(invitationRequestId||""))
+        return reply({error:"INVALID_INVITATION_REQUEST"},422);
+      const pending=(state.hubPendingInvitations||[]).find(item=>
+        item.invitationRequestId===invitationRequestId&&item.expiresAt>Date.now());
+      if(!pending)return reply({error:"INVITATION_REQUEST_EXPIRED"},404);
+      try {state=await this.refreshPageAddress(state);}
+      catch {return reply({error:"SESSION_CONTEXT_UNAVAILABLE"},409);}
+      const host=publicSiteHost(state.url);
+      if(!state.browserSessionId||pending.browserSessionId!==state.browserSessionId||
+          pending.hostname!==host)
+        return reply({error:"INVITATION_CONTEXT_CHANGED"},409);
+      if(!mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))
+        return reply({error:"HOST_NOT_OWNER_APPROVED"},403);
+      const grant={
+        grantId:crypto.randomUUID(),
+        issuer:pending.issuer,audience:pending.audience,subject:pending.subject,
+        browserSessionId:state.browserSessionId,hostname:host,
+        ownerCredentialId,createdAt:Date.now(),
+        expiresAt:Date.now()+passkeyUtils.PASSKEY_SESSION_TTL_SECONDS*1000,
+      };
+      state.hubGrant=grant;
+      state.hubPendingInvitations=(state.hubPendingInvitations||[]).filter(item=>
+        item.invitationRequestId!==invitationRequestId);
+      if(state.controller==="HUB"){state.controller="BIG";state.mode="OBSERVE";}
+      await this.save(state);
+      return reply({approved:true,grantId:grant.grantId,
+        browserSessionId:grant.browserSessionId,hostname:grant.hostname,
+        expiresAt:new Date(grant.expiresAt).toISOString()});
+    }
+    if(action==="deny") {
+      if(!uuidPattern.test(body.invitationRequestId||""))
+        return reply({error:"INVALID_INVITATION_REQUEST"},422);
+      state.hubPendingInvitations=(state.hubPendingInvitations||[]).filter(item=>
+        item.invitationRequestId!==body.invitationRequestId);
+      await this.save(state);
+      return reply({denied:true});
+    }
+    if(action==="revoke") {
+      if(!uuidPattern.test(body.grantId||"")||state.hubGrant?.grantId!==body.grantId)
+        return reply({error:"HUB_GRANT_NOT_FOUND"},404);
+      state.hubGrant=null;
+      if(state.controller==="HUB"){state.controller="BIG";state.mode="OBSERVE";}
+      if(state.job?.originRole==="HUB"&&state.job.status==="RUNNING") {
+        state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
+      }
+      await this.save(state);
+      return reply({revoked:true});
+    }
+    return reply({error:"INVALID_HUB_INVITATION_ACTION"},422);
+  }
+  async handleHubRequest(request,path) {
+    const nameForPath=Object.entries(HUB_PATHS).find(([,routePath])=>routePath===path)?.[0];
+    if(!nameForPath)return reply({error:"NOT_FOUND"},404);
+    const method=request.method;
+    const body=method==="POST"?await bodyOf(request):{};
+    if(method!==HUB_METHODS[nameForPath])return reply({error:"METHOD_NOT_ALLOWED"},405);
+    const validated=await this.validateHubContext(request,path,body);
+    if(validated.error)return reply({status:validated.error},403);
+    const context=validated.context;
+    if(context.name!==nameForPath)return reply({status:"HUB_CONTEXT_INVALID"},403);
+    const replay=await this.consumeHubRequest(context);
+    if(replay)return reply({status:replay.error},409);
+
+    let state=await this.state();
+    if(nameForPath==="observatory_session"&&context.grantId===null) {
+      const bootstrap=await this.hubBootstrap(state,context);
+      if(bootstrap.response)return bootstrap.response;
+      state=bootstrap.state;
+      const grant=bootstrap.grant;
+      return reply({
+        ...summarize(state),
+        browserSessionId:grant.browserSessionId,
+        grantId:grant.grantId,
+        pageHost:grant.hostname,
+      });
+    }
+    const grantError=await this.hubGrantFailure(state,context);
+    if(grantError)return reply({status:grantError},403);
+    if(!state.browserSessionId)return reply({status:"SESSION_MISMATCH"},409);
+
+    try {
+      if(nameForPath==="observatory_session")
+        return reply({...summarize(await this.reconcileBrowserSession(state)),
+          browserSessionId:state.browserSessionId,grantId:state.hubGrant.grantId,
+          pageHost:state.hubGrant.hostname});
+      if(nameForPath==="observatory_observe")
+        return reply(await this.observe(state,"HUB",context));
+      if(nameForPath==="observatory_screenshot") {
+        return reply(await this.withPage(state,async page=>{
+          if(!sameHubGrant(state,context)||publicSiteHost(page.url())!==state.hubGrant.hostname)
+            throw new Error("HOST_NOT_GRANTED");
+          const raw=await page.screenshot({type:"jpeg",quality:52,fullPage:false});
+          const bytes=new Uint8Array(raw);
+          if(bytes.byteLength>512000)throw new Error("SCREENSHOT_TOO_LARGE");
+          return {mimeType:"image/jpeg",image:Buffer.from(bytes).toString("base64"),
+            observedAt:new Date().toISOString()};
+        }));
+      }
+      if(nameForPath==="observatory_job")
+        return reply({job:state.job?.originRole==="HUB"?state.job:null});
+      if(nameForPath==="observatory_note") {
+        if(typeof body.message!=="string"||body.message.trim().length<1||body.message.length>240)
+          return reply({error:"INVALID_GO_NOTE"},422);
+        state.note={message:body.message.trim(),at:new Date().toISOString()};
+        await this.save(state);
+        return reply({saved:true,version:state.version});
+      }
+      if(nameForPath==="observatory_action") {
+        if(this.inFlight||state.mode==="HEADLESS")return reply({error:"BUSY"},409);
+        if(state.controller!=="HUB")return reply({error:"OWNER_CONTROL_REQUIRED"},403);
+        if(!allowedAction(body))return reply({error:"ACTION_NOT_ALLOWED"},422);
+        this.inFlight=true;
+        try{return reply(await this.action(state,body,"HUB",context));}
+        finally{this.inFlight=false;}
+      }
+      if(nameForPath==="observatory_run") {
+        if(state.controller!=="HUB"||!state.hubGrant)
+          return reply({error:"OWNER_CONTROL_REQUIRED"},403);
+        if(!Array.isArray(body.steps)||body.steps.length<1||body.steps.length>10||
+            !body.steps.every(allowedAction)||!uuidPattern.test(body.requestId||""))
+          return reply({error:"INVALID_STEPS"},422);
+        if(body.steps.some(step=>step.type==="navigate"&&
+            publicSiteHost(step.url)!==state.hubGrant.hostname))
+          return reply({error:"HOST_NOT_GRANTED"},403);
+        if(this.inFlight)return reply({error:"BUSY"},409);
+        this.inFlight=true;
+        try {
+          const pending=await this.enqueue(state,"HUB_SCRIPT",body.steps.map(cleanStep),
+            body.requestId,{
+              issuer:context.issuer,audience:context.audience,subject:context.subject,
+              browserSessionId:context.browserSessionId,grantId:context.grantId,
+              expiresAt:context.expiresAt,
+            });
+          return reply(pending,202);
+        } finally {this.inFlight=false;}
+      }
+      return reply({error:"NOT_FOUND"},404);
+    } catch(error) {
+      const safe=new Set(["SESSION_NOT_STARTED","SESSION_UNAVAILABLE","EXACT_PAGE_UNAVAILABLE",
+        "CONTROLLER_MISMATCH","HOST_NOT_GRANTED","HUB_GRANT_HOST_MISMATCH",
+        "SENSITIVE_ACTION_NEEDS_OWNER","PROTECTED_INPUT","HTTPS_PUBLIC_URL_REQUIRED",
+        "SCREENSHOT_TOO_LARGE","JOB_ALREADY_RUNNING"]);
+      return reply({status:safe.has(error?.message)?error.message:"HUB_REQUEST_FAILED"},400);
+    }
+  }
 
   /** A persisted RUNNING flag is not proof Browser Run still owns that session.
    * Read provider session IDs before claiming liveness; never launch on a GET.
@@ -274,6 +615,7 @@ export class BrowserWorkspace {
     fresh.browserSessionId=null;fresh.targetId=null;
     fresh.controller="BIG";fresh.mode="IDLE";fresh.status="EXPIRED";
     fresh.allowGoRead=false;fresh.grantedHost=null;fresh.note=null;
+    fresh.hubGrant=null;fresh.hubPendingInvitations=[];
     await this.save(fresh);
     return fresh;
   }
@@ -296,7 +638,9 @@ export class BrowserWorkspace {
         const fresh=await this.state();
         if(fresh.browserSessionId===state.browserSessionId){
           fresh.status="EXPIRED";fresh.controller="BIG";fresh.mode="IDLE";
-          fresh.allowGoRead=false;fresh.grantedHost=null;await this.save(fresh);
+          fresh.allowGoRead=false;fresh.grantedHost=null;
+          fresh.hubGrant=null;fresh.hubPendingInvitations=[];
+          await this.save(fresh);
         }
       }
       throw error;
@@ -312,6 +656,10 @@ export class BrowserWorkspace {
     if(!current)throw Error("CURRENT_PAGE_NOT_PUBLIC_HTTPS");
     if(current!==state.url){
       state.url=current;
+      if(state.hubGrant&&publicSiteHost(current)!==state.hubGrant.hostname) {
+        state.hubGrant=null;
+        if(state.controller==="HUB"){state.controller="BIG";state.mode="OBSERVE";}
+      }
       if(!sameGrant(state)){
         state.allowGoRead=false;state.grantedHost=null;
         if(state.controller==="GO"){state.controller="BIG";state.mode="OBSERVE";}
@@ -320,9 +668,11 @@ export class BrowserWorkspace {
     }
     return state;
   }
-  async observe(state,role) {
+  async observe(state,role,hubContext=null) {
     return this.withPage(state, async page => {
       if(role==="GO" && !sameGrant(state,page.url()))throw new Error("OBSERVE_GRANT_ORIGIN_MISMATCH");
+      if(role==="HUB"&&(!sameHubGrant(state,hubContext)||
+          publicSiteHost(page.url())!==state.hubGrant.hostname))throw new Error("HOST_NOT_GRANTED");
       const snapshot=await page.evaluate(() => ({
         title:document.title,
         url:location.href,
@@ -338,6 +688,12 @@ export class BrowserWorkspace {
       const current=await this.state();
       const browserUrl=validPageUrl(snapshot.url);
       if(browserUrl && browserUrl!==current.url) {
+        if(role==="HUB"&&publicSiteHost(browserUrl)!==current.hubGrant?.hostname) {
+          current.hubGrant=null;
+          if(current.controller==="HUB"){current.controller="BIG";current.mode="OBSERVE";}
+          await this.save(current);
+          throw new Error("HUB_GRANT_HOST_MISMATCH");
+        }
         current.url=browserUrl;
         if(!sameGrant(current,browserUrl)){
           current.allowGoRead=false;current.grantedHost=null;
@@ -348,14 +704,22 @@ export class BrowserWorkspace {
       return {...snapshot,version:current.version,observedAt:new Date().toISOString()};
     });
   }
-  async action(state, raw, role) {
+  async action(state, raw, role,hubContext=null) {
     const step=cleanStep(raw);
     if (state.controller!==role) throw new Error("CONTROLLER_MISMATCH");
     if (role==="GO" && (!mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions) || !sameGrant(state))) throw new Error("GO_DOMAIN_NOT_ALLOWED");
     if (step.type==="navigate" && role==="GO" && !mayGoUseSite(step.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) throw new Error("GO_DOMAIN_NOT_ALLOWED");
+    if(role==="HUB"&&(!sameHubGrant(state,hubContext)||
+        !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)))throw new Error("HOST_NOT_GRANTED");
+    if(step.type==="navigate"&&role==="HUB"&&
+        (publicSiteHost(step.url)!==state.hubGrant.hostname||
+         !mayGoUseSite(step.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)))
+      throw new Error("HOST_NOT_GRANTED");
     return this.withPage(state, async page => {
       if(role==="GO" && (!sameGrant(state,page.url()) ||
         (step.type==="navigate" && new URL(step.url).hostname!==state.grantedHost)))throw new Error("GO_GRANT_ORIGIN_MISMATCH");
+      if(role==="HUB"&&(!sameHubGrant(state,hubContext)||
+          publicSiteHost(page.url())!==state.hubGrant.hostname))throw new Error("HOST_NOT_GRANTED");
       switch(step.type) {
         case "navigate": await page.goto(step.url,{waitUntil:"domcontentloaded",timeout:20000});break;
         case "back": await page.goBack({waitUntil:"domcontentloaded",timeout:20000});break;
@@ -379,6 +743,13 @@ export class BrowserWorkspace {
       }
       const latest=await this.state(); // Preserve a BIG takeover that occurred during a slow navigation.
       latest.url=validPageUrl(page.url()) || latest.url;
+      if(role==="HUB"&&(!sameHubGrant(latest,hubContext)||
+          publicSiteHost(latest.url)!==latest.hubGrant?.hostname)) {
+        latest.hubGrant=null;
+        if(latest.controller==="HUB"){latest.controller="BIG";latest.mode="OBSERVE";}
+        await this.save(latest);
+        throw new Error("HUB_GRANT_HOST_MISMATCH");
+      }
       if(!sameGrant(latest)) {
         latest.allowGoRead=false;latest.grantedHost=null;
         if(latest.controller==="GO"){latest.controller="BIG";latest.mode="OBSERVE";}
@@ -427,7 +798,8 @@ export class BrowserWorkspace {
       await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
       state={...state,browserSessionId:browser.sessionId(),targetId:page.target()._targetId || null,
         controller:"BIG",mode:"OBSERVE",status:"RUNNING",url:validPageUrl(page.url()) || url,allowGoRead:false,grantedHost:null,job:null,
-        note:null,recording,lastClosedSessionId:state.lastClosedSessionId||null};
+        note:null,recording,lastClosedSessionId:state.lastClosedSessionId||null,
+        hubGrant:null,hubPendingInvitations:[]};
       await this.save(state);return summarize(state);
     } finally { await browser.disconnect().catch(()=>{}); }
   }
@@ -446,6 +818,7 @@ export class BrowserWorkspace {
     state.lastClosedSessionId=state.browserSessionId;
     state.browserSessionId=null;state.targetId=null;state.controller="BIG";state.note=null;
     state.allowGoRead=false;state.grantedHost=null;state.mode="IDLE";state.status="CLOSED";
+    state.hubGrant=null;state.hubPendingInvitations=[];
     await this.save(state);return summarize(state);
   }
   async view(state) {
@@ -465,19 +838,23 @@ export class BrowserWorkspace {
    * Persist DISPATCHING *before* a step. If runtime resets mid-click, mark UNKNOWN
    * instead of replaying an action that might have succeeded on the website.
    */
-  async enqueue(state,kind,items,requestId) {
+  async enqueue(state,kind,items,requestId,hubPrincipal=null) {
     const repeat=state.recentRequests?.find(r=>r.requestId===requestId);
     if(repeat) return {jobId:repeat.jobId,status:"ALREADY_ACCEPTED",duplicate:true};
     if(["RUNNING","STOP_REQUESTED"].includes(state.job?.status) || state.mode==="HEADLESS")
       throw new Error("JOB_ALREADY_RUNNING");
     const job={id:crypto.randomUUID(),kind,status:"RUNNING",startedAt:new Date().toISOString(),
-      progress:0,total:items.length,results:[],requestId,originRole:kind==="GO_SCRIPT"?"GO":"BIG"};
+      progress:0,total:items.length,results:[],requestId,
+      originRole:kind==="GO_SCRIPT"?"GO":kind==="HUB_SCRIPT"?"HUB":"BIG"};
     state.job=job;state.mode="HEADLESS";state.status="RUNNING";
     // A page audit is read-only and needs no GO observer grant; GO scripts require
     // the explicit scoped session grant throughout their entire execution.
     if(kind==="PAGE_AUDIT"){state.controller="BIG";state.allowGoRead=false;state.grantedHost=null;}
     state.recentRequests=[...(state.recentRequests||[]).slice(-19),{requestId,jobId:job.id}];
-    await this.ctx.storage.put("pending-job",{jobId:job.id,kind,items,index:0,phase:"READY"});
+    await this.ctx.storage.put("pending-job",{
+      jobId:job.id,kind,items,index:0,phase:"READY",
+      ...(kind==="HUB_SCRIPT"?{hubPrincipal}:{}),
+    });
     await this.save(state);
     await this.ctx.storage.setAlarm(Date.now()+500);
     return {jobId:job.id,status:"RUNNING",total:items.length};
@@ -489,7 +866,7 @@ export class BrowserWorkspace {
     if(error)job.error=error;
     current.job=job;
     current.status=status;current.mode="OBSERVE";current.controller="BIG";
-    current.allowGoRead=false;current.grantedHost=null;
+    if(job.originRole==="GO") {current.allowGoRead=false;current.grantedHost=null;}
     await this.save(current);
     await this.ctx.storage.delete("pending-job");
   }
@@ -668,7 +1045,12 @@ export class BrowserWorkspace {
         if(session)await this.ctx.storage.delete(storageKey);
         return reply({valid:false});
       }
-      return reply({valid:true,expiresAt:new Date(session.expiresAt).toISOString()});
+      if(!(await this.passkeyCredentials()).some(item=>item.id===session.credentialId)) {
+        await this.ctx.storage.delete(storageKey);
+        return reply({valid:false});
+      }
+      return reply({valid:true,credentialId:session.credentialId,
+        expiresAt:new Date(session.expiresAt).toISOString()});
     }
     if(path==="/_auth/session/revoke" && method==="POST" && role==="AUTH") {
       if(/^[A-Za-z0-9_-]{43}$/u.test(body.sessionId||"")) {
@@ -704,6 +1086,10 @@ export class BrowserWorkspace {
     if(pending.kind==="GO_SCRIPT" && (state.controller!=="GO" || !sameGrant(state))) {
       await this.finishJob("STOPPED","OWNER_GO_GRANT_REVOKED");return;
     }
+    if(pending.kind==="HUB_SCRIPT"&&
+        (state.controller!=="HUB"||await this.hubGrantFailure(state,pending.hubPrincipal))) {
+      await this.finishJob("STOPPED","OWNER_HUB_GRANT_REVOKED");return;
+    }
     pending.phase="DISPATCHING";
     await this.ctx.storage.put("pending-job",pending); // source-owned pre-dispatch evidence
     let receipt=null,err=null;
@@ -711,6 +1097,9 @@ export class BrowserWorkspace {
       const item=pending.items[pending.index];
       if(pending.kind==="GO_SCRIPT"){
         receipt=await this.action(state,item,"GO");
+        receipt={...receipt,step:pending.index+1,dispatched:true,businessOutcome:"UNKNOWN"};
+      } else if(pending.kind==="HUB_SCRIPT") {
+        receipt=await this.action(state,item,"HUB",pending.hubPrincipal);
         receipt={...receipt,step:pending.index+1,dispatched:true,businessOutcome:"UNKNOWN"};
       } else {
         receipt=await this.withPage(state,async page=>{
@@ -732,8 +1121,10 @@ export class BrowserWorkspace {
     job.progress=Math.min(job.total,pending.index+1);
     fresh.job=job;
     await this.save(fresh);
-    const shouldStop=fresh.status==="STOP_REQUESTED" || (pending.kind==="GO_SCRIPT" &&
+    let shouldStop=fresh.status==="STOP_REQUESTED" || (pending.kind==="GO_SCRIPT" &&
       (fresh.controller!=="GO" || !sameGrant(fresh)));
+    if(pending.kind==="HUB_SCRIPT"&&(fresh.controller!=="HUB"||
+        await this.hubGrantFailure(fresh,pending.hubPrincipal)))shouldStop=true;
     if(err || shouldStop || job.progress>=job.total){
       await this.finishJob(err?"FAILED":shouldStop?"STOPPED":"COMPLETED",err);
       return;
@@ -745,10 +1136,11 @@ export class BrowserWorkspace {
   }
   async fetch(request) {
     const suppliedRole=request.headers.get("x-observatory-role");
-    const role=["BIG","GO","AUTH"].includes(suppliedRole)?suppliedRole:"GO";
+    const role=["BIG","GO","HUB","AUTH"].includes(suppliedRole)?suppliedRole:"GO";
     const method=request.method,path=new URL(request.url).pathname;
     try {
       if(path.startsWith("/_auth/"))return await this.passkeyAuth(request,role,path);
+      if(role==="HUB")return await this.handleHubRequest(request,path);
       const access=await this.state();
       if(role==="GO" && !sameGrant(access)) {
         if(method==="GET" && path==="/v1/job" && access.job?.originRole==="GO")
@@ -760,6 +1152,11 @@ export class BrowserWorkspace {
               ? {id:access.job.id,status:access.job.status,progress:access.job.progress,total:access.job.total}
               : null});
         return reply({error:"OWNER_HAS_NOT_INVITED_GO"},403);
+      }
+      if(path==="/v1/hub-invitations"&&role==="BIG") {
+        if(method==="GET")return await this.ownerHubInvitationView(request);
+        if(method==="POST")return await this.ownerHubInvitationMutation(request,await bodyOf(request));
+        return reply({error:"METHOD_NOT_ALLOWED"},405);
       }
       // All mutations are owned by this Durable Object, and guarded against overlapping browser writes.
       if(method==="GET" && path==="/v1/site-permissions" && role==="BIG") {
@@ -814,6 +1211,10 @@ export class BrowserWorkspace {
         // The session owner approves only the tab origin actually on screen.
         if(body.action==="allow")await this.refreshPageAddress(state);
         updateOwnerSitePermission(state,body.action,body.host);
+        if(body.action==="revoke"&&state.hubGrant?.hostname===body.host) {
+          state.hubGrant=null;
+          if(state.controller==="HUB"){state.controller="BIG";state.mode="OBSERVE";}
+        }
         await this.save(state);
         return reply(sitePermissionsView(state,this.env.GO_ALLOWED_HOSTS));
       }
@@ -830,13 +1231,25 @@ export class BrowserWorkspace {
       if(path==="/v1/control" && role==="BIG") {
         if(this.inFlight)return reply({error:"BUSY"},409);
         const next=body.controller;
-        if(!["BIG","GO"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
+        if(!["BIG","GO","HUB"].includes(next))return reply({error:"INVALID_CONTROLLER"},422);
         if(state.mode==="HEADLESS" && next==="BIG"){
           state.status="STOP_REQUESTED";state.job.status="STOP_REQUESTED";
         }
         if(next==="GO")await this.refreshPageAddress(state);
+        if(next==="HUB") {
+          await this.refreshPageAddress(state);
+          const ownerCredentialId=request.headers.get("x-observatory-owner-id");
+          const grant=state.hubGrant;
+          if(!await this.ownerCredentialIsActive(ownerCredentialId)||!grant||
+              !sameHubGrant(state,grant)||
+              !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions))
+            return reply({error:"OWNER_HUB_GRANT_REQUIRED"},403);
+        }
         if(next==="GO" && !mayGoUseSite(state.url,this.env.GO_ALLOWED_HOSTS,state.sitePermissions)) return reply({error:"GO_DOMAIN_NOT_ALLOWED"},403);
-        state.controller=next;state.mode=next==="GO"?"LIVE":"OBSERVE";state.allowGoRead=next==="GO";state.grantedHost=next==="GO"?new URL(state.url).hostname:null;await this.save(state);return reply(summarize(state));
+        state.controller=next;state.mode=next==="GO"||next==="HUB"?"LIVE":"OBSERVE";
+        if(next==="GO"){state.allowGoRead=true;state.grantedHost=new URL(state.url).hostname;}
+        if(next==="BIG"){state.allowGoRead=false;state.grantedHost=null;}
+        await this.save(state);return reply(summarize(state));
       }
       if(path==="/v1/action") {
         if(this.inFlight || state.mode==="HEADLESS")return reply({error:"BUSY"},409);
@@ -906,5 +1319,13 @@ export class BrowserWorkspace {
 export class ObservatoryGoBridge extends WorkerEntrypoint {
   async invoke(name,args={}) {
     return invokeObservatoryGo(this.env,name,args);
+  }
+}
+
+// Private Hub RPC. The Hub Access assertion is independently verified before
+// the Durable Object receives a signed-claim-derived internal context.
+export class ObservatoryHubBridge extends WorkerEntrypoint {
+  async invoke(name,args={},context={}) {
+    return invokeObservatoryHub(this.env,name,args,context);
   }
 }

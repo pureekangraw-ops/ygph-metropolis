@@ -27,6 +27,8 @@
     }
   ],
   "vars": {
+    "CF_ACCESS_TEAM_DOMAIN": "pureekangraw.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "b58f59d8d951e2205bbaa1ee4ca4b4cfafee8c1ab054176f99f1a5e40d5ce395",
     "GO_ALLOWED_HOSTS": "*.yggmetro.com,greenhouse-owner.pages.dev,observatory-web.pureekangraw.workers.dev",
     "PUBLIC_ASSET_HOSTS": "cdn.jsdelivr.net,fonts.googleapis.com,fonts.gstatic.com,static.cloudflareinsights.com,unpkg.com"
   }
