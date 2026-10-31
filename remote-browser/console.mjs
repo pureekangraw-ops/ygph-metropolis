@@ -37,6 +37,9 @@ button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-v
 </div><label><input type="checkbox" id="recording">บันทึกเซสชันไว้ดูย้อนหลังบน Cloudflare (อาจมีข้อมูลหน้าเว็บ)</label>
 <div class="row"><button id="live">▶ ดูสด</button><button id="observe">👁 อ่านหน้า</button><button id="invite">เรียก GO มาดู</button></div>
 <p id="pageInfo" class="status" role="status" aria-live="polite">ยังไม่มีเซสชัน</p></section>
+<section><h2>🔗 คำเชิญ Hub โดยตรง</h2>
+<p class="muted">Hub จะเข้าถึงได้เฉพาะเมื่อเจ้าของอนุมัติผู้ใช้ Cloudflare Access นี้ สำหรับเซสชันและโฮสต์ปัจจุบัน การอนุมัติ Hub ต้องยืนยันด้วย Passkey</p>
+<div id="hubInvitations" class="status">กำลังตรวจคำเชิญ Hub…</div></section>
 <section><h2>🔐 Passkey ของเจ้าของ</h2>
 <label for="passkeyLabel">ชื่อ Passkey สำหรับจำอุปกรณ์</label>
 <input id="passkeyLabel" maxlength="40" value="อุปกรณ์ของฉัน" autocomplete="off">
@@ -45,7 +48,7 @@ button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-v
 <p class="muted">Passkey ใช้เข้าสู่ Console ได้โดยไม่ต้องวาง Token ทุกครั้ง · OWNER_TOKEN ยังคงเป็นทางกู้คืน</p></section>
 <div class="stack">
 <section><h2>🖐️ สลับการควบคุม</h2>
-<div class="row"><button id="delegate">ให้ GO ทำแทน</button><button id="takeover">ฉันควบคุมเอง</button></div>
+<div class="row"><button id="delegate">ให้ GO ทำแทน</button><button id="delegateHub">ให้ Hub ทำแทน</button><button id="takeover">ฉันควบคุมเอง</button></div>
 <p class="muted">GO เริ่มงานเมื่อมีคำสั่งผ่านเครื่องมือที่เชื่อมแล้วเท่านั้น บิ๊กยึดคืนได้ทุกเมื่อ</p></section>
 <section><h2>🌙 เบื้องหลัง</h2>
 <div class="row"><button id="audit">ตรวจหน้านี้บนคลาวด์</button><button id="job">ดูผลงาน</button><button id="stop">หยุดงาน</button></div>
@@ -121,6 +124,7 @@ async function enterWorkspace(){
   q("connection").textContent="● CONNECTED";render(data);
   if(refresh)clearInterval(refresh);refresh=setInterval(refreshState,5000);
   await loadPasskeys();
+  await loadHubInvitations();
 }
 function render(data){
   if(data.pageUrl){q("address").value=data.pageUrl}
@@ -133,7 +137,7 @@ function render(data){
     if(value!==jobSeen){jobSeen=value;tell("งาน "+job.status+" · "+job.progress+"/"+job.total+" ขั้น "+(data.note?.message||""))}
   }
 }
-async function refreshState(){if(!connected||busy)return;try{render(await api("GET","/v1/session"))}catch(e){q("connection").textContent="เชื่อมต่อขัดข้อง";tell(String(e.message))}}
+async function refreshState(){if(!connected||busy)return;try{render(await api("GET","/v1/session"));await loadHubInvitations()}catch(e){q("connection").textContent="เชื่อมต่อขัดข้อง";tell(String(e.message))}}
 q("connect").addEventListener("click",()=>op(async()=>{
   const raw=q("secret").value.trim();
   if(raw.length<32||raw.length>256)throw Error("ความยาว OWNER_TOKEN ไม่ถูกต้อง");
@@ -217,7 +221,52 @@ q("delegate").addEventListener("click",()=>op(async()=>{
  if(!confirm("ให้ GO ควบคุมและกด/พิมพ์บนโดเมนที่อนุญาตใช่ไหม?"))return;
  render(await api("POST","/v1/control",{controller:"GO"}));show("ให้ GO ควบคุมแล้ว · เปิด Live View เพื่อดูสด");
 }));
+q("delegateHub").addEventListener("click",()=>op(async()=>{
+ if(!confirm("ให้ Hub ควบคุมเฉพาะเซสชันและโฮสต์ที่อนุมัติด้วย Passkey ใช่ไหม?"))return;
+ render(await api("POST","/v1/control",{controller:"HUB"}));show("ให้ Hub ควบคุมเซสชันที่อนุมัติแล้ว");
+}));
 q("takeover").addEventListener("click",()=>op(async()=>{render(await api("POST","/v1/control",{controller:"BIG"}));show("BIG รับการควบคุมแล้ว")}));
+async function loadHubInvitations(){
+  const list=q("hubInvitations");
+  if(!connected||!list)return;
+  try{
+    const data=await api("GET","/v1/hub-invitations");
+    list.replaceChildren();
+    if(data.grant){
+      const row=document.createElement("div");row.className="row";
+      const text=document.createElement("span");
+      text.textContent="อนุญาต Hub · "+data.grant.subject+" · "+data.grant.hostname+" · หมดอายุ "+new Date(data.grant.expiresAt).toLocaleString();
+      const revoke=document.createElement("button");revoke.type="button";revoke.textContent="เพิกถอน";
+      revoke.addEventListener("click",()=>op(async()=>{
+        if(!confirm("เพิกถอนสิทธิ์ Hub สำหรับเซสชันและโฮสต์นี้ใช่ไหม?"))return;
+        await api("POST","/v1/hub-invitations",{action:"revoke",grantId:data.grant.grantId});
+        show("เพิกถอนสิทธิ์ Hub แล้ว");await loadHubInvitations();
+      }));
+      row.append(text,revoke);list.append(row);
+    }
+    for(const item of data.pending||[]){
+      const card=document.createElement("div");card.className="row";
+      const text=document.createElement("span");
+      text.textContent="รออนุมัติ · "+item.subject+" · "+item.hostname+" · เซสชัน "+item.browserSessionId+" · หมดอายุ "+new Date(item.expiresAt).toLocaleTimeString();
+      const approve=document.createElement("button");approve.type="button";approve.className="primary";approve.textContent="อนุมัติด้วย Passkey";
+      approve.addEventListener("click",()=>op(async()=>{
+        if(!confirm("อนุมัติ Hub สำหรับ "+item.subject+" บน "+item.hostname+" ในเซสชันนี้ใช่ไหม?"))return;
+        await api("POST","/v1/hub-invitations",{action:"approve",invitationRequestId:item.invitationRequestId});
+        show("อนุมัติ Hub แล้ว · ให้ผู้ใช้เรียก observatory_session อีกครั้งเพื่อรับตัวเลือกเซสชัน");
+        await loadHubInvitations();
+      }));
+      const deny=document.createElement("button");deny.type="button";deny.textContent="ปฏิเสธ";
+      deny.addEventListener("click",()=>op(async()=>{
+        await api("POST","/v1/hub-invitations",{action:"deny",invitationRequestId:item.invitationRequestId});
+        await loadHubInvitations();
+      }));
+      card.append(text,approve,deny);list.append(card);
+    }
+    if(!data.grant&&!(data.pending||[]).length)list.textContent="ไม่มีคำเชิญหรือสิทธิ์ Hub ค้างอยู่";
+  }catch{
+    list.textContent="การอนุมัติ Hub ต้องเข้าสู่ระบบด้วย Passkey ของเจ้าของ";
+  }
+}
 q("audit").addEventListener("click",()=>op(async()=>{
  const url=q("address").value.trim();
  if(!confirm("ตรวจ "+url+" บนคลาวด์แบบอ่านอย่างเดียว?"))return;

@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 import * as policy from "../policy.mjs";
 import * as sites from "../site-permissions.mjs";
 import * as passkeyUtils from "../passkey-utils.mjs";
+import {computeHubRequestDigest,decodeHubContext} from "../hub-contract.mjs";
 
 const source=readFileSync(new URL("../worker.mjs",import.meta.url),"utf8")
   .replace(/^import .*;\n/gm,"")
@@ -75,6 +76,9 @@ function fixture() {
     consoleHtml:"",
     WorkerEntrypoint:class {},
     invokeObservatoryGo:async()=>({ok:false}),
+    invokeObservatoryHub:async()=>({ok:false}),
+    computeHubRequestDigest,
+    decodeHubContext,
     scrollRemotePage:async()=>{},
   };
   const {worker,BrowserWorkspace}=new Function(
