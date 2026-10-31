@@ -1,6 +1,6 @@
 # YGG Observatory — Android Browser + GOVIEW
 
-The Android application exposes exactly two modes, Browser and GOVIEW. The new Browser launcher is RemoteBrowserActivity; target websites run in Cloudflare Browser Run, not GeckoView or an on-device website WebView. Android WebView here only renders the hosted Live View.
+The Android launcher opens `GoviewHomeActivity`, which reports Android-validated Internet and a read-only public Hub `/health` response separately from owner authentication and provider state. Hub sign-in, work details, and approvals open in the Hub's first-party top-level browser page; the app does not send Hub credentials or make native approval API calls. The existing Browser and GOVIEW Map activities remain available from Home. Target websites run in Cloudflare Browser Run, not GeckoView or an on-device website WebView; the existing Android WebView only renders the hosted Live View.
 
 ## Browser Mode
 The Browser header has address input, navigation, Observe / invite GO, grant GO control, owner takeover, headless audit, and job receipts. The owner may hide the view while a cloud job works. API session and GO permissions are enforced in a standalone Cloudflare Worker with a Durable Object. The owner token is encrypted in Android Keystore and the UI only accepts HTTPS on workers.dev or yggmetro.com. Without the Worker configured the app shows an explicit setup dialog; GOVIEW stays reachable.
