@@ -42,6 +42,7 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
     var onReady:()->Unit={}
     var onConfirmed:(RenderConfirmation)->Unit={}
     var onSelect:(Point)->Unit={}
+    var onPinTap:(String)->Unit={}
     var onError:(String)->Unit={}
     private val sourceIds=listOf("outside-zones","outside-grids","outside-pins")
     init {
@@ -53,7 +54,17 @@ class MapLibreOutsideRenderer(private val host:ViewGroup,private val packageStor
         mapView.addOnDidFailLoadingMapListener {_->onError("Map loading failed · retry from map tools");failPending("map-load-failed")}
         mapView.addOnWillStartRenderingFrameListener {if(updatesComplete&&cameraComplete)frameStarted=true}
         mapView.addOnDidFinishRenderingFrameListener(MapView.OnDidFinishRenderingFrameListener {fully,_,_->if(fully)confirmFrame()})
-        mapView.getMapAsync {m->map=m;if(savedInstanceState==null)m.cameraPosition=CameraPosition.Builder().target(LatLng(13.75,100.5)).zoom(11.0).build();m.addOnMapLongClickListener {p->onSelect(Point(p.longitude,p.latitude));true};reloadStyle()}
+        mapView.getMapAsync {m->map=m;if(savedInstanceState==null)m.cameraPosition=CameraPosition.Builder().target(LatLng(13.75,100.5)).zoom(11.0).build();m.addOnMapLongClickListener {p->onSelect(Point(p.longitude,p.latitude));true};m.addOnMapClickListener {p->selectPinAt(m.projection.toScreenLocation(p))};reloadStyle()}
+    }
+    /** Read the rendered pin layer only; tapping never creates or modifies a map record. */
+    fun selectPinAt(point:android.graphics.PointF):Boolean {
+        val m=map?:return false
+        if(!foregroundReady)return false
+        val radius=24f*host.resources.displayMetrics.density
+        val pin=m.queryRenderedFeatures(RectF(point.x-radius,point.y-radius,point.x+radius,point.y+radius),"pin-dots")
+            .firstOrNull {it.hasProperty("_id")}?:return false
+        onPinTap(pin.getStringProperty("_id"))
+        return true
     }
     override val foregroundReady:Boolean get()=resumed && map?.style?.isFullyLoaded==true
     override val styleGeneration:Long get()=generation

@@ -1,10 +1,12 @@
-# YGG Observatory — Android GeckoView & Web Map
+# YGG Observatory — Shared Browser & GOVIEW
 
 This repository contains **Observatory only**.
 
 ## Components
 
-- `android-browser/` — standalone Android GeckoView Observatory app, including tests, docs, and build scripts.
+- `android-browser/` — standalone Android Observatory app with Cloudflare shared Browser and native/offline GOVIEW, including tests, docs, and build scripts.
+- `remote-browser/` — Cloudflare Browser Run session, invitation/control/revoke and bounded GO tools. Android WebView displays its Live View; GeckoView is historical.
+- `goview-package-bridge/` — existing typed selected GeoJSON/Studio transport, with separate role and receipt contracts.
 - `observatory-web/worker.mjs` — local-first Observatory map Cloudflare Worker.
 - `tests/greenfield-observatory-web.test.cjs` — Observatory Web regression tests.
 - `.github/workflows/android-browser.yml` — Android CI and emulator acceptance.
@@ -14,6 +16,8 @@ This repository contains **Observatory only**.
 ## Test
 
 Run `npm test` for local Node-based tests. Run `cd android-browser && gradle :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` with Android SDK and Gradle installed. Android emulator acceptance runs in CI.
+
+Current integration and release boundaries: `docs/reviews/observatory-completion-20261026.md` and `docs/reviews/observatory-backlog-inventory-20261026.md`. Source/build/emulator proof is separate from live activation, signing, in-place installation and physical-device acceptance. Map Studio stays a separate design workspace; external Places/routing providers are not yet implemented.
 
 ## Deploy
 

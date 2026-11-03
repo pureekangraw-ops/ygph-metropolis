@@ -51,6 +51,9 @@ class GoviewStudioActivity : Activity() {
     // All Activity instances coordinate read/modify/write, including rotation.
     companion object { private val storageLock = Any() }
     private val transferDirectory by lazy { File(filesDir, "goview-transfers").apply { mkdirs() } }
+    private val typedTransfer by lazy {GoviewStudioTransfer(File(filesDir,"goview-typed-studio"),transferDirectory,
+        GoviewTransferClient(this),{id->mapStorage(id).openRead().use {readLimited(it)}},storageLock,
+        {file->AtomicFile(file).openRead().use {readLimited(it)}})}
     private var pendingExport: ByteArray? = null
     private var webReady = false
     private var pendingIncoming: Intent? = null
@@ -408,6 +411,28 @@ class GoviewStudioActivity : Activity() {
                         }.setNegativeButton("Close", null).show()
                 }
             }.onFailure { callback("nativeStatus", "Receipt/readback unavailable · no data changed") }
+        }
+
+        @JavascriptInterface fun downloadTyped(transferId:String,mapId:String,version:String,sha256:String) {
+            Thread {
+                val result=runCatching {typedTransfer.download(transferId,mapId,version.toInt(),sha256)}
+                result.onSuccess {callback("receiveDownload",it.payload,it.transferId)}
+                    .onFailure {callback("nativeStatus","Typed Download ไม่ผ่าน · แผนที่เดิมยังอยู่ · "+directSafeError(it))}
+            }.start()
+        }
+
+        @JavascriptInterface fun reportTypedReceipt() {
+            val ids=runCatching {typedTransfer.ids()}.getOrDefault(emptyList())
+            if(ids.isEmpty()){callback("nativeStatus","ยังไม่มี Typed Studio transfer ที่ดาวน์โหลด");return}
+            runOnUiThread {
+                if(isFinishing||isDestroyed)return@runOnUiThread
+                android.app.AlertDialog.Builder(this@GoviewStudioActivity).setTitle("ส่ง Receipt ให้ GO · ไม่ Update ซ้ำ")
+                    .setItems(ids.toTypedArray()){_,index->if(!isFinishing&&!isDestroyed)Thread {
+                        runCatching {typedTransfer.report(ids[index])}
+                            .onSuccess {callback("nativeStatus","GO รับ Receipt แล้ว · ตรวจไฟล์ที่อนุมัติไว้ก่อนส่ง · ไม่ Update ซ้ำ")}
+                            .onFailure {callback("nativeStatus","Receipt ยังไม่ยืนยัน · ต้องอนุมัติและตรวจไฟล์ตรงกันก่อน · ลองส่งเฉพาะ Receipt ภายหลัง")}
+                    }.start()}.setNegativeButton("ปิด",null).show()
+            }
         }
 
         @JavascriptInterface fun downloadExact(endpoint: String, mapId: String, token: String,

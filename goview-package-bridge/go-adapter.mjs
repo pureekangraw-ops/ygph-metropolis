@@ -1,9 +1,11 @@
+import {invokeTransfer,transferTools} from './go-transfer-adapter.mjs';
 import worker from './worker.mjs';
 import Engine from '../android-browser/app/src/main/assets/goview-studio/engine.js';
 
 // Named GO Brain RPC only. Reuses the versioned HTTP storage contract and its guards.
 // Runtime binding/provisioning is deliberately a separate owner-authorized action.
 export async function invokeGoview(env, name, args={}) {
+  if(transferTools.includes(name))return invokeTransfer(env,name,args,worker);
   // GO direct commands reuse the existing private GOVIEW_GO binding.
   // Cloudflare stores proposals, while Android remains the only map-data authority.
   if(['goview_focus_point','goview_propose_pin','goview_command_status'].includes(name)) {
