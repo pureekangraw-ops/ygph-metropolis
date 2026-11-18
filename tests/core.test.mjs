@@ -146,6 +146,31 @@ test('multi-turn conversation automatically fills goal -> scope -> confirm -> ha
   assert.equal(t4.plan.action, 'PREPARE_HANDOFF');
 });
 
+test('ignores greetings/short fillers and resets brief when user rejects confirmation', async () => {
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: null,
+  });
+
+  const greet = await bot.respond({ sessionId: 'lead-2', text: 'ดีจ้า' });
+  assert.equal(greet.plan.matchedRuleId, 'GREETING_MENU');
+  assert.equal(greet.session.brief.goal, undefined);
+
+  const filler = await bot.respond({ sessionId: 'lead-2', text: 'หา' });
+  assert.equal(filler.session.brief.goal, undefined);
+  assert.equal(filler.plan.reason, 'MISSING_GOAL');
+
+  await bot.respond({ sessionId: 'lead-2', text: 'ทำบอทขายเสื้อผ้า' });
+  const confirmTurn = await bot.respond({ sessionId: 'lead-2', text: 'ตอบแชทลูกค้าและเก็บเบอร์โทร' });
+  assert.equal(confirmTurn.plan.action, 'CONFIRM_BRIEF');
+  assert.match(confirmTurn.reply, /ทำบอทขายเสื้อผ้า/);
+
+  const rejectTurn = await bot.respond({ sessionId: 'lead-2', text: 'ไม่ตรง' });
+  assert.equal(rejectTurn.session.brief.goal, '');
+  assert.equal(rejectTurn.session.brief.scope, '');
+  assert.equal(rejectTurn.plan.reason, 'MISSING_GOAL');
+});
+
 test('KVSessionStore persists and retrieves session state', async () => {
   const backing = new Map();
   const fakeKV = {

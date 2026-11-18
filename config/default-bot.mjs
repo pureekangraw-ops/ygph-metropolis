@@ -17,7 +17,7 @@ export const defaultBotConfig = {
   rules: [
     {
       id: 'GREETING_MENU',
-      match: /^(สวัสดี|หวัดดี|hi|hello|menu|เมนู)$/i,
+      match: /^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|ทักครับ|ทักค่ะ|hi|hello|menu|เมนู)[!.\s]*$/i,
       action: 'OBSERVE',
       status: 'OBSERVED',
       reply: 'สวัสดีครับ! สอบถามแพ็กเกจ ราคา หรือแจ้งรายละเอียดงานที่อยากทำได้เลยครับ',

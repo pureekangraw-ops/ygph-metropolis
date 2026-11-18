@@ -158,9 +158,13 @@ export function evaluatePolicy(input, options = {}, now = Date.now()) {
   }
 
   if (!brief.confirmed) {
+    const summaryParts = fields
+      .map((f) => (nonempty(brief[f.key]) ? `${f.key}: "${brief[f.key]}"` : null))
+      .filter(Boolean);
+    const summaryText = summaryParts.length > 0 ? ` (${summaryParts.join(' | ')})` : '';
     return answer({
       action: 'CONFIRM_BRIEF',
-      reply: 'รายละเอียดที่สรุปไว้ตรงกับงานที่ต้องการไหมครับ?',
+      reply: `รายละเอียดที่สรุปไว้${summaryText} ตรงกับงานที่ต้องการไหมครับ?`,
       allowModel: true,
     });
   }
