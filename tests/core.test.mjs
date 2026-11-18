@@ -216,6 +216,32 @@ test('policy-only mode answers price, comparison, and offer questions using real
   assert.match(offer.reply, /Starter Chatbot Setup/);
 });
 
+test('handles competitor compare, tech integration, and prevents intent/filler leak into brief', async () => {
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: null,
+  });
+
+  const thanks = await bot.respond({ sessionId: 'sales-2', text: 'ขอบคุณครับ' });
+  assert.equal(thanks.session.brief.goal, undefined);
+
+  const viewWork = await bot.respond({ sessionId: 'sales-2', text: 'ขอดูงาน' });
+  assert.equal(viewWork.plan.matchedRuleId, 'PORTFOLIO_DEMO');
+  assert.equal(viewWork.session.brief.goal, undefined);
+
+  const overBudget = await bot.respond({ sessionId: 'sales-2', text: 'เกินงบ' });
+  assert.equal(overBudget.plan.matchedRuleId, 'OBJECTION_HESITATION');
+  assert.equal(overBudget.session.brief.goal, undefined);
+
+  const compare = await bot.respond({ sessionId: 'sales-2', text: 'ต่างจากเจ้าอื่นยังไง' });
+  assert.equal(compare.plan.matchedRuleId, 'COMPETITOR_COMPARE');
+  assert.equal(compare.plan.allowModel, true);
+
+  const tech = await bot.respond({ sessionId: 'sales-2', text: 'เชื่อม Google Sheet ได้ไหม' });
+  assert.equal(tech.plan.matchedRuleId, 'INTEGRATION_TECH');
+  assert.equal(tech.plan.allowModel, true);
+});
+
 test('KVSessionStore persists and retrieves session state', async () => {
   const backing = new Map();
   const fakeKV = {
