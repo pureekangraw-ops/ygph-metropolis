@@ -10,6 +10,7 @@ const CONFIRM_PATTERN = /^(ใช่|ใช่ครับ|ใช่ค่ะ|�
 const REJECT_PATTERN = /^(ไม่ตรง|ไม่ใช่|ไม่ถูก|ผิด|แก้|แก้ไข|เปลี่ยนใหม่|เริ่มใหม่|no|nope)[!.\s]*$/i;
 const QUESTION_ONLY_PATTERN = /^(?:.*[?？]|.*(?:ราคา|เท่าไหร่|กี่บาท|กี่วัน|คืออะไร|ยังไง|มีอะไรบ้าง))$/i;
 const GREETING_PATTERN = /^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|ทักครับ|ทักค่ะ|hi|hello|menu|เมนู)[!.\s]*$/i;
+const INTENT_ONLY_PATTERN = /^(สนใจ|สอบถาม|ขอดู|มีอะไรบ้าง|ทำอะไรได้บ้าง|แนะนำหน่อย|ขอดูตัวอย่าง|ขอคิดดูก่อน|ไว้ก่อน|แพงไป|สั่งซื้อ|จองคิว|พร้อมโอน)[!.\sครับค่ะจ้า]*$/i;
 const FILLER_PATTERN = /^(หา|ห๊ะ|ฮะ|เอ๊ะ|อืม|อ่อ|อ๋อ|งง|ครับ|ค่ะ|จ้า|โอ้|\.+|\?+)$/i;
 
 export function extractBriefUpdates({ text, currentBrief = {}, pendingField = null, pendingAction = null, briefFields } = {}) {
@@ -41,8 +42,14 @@ export function extractBriefUpdates({ text, currentBrief = {}, pendingField = nu
     return updates;
   }
 
-  // Skip filling slots on greetings, pure questions, or short fillers like "หา"
-  if (GREETING_PATTERN.test(trimmed) || QUESTION_ONLY_PATTERN.test(trimmed) || FILLER_PATTERN.test(trimmed) || trimmed.length < 4) {
+  // Skip filling slots on greetings, pure questions, pure intent phrases, or short fillers
+  if (
+    GREETING_PATTERN.test(trimmed) ||
+    QUESTION_ONLY_PATTERN.test(trimmed) ||
+    INTENT_ONLY_PATTERN.test(trimmed) ||
+    FILLER_PATTERN.test(trimmed) ||
+    trimmed.length < 4
+  ) {
     return updates;
   }
 

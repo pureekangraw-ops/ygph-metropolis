@@ -171,6 +171,31 @@ test('ignores greetings/short fillers and resets brief when user rejects confirm
   assert.equal(rejectTurn.plan.reason, 'MISSING_GOAL');
 });
 
+test('handles sales intents (discovery, demo, objection, discount, closing) cleanly', async () => {
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: null,
+  });
+
+  const interest = await bot.respond({ sessionId: 'sales-1', text: 'สนใจครับ' });
+  assert.equal(interest.plan.matchedRuleId, 'INTEREST_DISCOVERY');
+  assert.equal(interest.session.brief.goal, undefined);
+
+  const demo = await bot.respond({ sessionId: 'sales-1', text: 'ขอดูตัวอย่างหน่อย' });
+  assert.equal(demo.plan.matchedRuleId, 'PORTFOLIO_DEMO');
+
+  const objection = await bot.respond({ sessionId: 'sales-1', text: 'แพงไปหน่อย ขอคิดดูก่อน' });
+  assert.equal(objection.plan.matchedRuleId, 'OBJECTION_HESITATION');
+
+  const discount = await bot.respond({ sessionId: 'sales-1', text: 'ลดได้ไหมครับ' });
+  assert.equal(discount.plan.matchedRuleId, 'DISCOUNT_NEGOTIATION');
+  assert.equal(discount.plan.action, 'HANDOFF');
+
+  const closing = await bot.respond({ sessionId: 'sales-1', text: 'เอาอันนี้ครับ ขอเลขบัญชี' });
+  assert.equal(closing.plan.matchedRuleId, 'CLOSING_READY');
+  assert.equal(closing.plan.action, 'HANDOFF');
+});
+
 test('KVSessionStore persists and retrieves session state', async () => {
   const backing = new Map();
   const fakeKV = {
