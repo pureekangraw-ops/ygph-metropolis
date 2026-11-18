@@ -20,6 +20,7 @@ import com.big.gobrowser.outsideview.OutsideViewActivity
 import com.big.gobrowser.transport.AndroidDeviceCredentialStore
 import com.big.gobrowser.transport.StationDiagnostics
 import com.big.gobrowser.transport.StationFailure
+import com.big.gobrowser.transport.StationResponse
 import com.big.gobrowser.transport.StationHttp
 import com.big.gobrowser.ui.ObservatoryTheme
 import com.big.gobrowser.ui.PhoneLayout
@@ -217,10 +218,7 @@ class RemoteBrowserActivity : Activity() {
               host == "yggmetro.com" || host.endsWith(".yggmetro.com"))) return null
         "https://" + host
     }.getOrNull()
-    private fun allowedViewerUrl(url: String): Boolean = runCatching {
-        val u = URI(url)
-        u.scheme == "https" && u.host == "live.browser.run"
-    }.getOrDefault(false)
+    private fun allowedViewerUrl(url: String): Boolean = BrowserResponse.allowedViewerUrl(url)
     private fun validWebUrl(raw: String): String? {
         val text = raw.trim().let { if (it.contains("://")) it else "https://" + it }
         return runCatching {
@@ -532,18 +530,20 @@ class RemoteBrowserActivity : Activity() {
         busy=true
         val requestId=java.util.UUID.randomUUID().toString()
         io.execute {
-            val result=runCatching { JSONObject(StationHttp.request(service+path,method,body,token,requestId)).also {
-                if(path=="/v1/view" && !allowedViewerUrl(it.optString("url"))) throw IllegalStateException("LIVE_VIEW_UNAVAILABLE")
-                if (it.has("error")) throw IllegalStateException(StationDiagnostics.safeCode(it.optString("error")) ?: "STATION_REQUEST_FAILED")
-            }}
+            var response:StationResponse?=null
+            val result=runCatching {
+                val received=StationHttp.requestResponse(service+path,method,body,token,requestId)
+                response=received
+                BrowserResponse.parse(received,path)
+            }
             val key=StationDiagnostics.diagnosticKey(path)
             val failure=result.exceptionOrNull()
             prefs.edit().putString("$key-status", if(result.isSuccess) "REQUEST_SUCCEEDED" else readableError(requireNotNull(failure)))
                 .putString("$key-request-id",requestId)
-                .putBoolean("$key-server-correlated",result.isSuccess || (failure as? StationFailure)?.correlationConfirmed==true)
+                .putBoolean("$key-server-correlated",response?.correlationConfirmed ?: ((failure as? StationFailure)?.correlationConfirmed==true))
                 .putString("$key-time",java.time.Instant.now().toString())
                 .putString("$key-method",method).putString("$key-path",path)
-                .putString("$key-http",(failure as? StationFailure)?.httpStatus?.toString() ?: if(result.isSuccess) "2xx" else "unknown").apply()
+                .putString("$key-http",(failure as? StationFailure)?.httpStatus?.toString() ?: response?.httpStatus?.toString() ?: "unknown").apply()
             main.post {busy=false;if(!destroyed)onDone(result)}
         }
     }

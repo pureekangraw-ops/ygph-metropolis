@@ -51,6 +51,7 @@ class GoviewDirectClient(context: Context) {
     fun configured()=connection.configured()
     fun canPoll()=connection.canPoll()
     fun requiresReconnect()=connection.blocked()
+    fun validationInProgress()=connection.validationInProgress()
     fun beginValidation()=connection.beginValidation()
     fun validate(ticket:Long,token:String)=connection.validate(ticket,token)
     fun cancelPending()=connection.cancel()
