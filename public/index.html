@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YGG Sales Bot — ทดลองคุยกับแชทบอทขายของหน้าร้าน</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --accent: #059669;
+      --accent-soft: #ecfdf5;
+      --warn-soft: #fff7ed;
+      --warn-text: #c2410c;
+      --radius: 16px;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    /* Header */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .brand-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* Main layout */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* Left column: Pitch + Pricing + Quick Prompts */
+    .pitch {
+      padding: 28px;
+    }
+    .eyebrow {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+      background: #eff6ff;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    }
+    .lead {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .highlights {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 560px) {
+      .highlights { grid-template-columns: 1fr; }
+    }
+    .highlight-item {
+      background: var(--surface-soft);
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13.5px;
+    }
+    .highlight-item strong {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--text);
+    }
+    .highlight-item span {
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      color: var(--text);
+    }
+
+    .packages {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 560px) {
+      .packages { grid-template-columns: 1fr; }
+    }
+    .pkg {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+    }
+    .pkg.featured {
+      border-color: var(--primary);
+      background: #f8fbff;
+    }
+    .pkg-name {
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .pkg-price {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary);
+      margin: 4px 0 6px;
+    }
+    .pkg-desc {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .quick-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .quick-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .quick-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: #eff6ff;
+    }
+
+    /* Right column: Chat Demo */
+    .chat-card {
+      display: flex;
+      flex-direction: column;
+      height: 620px;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+    }
+    .chat-agent {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .chat-agent-name {
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .chat-agent-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .reset-btn {
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .reset-btn:hover {
+      color: var(--text);
+      border-color: #cbd5e1;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #f8fafc;
+    }
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 84%;
+    }
+    .msg-row.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+    .msg-row.bot {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+    .bubble {
+      padding: 11px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg-row.user .bubble {
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .msg-row.bot .bubble {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .msg-tag {
+      margin-top: 4px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #e2e8f0;
+    }
+    .msg-tag.handoff {
+      background: var(--warn-soft);
+      color: var(--warn-text);
+      font-weight: 600;
+    }
+    .msg-tag.verified {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .chat-form {
+      display: flex;
+      gap: 8px;
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+    }
+    .chat-input {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    .chat-input:focus {
+      border-color: var(--primary);
+    }
+    .send-btn {
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      padding: 0 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .send-btn:hover { background: var(--primary-hover); }
+    .send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-badge">YGG</div>
+        <div>YGG Sales Bot</div>
+      </div>
+      <div class="status-pill">
+        <span class="dot"></span>
+        พร้อมทดลองคุยจริง (Live Demo)
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Left: Product Pitch + Pricing + Demo Prompts -->
+      <section class="card pitch">
+        <span class="eyebrow">แชทบอทขายของหน้าร้าน</span>
+        <h1>ช่วยตอบลูกค้า เก็บรายละเอียดงาน และส่งต่อทีมขายโดยไม่มั่วราคา</h1>
+        <p class="lead">
+          ออกแบบมาสำหรับร้านค้าและทีมขายที่ต้องการบอทตอบไวเป็นธรรมชาติ แจ้งเฉพาะราคาและข้อมูลที่ร้านยืนยันแล้ว
+          และส่งต่อแอดมินทันทีเมื่อลูกค้าพร้อมสั่งซื้อหรือมีเคสสำคัญ
+        </p>
+
+        <div class="highlights">
+          <div class="highlight-item">
+            <strong>1. ตอบจากข้อมูลร้านจริง</strong>
+            <span>อ้างอิงสินค้า ราคา และ FAQ ที่คุณตั้งไว้เท่านั้น</span>
+          </div>
+          <div class="highlight-item">
+            <strong>2. เก็บรายละเอียดงานอัตโนมัติ</strong>
+            <span>สรุปเป้าหมายและขอบเขตก่อนส่งต่อทีม</span>
+          </div>
+          <div class="highlight-item">
+            <strong>3. แยกเรื่องที่ต้องให้คนดูแล</strong>
+            <span>แจ้งโอน ต่อราคา ร้องเรียน หรือปิดการขายส่งต่อทันที</span>
+          </div>
+          <div class="highlight-item">
+            <strong>4. ปรับเงื่อนไขร้านได้ตลอด</strong>
+            <span>เพิ่มสินค้า คำถามพบบ่อย และกติกาใหม่ได้ง่าย</span>
+          </div>
+        </div>
+
+        <h2 class="section-title">แพ็กเกจบริการ</h2>
+        <div class="packages">
+          <div class="pkg">
+            <div class="pkg-name">Starter Setup</div>
+            <div class="pkg-price">4,900 บาท</div>
+            <p class="pkg-desc">ติดตั้งแชทบอทขายของ 1 ช่องทาง (LINE หรือเว็บแชท) พร้อมฐานความรู้เริ่มต้น</p>
+          </div>
+          <div class="pkg featured">
+            <div class="pkg-name">Pro Central Bot</div>
+            <div class="pkg-price">12,900 บาท</div>
+            <p class="pkg-desc">แชทบอทกลางพร้อมระบบเก็บรายละเอียดลูกค้าและเชื่อมฐานข้อมูลร้าน</p>
+          </div>
+        </div>
+
+        <h2 class="section-title">กดเพื่อลองถามบอทได้เลย</h2>
+        <div class="quick-list">
+          <button type="button" class="quick-btn" data-text="สนใจครับ มีแพ็กเกจอะไรบ้าง">สนใจครับ มีแพ็กเกจอะไรบ้าง</button>
+          <button type="button" class="quick-btn" data-text="ราคาเท่าไหร่ครับ">ราคาเท่าไหร่ครับ</button>
+          <button type="button" class="quick-btn" data-text="ขอดูตัวอย่างหน่อย">ขอดูตัวอย่างหน่อย</button>
+          <button type="button" class="quick-btn" data-text="อยากทำบอทขายเสื้อผ้า">อยากทำบอทขายเสื้อผ้า</button>
+          <button type="button" class="quick-btn" data-text="แพงไป ขอคิดดูก่อน">แพงไป ขอคิดดูก่อน</button>
+          <button type="button" class="quick-btn" data-text="เอาอันนี้ครับ ขอเลขบัญชี">เอาอันนี้ครับ ขอเลขบัญชี</button>
+        </div>
+      </section>
+
+      <!-- Right: Live Chat Demo -->
+      <section class="card chat-card" aria-label="หน้าต่างทดลองแชทบอท">
+        <div class="chat-header">
+          <div class="chat-agent">
+            <div class="avatar">AI</div>
+            <div>
+              <div class="chat-agent-name">ผู้ช่วยขายหน้าร้าน</div>
+              <div class="chat-agent-sub">ตอบตามข้อมูลร้าน • ส่งต่อทีมเมื่อพร้อมปิดการขาย</div>
+            </div>
+          </div>
+          <button type="button" class="reset-btn" id="resetBtn">เริ่มคุยใหม่</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg-row bot">
+            <div class="bubble">สวัสดีครับ! ลองทักมาสอบถามแพ็กเกจ ราคา หรือแจ้งรายละเอียดงานที่อยากทำได้เลยครับ</div>
+            <span class="msg-tag verified">พร้อมให้บริการ</span>
+          </div>
+        </div>
+
+        <form class="chat-form" id="chatForm">
+          <input
+            type="text"
+            class="chat-input"
+            id="chatInput"
+            placeholder="พิมพ์ข้อความทดสอบเหมือนลูกค้าจริง..."
+            autocomplete="off"
+            required
+          />
+          <button type="submit" class="send-btn" id="sendBtn">ส่ง</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById('chatMessages');
+    const formEl = document.getElementById('chatForm');
+    const inputEl = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    let sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
+
+    function appendMessage(role, text, tagInfo = null) {
+      const row = document.createElement('div');
+      row.className = `msg-row ${role}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      row.appendChild(bubble);
+
+      if (tagInfo) {
+        const tag = document.createElement('span');
+        tag.className = `msg-tag ${tagInfo.kind || ''}`.trim();
+        tag.textContent = tagInfo.label;
+        row.appendChild(tag);
+      }
+
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return row;
+    }
+
+    function getTagForResponse(data) {
+      const action = data?.plan?.action;
+      if (action === 'HANDOFF' || action === 'PREPARE_HANDOFF' || action === 'REVIEW_PAYMENT') {
+        return { kind: 'handoff', label: 'ส่งต่อทีมงานดูแลต่อ' };
+      }
+      if (action === 'CONFIRM_BRIEF') {
+        return { kind: 'verified', label: 'สรุปรายละเอียดงาน' };
+      }
+      if (action === 'BLOCKED') {
+        return { kind: 'handoff', label: 'ป้องกันข้อมูลอ่อนไหว' };
+      }
+      if (data?.modelStatus === 'RESPONDED') {
+        return { kind: 'verified', label: 'ตอบจากฐานความรู้ร้าน' };
+      }
+      return null;
+    }
+
+    async function sendMessage(text) {
+      const clean = text.trim();
+      if (!clean) return;
+
+      appendMessage('user', clean);
+      inputEl.value = '';
+      sendBtn.disabled = true;
+
+      const typingRow = appendMessage('bot', 'กำลังพิมพ์...');
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, text: clean }),
+        });
+        const data = await res.json();
+        typingRow.remove();
+
+        if (!res.ok || !data.ok) {
+          appendMessage('bot', 'ขออภัยครับ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ');
+          return;
+        }
+        appendMessage('bot', data.reply, getTagForResponse(data));
+      } catch {
+        typingRow.remove();
+        appendMessage('bot', 'ไม่สามารถเชื่อมต่อระบบแชทได้ในขณะนี้ครับ');
+      } finally {
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    formEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      sendMessage(inputEl.value);
+    });
+
+    document.querySelectorAll('.quick-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sendMessage(btn.dataset.text || '');
+      });
+    });
+
+    resetBtn.addEventListener('click', () => {
+      sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
+      messagesEl.innerHTML = '';
+      appendMessage('bot', 'เริ่มการสนทนาใหม่แล้วครับ ลองทักมาสอบถามแพ็กเกจ ราคา หรือแจ้งงานที่ต้องการได้เลยครับ', {
+        kind: 'verified',
+        label: 'พร้อมให้บริการ',
+      });
+    });
+  </script>
+</body>
+</html>
