@@ -196,6 +196,26 @@ test('handles sales intents (discovery, demo, objection, discount, closing) clea
   assert.equal(closing.plan.action, 'HANDOFF');
 });
 
+test('policy-only mode answers price, comparison, and offer questions using real catalogue/faq data', async () => {
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: null,
+  });
+
+  const prices = await bot.respond({ sessionId: 'q-1', text: 'มีกี่ราคา' });
+  assert.match(prices.reply, /4,900 บาท/);
+  assert.match(prices.reply, /12,900 บาท/);
+
+  const compare = await bot.respond({ sessionId: 'q-1', text: 'แบบไหนคุ้ม' });
+  assert.equal(compare.plan.action, 'OBSERVE');
+  assert.equal(compare.session.brief.goal, undefined);
+  assert.match(compare.reply, /แนะนำเบื้องต้น/);
+
+  const offer = await bot.respond({ sessionId: 'q-1', text: 'มีข้อเสนอไหม' });
+  assert.equal(offer.plan.action, 'OBSERVE');
+  assert.match(offer.reply, /Starter Chatbot Setup/);
+});
+
 test('KVSessionStore persists and retrieves session state', async () => {
   const backing = new Map();
   const fakeKV = {

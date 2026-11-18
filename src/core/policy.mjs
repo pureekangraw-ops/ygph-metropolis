@@ -3,6 +3,24 @@
  * Supports data-driven rules & brief schemas while preserving safety guardrails.
  */
 
+function formatCatalogueReply(catalogue = [], isComparison = false) {
+  if (!Array.isArray(catalogue) || catalogue.length === 0) return null;
+  const lines = catalogue.map(
+    (item) => `• ${item.name} (${item.priceText ?? `${item.price} บาท`}): ${item.description ?? ''}`.trim(),
+  );
+  if (isComparison && catalogue.length >= 2) {
+    lines.push('', `แนะนำเบื้องต้น: ถ้าเริ่มขายช่องทางเดียวเลือก ${catalogue[0].name} จะคุ้มสุดครับ แต่ถ้าเน้นต่อยอดหลายช่องทาง/เชื่อมระบบร้าน แนะนำ ${catalogue[1].name} ครับ`);
+  }
+  return lines.join('\n');
+}
+
+function formatFaqReply(faq = []) {
+  if (!Array.isArray(faq) || faq.length === 0) return null;
+  return faq
+    .slice(0, 2)
+    .map((f) => `• ${f.q ?? f.question}: ${f.a ?? f.answer}`)
+    .join('\n');
+}
 const nonempty = (v) => typeof v === 'string' && v.trim().length > 0;
 const sensitivePattern = /password|passcode|otp|token|secret|authorization|cookie|รหัสผ่าน|รหัสยืนยัน|รหัสลับ|บัตรเครดิต/i;
 
@@ -104,13 +122,13 @@ export function evaluatePolicy(input, options = {}, now = Date.now()) {
   const hasCatalogue = Array.isArray(selectedKnowledge.catalogue) && selectedKnowledge.catalogue.length > 0;
   const hasFaq = Array.isArray(selectedKnowledge.faq) && selectedKnowledge.faq.length > 0;
 
-  if (/ราคา|เท่าไหร่|กี่บาท|แพ็กเกจ|ประเมิน|ใบเสนอ|estimate|quote/i.test(input.text)) {
+  if (/ราคา|เท่าไหร่|กี่บาท|กี่ราคา|แพ็กเกจ|ประเมิน|ใบเสนอ|estimate|quote/i.test(input.text)) {
     if (hasCatalogue) {
       return answer({
         action: 'OBSERVE',
         status: 'OBSERVED',
         reason: 'CATALOGUE_QUOTE',
-        reply: 'สามารถดูรายละเอียดแพ็กเกจและราคาจากรายการที่ยืนยันแล้วได้เลยครับ',
+        reply: formatCatalogueReply(selectedKnowledge.catalogue, false),
         allowModel: true,
       });
     }
@@ -131,13 +149,19 @@ export function evaluatePolicy(input, options = {}, now = Date.now()) {
     });
   }
 
-  // If user is asking a general question and we have knowledge, let LLM answer naturally
-  if (/[?？]|ไหม|ยังไง|คืออะไร|มีอะไรบ้าง|รายละเอียด|แนะนำ/i.test(input.text) && (hasCatalogue || hasFaq)) {
+  // If user is asking a general/comparison question and we have knowledge, answer from knowledge
+  if (/[?？]|ไหม|ยังไง|คืออะไร|มีอะไรบ้าง|รายละเอียด|แนะนำ|คุ้ม|ต่างกัน|เปรียบเทียบ|เลือกอันไหน|ข้อเสนอ/i.test(input.text) && (hasCatalogue || hasFaq)) {
+    const isComparison = /คุ้ม|ต่างกัน|เปรียบเทียบ|เลือกอันไหน/i.test(input.text);
+    const catReply = formatCatalogueReply(selectedKnowledge.catalogue, isComparison);
+    const faqReply = formatFaqReply(selectedKnowledge.faq);
+    const combined = [catReply, !isComparison && faqReply ? `\nข้อมูลเพิ่มเติม:\n${faqReply}` : null]
+      .filter(Boolean)
+      .join('\n');
     return answer({
       action: 'OBSERVE',
       status: 'OBSERVED',
       reason: 'KNOWLEDGE_QUERY',
-      reply: 'ให้รายละเอียดเพิ่มเติมจากข้อมูลที่มีอยู่ครับ',
+      reply: combined || 'ให้รายละเอียดเพิ่มเติมจากข้อมูลที่มีอยู่ครับ',
       allowModel: true,
     });
   }
