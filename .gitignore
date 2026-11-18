@@ -1,7 +1,9 @@
-.worktrees/
-.lighthouse-next-staging/
 node_modules/
+.wrangler/
 .dev.vars
-.dev.vars.*
 .env
 .env.*
+!.dev.vars.example
+dist/
+coverage/
+*.log

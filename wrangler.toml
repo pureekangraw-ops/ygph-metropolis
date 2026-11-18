@@ -1,0 +1,6 @@
+name = "ygph-metropolis-chatbot"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+
+[vars]
+ENVIRONMENT = "staging"

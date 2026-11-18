@@ -1,10 +1,14 @@
 {
-  "name": "ygg-observatory",
+  "name": "ygph-metropolis-chatbot",
+  "version": "1.0.0",
   "private": true,
-  "description": "Standalone YGG Observatory Android browser and web map",
+  "type": "module",
+  "description": "Central configurable sales chatbot core (evolved from YGG Lyra/Genome) with LINE Webhook & Cloudflare Worker support",
   "scripts": {
-    "test": "npm run test:web && npm run test:dom",
-    "test:web": "node --test tests/greenfield-observatory-web.test.cjs",
-    "test:dom": "node --test android-browser/tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/worker.mjs src/core/*.mjs src/channels/*.mjs config/*.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

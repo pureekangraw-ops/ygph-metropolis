@@ -1,0 +1,8 @@
+# LINE Messaging API (ตั้งค่าผ่าน `wrangler secret put` บน Production)
+LINE_CHANNEL_SECRET=your_line_channel_secret
+LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
+
+# OpenAI-compatible LLM Endpoint (เช่น Gemini OpenAI-compat, OpenAI, OpenRouter)
+LLM_ENDPOINT=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+LLM_MODEL=gemini-2.5-flash
+LLM_API_KEY=your_llm_api_key
