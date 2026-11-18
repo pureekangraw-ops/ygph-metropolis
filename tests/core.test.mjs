@@ -256,3 +256,79 @@ test('KVSessionStore persists and retrieves session state', async () => {
   await store.delete('u1');
   assert.equal(await store.get('u1'), null);
 });
+
+test('dynamic store sandbox isolates sessions, computes verifiedPrices per session, and leaves defaultBotConfig untouched', async () => {
+  const originalCatalogueLen = defaultBotConfig.knowledge.catalogue.length;
+
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: async ({ context }) => {
+      const firstItem = context.knowledge.catalogue[0];
+      return { reply: `สินค้า ${firstItem.name} ราคา ${firstItem.priceText} ครับ` };
+    },
+  });
+
+  // Session A sets custom coffee shop catalogue (120 บาท)
+  const resA = await bot.respond({
+    sessionId: 'store-a',
+    text: 'ราคาเท่าไหร่ครับ',
+    context: {
+      demoKnowledge: {
+        storeName: 'ร้านกาแฟอารีย์',
+        catalogue: [{ name: 'มัทฉะลาเต้', price: 120, description: 'เกรดพิธีชง' }],
+      },
+    },
+  });
+  assert.equal(resA.modelStatus, 'RESPONDED');
+  assert.match(resA.reply, /มัทฉะลาเต้/);
+  assert.match(resA.reply, /120 บาท/);
+
+  // Session B has NO demoKnowledge -> uses defaultBotConfig (4,900 บาท), no bleed from Session A
+  const resB = await bot.respond({
+    sessionId: 'store-b',
+    text: 'ราคาเท่าไหร่ครับ',
+  });
+  assert.equal(resB.modelStatus, 'RESPONDED');
+  assert.match(resB.reply, /Starter Chatbot Setup/);
+  assert.equal(resB.reply.includes('มัทฉะลาเต้'), false);
+
+  // Session A trying to mention defaultBotConfig's 4,900 บาท or fake 999 บาท gets blocked by per-session verifiedPrices
+  const strictBot = createChatbot({
+    ...defaultBotConfig,
+    provider: async () => ({ reply: 'ราคา 4,900 บาท ครับ' }),
+  });
+  const blockedCrossPrice = await strictBot.respond({
+    sessionId: 'store-a-strict',
+    text: 'ราคาเท่าไหร่ครับ',
+    context: {
+      demoKnowledge: {
+        storeName: 'ร้านกาแฟอารีย์',
+        catalogue: [{ name: 'มัทฉะลาเต้', price: 120 }],
+      },
+    },
+  });
+  assert.equal(blockedCrossPrice.modelStatus, 'INVALID_OUTPUT');
+  assert.equal(defaultBotConfig.knowledge.catalogue.length, originalCatalogueLen);
+});
+
+test('maxLlmTurns caps LLM calls per session and falls back to policy-only reply', async () => {
+  let calls = 0;
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    maxLlmTurns: 2,
+    provider: async () => {
+      calls += 1;
+      return { reply: `ตอบรอบที่ ${calls}` };
+    },
+  });
+
+  const t1 = await bot.respond({ sessionId: 'cap-1', text: 'ราคาเท่าไหร่ครับ' });
+  const t2 = await bot.respond({ sessionId: 'cap-1', text: 'แบบไหนคุ้มครับ' });
+  const t3 = await bot.respond({ sessionId: 'cap-1', text: 'มีข้อเสนอไหม' });
+
+  assert.equal(t1.modelStatus, 'RESPONDED');
+  assert.equal(t2.modelStatus, 'RESPONDED');
+  assert.equal(t3.modelStatus, 'QUOTA_EXCEEDED');
+  assert.equal(calls, 2);
+  assert.match(t3.reply, /4,900 บาท/);
+});

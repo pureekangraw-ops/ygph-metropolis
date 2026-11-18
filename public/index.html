@@ -357,6 +357,80 @@
     }
     .send-btn:hover { background: var(--primary-hover); }
     .send-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Store Sandbox Card */
+    .sandbox-card {
+      margin-top: 20px;
+      padding: 20px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .sandbox-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .sandbox-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .sandbox-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .sandbox-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sandbox-row {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr 1.4fr;
+      gap: 8px;
+    }
+    @media (max-width: 600px) {
+      .sandbox-row { grid-template-columns: 1fr; }
+    }
+    .sandbox-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+    }
+    .sandbox-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary-sm {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary-sm:hover { opacity: 0.92; }
   </style>
 </head>
 <body>
@@ -424,6 +498,32 @@
           <button type="button" class="quick-btn" data-text="แพงไป ขอคิดดูก่อน">แพงไป ขอคิดดูก่อน</button>
           <button type="button" class="quick-btn" data-text="เอาอันนี้ครับ ขอเลขบัญชี">เอาอันนี้ครับ ขอเลขบัญชี</button>
         </div>
+
+        <div class="sandbox-card">
+          <div class="sandbox-header">
+            <div>
+              <h2 class="sandbox-title">ทดลองใส่ข้อมูลร้านของคุณ (Sandbox)</h2>
+              <div class="sandbox-sub">ลองกรอกสินค้าและราคาของร้านคุณเอง ข้อมูลจะแยกเฉพาะหน้านี้</div>
+            </div>
+          </div>
+          <form class="sandbox-form" id="sandboxForm">
+            <input type="text" class="sandbox-input" id="storeNameInput" placeholder="ชื่อร้านของคุณ เช่น ร้านกาแฟอารีย์" />
+            <div id="productRows">
+              <div class="sandbox-row">
+                <input type="text" class="sandbox-input prod-name" placeholder="ชื่อสินค้า/บริการ" value="" />
+                <input type="number" class="sandbox-input prod-price" placeholder="ราคา (บาท)" min="0" />
+                <input type="text" class="sandbox-input prod-desc" placeholder="รายละเอียดสั้นๆ" />
+              </div>
+            </div>
+            <input type="text" class="sandbox-input" id="faqQInput" placeholder="คำถามที่พบบ่อย เช่น ส่งของกี่วันถึง" />
+            <input type="text" class="sandbox-input" id="faqAInput" placeholder="คำตอบของร้าน เช่น จัดส่งภายใน 1-2 วันทำการครับ" />
+            <div class="sandbox-actions">
+              <button type="button" class="btn-secondary" id="addProdBtn">+ เพิ่มสินค้า</button>
+              <button type="submit" class="btn-primary-sm">ใช้ข้อมูลร้านนี้ทดลองคุย</button>
+              <button type="button" class="btn-secondary" id="clearSandboxBtn">กลับไปใช้ตัวอย่าง YGG</button>
+            </div>
+          </form>
+        </div>
       </section>
 
       <!-- Right: Live Chat Demo -->
@@ -467,8 +567,14 @@
     const inputEl = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const sandboxForm = document.getElementById('sandboxForm');
+    const addProdBtn = document.getElementById('addProdBtn');
+    const clearSandboxBtn = document.getElementById('clearSandboxBtn');
+    const productRowsEl = document.getElementById('productRows');
+    const agentNameEl = document.querySelector('.chat-agent-name');
 
     let sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
+    let activeDemoKnowledge = null;
 
     function appendMessage(role, text, tagInfo = null) {
       const row = document.createElement('div');
@@ -518,16 +624,22 @@
 
       const typingRow = appendMessage('bot', 'กำลังพิมพ์...');
       try {
+        const payload = { sessionId, text: clean };
+        if (activeDemoKnowledge !== undefined) {
+          payload.demoKnowledge = activeDemoKnowledge;
+        }
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, text: clean }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         typingRow.remove();
 
         if (!res.ok || !data.ok) {
-          appendMessage('bot', 'ขออภัยครับ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ');
+          appendMessage('bot', res.status === 429
+            ? 'ส่งข้อความถี่เกินไปครับ กรุณารอสักครู่แล้วลองใหม่นะครับ'
+            : 'ขออภัยครับ ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ');
           return;
         }
         appendMessage('bot', data.reply, getTagForResponse(data));
@@ -555,6 +667,57 @@
       sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
       messagesEl.innerHTML = '';
       appendMessage('bot', 'เริ่มการสนทนาใหม่แล้วครับ ลองทักมาสอบถามแพ็กเกจ ราคา หรือแจ้งงานที่ต้องการได้เลยครับ', {
+        kind: 'verified',
+        label: 'พร้อมให้บริการ',
+      });
+    });
+
+    addProdBtn.addEventListener('click', () => {
+      if (productRowsEl.children.length >= 5) return;
+      const row = document.createElement('div');
+      row.className = 'sandbox-row';
+      row.innerHTML = `
+        <input type="text" class="sandbox-input prod-name" placeholder="ชื่อสินค้า/บริการ" />
+        <input type="number" class="sandbox-input prod-price" placeholder="ราคา (บาท)" min="0" />
+        <input type="text" class="sandbox-input prod-desc" placeholder="รายละเอียดสั้นๆ" />
+      `;
+      productRowsEl.appendChild(row);
+    });
+
+    sandboxForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const storeName = document.getElementById('storeNameInput').value.trim();
+      const catalogue = [...productRowsEl.querySelectorAll('.sandbox-row')]
+        .map((row) => ({
+          name: row.querySelector('.prod-name').value.trim(),
+          price: Number(row.querySelector('.prod-price').value),
+          description: row.querySelector('.prod-desc').value.trim(),
+        }))
+        .filter((item) => item.name);
+
+      const q = document.getElementById('faqQInput').value.trim();
+      const a = document.getElementById('faqAInput').value.trim();
+      const faq = q && a ? [{ q, a }] : [];
+
+      if (!storeName && catalogue.length === 0 && faq.length === 0) return;
+
+      activeDemoKnowledge = { storeName, catalogue, faq };
+      sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
+      agentNameEl.textContent = storeName ? `ผู้ช่วยขาย — ${storeName}` : 'ผู้ช่วยขาย (ข้อมูลร้านของคุณ)';
+      messagesEl.innerHTML = '';
+      appendMessage(
+        'bot',
+        `โหลดข้อมูล${storeName ? `ร้าน "${storeName}"` : 'ร้านของคุณ'} (${catalogue.length} สินค้า) เรียบร้อยแล้วครับ! ลองพิมพ์ถามราคาหรือสอบถามสินค้าได้เลย`,
+        { kind: 'verified', label: 'โหมด Sandbox ร้านของคุณ' },
+      );
+    });
+
+    clearSandboxBtn.addEventListener('click', () => {
+      activeDemoKnowledge = null;
+      sessionId = 'demo-' + Math.random().toString(36).slice(2, 10);
+      agentNameEl.textContent = 'ผู้ช่วยขายหน้าร้าน';
+      messagesEl.innerHTML = '';
+      appendMessage('bot', 'กลับมาใช้ข้อมูลตัวอย่าง YGG แล้วครับ ลองสอบถามแพ็กเกจหรือราคาได้เลยครับ', {
         kind: 'verified',
         label: 'พร้อมให้บริการ',
       });

@@ -6,7 +6,7 @@
 
 import { evaluatePolicy } from './policy.mjs';
 import { buildSystemPrompt } from './prompts.mjs';
-import { extractVerifiedPrices, selectKnowledge } from './knowledge.mjs';
+import { extractVerifiedPrices, normalizeDemoKnowledge, selectKnowledge } from './knowledge.mjs';
 import { extractBriefUpdates } from './extractor.mjs';
 import { InMemorySessionStore } from './session.mjs';
 
@@ -93,16 +93,24 @@ export function createChatbot({
   extractBrief = extractBriefUpdates,
   clock = Date.now,
   timeoutMs = 10000,
+  maxLlmTurns = 12,
   allowInternalTerms = false,
 } = {}) {
   if (provider !== null && typeof provider !== 'function') {
     throw new Error('PROVIDER_INVALID');
   }
-  if (typeof clock !== 'function' || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) {
+  if (
+    typeof clock !== 'function' ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > 30000 ||
+    !Number.isFinite(maxLlmTurns) ||
+    maxLlmTurns < 0
+  ) {
     throw new Error('RUNTIME_CONFIG_INVALID');
   }
 
-  const verifiedPrices = extractVerifiedPrices(knowledge);
+  const defaultVerifiedPrices = extractVerifiedPrices(knowledge);
   const system = buildSystemPrompt({
     rolePrompt,
     persona,
@@ -118,6 +126,22 @@ export function createChatbot({
       const request = structuredClone(input);
       const sessionId = typeof request.sessionId === 'string' ? request.sessionId : null;
       const savedSession = sessionId ? (await sessionStore.get(sessionId)) ?? {} : {};
+
+      // Isolate per-session demoKnowledge from defaultBotConfig
+      const incomingDemoKnowledge = request.context?.demoKnowledge === null
+        ? null
+        : request.context?.demoKnowledge !== undefined
+          ? normalizeDemoKnowledge(request.context.demoKnowledge)
+          : undefined;
+
+      const activeDemoKnowledge = incomingDemoKnowledge !== undefined
+        ? incomingDemoKnowledge
+        : (savedSession.demoKnowledge ?? null);
+
+      const activeKnowledge = activeDemoKnowledge ?? knowledge;
+      const activeVerifiedPrices = activeDemoKnowledge
+        ? extractVerifiedPrices(activeDemoKnowledge)
+        : defaultVerifiedPrices;
 
       const baseBrief = {
         ...(savedSession.brief ?? {}),
@@ -143,23 +167,31 @@ export function createChatbot({
         },
         history: Array.isArray(savedSession.history) ? savedSession.history.slice(-6) : [],
       };
+      delete mergedContext.demoKnowledge;
 
-      const selectedKnowledge = selectKnowledge(knowledge, request.text);
+      const selectedKnowledge = selectKnowledge(activeKnowledge, request.text);
       const plan = evaluatePolicy(
         { text: request.text, context: mergedContext },
         { rules, briefFields, selectedKnowledge },
         clock(),
       );
 
+      const currentLlmTurns = Number.isFinite(savedSession.llmTurns) ? savedSession.llmTurns : 0;
+      const quotaExceeded = Boolean(provider) && currentLlmTurns >= maxLlmTurns;
+
       let finalResult = {
         reply: plan.reply,
         plan,
         executed: false,
-        modelStatus: provider ? 'SKIPPED_POLICY_REPLY' : 'NOT_CONFIGURED',
+        modelStatus: !provider
+          ? 'NOT_CONFIGURED'
+          : quotaExceeded
+            ? 'QUOTA_EXCEEDED'
+            : 'SKIPPED_POLICY_REPLY',
         session: mergedContext,
       };
 
-      if (provider && plan.allowModel && plan.status !== 'BLOCKED') {
+      if (provider && !quotaExceeded && plan.allowModel && plan.status !== 'BLOCKED') {
         const controller = new AbortController();
         let timer;
         try {
@@ -167,6 +199,7 @@ export function createChatbot({
             system,
             text: sanitize(request.text),
             context: sanitize({
+              storeName: activeDemoKnowledge?.storeName || undefined,
               brief: mergedContext.brief,
               history: mergedContext.history,
               knowledge: selectedKnowledge,
@@ -185,7 +218,7 @@ export function createChatbot({
             }),
           ]);
 
-          if (!validReply(output, { verifiedPrices, allowInternalTerms })) {
+          if (!validReply(output, { verifiedPrices: activeVerifiedPrices, allowInternalTerms })) {
             finalResult = { ...finalResult, modelStatus: 'INVALID_OUTPUT' };
           } else {
             finalResult = {
@@ -212,8 +245,12 @@ export function createChatbot({
           ? plan.reason.slice('MISSING_'.length).toLowerCase()
           : null;
 
+        const nextLlmTurns = finalResult.modelStatus === 'RESPONDED' ? currentLlmTurns + 1 : currentLlmTurns;
+
         await sessionStore.set(sessionId, {
           brief: mergedContext.brief,
+          demoKnowledge: activeDemoKnowledge,
+          llmTurns: nextLlmTurns,
           pendingField: nextPendingField,
           pendingAction: plan.action,
           history: nextHistory,

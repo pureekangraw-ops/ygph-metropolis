@@ -15,6 +15,33 @@ import { defaultBotConfig } from '../config/default-bot.mjs';
 const defaultSessionStore = new InMemorySessionStore();
 const defaultDeduplicator = new EventDeduplicator();
 
+export class SlidingWindowRateLimiter {
+  constructor({ maxRequests = 20, windowMs = 60 * 1000, clock = Date.now } = {}) {
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+    this.clock = clock;
+    this.buckets = new Map();
+  }
+
+  allow(key) {
+    const now = this.clock();
+    const windowStart = now - this.windowMs;
+    const prev = this.buckets.get(key) ?? [];
+    const recent = prev.filter((ts) => ts > windowStart);
+
+    if (recent.length >= this.maxRequests) {
+      this.buckets.set(key, recent);
+      return false;
+    }
+
+    recent.push(now);
+    this.buckets.set(key, recent);
+    return true;
+  }
+}
+
+const defaultRateLimiter = new SlidingWindowRateLimiter();
+
 export function createWorkerChatbot(env = {}, overrides = {}) {
   let provider = overrides.provider ?? null;
   if (!provider && env.LLM_ENDPOINT && env.LLM_MODEL && env.LLM_API_KEY) {
@@ -29,11 +56,15 @@ export function createWorkerChatbot(env = {}, overrides = {}) {
   const sessionStore = overrides.sessionStore
     ?? (env.CHAT_SESSIONS ? new KVSessionStore(env.CHAT_SESSIONS) : defaultSessionStore);
 
+  const parsedTurns = Number(env.MAX_LLM_TURNS_PER_SESSION);
+  const maxLlmTurns = Number.isFinite(parsedTurns) && parsedTurns >= 0 ? parsedTurns : 10;
+
   return createChatbot({
     ...defaultBotConfig,
     ...(overrides.botConfig ?? {}),
     provider,
     sessionStore,
+    maxLlmTurns,
     clock: overrides.clock,
   });
 }
@@ -112,11 +143,31 @@ export async function handleRequest(request, env = {}, ctx = {}, deps = {}) {
       return Response.json({ ok: false, error: 'Missing text field' }, { status: 400 });
     }
 
+    const sessionId = typeof body.sessionId === 'string' && body.sessionId.trim()
+      ? body.sessionId.trim().slice(0, 80)
+      : 'api:default';
+    const clientIp = request.headers.get('cf-connecting-ip')
+      || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || sessionId;
+
+    const rateLimiter = deps.rateLimiter ?? defaultRateLimiter;
+    if (!rateLimiter.allow(clientIp)) {
+      return Response.json(
+        { ok: false, error: 'Too many requests, please try again shortly' },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      );
+    }
+
+    const context = {
+      ...(body.context && typeof body.context === 'object' ? body.context : {}),
+      ...(body.demoKnowledge !== undefined ? { demoKnowledge: body.demoKnowledge } : {}),
+    };
+
     const chatbot = deps.chatbot ?? createWorkerChatbot(env, deps);
     const result = await chatbot.respond({
-      sessionId: typeof body.sessionId === 'string' ? body.sessionId : 'api:default',
+      sessionId,
       text: body.text,
-      context: body.context,
+      context,
     });
     return Response.json({ ok: true, ...result });
   }

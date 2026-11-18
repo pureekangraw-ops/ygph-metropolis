@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computeLineSignature } from '../src/channels/line.mjs';
-import { createWorkerChatbot, handleRequest } from '../src/worker.mjs';
+import { createWorkerChatbot, handleRequest, SlidingWindowRateLimiter } from '../src/worker.mjs';
 
 const TEST_ENV = {
   ENVIRONMENT: 'staging',
@@ -115,4 +115,58 @@ test('POST /webhook/line uses ctx.waitUntil and deduplicates redelivered events'
   assert.equal(res2.status, 200);
   await Promise.all(waitUntilPromises);
   assert.equal(sentReplies.length, 1);
+});
+
+test('POST /api/chat supports per-session demoKnowledge and enforces 429 rate limit', async () => {
+  const rateLimiter = new SlidingWindowRateLimiter({ maxRequests: 2, windowMs: 60000 });
+
+  const req1 = await handleRequest(
+    new Request('https://example.com/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.2.3.4' },
+      body: JSON.stringify({
+        sessionId: 'custom-store-1',
+        text: 'ราคาเท่าไหร่ครับ',
+        demoKnowledge: {
+          storeName: 'ร้านดอกไม้',
+          catalogue: [{ name: 'ช่อกุหลาบ', price: 850, description: 'กุหลาบแดง 12 ดอก' }],
+        },
+      }),
+    }),
+    TEST_ENV,
+    {},
+    { rateLimiter },
+  );
+  assert.equal(req1.status, 200);
+  const body1 = await req1.json();
+  assert.match(body1.reply, /ช่อกุหลาบ/);
+  assert.match(body1.reply, /850 บาท/);
+
+  // Second turn in same session remembers demoKnowledge without resending it
+  const req2 = await handleRequest(
+    new Request('https://example.com/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.2.3.4' },
+      body: JSON.stringify({ sessionId: 'custom-store-1', text: 'มีกี่ราคา' }),
+    }),
+    TEST_ENV,
+    {},
+    { rateLimiter },
+  );
+  assert.equal(req2.status, 200);
+  const body2 = await req2.json();
+  assert.match(body2.reply, /850 บาท/);
+
+  // Third request within window triggers 429
+  const req3 = await handleRequest(
+    new Request('https://example.com/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '1.2.3.4' },
+      body: JSON.stringify({ sessionId: 'custom-store-1', text: 'สวัสดี' }),
+    }),
+    TEST_ENV,
+    {},
+    { rateLimiter },
+  );
+  assert.equal(req3.status, 429);
 });

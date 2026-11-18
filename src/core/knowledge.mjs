@@ -81,3 +81,59 @@ export function extractVerifiedPrices(knowledge = {}) {
 
   return prices;
 }
+
+/**
+ * Normalizes and bounds customer-submitted demo knowledge for a single session
+ * so it cannot bloat prompts or mutate the default bot config.
+ */
+export function normalizeDemoKnowledge(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const storeName = typeof raw.storeName === 'string' ? raw.storeName.trim().slice(0, 80) : '';
+  const catalogue = Array.isArray(raw.catalogue)
+    ? raw.catalogue
+        .slice(0, 20)
+        .filter((item) => item && typeof item.name === 'string' && item.name.trim())
+        .map((item, idx) => {
+          const numPrice = Number(item.price);
+          const hasValidPrice = Number.isFinite(numPrice) && numPrice >= 0 && numPrice <= 10000000;
+          return {
+            id: typeof item.id === 'string' && item.id.trim() ? item.id.trim().slice(0, 40) : `demo-item-${idx + 1}`,
+            name: item.name.trim().slice(0, 100),
+            category: typeof item.category === 'string' ? item.category.trim().slice(0, 50) : storeName || 'สินค้า',
+            price: hasValidPrice ? Math.round(numPrice) : undefined,
+            priceText: hasValidPrice
+              ? `${Math.round(numPrice).toLocaleString('en-US')} บาท`
+              : typeof item.priceText === 'string'
+                ? item.priceText.trim().slice(0, 40)
+                : '',
+            description: typeof item.description === 'string' ? item.description.trim().slice(0, 240) : '',
+            tags: Array.isArray(item.tags) ? item.tags.slice(0, 8).map((t) => String(t).slice(0, 30)) : [],
+          };
+        })
+    : [];
+
+  const faq = Array.isArray(raw.faq)
+    ? raw.faq
+        .slice(0, 20)
+        .filter((f) => f && typeof (f.q ?? f.question) === 'string' && typeof (f.a ?? f.answer) === 'string')
+        .map((f) => ({
+          q: (f.q ?? f.question).trim().slice(0, 160),
+          a: (f.a ?? f.answer).trim().slice(0, 300),
+          tags: Array.isArray(f.tags) ? f.tags.slice(0, 8).map((t) => String(t).slice(0, 30)) : [],
+        }))
+    : [];
+
+  const policies = Array.isArray(raw.policies)
+    ? raw.policies
+        .slice(0, 10)
+        .filter((p) => typeof p === 'string' && p.trim())
+        .map((p) => p.trim().slice(0, 200))
+    : [];
+
+  if (!storeName && catalogue.length === 0 && faq.length === 0 && policies.length === 0) {
+    return null;
+  }
+
+  return { storeName, catalogue, faq, policies };
+}
