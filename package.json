@@ -6,7 +6,8 @@
   "description": "Central configurable sales chatbot core (evolved from YGG Lyra/Genome) with LINE Webhook & Cloudflare Worker support",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check src/worker.mjs src/core/*.mjs src/channels/*.mjs config/*.mjs"
+    "check": "node --check src/worker.mjs src/core/*.mjs src/channels/*.mjs config/*.mjs scripts/*.mjs",
+    "chat": "node scripts/chat-cli.mjs"
   },
   "engines": {
     "node": ">=22.0.0"

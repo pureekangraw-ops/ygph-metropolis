@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createChatbot } from '../src/core/runtime.mjs';
+import { KVSessionStore } from '../src/core/session.mjs';
 import { defaultBotConfig } from '../config/default-bot.mjs';
 
 test('custom rules and built-in escalations use deterministic policy replies without calling LLM', async () => {
@@ -117,4 +118,45 @@ test('unavailable provider falls back gracefully without leaking internal error 
   const res = await bot.respond({ text: 'อยากทำบอท' });
   assert.equal(res.modelStatus, 'UNAVAILABLE');
   assert.equal(res.reply.includes('upstream_secret_key_failed'), false);
+});
+
+test('multi-turn conversation automatically fills goal -> scope -> confirm -> handoff', async () => {
+  const bot = createChatbot({
+    ...defaultBotConfig,
+    provider: null,
+  });
+
+  // Turn 1: greeting asks/welcomes
+  const t1 = await bot.respond({ sessionId: 'lead-1', text: 'สวัสดี' });
+  assert.equal(t1.plan.matchedRuleId, 'GREETING_MENU');
+
+  // Turn 2: user states goal -> bot asks for scope
+  const t2 = await bot.respond({ sessionId: 'lead-1', text: 'อยากทำบอทขายคอร์สเรียนออนไลน์' });
+  assert.equal(t2.session.brief.goal, 'อยากทำบอทขายคอร์สเรียนออนไลน์');
+  assert.equal(t2.plan.reason, 'MISSING_SCOPE');
+
+  // Turn 3: user states scope -> bot asks to confirm brief
+  const t3 = await bot.respond({ sessionId: 'lead-1', text: 'อยากให้ตอบคำถามลูกค้าและเก็บเบอร์โทรติดต่อ' });
+  assert.equal(t3.session.brief.scope, 'อยากให้ตอบคำถามลูกค้าและเก็บเบอร์โทรติดต่อ');
+  assert.equal(t3.plan.action, 'CONFIRM_BRIEF');
+
+  // Turn 4: user confirms -> bot prepares handoff
+  const t4 = await bot.respond({ sessionId: 'lead-1', text: 'ใช่ครับ' });
+  assert.equal(t4.session.brief.confirmed, true);
+  assert.equal(t4.plan.action, 'PREPARE_HANDOFF');
+});
+
+test('KVSessionStore persists and retrieves session state', async () => {
+  const backing = new Map();
+  const fakeKV = {
+    async get(k) { return backing.get(k) ?? null; },
+    async put(k, v) { backing.set(k, v); },
+    async delete(k) { backing.delete(k); },
+  };
+  const store = new KVSessionStore(fakeKV);
+  await store.set('u1', { brief: { goal: 'ทดสอบ KV' } });
+  const loaded = await store.get('u1');
+  assert.equal(loaded.brief.goal, 'ทดสอบ KV');
+  await store.delete('u1');
+  assert.equal(await store.get('u1'), null);
 });

@@ -1,6 +1,6 @@
 /**
- * Session store interface + default in-memory TTL store.
- * Keeps `brief` and recent conversation turns per sessionId/userId.
+ * Session store interface + InMemorySessionStore + Cloudflare KVSessionStore.
+ * Keeps `brief`, pending slot tracking, and recent conversation turns per sessionId.
  */
 
 export class InMemorySessionStore {
@@ -32,5 +32,39 @@ export class InMemorySessionStore {
   async delete(sessionId) {
     if (!sessionId) return;
     this.store.delete(sessionId);
+  }
+}
+
+export class KVSessionStore {
+  constructor(kvNamespace, { ttlSeconds = 24 * 60 * 60, prefix = 'chat_session:' } = {}) {
+    if (!kvNamespace || typeof kvNamespace.get !== 'function' || typeof kvNamespace.put !== 'function') {
+      throw new Error('KV_NAMESPACE_INVALID');
+    }
+    this.kv = kvNamespace;
+    this.ttlSeconds = ttlSeconds;
+    this.prefix = prefix;
+  }
+
+  async get(sessionId) {
+    if (!sessionId) return null;
+    const raw = await this.kv.get(`${this.prefix}${sessionId}`);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async set(sessionId, data) {
+    if (!sessionId) return;
+    await this.kv.put(`${this.prefix}${sessionId}`, JSON.stringify(data), {
+      expirationTtl: this.ttlSeconds,
+    });
+  }
+
+  async delete(sessionId) {
+    if (!sessionId) return;
+    await this.kv.delete(`${this.prefix}${sessionId}`);
   }
 }

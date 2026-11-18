@@ -7,6 +7,7 @@
 import { evaluatePolicy } from './policy.mjs';
 import { buildSystemPrompt } from './prompts.mjs';
 import { extractVerifiedPrices, selectKnowledge } from './knowledge.mjs';
+import { extractBriefUpdates } from './extractor.mjs';
 import { InMemorySessionStore } from './session.mjs';
 
 const sensitiveKey = /password|passcode|otp|token|secret|credential|cookie|authorization/i;
@@ -89,6 +90,7 @@ export function createChatbot({
   briefFields,
   provider = null,
   sessionStore = new InMemorySessionStore(),
+  extractBrief = extractBriefUpdates,
   clock = Date.now,
   timeoutMs = 10000,
   allowInternalTerms = false,
@@ -117,12 +119,27 @@ export function createChatbot({
       const sessionId = typeof request.sessionId === 'string' ? request.sessionId : null;
       const savedSession = sessionId ? (await sessionStore.get(sessionId)) ?? {} : {};
 
+      const baseBrief = {
+        ...(savedSession.brief ?? {}),
+        ...(request.context?.brief ?? {}),
+      };
+
+      const extractedBrief = sessionId && typeof extractBrief === 'function'
+        ? await extractBrief({
+            text: request.text,
+            currentBrief: baseBrief,
+            pendingField: savedSession.pendingField ?? null,
+            pendingAction: savedSession.pendingAction ?? null,
+            briefFields,
+          })
+        : {};
+
       const mergedContext = {
         ...savedSession,
         ...(request.context ?? {}),
         brief: {
-          ...(savedSession.brief ?? {}),
-          ...(request.context?.brief ?? {}),
+          ...baseBrief,
+          ...(extractedBrief ?? {}),
         },
         history: Array.isArray(savedSession.history) ? savedSession.history.slice(-6) : [],
       };
@@ -191,8 +208,14 @@ export function createChatbot({
           { role: 'assistant', text: finalResult.reply },
         ].slice(-8);
 
+        const nextPendingField = plan.action === 'CLARIFY' && typeof plan.reason === 'string' && plan.reason.startsWith('MISSING_')
+          ? plan.reason.slice('MISSING_'.length).toLowerCase()
+          : null;
+
         await sessionStore.set(sessionId, {
           brief: mergedContext.brief,
+          pendingField: nextPendingField,
+          pendingAction: plan.action,
           history: nextHistory,
         });
       }

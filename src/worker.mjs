@@ -8,7 +8,7 @@
 
 import { createChatbot } from './core/runtime.mjs';
 import { createOpenAICompatibleProvider } from './core/provider.mjs';
-import { InMemorySessionStore } from './core/session.mjs';
+import { InMemorySessionStore, KVSessionStore } from './core/session.mjs';
 import { EventDeduplicator, replyToLine, verifyLineSignature } from './channels/line.mjs';
 import { defaultBotConfig } from '../config/default-bot.mjs';
 
@@ -26,11 +26,14 @@ export function createWorkerChatbot(env = {}, overrides = {}) {
     });
   }
 
+  const sessionStore = overrides.sessionStore
+    ?? (env.CHAT_SESSIONS ? new KVSessionStore(env.CHAT_SESSIONS) : defaultSessionStore);
+
   return createChatbot({
     ...defaultBotConfig,
     ...(overrides.botConfig ?? {}),
     provider,
-    sessionStore: overrides.sessionStore ?? defaultSessionStore,
+    sessionStore,
     clock: overrides.clock,
   });
 }
